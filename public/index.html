@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./truck.svg" />
+    <title>Haulage — Truck Driver Finance</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <img src="./truck.svg" alt="" />
+          <span>Haulage</span>
+        </div>
+        <nav class="sidebar-nav">
+          <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+          <button class="nav-btn" data-view="receipts">Scan receipt</button>
+          <button class="nav-btn" data-view="expenses">Expenses</button>
+          <button class="nav-btn" data-view="income">Income</button>
+          <button class="nav-btn" data-view="report">EOFY report</button>
+          <button class="nav-btn" data-view="forecast">Forecast</button>
+          <button class="nav-btn" data-view="profile">Profile</button>
+        </nav>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <h1 id="page-title">Dashboard</h1>
+          <div class="fy-picker">
+            <label for="fy-select">Financial year</label>
+            <select id="fy-select"></select>
+            <span class="fy-chip">FY <span id="fy-label">—</span></span>
+          </div>
+        </header>
+
+        <!-- Dashboard -->
+        <section id="view-dashboard" class="view active">
+          <div id="stat-grid" class="stat-grid"></div>
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Snapshot</h2></div>
+              <div id="snapshot-content"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Expense totals</h2>
+                <span class="muted" id="dashboard-expense-total-range-label"></span>
+              </div>
+              <div id="dashboard-expense-totals" class="expense-totals-grid"></div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Allowance caps</h2></div>
+              <div id="allowance-caps"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header"><h2>Recent activity</h2></div>
+              <div id="recent-activity"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Scan receipt -->
+        <section id="view-receipts" class="view">
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Upload a receipt</h2></div>
+              <div id="upload-zone" class="upload-zone">
+                <p>Drag &amp; drop a receipt photo or PDF here</p>
+                <button type="button" class="btn primary" id="pick-receipt">Choose file from PC</button>
+                <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
+              </div>
+              <div id="receipt-preview" class="preview hidden"></div>
+              <div id="scan-result" class="scan-box hidden"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>Add receipt manually</h2></div>
+              <div id="manual-approval-banner" class="banner hidden"></div>
+              <form id="manual-receipt-form" class="form-grid">
+                <label>Date<input type="date" name="date" required /></label>
+                <label>Category
+                  <select id="manual-receipt-category" name="category" class="category-select"></select>
+                </label>
+                <label>Vendor
+                  <input type="text" id="manual-vendor-input" name="vendor" list="vendor-list" placeholder="BP Truck Stop" />
+                </label>
+                <label>ABN (optional)
+                  <input type="text" id="manual-vendor-abn" name="vendorAbn" placeholder="12 345 678 901" />
+                </label>
+                <label class="span-2">Description<input type="text" name="description" placeholder="Diesel / meal / accommodation" /></label>
+                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" /></label>
+                <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
+                <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
+                <div class="span-2 form-actions">
+                  <button type="submit" class="btn primary">Save manual receipt</button>
+                </div>
+              </form>
+              <div id="manual-receipt-preview" class="preview-note hidden"></div>
+              <datalist id="vendor-list"></datalist>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h2>Receipt totals</h2></div>
+            <div id="receipt-expense-totals"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h2>Receipt gallery</h2></div>
+            <div id="receipt-gallery" class="receipt-gallery"></div>
+          </div>
+        </section>
+
+        <!-- Expenses -->
+        <section id="view-expenses" class="view">
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Add expense</h2></div>
+              <form id="expense-form" class="form-grid">
+                <label>Date<input type="date" name="date" required /></label>
+                <label>Category
+                  <select id="expense-category" name="category" class="category-select" required></select>
+                </label>
+                <label>Vendor<input type="text" name="vendor" placeholder="Vendor name" /></label>
+                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required /></label>
+                <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
+                <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
+                <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
+                <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
+                <div class="span-2 form-actions">
+                  <button type="submit" class="btn primary">Save expense</button>
+                </div>
+              </form>
+              <div id="expense-preview" class="preview-note hidden"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Total expenses</h2>
+                <select id="expense-total-period" class="period-select" aria-label="Expense total period">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <p class="muted">Range: <span id="expense-total-range-label"></span></p>
+              <div id="expense-totals" class="expense-totals-grid"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Expense ledger</h2>
+              <span class="muted" id="expense-list-summary"></span>
+            </div>
+            <div id="expense-list"></div>
+          </div>
+        </section>
+
+        <!-- Income -->
+        <section id="view-income" class="view">
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Scan payslip / remittance</h2></div>
+              <div id="income-upload-zone" class="upload-zone">
+                <p>Drag &amp; drop a payslip or remittance (image / PDF)</p>
+                <button type="button" class="btn primary" id="pick-income">Choose file from PC</button>
+                <input type="file" id="income-file" accept="image/*,application/pdf" hidden />
+              </div>
+              <div id="income-preview" class="preview hidden"></div>
+              <div id="income-scan-result" class="scan-box hidden"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>Add income manually</h2></div>
+              <div id="income-approval-banner" class="banner hidden"></div>
+              <form id="income-form" class="form-grid">
+                <label>Date<input type="date" name="date" required /></label>
+                <label>Type<select id="income-type" name="type"></select></label>
+                <label class="span-2">Payer / entity<input type="text" name="payer" placeholder="Employer or company" /></label>
+                <label>Gross ($)<input type="number" name="grossTotal" step="0.01" min="0" /></label>
+                <label>Taxable ($)<input type="number" name="taxableIncome" step="0.01" min="0" /></label>
+                <label>GST ($)<input type="number" name="gstAmount" step="0.01" min="0" value="0" /></label>
+                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" required /></label>
+                <label>Net pay ($)<input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" /></label>
+                <label>Reference / period<input type="text" name="reference" placeholder="Pay period" /></label>
+                <label>Document kind
+                  <select id="income-document-kind" name="documentKind">
+                    <option value="">—</option>
+                    <option value="payslip">Payslip</option>
+                    <option value="remittance">Remittance</option>
+                    <option value="payment_summary">Payment summary</option>
+                    <option value="invoice">Invoice</option>
+                  </select>
+                </label>
+                <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
+                <label class="span-2">Summary notes<input type="text" id="income-summary-notes" name="summaryNotes" /></label>
+                <div id="claiming-wrap" class="span-2 hidden">
+                  <label class="checkbox"><input type="checkbox" name="claimingDeduction" /> Claiming a deduction against this allowance</label>
+                </div>
+                <div class="span-2 form-actions">
+                  <button type="submit" id="income-save-btn" class="btn primary">Save income</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h2>Income ledger</h2></div>
+            <div id="income-list"></div>
+          </div>
+        </section>
+
+        <!-- Report -->
+        <section id="view-report" class="view">
+          <div class="panel-header report-actions">
+            <h2>EOFY performance statement</h2>
+            <button type="button" class="btn secondary" id="export-report">Export JSON</button>
+          </div>
+          <div id="report-content" class="panel"></div>
+        </section>
+
+        <!-- Forecast -->
+        <section id="view-forecast" class="view">
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Financial forecast</h2>
+              <div class="toggle-group">
+                <button type="button" class="btn secondary active" data-forecast-mode="realtime">Real-time</button>
+                <button type="button" class="btn secondary" data-forecast-mode="manual">Manual</button>
+              </div>
+            </div>
+            <form id="manual-forecast-form" class="form-grid hidden">
+              <label>Projected income ($)<input type="number" name="projectedIncome" step="0.01" min="0" /></label>
+              <label>Projected deductions ($)<input type="number" name="projectedDeductions" step="0.01" min="0" /></label>
+              <div class="span-2 form-actions"><button type="submit" class="btn primary">Recalculate</button></div>
+            </form>
+            <div id="forecast-progress" class="forecast-progress"></div>
+          </div>
+          <div id="forecast-stats" class="stat-grid"></div>
+          <div class="panel">
+            <div class="panel-header"><h2>Scenarios</h2></div>
+            <div id="forecast-scenarios"></div>
+          </div>
+        </section>
+
+        <!-- Profile -->
+        <section id="view-profile" class="view">
+          <div class="panel">
+            <div class="panel-header"><h2>Driver profile</h2></div>
+            <form id="profile-form" class="form-grid">
+              <label>Name<input type="text" name="name" placeholder="Full name" /></label>
+              <label>Driver type<select id="driver-type" name="driverType"></select></label>
+              <label>Employer<input type="text" name="employer" placeholder="Company" /></label>
+              <label>Annual salary ($)<input type="number" name="annualSalary" step="0.01" min="0" /></label>
+              <label>Salary band
+                <select name="salaryBand">
+                  <option value="band1">Band 1</option>
+                  <option value="band2">Band 2</option>
+                  <option value="band3">Band 3</option>
+                </select>
+              </label>
+              <label>Financial year<select id="profile-financial-year" name="financialYear"></select></label>
+              <label class="checkbox span-2"><input type="checkbox" name="tfnSupplied" /> TFN supplied to employer</label>
+              <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Receipt viewer modal -->
+    <div id="receipt-viewer" class="modal hidden">
+      <div class="modal-backdrop" data-close-viewer></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <div id="receipt-viewer-title"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn secondary" id="receipt-viewer-download">Download</button>
+            <button type="button" class="btn secondary" id="receipt-viewer-share">Share</button>
+            <button type="button" class="btn secondary" id="receipt-viewer-close">Close</button>
+          </div>
+        </div>
+        <div id="receipt-viewer-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

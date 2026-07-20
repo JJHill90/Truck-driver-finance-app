@@ -1,11 +1,17 @@
 # Truck-driver-finance-app
 
-**TruckLedger** — a lightweight finance tracker for truck drivers to log loads,
-fuel, tolls and other expenses, and instantly see net earnings on the road.
+**Haulage** — a finance tool for Australian truck drivers to track work expenses
+and income/remittances, capture receipts, and produce a live EOFY performance
+statement, tax estimate and financial forecast.
 
-Built with **Vite + React + TypeScript**. Transactions are persisted locally in
-the browser via `localStorage`, so the app runs fully client-side with no
-backend required.
+The frontend is a framework-free single-page app (`public/app.js`) served by a
+small **Node.js + Express** backend that stores data in a local JSON file
+(`data/store.json`) and receipt files under `data/uploads/`. No database or
+external services are required.
+
+> Receipt/payslip scanning runs in **manual/fallback mode**: uploaded images and
+> PDFs are stored, and you enter + approve the totals. No AI/OCR API key is
+> needed to run the app.
 
 ## Requirements
 
@@ -15,35 +21,41 @@ backend required.
 ## Getting started
 
 ```bash
-npm install      # install dependencies
-npm run dev      # start the dev server at http://localhost:5173
+npm install
+npm start
 ```
+
+Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
 
 ## Scripts
 
-| Command             | Description                                     |
-| ------------------- | ----------------------------------------------- |
-| `npm run dev`       | Start the Vite dev server (HMR) on port `5173`. |
-| `npm run build`     | Type-check and build the production bundle.     |
-| `npm run preview`   | Preview the production build locally.           |
-| `npm run lint`      | Run ESLint over the project.                    |
-| `npm test`          | Run the unit/component test suite (Vitest).     |
-| `npm run test:watch`| Run tests in watch mode.                        |
+| Command          | Description                                                  |
+| ---------------- | ------------------------------------------------------------ |
+| `npm start`      | Start the Express server + UI on port `3000`.                |
+| `npm run dev`    | Same, with `node --watch` auto-restart on file changes.      |
+| `npm run lint`   | Run ESLint over server/lib code.                             |
+| `npm test`       | Run backend unit tests (Vitest) for the tax/analysis logic.  |
 
 ## Project structure
 
 ```
-src/
-  App.tsx              # Main UI: add transactions, summary cards, ledger
-  App.test.tsx         # Component tests (Testing Library + Vitest)
-  lib/
-    finance.ts         # Pure domain logic (totals, categories, formatting)
-    finance.test.ts     # Unit tests for domain logic
-    useLocalStorage.ts # Persistence hook
-  test/setup.ts        # Test environment setup (jest-dom matchers)
+server.js            Express app: static UI + JSON API under /api/haulage
+lib/
+  standards.js       Categories, income types, driver types, ATO caps
+  tax.js             Tax brackets, expense analysis, summary/report/forecast
+  tax.test.js        Unit tests for the pure logic
+  store.js           JSON-file store + receipt image persistence
+public/
+  index.html         App shell / all DOM the frontend expects
+  app.js             Frontend SPA (provided verbatim)
+  styles.css         Styles
+  truck.svg          Icon
+data/                Runtime store + uploaded receipts (git-ignored)
 ```
 
-## Deployment
+## API (base `/api/haulage`)
 
-Configured for Netlify (see `netlify.toml`): build command `npm run build`,
-publish directory `dist`, with an SPA fallback redirect.
+`GET /standards`, `GET /records`, `GET /summary`, `GET /report`, `GET /forecast`,
+`PUT /profile`, `POST|DELETE /expenses`, `POST /expenses/preview`,
+`POST|DELETE /income`, `POST /receipts/scan`, `POST /receipts/manual`,
+`POST /receipts/:id/confirm`, `GET /receipts/:id/image`, `GET /receipts/:id/file`.

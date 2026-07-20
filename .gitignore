@@ -1,17 +1,18 @@
 node_modules
-dist
-dist-ssr
+coverage
+
+# Runtime data store & uploaded receipts (dev artifacts)
+data
+
 *.local
 .DS_Store
 .netlify
-coverage
 
 # Logs
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 
 # Editor

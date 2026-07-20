@@ -2,24 +2,34 @@
 
 ## Project overview
 
-**TruckLedger** (repo `Truck-driver-finance-app`) is a client-side finance
-tracker for truck drivers, built with Vite + React + TypeScript. There is no
-backend — transactions persist to the browser's `localStorage`. All standard
-commands are documented in `README.md` (`dev`, `build`, `preview`, `lint`,
-`test`).
+**Haulage** (repo `Truck-driver-finance-app`) is a finance tool for Australian
+truck drivers: work expenses, income/remittances, receipt capture, a live EOFY
+report, tax estimate and forecast. Standard commands (`start`, `dev`, `lint`,
+`test`) are documented in `README.md`.
+
+- Frontend: framework-free SPA in `public/app.js` (treat as source-of-truth /
+  user-provided — the backend and `public/index.html` exist to satisfy the exact
+  DOM ids and API contract it expects).
+- Backend: Node.js + Express (`server.js`) with pure logic in `lib/` and a
+  JSON-file store in `lib/store.js`.
 
 ## Cursor Cloud specific instructions
 
-- Single service, no backend/database. The only long-running process is the
-  Vite dev server (`npm run dev`), served on port `5173` (bound to `0.0.0.0`
-  via `server.host` in `vite.config.ts`).
-- Domain logic lives in `src/lib/finance.ts` and is intentionally kept pure so
-  it can be unit-tested without a DOM. UI/component tests use Testing Library
-  with a `jsdom` environment; the matcher setup is in `src/test/setup.ts` and
-  wired via `test.setupFiles` in `vite.config.ts`.
-- `npm run build` runs `tsc -b` (project references in `tsconfig.app.json` /
-  `tsconfig.node.json`) before `vite build`; a type error fails the build even
-  if the dev server runs fine.
-- App state is persisted under the `localStorage` key
-  `truckledger.transactions`. To reset to an empty ledger during manual
-  testing, clear site data / that key rather than editing code.
+- Single service. Start with `npm start` (or `npm run dev` for `node --watch`).
+  It listens on port `3000` bound to `0.0.0.0`; open the UI at
+  **`http://localhost:3000/haulage/`** (root `/` 302-redirects there). Set `PORT`
+  to override.
+- The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
+  `${window.location.origin}/api/haulage`, so the UI must be opened via the
+  server (not as a `file://`) and on the same origin as the API.
+- Persistence is a local JSON file at `data/store.json` with receipt uploads in
+  `data/uploads/` (both git-ignored). To reset all app data, stop the server,
+  delete the `data/` directory, and restart — the store is cached in memory, so
+  deleting the file while running has no effect until restart.
+- Receipt/payslip OCR is intentionally in fallback mode (`ocrResult.ocrSource`
+  is `"fallback"`/`"pdf"`, `detectedTotals: []`): files are stored and the user
+  enters/approves totals. There is no AI key wired in; adding real OCR means
+  implementing it in `POST /api/haulage/receipts/scan`.
+- `public/app.js` is deliberately excluded from ESLint (browser globals, provided
+  verbatim); lint/tests cover `server.js` and `lib/` only. `npm test` (Vitest)
+  targets the pure functions in `lib/tax.js`; there is no build step.
