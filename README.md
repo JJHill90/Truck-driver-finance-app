@@ -6,12 +6,13 @@ statement, tax estimate and financial forecast.
 
 The frontend is a framework-free single-page app (`public/app.js`) served by a
 small **Node.js + Express** backend that stores data in a local JSON file
-(`data/store.json`) and receipt files under `data/uploads/`. No database or
-external services are required.
+(`data/driver-records.json`) and receipt files under `data/receipts/`. No
+database is required.
 
-> Receipt/payslip scanning runs in **manual/fallback mode**: uploaded images and
-> PDFs are stored, and you enter + approve the totals. No AI/OCR API key is
-> needed to run the app.
+> **Receipt/payslip OCR:** works out of the box with **local OCR** (Tesseract.js)
+> plus a manual approve-totals step. If `OPENAI_API_KEY` is set, cloud OCR
+> (OpenAI `gpt-4o-mini` vision) is used and merged with the local result. PDF
+> income documents are parsed via `pdf-parse`. No key is required to run.
 
 ## Requirements
 
@@ -39,19 +40,29 @@ Then open **http://localhost:3000/haulage/** (the root path `/` redirects there)
 ## Project structure
 
 ```
-server.js            Express app: static UI + JSON API under /api/haulage
-lib/
-  standards.js       Categories, income types, driver types, ATO caps
-  tax.js             Tax brackets, expense analysis, summary/report/forecast
-  tax.test.js        Unit tests for the pure logic
-  store.js           JSON-file store + receipt image persistence
+server.js               Express app: static UI + JSON API under /api/haulage
+tax-calculator.test.js  Unit tests for the ATO tax/deduction logic
+lib/                    Provided backend modules (verbatim):
+  ato-standards.js      ATO categories, income types, caps, FY helpers
+  tax-calculator.js     Tax brackets, deduction analysis, year summary/report
+  forecast.js           EOFY projection + scenarios
+  storage.js            JSON-file store + receipt image persistence
+  receipt-ocr.js        OCR orchestration (OpenAI + local + merge)
+  local-receipt-ocr.js  Tesseract.js money/text extraction
+  income-document-ocr.js Payslip/remittance + PDF parsing
+  receipt-ocr-money.js  Money parsing helpers
 public/
-  index.html         App shell / all DOM the frontend expects
-  app.js             Frontend SPA (provided verbatim)
-  styles.css         Styles
-  truck.svg          Icon
-data/                Runtime store + uploaded receipts (git-ignored)
+  index.html            App shell / all DOM the frontend expects
+  app.js                Frontend SPA (provided verbatim)
+  styles.css            Styles
+  truck.svg             Icon
+data/                   Runtime store + receipts (git-ignored)
 ```
+
+## Environment variables
+
+- `PORT` — server port (default `3000`).
+- `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
 
 ## API (base `/api/haulage`)
 

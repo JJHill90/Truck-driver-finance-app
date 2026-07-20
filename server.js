@@ -1,291 +1,233 @@
-import express from 'express'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { standardsPayload } from './lib/standards.js'
-import {
-  getStore,
-  newId,
-  readReceiptDataUrl,
-  readReceiptImage,
-  recordsPayload,
-  saveReceiptImage,
-  saveStore,
-  upsertVendor,
-} from './lib/store.js'
-import {
-  analyzeExpense,
-  buildForecast,
-  buildReport,
-  currentFinancialYear,
-  summarize,
-} from './lib/tax.js'
+const path = require("path");
+const express = require("express");
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = Number(process.env.PORT) || 3000
-const PUBLIC_DIR = path.join(__dirname, 'public')
+const {
+  listCategories,
+  listIncomeTypes,
+  CATEGORY_GROUPS,
+  DRIVER_TYPES,
+  getCurrentFinancialYear,
+} = require("./lib/ato-standards");
+const storage = require("./lib/storage");
+const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
+const { buildForecast } = require("./lib/forecast");
+const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
 
-const app = express()
-app.use(express.json({ limit: '30mb' }))
+const PORT = Number(process.env.PORT) || 3000;
+const PUBLIC_DIR = path.join(__dirname, "public");
 
-const api = express.Router()
+// Optional cloud OCR — only used when an API key is configured.
+let openai = null;
+if (process.env.OPENAI_API_KEY) {
+  try {
+    const OpenAI = require("openai");
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  } catch (err) {
+    console.warn("OpenAI SDK unavailable, falling back to local OCR:", err.message);
+  }
+}
+
+// Single in-memory record set persisted to data/driver-records.json after mutations.
+const records = storage.loadRecords();
+
+const app = express();
+app.use(express.json({ limit: "30mb" }));
+
+const api = express.Router();
+
+function profileFor(financialYear) {
+  return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
+}
 
 // --- Reference data ------------------------------------------------------
-api.get('/standards', (_req, res) => {
-  res.json(standardsPayload())
-})
+api.get("/standards", (_req, res) => {
+  res.json({
+    categories: listCategories(),
+    categoryGroups: CATEGORY_GROUPS,
+    incomeTypes: listIncomeTypes(),
+    driverTypes: DRIVER_TYPES,
+    financialYear: getCurrentFinancialYear(),
+  });
+});
 
-api.get('/records', (_req, res) => {
-  res.json(recordsPayload())
-})
+api.get("/records", (_req, res) => {
+  res.json({ ...records, vendors: storage.listVendors(records) });
+});
 
 // --- Profile -------------------------------------------------------------
-api.put('/profile', (req, res) => {
-  const s = getStore()
-  s.profile = { ...s.profile, ...req.body }
-  if (req.body.annualSalary != null) s.profile.annualSalary = Number(req.body.annualSalary) || 0
-  saveStore()
-  res.json({ profile: s.profile })
-})
+api.put("/profile", (req, res) => {
+  const profile = storage.updateProfile(records, req.body || {});
+  storage.saveRecords(records);
+  res.json({ profile });
+});
 
 // --- Summary / report / forecast ----------------------------------------
-api.get('/summary', (req, res) => {
-  const fy = req.query.financialYear || getStore().profile.financialYear || currentFinancialYear()
-  res.json(summarize(getStore(), fy))
-})
+api.get("/summary", (req, res) => {
+  const fy = req.query.financialYear || records.profile.financialYear;
+  res.json(summariseYear(records, profileFor(fy)));
+});
 
-api.get('/report', (req, res) => {
-  const fy = req.query.financialYear || getStore().profile.financialYear || currentFinancialYear()
-  res.json(buildReport(getStore(), fy))
-})
+api.get("/report", (req, res) => {
+  const fy = req.query.financialYear || records.profile.financialYear;
+  res.json(buildAccountantReport(records, profileFor(fy)));
+});
 
-api.get('/forecast', (req, res) => {
-  const { mode, projectedIncome, projectedDeductions } = req.query
-  res.json(buildForecast(getStore(), { mode, projectedIncome, projectedDeductions }))
-})
+api.get("/forecast", (req, res) => {
+  const manual = {
+    mode: req.query.mode,
+    projectedIncome: req.query.projectedIncome,
+    projectedDeductions: req.query.projectedDeductions,
+  };
+  res.json(buildForecast(records, records.profile, manual));
+});
 
 // --- Expenses ------------------------------------------------------------
-api.post('/expenses/preview', (req, res) => {
-  res.json(analyzeExpense(req.body || {}))
-})
+api.post("/expenses/preview", (req, res) => {
+  res.json(calcExpenseDeduction(req.body || {}));
+});
 
-function createExpense(payload, receiptId = null) {
-  const s = getStore()
-  const vendor = upsertVendor(payload)
-  const entry = {
-    id: newId(),
-    date: payload.date,
-    category: payload.category || 'other_work',
-    vendor: payload.vendor || '',
-    vendorAbn: payload.vendorAbn || '',
-    vendorId: vendor?.id || null,
-    description: payload.description || '',
-    amount: Number(payload.amount) || 0,
-    workUsePercent: payload.workUsePercent == null ? 100 : Number(payload.workUsePercent),
-    reimbursed: Boolean(payload.reimbursed),
-    method: payload.method,
-    kilometres: payload.kilometres != null ? Number(payload.kilometres) : undefined,
-    laundryLoads: payload.laundryLoads != null ? Number(payload.laundryLoads) : undefined,
-    laundryMixed: Boolean(payload.laundryMixed),
-    receiptId,
-    createdAt: new Date().toISOString(),
-  }
-  s.expenses.push(entry)
-  saveStore()
-  return { entry, analysis: analyzeExpense(entry) }
-}
+api.post("/expenses", (req, res) => {
+  const entry = storage.addExpense(records, req.body || {});
+  storage.saveRecords(records);
+  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+});
 
-api.post('/expenses', (req, res) => {
-  res.json(createExpense(req.body || {}))
-})
-
-api.delete('/expenses/:id', (req, res) => {
-  const s = getStore()
-  s.expenses = s.expenses.filter((e) => e.id !== req.params.id)
-  saveStore()
-  res.json({ ok: true })
-})
+api.delete("/expenses/:id", (req, res) => {
+  const removed = storage.deleteEntry(records, "expense", req.params.id);
+  storage.saveRecords(records);
+  res.json({ ok: removed });
+});
 
 // --- Income --------------------------------------------------------------
-function createIncome(payload, receiptId = null) {
-  const s = getStore()
-  const amount = Number(payload.amount) || 0
-  const grossTotal = payload.grossTotal != null && payload.grossTotal !== '' ? Number(payload.grossTotal) : amount
-  const entry = {
-    id: newId(),
-    date: payload.date,
-    type: payload.type || 'salary_wages',
-    payer: payload.payer || payload.entity || '',
-    entity: payload.entity || payload.payer || '',
-    amount,
-    grossTotal,
-    taxableIncome:
-      payload.taxableIncome != null && payload.taxableIncome !== '' ? Number(payload.taxableIncome) : grossTotal,
-    gstAmount: payload.gstAmount != null && payload.gstAmount !== '' ? Number(payload.gstAmount) : 0,
-    netPay: payload.netPay != null && payload.netPay !== '' ? Number(payload.netPay) : amount,
-    description: payload.description || '',
-    documentKind: payload.documentKind || '',
-    reference: payload.reference || '',
-    summaryNotes: payload.summaryNotes || '',
-    claimingDeduction: Boolean(payload.claimingDeduction),
-    receiptId,
-    createdAt: new Date().toISOString(),
-  }
-  s.income.push(entry)
-  saveStore()
-  return { entry }
-}
+api.post("/income", (req, res) => {
+  const entry = storage.addIncome(records, req.body || {});
+  storage.saveRecords(records);
+  res.json({ entry });
+});
 
-api.post('/income', (req, res) => {
-  res.json(createIncome(req.body || {}))
-})
-
-api.delete('/income/:id', (req, res) => {
-  const s = getStore()
-  s.income = s.income.filter((i) => i.id !== req.params.id)
-  saveStore()
-  res.json({ ok: true })
-})
+api.delete("/income/:id", (req, res) => {
+  const removed = storage.deleteEntry(records, "income", req.params.id);
+  storage.saveRecords(records);
+  res.json({ ok: removed });
+});
 
 // --- Receipts ------------------------------------------------------------
-// OCR runs in fallback/manual mode: the image/PDF is stored and the user
-// enters + approves the totals. No external AI key is required.
-api.post('/receipts/scan', (req, res) => {
-  const { imageBase64, mimeType, filename, purpose } = req.body || {}
-  if (!imageBase64) {
-    res.status(400).json({ error: 'Missing image data.' })
-    return
-  }
-  const s = getStore()
-  const id = newId()
-  const isPdf = mimeType === 'application/pdf'
-  let saved = { imagePath: null }
+api.post("/receipts/scan", async (req, res, next) => {
   try {
-    saved = saveReceiptImage(id, imageBase64, mimeType)
-  } catch {
-    res.status(413).json({ error: 'Could not store file — it may be too large.' })
-    return
+    const { imageBase64, mimeType, filename, purpose } = req.body || {};
+    if (!imageBase64) {
+      res.status(400).json({ error: "Missing image data." });
+      return;
+    }
+    const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
+      purpose: purpose === "income" ? "income" : "expense",
+    });
+    const receipt = storage.addReceipt(records, {
+      source: "scan",
+      filename: filename || "receipt.jpg",
+      mimeType: mimeType || "image/jpeg",
+      dataUrl: imageBase64,
+      ocrResult,
+    });
+    storage.saveRecords(records);
+    res.json({
+      receipt: {
+        id: receipt.id,
+        filename: receipt.filename,
+        mimeType: receipt.mimeType,
+        hasImage: Boolean(receipt.imagePath),
+      },
+      ocrResult,
+      detectedTotals: getDetectedTotals(ocrResult),
+    });
+  } catch (err) {
+    next(err);
   }
+});
 
-  const ocrResult = {
-    documentType: purpose === 'income' ? 'income' : 'expense',
-    ocrSource: isPdf ? 'pdf' : 'fallback',
-    confidence: null,
-    notes: isPdf
-      ? 'PDF stored for your records — enter the totals from the document, then approve.'
-      : 'Automatic scan is unavailable in this build — enter the total from your receipt image, then approve.',
-    candidateAmounts: [],
-    lineItems: [],
-    date: null,
-    vendor: '',
-    vendorAbn: '',
-    suggestedCategory: purpose === 'income' ? undefined : 'other_work',
-    suggestedIncomeType: purpose === 'income' ? 'salary_wages' : undefined,
-  }
+api.post("/receipts/manual", (req, res) => {
+  const { expense } = storage.addManualReceipt(records, req.body || {});
+  storage.saveRecords(records);
+  res.json({ entry: expense, analysis: calcExpenseDeduction(expense) });
+});
 
-  const receipt = {
-    id,
-    filename: filename || `receipt-${id}`,
-    mimeType: mimeType || 'application/octet-stream',
-    imagePath: saved.imagePath,
-    ocrResult,
-    manual: null,
-    linkedExpenseId: null,
-    purpose: purpose || 'expense',
-    createdAt: new Date().toISOString(),
-  }
-  s.receipts.push(receipt)
-  saveStore()
-
-  res.json({
-    receipt: { id: receipt.id, filename: receipt.filename, mimeType: receipt.mimeType, hasImage: true },
-    ocrResult,
-    detectedTotals: [],
-  })
-})
-
-api.post('/receipts/manual', (req, res) => {
-  res.json(createExpense(req.body || {}))
-})
-
-api.post('/receipts/:id/confirm', (req, res) => {
-  const s = getStore()
-  const receipt = s.receipts.find((r) => r.id === req.params.id)
-  const { confirmed, purpose, ...payload } = req.body || {}
+api.post("/receipts/:id/confirm", (req, res) => {
+  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
+  const { confirmed, purpose, ...payload } = req.body || {};
 
   if (!confirmed) {
-    if (receipt) {
-      receipt.manual = payload
-      saveStore()
-    }
-    res.json({ ok: true, discarded: true })
-    return
+    if (receipt) receipt.manual = payload;
+    storage.saveRecords(records);
+    res.json({ ok: true, discarded: true });
+    return;
   }
 
-  if (purpose === 'income') {
-    const { entry } = createIncome(payload, receipt?.id || null)
+  if (purpose === "income") {
+    const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     if (receipt) {
-      receipt.linkedExpenseId = entry.id
-      receipt.manual = payload
-      saveStore()
+      receipt.linkedIncomeId = entry.id;
+      receipt.manual = payload;
     }
-    res.json({ entry })
-    return
+    storage.saveRecords(records);
+    res.json({ entry });
+    return;
   }
 
-  const { entry, analysis } = createExpense(payload, receipt?.id || null)
+  const entry = storage.addExpense(records, { ...payload, receiptId: receipt?.id || null });
   if (receipt) {
-    receipt.linkedExpenseId = entry.id
-    receipt.manual = payload
-    if (payload.category && receipt.ocrResult) receipt.ocrResult.suggestedCategory = payload.category
-    saveStore()
+    receipt.linkedExpenseId = entry.id;
+    receipt.manual = payload;
   }
-  res.json({ entry, analysis })
-})
+  storage.saveRecords(records);
+  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+});
 
-api.get('/receipts/:id/image', (req, res) => {
-  const receipt = getStore().receipts.find((r) => r.id === req.params.id)
-  const dataUrl = receipt && readReceiptDataUrl(receipt)
+api.get("/receipts/:id/image", (req, res) => {
+  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
+  const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
   if (!dataUrl) {
-    res.status(404).json({ error: 'Receipt image not found.' })
-    return
+    res.status(404).json({ error: "Receipt image not found." });
+    return;
   }
-  res.json({ dataUrl })
-})
+  res.json({ dataUrl });
+});
 
-api.get('/receipts/:id/file', (req, res) => {
-  const receipt = getStore().receipts.find((r) => r.id === req.params.id)
-  const img = receipt && readReceiptImage(receipt)
-  if (!img) {
-    res.status(404).json({ error: 'Receipt file not found.' })
-    return
+api.get("/receipts/:id/file", (req, res) => {
+  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
+  const info = receipt?.imagePath ? storage.getReceiptFileInfo(receipt.imagePath) : null;
+  if (!info) {
+    res.status(404).json({ error: "Receipt file not found." });
+    return;
   }
-  res.setHeader('Content-Type', img.mimeType)
+  res.setHeader("Content-Type", info.mime);
   if (req.query.download) {
-    res.setHeader('Content-Disposition', `attachment; filename="${receipt.filename || 'receipt'}"`)
+    res.setHeader("Content-Disposition", `attachment; filename="${receipt.filename || info.filename}"`);
   }
-  res.send(img.buffer)
-})
+  res.sendFile(info.filePath);
+});
 
-app.use('/api/haulage', api)
+app.use("/api/haulage", api);
 
 // --- Static UI at /haulage ----------------------------------------------
-app.use('/haulage', express.static(PUBLIC_DIR))
-app.get('/haulage', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')))
-app.get('/', (_req, res) => res.redirect('/haulage/'))
+app.use("/haulage", express.static(PUBLIC_DIR));
+app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+app.get("/", (_req, res) => res.redirect("/haulage/"));
 
-// JSON body-size / parse errors -> 413 so the client shows a friendly message.
+// Error handler -> friendly JSON (413 for oversized uploads).
 app.use((err, _req, res, _next) => {
-  if (err?.type === 'entity.too.large') {
-    res.status(413).json({ error: 'Upload too large.' })
-    return
+  if (err && err.type === "entity.too.large") {
+    res.status(413).json({ error: "Upload too large." });
+    return;
   }
-  res.status(err.status || 500).json({ error: err.message || 'Server error' })
-})
+  console.error("Server error:", err && err.message);
+  res.status((err && err.status) || 500).json({ error: (err && err.message) || "Server error" });
+});
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Haulage finance app running at http://localhost:${PORT}/haulage/`)
-  })
+if (process.env.NODE_ENV !== "test") {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Haulage finance app running at http://localhost:${PORT}/haulage/`);
+    console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
+  });
 }
 
-export { app }
+module.exports = { app };
