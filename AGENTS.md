@@ -39,7 +39,17 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   `openai`, `pdf-parse`) are installed by `npm install`; `require('./lib/receipt-ocr')`
   pulls in `tesseract.js` at load, so it must remain installed for the server to boot.
 - Lint/tests cover first-party code only: `public/app.js` and the provided
-  `lib/*.js` modules are excluded from ESLint (see `eslint.config.js`).
-  `npm test` (Vitest, `globals: true`) targets `tax-calculator.test.js`, which
-  exercises the real `lib/tax-calculator.js` + `lib/forecast.js`. There is no
-  build step.
+  `lib/*.js` modules are excluded from ESLint (see `eslint.config.js`); my own
+  `lib/document-breakdown.js`, `server.js`, `public/enhancements.js` and the
+  `*.test.js` files ARE linted. `npm test` (Vitest, `globals: true`) covers
+  `tax-calculator.test.js` and `document-breakdown.test.js`. No build step.
+- Scan enrichment is layered on without editing the provided files:
+  `lib/document-breakdown.js` computes the typed component breakdown + ATO
+  compliance and `server.js` folds it into the `/receipts/scan` response
+  (`componentBreakdown`, `compliance`, and typed `detectedTotals`).
+  `public/enhancements.js` (loaded after `app.js` in `index.html`) wraps
+  `fetch` to capture that response and renders the breakdown/compliance panel
+  into the scan-review box, and adds a click-to-enlarge image lightbox. Because
+  the provided OCR extractors don't parse super/PAYG as named fields, those
+  components are estimated/flagged unless a clear scan or `OPENAI_API_KEY`
+  surfaces them — the full breach/within-policy grading is covered by unit tests.

@@ -12,6 +12,35 @@ const storage = require("./lib/storage");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { buildForecast } = require("./lib/forecast");
 const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
+const { analyzeScan } = require("./lib/document-breakdown");
+
+// Merge the typed component breakdown with the provided detected totals,
+// preferring typed labels, de-duplicating by amount, keeping one primary.
+function mergeDetectedTotals(ocrResult, components) {
+  const out = [];
+  const seen = new Set();
+  const add = (label, amount, primary) => {
+    const v = Number(amount);
+    if (!(v > 0)) return;
+    const key = v.toFixed(2);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ label, amount: v, primary: Boolean(primary) });
+  };
+  for (const c of components) {
+    if (c.detected !== false) add(c.label, c.amount, false);
+  }
+  for (const t of getDetectedTotals(ocrResult)) add(t.label, t.amount, t.primary);
+  if (out.length && !out.some((t) => t.primary)) out[0].primary = true;
+  let primarySeen = false;
+  for (const t of out) {
+    if (t.primary) {
+      if (primarySeen) t.primary = false;
+      else primarySeen = true;
+    }
+  }
+  return out;
+}
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -122,6 +151,18 @@ api.post("/receipts/scan", async (req, res, next) => {
     const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
       purpose: purpose === "income" ? "income" : "expense",
     });
+
+    // Enrich: typed component breakdown + ATO compliance assessment.
+    const { componentBreakdown, breakdownKind, compliance } = analyzeScan(
+      ocrResult,
+      purpose === "income" ? "income" : "expense",
+      records.profile
+    );
+    ocrResult.componentBreakdown = componentBreakdown;
+    ocrResult.compliance = compliance;
+    // Surface the compliance summary in the existing confirm UI note.
+    ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+
     const receipt = storage.addReceipt(records, {
       source: "scan",
       filename: filename || "receipt.jpg",
@@ -138,7 +179,10 @@ api.post("/receipts/scan", async (req, res, next) => {
         hasImage: Boolean(receipt.imagePath),
       },
       ocrResult,
-      detectedTotals: getDetectedTotals(ocrResult),
+      detectedTotals: mergeDetectedTotals(ocrResult, componentBreakdown),
+      componentBreakdown,
+      breakdownKind,
+      compliance,
     });
   } catch (err) {
     next(err);

@@ -14,6 +14,23 @@ database is required.
 > (OpenAI `gpt-4o-mini` vision) is used and merged with the local result. PDF
 > income documents are parsed via `pdf-parse`. No key is required to run.
 
+### Scan enrichment (breakdown + ATO compliance)
+
+When a document is scanned, the total is broken down into typed components and
+checked against ATO transport-industry standards:
+
+- **Income (payslip/remittance):** components for Wages/gross, PAYG tax,
+  Superannuation, Entitlements/allowances, GST and Net pay; compliance checks for
+  the Super Guarantee rate (12% for 2025-26+), PAYG withholding and net
+  reconciliation. Undetected components (e.g. super) are estimated and flagged.
+- **Expense:** line-item breakdown plus checks for ATO reasonable-amount meal
+  caps and the $300 substantiation threshold.
+
+The scanned image is shown during review and can be clicked to enlarge (a
+lightbox) so totals are easy to read before approving. This enrichment lives in
+`lib/document-breakdown.js` (backend) and `public/enhancements.js` (UI layer),
+leaving the provided `app.js` untouched.
+
 ## Requirements
 
 - Node.js 20+ (developed on Node 22)
