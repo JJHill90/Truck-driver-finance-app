@@ -7,6 +7,7 @@ const {
   assessExpenseCompliance,
   analyzeScan,
   sgRate,
+  DAILY_OVERNIGHT_ALLOWANCE,
 } = require("./lib/document-breakdown");
 
 describe("sgRate", () => {
@@ -272,5 +273,29 @@ describe("analyzeScan", () => {
     );
     expect(r.componentBreakdown.length).toBeGreaterThan(0);
     expect(r.compliance.scope).toBe("income");
+  });
+
+  it("adds a separate ATO overnight allowance line for the pay period", () => {
+    const ocr = {
+      documentType: "income",
+      grossTotal: 3130.41,
+      netPay: 2321.4,
+      rawText: "Pay Period From: 17/6/2026 To: 23/6/2026\nPayment Date: 25/6/2026",
+    };
+    const r = analyzeScan(ocr, "income", { financialYear: "2025-26", driverType: "long_haul" });
+    const ov = r.componentBreakdown.find((c) => c.type === "overnight_allowance");
+    expect(ov).toBeTruthy();
+    expect(ov.amount).toBe(7 * DAILY_OVERNIGHT_ALLOWANCE); // 7-day Wed–Tue period
+    expect(ov.detected).toBe(false);
+    expect(r.overnightAllowance.days).toBe(7);
+  });
+
+  it("omits the overnight allowance for local drivers", () => {
+    const r = analyzeScan(
+      { documentType: "income", grossTotal: 2000, rawText: "Pay Period From: 17/6/2026 To: 23/6/2026" },
+      "income",
+      { driverType: "local" }
+    );
+    expect(r.componentBreakdown.find((c) => c.type === "overnight_allowance")).toBeUndefined();
   });
 });

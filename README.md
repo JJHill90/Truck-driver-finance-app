@@ -31,6 +31,11 @@ For income documents the **pay period and payment date** are extracted (e.g.
 weekly cycle window it falls into is derived (e.g. Wed→Tue), and all of it is
 shown in the review panel and saved with the entry so it appears in filing.
 
+For long-haul drivers the breakdown also adds a **separate ATO overnight
+allowance line** (Living Away From Home Allowance, an indicative ~$132/day ×
+days in the pay period) — shown whether or not the payslip lists a "Travel
+Allowance", as a clearly-badged estimate that is not counted as actual income.
+
 The scanned image is shown during review and can be clicked to enlarge (a
 lightbox) so totals are easy to read before approving. This enrichment lives in
 `lib/document-breakdown.js` (backend) and `public/enhancements.js` (UI layer),
