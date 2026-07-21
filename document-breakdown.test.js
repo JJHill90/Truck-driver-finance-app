@@ -1,5 +1,6 @@
 const {
   buildComponentBreakdown,
+  parseLabeledLineItems,
   assessIncomeCompliance,
   assessExpenseCompliance,
   analyzeScan,
@@ -47,6 +48,53 @@ describe("buildComponentBreakdown (income)", () => {
     const superComp = components.find((c) => c.type === "super");
     expect(superComp.detected).toBe(false);
     expect(superComp.amount).toBe(120); // 1000 * 12%
+  });
+});
+
+describe("parseLabeledLineItems", () => {
+  it("labels entries with the text preceding the amount", () => {
+    const text = [
+      "BP Truck Stop",
+      "Diesel 450.3L        $720.48",
+      "AdBlue 10L           $18.90",
+      "Coffee               $5.50",
+      "GST                  $67.71",
+      "TOTAL                $744.88",
+    ].join("\n");
+    const items = parseLabeledLineItems(text);
+    const map = Object.fromEntries(items.map((i) => [i.description, i.amount]));
+    expect(map["Diesel 450.3L"]).toBe(720.48);
+    expect(map["AdBlue 10L"]).toBe(18.9);
+    expect(map["Coffee"]).toBe(5.5);
+  });
+});
+
+describe("buildComponentBreakdown (expense, multi-entry receipt)", () => {
+  it("labels each entry from the receipt image text and separates GST/total", () => {
+    const ocr = {
+      documentType: "expense",
+      amount: 744.88,
+      gst: 67.71,
+      rawTextPreview: [
+        "BP Truck Stop",
+        "Diesel 450.3L        $720.48",
+        "AdBlue 10L           $18.90",
+        "Coffee               $5.50",
+        "GST                  $67.71",
+        "TOTAL                $744.88",
+      ].join("\n"),
+    };
+    const { components, kind } = buildComponentBreakdown(ocr, false, "2025-26");
+    expect(kind).toBe("expense");
+    const lines = components.filter((c) => c.type === "line").map((c) => c.label);
+    expect(lines).toContain("Diesel 450.3L");
+    expect(lines).toContain("AdBlue 10L");
+    expect(lines).toContain("Coffee");
+    // GST and grand total are captured as their own components, not line items.
+    expect(components.find((c) => c.type === "gst").amount).toBe(67.71);
+    expect(components.find((c) => c.type === "total").amount).toBe(744.88);
+    expect(lines).not.toContain("TOTAL");
+    expect(lines).not.toContain("GST");
   });
 });
 
