@@ -76,6 +76,21 @@ public/
 data/                   Runtime store + receipts (git-ignored)
 ```
 
+## Accounts (multi-user profiles)
+
+Under the **Profile** tab, a first-time user can create a profile with a
+username + password; existing users log in there too. Each account has its own
+private data store (receipts, income, EOFY projections, tax values and presets),
+so after logging in all of that user's data loads immediately. A missing-data
+alert banner (e.g. expenses needing receipts, no income recorded, incomplete
+profile) is shown on load.
+
+- Accounts persist to `data/users.json`; per-user records to `data/users/<name>.json`.
+- Passwords are stored as salted PBKDF2 hashes; the session is an HttpOnly cookie.
+- Without logging in, the app works against a shared **guest** store.
+- This is app-appropriate auth for a self-hosted tool (the "cloud" is the local
+  server), not a hardened public identity provider.
+
 ## Environment variables
 
 - `PORT` — server port (default `3000`).

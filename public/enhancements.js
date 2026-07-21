@@ -199,3 +199,178 @@
     init();
   }
 })();
+
+/*
+ * Accounts + alerts layer.
+ * Lets a first-time user create a profile (username/password) under the Profile
+ * tab, logs existing users in, and shows a missing-data alert banner. On a
+ * successful auth change the page reloads so app.js re-fetches the now
+ * user-scoped data (receipts, income, EOFY projections, tax values).
+ */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  async function apiPost(path, body) {
+    const res = await fetch(`${API}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
+  async function apiGet(path) {
+    const res = await fetch(`${API}${path}`, { credentials: "same-origin" });
+    return res.json().catch(() => ({}));
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function setMessage(text, isError) {
+    const el = byId("auth-message");
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.color = isError ? "var(--red)" : "var(--text-dim)";
+  }
+
+  function showAuthState(user) {
+    const outEl = byId("auth-logged-out");
+    const inEl = byId("auth-logged-in");
+    if (!outEl || !inEl) return;
+    if (user && user.username) {
+      outEl.classList.add("hidden");
+      inEl.classList.remove("hidden");
+      const nameEl = byId("auth-current-user");
+      if (nameEl) nameEl.textContent = user.username;
+      const presets = user.presets || {};
+      if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
+      if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
+    } else {
+      outEl.classList.remove("hidden");
+      inEl.classList.add("hidden");
+    }
+  }
+
+  function renderAlerts(alerts, user) {
+    const main = document.querySelector(".main");
+    if (!main) return;
+    let bar = byId("enh-alerts");
+    if (bar) bar.remove();
+    if (!alerts || !alerts.length) return;
+    bar = document.createElement("div");
+    bar.id = "enh-alerts";
+    bar.className = "enh-alerts";
+    const items = alerts
+      .map(
+        (a) =>
+          `<li class="enh-alert enh-alert-${esc(a.level || "info")}">${esc(a.message)}</li>`
+      )
+      .join("");
+    const who = user ? `Signed in as ${esc(user)}` : "Guest (create a profile to save your data)";
+    bar.innerHTML = `
+      <div class="enh-alerts-head">
+        <strong>Review needed</strong>
+        <span class="muted">${who}</span>
+        <button type="button" class="enh-alerts-close" aria-label="Dismiss">×</button>
+      </div>
+      <ul class="enh-alerts-list">${items}</ul>`;
+    bar.querySelector(".enh-alerts-close").addEventListener("click", () => bar.remove());
+    const topbar = main.querySelector(".topbar");
+    if (topbar && topbar.nextSibling) main.insertBefore(bar, topbar.nextSibling);
+    else main.insertBefore(bar, main.firstChild);
+  }
+
+  function readCreds() {
+    return {
+      username: (byId("auth-username") || {}).value || "",
+      password: (byId("auth-password") || {}).value || "",
+    };
+  }
+
+  function wire() {
+    const register = byId("auth-register");
+    const login = byId("auth-login");
+    const logout = byId("auth-logout");
+    const savePresets = byId("auth-save-presets");
+
+    if (register) {
+      register.addEventListener("click", async () => {
+        setMessage("Creating profile…");
+        try {
+          await apiPost("/auth/register", readCreds());
+          window.location.reload();
+        } catch (e) {
+          setMessage(e.message, true);
+        }
+      });
+    }
+    if (login) {
+      login.addEventListener("click", async () => {
+        setMessage("Logging in…");
+        try {
+          await apiPost("/auth/login", readCreds());
+          window.location.reload();
+        } catch (e) {
+          setMessage(e.message, true);
+        }
+      });
+    }
+    if (logout) {
+      logout.addEventListener("click", async () => {
+        try {
+          await apiPost("/auth/logout", {});
+        } catch {
+          /* ignore */
+        }
+        window.location.reload();
+      });
+    }
+    if (savePresets) {
+      savePresets.addEventListener("click", async () => {
+        const presets = {
+          defaultWorkUsePercent: Number((byId("preset-workuse") || {}).value) || undefined,
+          defaultCategory: (byId("preset-category") || {}).value || undefined,
+        };
+        try {
+          await apiPost("/auth/presets", presets);
+          if (window.toast) window.toast("Presets saved");
+        } catch (e) {
+          if (window.toast) window.toast(e.message);
+        }
+      });
+    }
+  }
+
+  async function start() {
+    wire();
+    try {
+      const me = await apiGet("/auth/me");
+      showAuthState(me.user);
+      const alertData = await apiGet("/alerts");
+      renderAlerts(alertData.alerts, alertData.user);
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

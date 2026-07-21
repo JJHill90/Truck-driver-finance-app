@@ -251,6 +251,35 @@
 
         <!-- Profile -->
         <section id="view-profile" class="view">
+          <div class="panel" id="account-panel">
+            <div id="auth-logged-out">
+              <div class="panel-header"><h2>Create your profile / Log in</h2></div>
+              <p class="muted">Save your receipts, income, EOFY figures and presets to your own profile in the app cloud. New here? Pick a username and password to get started.</p>
+              <form id="auth-form" class="form-grid" autocomplete="on">
+                <label>Username<input id="auth-username" name="username" autocomplete="username" placeholder="e.g. dave.hill" /></label>
+                <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="At least 6 characters" /></label>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn primary" id="auth-register">Create profile</button>
+                  <button type="button" class="btn secondary" id="auth-login">Log in</button>
+                </div>
+              </form>
+              <p id="auth-message" class="muted" role="status"></p>
+            </div>
+            <div id="auth-logged-in" class="hidden">
+              <div class="panel-header">
+                <h2>Signed in as <span id="auth-current-user"></span></h2>
+                <button type="button" class="btn secondary" id="auth-logout">Log out</button>
+              </div>
+              <p class="muted">Your data below is private to this profile. Presets pre-fill new entries.</p>
+              <div class="form-grid">
+                <label>Default work-use %<input id="preset-workuse" type="number" min="0" max="100" placeholder="100" /></label>
+                <label>Default expense category<input id="preset-category" placeholder="e.g. fuel" /></label>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn primary" id="auth-save-presets">Save presets</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="panel">
             <div class="panel-header"><h2>Driver profile</h2></div>
             <form id="profile-form" class="form-grid">

@@ -43,6 +43,16 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   `lib/document-breakdown.js`, `server.js`, `public/enhancements.js` and the
   `*.test.js` files ARE linted. `npm test` (Vitest, `globals: true`) covers
   `tax-calculator.test.js` and `document-breakdown.test.js`. No build step.
+- Multi-user accounts are layered on without editing the provided files.
+  `lib/auth.js` stores accounts in `data/users.json` (salted PBKDF2) and holds
+  sessions in memory (tokens); `server.js` reads the `haulage_sid` HttpOnly
+  cookie, resolves `req.user`, and scopes every route to that user's own records
+  file (`data/users/<name>.json`) via a per-user cache — anonymous requests use a
+  shared guest store. `public/enhancements.js` renders the Profile-tab account
+  panel (register/login/logout/presets) and a missing-data alert banner
+  (`GET /alerts`), and reloads the page after an auth change so `app.js`
+  re-fetches user-scoped data. Sessions reset on server restart (accounts/data
+  persist); receipt image files are shared under `data/receipts/` (UUID names).
 - Scan enrichment is layered on without editing the provided files:
   `lib/document-breakdown.js` computes the typed component breakdown + ATO
   compliance and `server.js` folds it into the `/receipts/scan` response

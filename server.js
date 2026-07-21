@@ -7,13 +7,72 @@ const {
   CATEGORY_GROUPS,
   DRIVER_TYPES,
   getCurrentFinancialYear,
+  getCategoryMeta,
 } = require("./lib/ato-standards");
 const storage = require("./lib/storage");
+const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { buildForecast } = require("./lib/forecast");
 const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
+
+const PORT = Number(process.env.PORT) || 3000;
+const PUBLIC_DIR = path.join(__dirname, "public");
+const SESSION_COOKIE = "haulage_sid";
+
+// Optional cloud OCR — only used when an API key is configured.
+let openai = null;
+if (process.env.OPENAI_API_KEY) {
+  try {
+    const OpenAI = require("openai");
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  } catch (err) {
+    console.warn("OpenAI SDK unavailable, falling back to local OCR:", err.message);
+  }
+}
+
+// --- Per-user record stores ---------------------------------------------
+// Each signed-in user gets their own data/users/<name>.json; anonymous visitors
+// share a guest store so the app still works before creating a profile.
+const recordsCache = new Map();
+function fileForUser(user) {
+  return user ? auth.recordsFileFor(user) : storage.DEFAULT_FILE;
+}
+function recordsForUser(user) {
+  const key = user || "__guest__";
+  if (!recordsCache.has(key)) recordsCache.set(key, storage.loadRecords(fileForUser(user)));
+  return recordsCache.get(key);
+}
+function getRecords(req) {
+  return recordsForUser(req.user);
+}
+function persist(req) {
+  storage.saveRecords(getRecords(req), fileForUser(req.user));
+}
+function profileFor(records, financialYear) {
+  return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  header.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx > -1) out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  });
+  return out;
+}
+
+function setSessionCookie(res, token) {
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
+  );
+}
+function clearSessionCookie(res) {
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+}
 
 // Merge the typed component breakdown with the provided detected totals,
 // preferring typed labels, de-duplicating by amount, keeping one primary.
@@ -31,8 +90,6 @@ function mergeDetectedTotals(ocrResult, components) {
   for (const c of components) {
     if (c.detected !== false) add(c.label, c.amount, false);
   }
-  // When we have a labelled breakdown, drop the generic "Detected $X" candidate
-  // rows (e.g. YTD figures) so the review list shows meaningful labels only.
   const hasBreakdown = components.length > 0;
   for (const t of getDetectedTotals(ocrResult)) {
     if (hasBreakdown && /^Detected \$/.test(t.label)) continue;
@@ -49,31 +106,113 @@ function mergeDetectedTotals(ocrResult, components) {
   return out;
 }
 
-const PORT = Number(process.env.PORT) || 3000;
-const PUBLIC_DIR = path.join(__dirname, "public");
+// Missing-data / compliance alerts for the current user's records.
+function buildAlerts(records) {
+  const alerts = [];
+  const profile = records.profile || {};
+  const summary = summariseYear(records, profile);
 
-// Optional cloud OCR — only used when an API key is configured.
-let openai = null;
-if (process.env.OPENAI_API_KEY) {
-  try {
-    const OpenAI = require("openai");
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  } catch (err) {
-    console.warn("OpenAI SDK unavailable, falling back to local OCR:", err.message);
+  const missing = [];
+  if (!profile.name) missing.push("name");
+  if (!profile.employer) missing.push("employer");
+  if (!Number(profile.annualSalary)) missing.push("annual salary");
+  if (missing.length) {
+    alerts.push({ level: "info", message: `Complete your profile: ${missing.join(", ")}.` });
   }
-}
 
-// Single in-memory record set persisted to data/driver-records.json after mutations.
-const records = storage.loadRecords();
+  const needReceipt = (records.expenses || []).filter((e) => {
+    const meta = getCategoryMeta(e.category);
+    const needs =
+      meta &&
+      ["receipt", "written_evidence", "receipt_and_work_use"].includes(meta.substantiation);
+    return needs && !e.receiptId && Number(e.amount) > 0;
+  });
+  if (needReceipt.length) {
+    alerts.push({
+      level: "warning",
+      message: `${needReceipt.length} expense(s) need a receipt attached for ATO substantiation.`,
+    });
+  }
+
+  if (summary.substantiation && summary.substantiation.required) {
+    alerts.push({ level: "warning", message: summary.substantiation.message });
+  }
+  if (!(records.income || []).length) {
+    alerts.push({
+      level: "info",
+      message: `No income recorded${profile.financialYear ? ` for FY ${profile.financialYear}` : ""} yet — scan a payslip or remittance.`,
+    });
+  }
+  if (!(records.expenses || []).length) {
+    alerts.push({
+      level: "info",
+      message: "No expenses recorded yet — scan a receipt to start tracking deductions.",
+    });
+  }
+  return alerts;
+}
 
 const app = express();
 app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
 
-function profileFor(financialYear) {
-  return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
-}
+// Resolve the signed-in user (if any) from the session cookie.
+api.use((req, _res, next) => {
+  const token = parseCookies(req)[SESSION_COOKIE];
+  req.sessionToken = token || null;
+  req.user = auth.getSessionUser(token);
+  next();
+});
+
+// --- Auth ----------------------------------------------------------------
+api.post("/auth/register", (req, res) => {
+  const { username, password, presets } = req.body || {};
+  try {
+    const user = auth.registerUser(username, password, presets);
+    const token = auth.createSession(user.username);
+    recordsForUser(user.username); // initialise their store
+    setSessionCookie(res, token);
+    res.json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/login", (req, res) => {
+  const { username, password } = req.body || {};
+  const user = auth.verifyUser(username, password);
+  if (!user) {
+    res.status(401).json({ error: "Invalid username or password." });
+    return;
+  }
+  const token = auth.createSession(user.username);
+  recordsForUser(user.username);
+  setSessionCookie(res, token);
+  res.json({ user });
+});
+
+api.post("/auth/logout", (req, res) => {
+  auth.destroySession(req.sessionToken);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+api.get("/auth/me", (req, res) => {
+  res.json({ user: req.user ? auth.getUser(req.user) : null });
+});
+
+api.post("/auth/presets", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to save presets." });
+    return;
+  }
+  res.json({ user: auth.updatePresets(req.user, req.body || {}) });
+});
+
+api.get("/alerts", (req, res) => {
+  res.json({ alerts: buildAlerts(getRecords(req)), user: req.user || null });
+});
 
 // --- Reference data ------------------------------------------------------
 api.get("/standards", (_req, res) => {
@@ -86,29 +225,34 @@ api.get("/standards", (_req, res) => {
   });
 });
 
-api.get("/records", (_req, res) => {
+api.get("/records", (req, res) => {
+  const records = getRecords(req);
   res.json({ ...records, vendors: storage.listVendors(records) });
 });
 
 // --- Profile -------------------------------------------------------------
 api.put("/profile", (req, res) => {
+  const records = getRecords(req);
   const profile = storage.updateProfile(records, req.body || {});
-  storage.saveRecords(records);
+  persist(req);
   res.json({ profile });
 });
 
 // --- Summary / report / forecast ----------------------------------------
 api.get("/summary", (req, res) => {
+  const records = getRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  res.json(summariseYear(records, profileFor(fy)));
+  res.json(summariseYear(records, profileFor(records, fy)));
 });
 
 api.get("/report", (req, res) => {
+  const records = getRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  res.json(buildAccountantReport(records, profileFor(fy)));
+  res.json(buildAccountantReport(records, profileFor(records, fy)));
 });
 
 api.get("/forecast", (req, res) => {
+  const records = getRecords(req);
   const manual = {
     mode: req.query.mode,
     projectedIncome: req.query.projectedIncome,
@@ -123,33 +267,38 @@ api.post("/expenses/preview", (req, res) => {
 });
 
 api.post("/expenses", (req, res) => {
+  const records = getRecords(req);
   const entry = storage.addExpense(records, req.body || {});
-  storage.saveRecords(records);
+  persist(req);
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
 
 api.delete("/expenses/:id", (req, res) => {
+  const records = getRecords(req);
   const removed = storage.deleteEntry(records, "expense", req.params.id);
-  storage.saveRecords(records);
+  persist(req);
   res.json({ ok: removed });
 });
 
 // --- Income --------------------------------------------------------------
 api.post("/income", (req, res) => {
+  const records = getRecords(req);
   const entry = storage.addIncome(records, req.body || {});
-  storage.saveRecords(records);
+  persist(req);
   res.json({ entry });
 });
 
 api.delete("/income/:id", (req, res) => {
+  const records = getRecords(req);
   const removed = storage.deleteEntry(records, "income", req.params.id);
-  storage.saveRecords(records);
+  persist(req);
   res.json({ ok: removed });
 });
 
 // --- Receipts ------------------------------------------------------------
 api.post("/receipts/scan", async (req, res, next) => {
   try {
+    const records = getRecords(req);
     const { imageBase64, mimeType, filename, purpose } = req.body || {};
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
@@ -179,7 +328,6 @@ api.post("/receipts/scan", async (req, res, next) => {
     );
     ocrResult.componentBreakdown = componentBreakdown;
     ocrResult.compliance = compliance;
-    // Surface the compliance summary in the existing confirm UI note.
     ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
 
     const receipt = storage.addReceipt(records, {
@@ -189,7 +337,7 @@ api.post("/receipts/scan", async (req, res, next) => {
       dataUrl: imageBase64,
       ocrResult,
     });
-    storage.saveRecords(records);
+    persist(req);
     res.json({
       receipt: {
         id: receipt.id,
@@ -209,18 +357,20 @@ api.post("/receipts/scan", async (req, res, next) => {
 });
 
 api.post("/receipts/manual", (req, res) => {
+  const records = getRecords(req);
   const { expense } = storage.addManualReceipt(records, req.body || {});
-  storage.saveRecords(records);
+  persist(req);
   res.json({ entry: expense, analysis: calcExpenseDeduction(expense) });
 });
 
 api.post("/receipts/:id/confirm", (req, res) => {
+  const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const { confirmed, purpose, ...payload } = req.body || {};
 
   if (!confirmed) {
     if (receipt) receipt.manual = payload;
-    storage.saveRecords(records);
+    persist(req);
     res.json({ ok: true, discarded: true });
     return;
   }
@@ -231,7 +381,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
       receipt.linkedIncomeId = entry.id;
       receipt.manual = payload;
     }
-    storage.saveRecords(records);
+    persist(req);
     res.json({ entry });
     return;
   }
@@ -241,11 +391,12 @@ api.post("/receipts/:id/confirm", (req, res) => {
     receipt.linkedExpenseId = entry.id;
     receipt.manual = payload;
   }
-  storage.saveRecords(records);
+  persist(req);
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
 
 api.get("/receipts/:id/image", (req, res) => {
+  const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
   if (!dataUrl) {
@@ -256,6 +407,7 @@ api.get("/receipts/:id/image", (req, res) => {
 });
 
 api.get("/receipts/:id/file", (req, res) => {
+  const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const info = receipt?.imagePath ? storage.getReceiptFileInfo(receipt.imagePath) : null;
   if (!info) {
