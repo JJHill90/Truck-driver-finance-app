@@ -1,6 +1,7 @@
 const {
   buildComponentBreakdown,
   parseLabeledLineItems,
+  parseIncomeTable,
   assessIncomeCompliance,
   assessExpenseCompliance,
   analyzeScan,
@@ -124,12 +125,55 @@ describe("buildComponentBreakdown (income, labels from document text)", () => {
     expect(byLabel["Net pay"].type).toBe("net");
   });
 
-  it("detects a super breach from the document (super below 12% of gross)", () => {
+  it("flags a moderate super shortfall from the document for review", () => {
     const breakdown = buildComponentBreakdown(ocr, true, "2025-26");
     const c = assessIncomeCompliance(ocr, breakdown, "2025-26");
     const sg = c.checks.find((x) => x.name === "Superannuation Guarantee");
-    expect(sg.status).toBe("breach"); // 180 < 12% of 2000 (240)
-    expect(c.status).toBe("breach");
+    expect(sg.status).toBe("review"); // 180 is 75% of 12%*2000 (240) -> review, not breach
+  });
+});
+
+describe("parseIncomeTable (tabular payslip)", () => {
+  const text = [
+    "Pay Period From: 17/6/2026 To: 23/6/2026 GROSS PAY: $3,130.41",
+    "NET PAY: $2,321.40",
+    "DESCRIPTION HOURS CALC. RATE AMOUNT YTD TYPE",
+    "RDO - Grade 8 1.00 $46.50 $46.50 $2,416.40 Wages",
+    "Travel Allowance 7.00 $56.28 $393.96 $17,503.08 Wages",
+    "Kilometre Rate B/D 4,055.0",
+    "0",
+    "$0.57 $2,315.81 $104,448.98 Wages",
+    "PAYG Withholding -$809.01 -$36,338.09 Tax",
+    "SG - Drops - 12% $4.80 $184.80 Superannuation Expenses",
+    "SG - BD Current $195.32 $9,781.57 Superannuation Expenses",
+    "-- 1 of 1 --",
+  ].join("\n");
+
+  it("reads each row's description, period AMOUNT (not YTD) and TYPE", () => {
+    const rows = parseIncomeTable(text);
+    const byDesc = Object.fromEntries(rows.map((r) => [r.description, r]));
+    expect(byDesc["RDO - Grade 8"].amount).toBe(46.5);
+    expect(byDesc["RDO - Grade 8"].type).toBe("wages");
+    expect(byDesc["Travel Allowance"].amount).toBe(393.96);
+    expect(byDesc["Kilometre Rate B/D"].amount).toBe(2315.81); // wrapped row
+    expect(byDesc["PAYG Withholding"].amount).toBe(-809.01);
+    expect(byDesc["PAYG Withholding"].type).toBe("tax");
+    expect(byDesc["SG - Drops - 12%"].type).toBe("super");
+    expect(byDesc["SG - Drops - 12%"].amount).toBe(4.8);
+  });
+
+  it("builds a labelled income breakdown and reconciles the tax check", () => {
+    const ocr = { documentType: "income", grossTotal: 3130.41, netPay: 2321.4, rawText: text };
+    const { components } = buildComponentBreakdown(ocr, true, "2026-27");
+    const labels = components.map((c) => c.label);
+    expect(labels).toContain("RDO - Grade 8");
+    expect(labels).toContain("PAYG Withholding");
+    expect(labels).toContain("SG - Drops - 12%");
+    const c = assessIncomeCompliance(ocr, { components }, "2026-27");
+    const payg = c.checks.find((x) => x.name === "PAYG withholding");
+    expect(payg.status).toBe("within_policy");
+    const recon = c.checks.find((x) => x.name === "Net reconciliation");
+    expect(recon.status).toBe("within_policy");
   });
 });
 

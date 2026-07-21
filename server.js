@@ -13,6 +13,7 @@ const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("
 const { buildForecast } = require("./lib/forecast");
 const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
+const { extractPdfText } = require("./lib/pdf-text");
 
 // Merge the typed component breakdown with the provided detected totals,
 // preferring typed labels, de-duplicating by amount, keeping one primary.
@@ -30,7 +31,13 @@ function mergeDetectedTotals(ocrResult, components) {
   for (const c of components) {
     if (c.detected !== false) add(c.label, c.amount, false);
   }
-  for (const t of getDetectedTotals(ocrResult)) add(t.label, t.amount, t.primary);
+  // When we have a labelled breakdown, drop the generic "Detected $X" candidate
+  // rows (e.g. YTD figures) so the review list shows meaningful labels only.
+  const hasBreakdown = components.length > 0;
+  for (const t of getDetectedTotals(ocrResult)) {
+    if (hasBreakdown && /^Detected \$/.test(t.label)) continue;
+    add(t.label, t.amount, t.primary);
+  }
   if (out.length && !out.some((t) => t.primary)) out[0].primary = true;
   let primarySeen = false;
   for (const t of out) {
@@ -151,6 +158,18 @@ api.post("/receipts/scan", async (req, res, next) => {
     const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
       purpose: purpose === "income" ? "income" : "expense",
     });
+
+    // For PDFs, capture the FULL document text (the provided extractor only
+    // exposes a short preview) so every row of tabular payslips can be labelled.
+    const isPdf = mimeType === "application/pdf" || /\.pdf$/i.test(filename || "");
+    if (isPdf) {
+      try {
+        const fullText = await extractPdfText(imageBase64);
+        if (fullText) ocrResult.rawText = fullText;
+      } catch (e) {
+        console.warn("PDF full-text extraction failed:", e.message);
+      }
+    }
 
     // Enrich: typed component breakdown + ATO compliance assessment.
     const { componentBreakdown, breakdownKind, compliance } = analyzeScan(
