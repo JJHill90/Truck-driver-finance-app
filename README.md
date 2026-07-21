@@ -26,6 +26,11 @@ checked against ATO transport-industry standards:
 - **Expense:** line-item breakdown plus checks for ATO reasonable-amount meal
   caps and the $300 substantiation threshold.
 
+For income documents the **pay period and payment date** are extracted (e.g.
+"Pay Period From: 17/06/2026 To: 23/06/2026", "Payment Date: 25/06/2026"), the
+weekly cycle window it falls into is derived (e.g. Wed→Tue), and all of it is
+shown in the review panel and saved with the entry so it appears in filing.
+
 The scanned image is shown during review and can be clicked to enlarge (a
 lightbox) so totals are easy to read before approving. This enrichment lives in
 `lib/document-breakdown.js` (backend) and `public/enhancements.js` (UI layer),

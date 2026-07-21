@@ -2,6 +2,7 @@ const {
   buildComponentBreakdown,
   parseLabeledLineItems,
   parseIncomeTable,
+  computePayPeriod,
   assessIncomeCompliance,
   assessExpenseCompliance,
   analyzeScan,
@@ -231,6 +232,34 @@ describe("assessExpenseCompliance", () => {
     const c = assessExpenseCompliance({ amount: 40, suggestedCategory: "meals_dinner" }, "2025-26");
     const meal = c.checks.find((x) => x.name === "Reasonable amount (meals)");
     expect(meal.status).toBe("within_policy");
+  });
+});
+
+describe("computePayPeriod", () => {
+  it("reads an explicit 'Pay Period From: X To: Y' and payment date", () => {
+    const text = [
+      "Payment Date: 25/6/2026",
+      "Pay Period From: 17/6/2026 To: 23/6/2026 GROSS PAY: $3,130.41",
+    ].join("\n");
+    const pp = computePayPeriod(text);
+    expect(pp.from).toBe("2026-06-17");
+    expect(pp.to).toBe("2026-06-23");
+    expect(pp.paymentDate).toBe("2026-06-25");
+    expect(pp.fromLabel).toMatch(/^Wed 17 Jun 2026/);
+    expect(pp.toLabel).toMatch(/^Tue 23 Jun 2026/);
+    expect(pp.cycleLabel).toBe("Weekly (Wed\u2013Tue)");
+  });
+
+  it("derives a Wed→Tue window from the payment date when no period is shown", () => {
+    const pp = computePayPeriod("Date Paid: 25/06/2026");
+    // Last Tuesday on/before Thu 25 Jun 2026 is Tue 23 Jun; the Wed before is 17 Jun.
+    expect(pp.to).toBe("2026-06-23");
+    expect(pp.from).toBe("2026-06-17");
+    expect(pp.cycleLabel).toBe("Weekly (Wed\u2013Tue)");
+  });
+
+  it("returns null when there are no dates", () => {
+    expect(computePayPeriod("no dates here")).toBeNull();
   });
 });
 

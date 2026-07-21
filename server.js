@@ -321,7 +321,7 @@ api.post("/receipts/scan", async (req, res, next) => {
     }
 
     // Enrich: typed component breakdown + ATO compliance assessment.
-    const { componentBreakdown, breakdownKind, compliance } = analyzeScan(
+    const { componentBreakdown, breakdownKind, compliance, payPeriod } = analyzeScan(
       ocrResult,
       purpose === "income" ? "income" : "expense",
       records.profile
@@ -329,6 +329,24 @@ api.post("/receipts/scan", async (req, res, next) => {
     ocrResult.componentBreakdown = componentBreakdown;
     ocrResult.compliance = compliance;
     ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+
+    // Pay period / payment date -> surface in the confirm form and saved entry
+    // (so it appears in filing), and expose structured info for the UI panel.
+    if (payPeriod) {
+      ocrResult.payPeriodInfo = payPeriod;
+      if (payPeriod.text && !ocrResult.payPeriod) ocrResult.payPeriod = payPeriod.text;
+      if (payPeriod.paymentDate && !ocrResult.date) ocrResult.date = payPeriod.paymentDate;
+      const filing = [
+        payPeriod.text && payPeriod.from ? `Pay period ${payPeriod.text}` : null,
+        payPeriod.paymentDateLabel ? `Paid ${payPeriod.paymentDateLabel}` : null,
+        payPeriod.cycleLabel || null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      if (filing) {
+        ocrResult.description = ocrResult.description ? `${ocrResult.description} · ${filing}` : filing;
+      }
+    }
 
     const receipt = storage.addReceipt(records, {
       source: "scan",
@@ -350,6 +368,7 @@ api.post("/receipts/scan", async (req, res, next) => {
       componentBreakdown,
       breakdownKind,
       compliance,
+      payPeriod: payPeriod || null,
     });
   } catch (err) {
     next(err);

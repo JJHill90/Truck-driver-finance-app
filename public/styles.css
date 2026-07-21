@@ -208,6 +208,10 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-check.enh-breach { border-left-color: var(--red); }
 .enh-disclaimer { color: var(--text-dim); font-size: 0.76rem; margin: 10px 0 0; }
 
+.enh-payperiod { border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 12px; padding: 12px 14px; }
+.enh-pp-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; padding: 3px 0; }
+.enh-pp-row span { color: var(--text-dim); }
+
 .enh-zoomable { cursor: zoom-in; }
 .enh-lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.82); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .enh-lightbox img { max-width: 94vw; max-height: 92vh; object-fit: contain; border-radius: 8px; cursor: zoom-in; transition: transform 0.15s ease; }

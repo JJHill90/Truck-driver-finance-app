@@ -41,6 +41,7 @@
         latest = {
           breakdown: data.componentBreakdown || [],
           compliance: data.compliance || null,
+          payPeriod: data.payPeriod || null,
           purpose,
           receiptId: data.receipt && data.receipt.id,
           isPdf: /pdf/i.test(mimeType),
@@ -77,6 +78,20 @@
          </div>`
       : "";
 
+    let payPeriodHtml = "";
+    const pp = data.payPeriod;
+    if (pp && (pp.from || pp.paymentDate)) {
+      const line = (labelText, value) =>
+        value ? `<div class="enh-pp-row"><span>${labelText}</span><strong>${esc(value)}</strong></div>` : "";
+      payPeriodHtml = `<div class="enh-section enh-payperiod">
+          <h4>Pay period</h4>
+          ${line("Payment date", pp.paymentDateLabel)}
+          ${line("Period start", pp.fromLabel)}
+          ${line("Period end", pp.toLabel)}
+          ${line("Cycle", pp.cycleLabel)}
+        </div>`;
+    }
+
     let complianceHtml = "";
     const comp = data.compliance;
     if (comp) {
@@ -96,7 +111,7 @@
     }
 
     const enlargeLabel = data.isPdf ? "Open scanned document" : "Enlarge scanned image";
-    wrap.innerHTML = `${breakdownHtml}${complianceHtml}
+    wrap.innerHTML = `${payPeriodHtml}${breakdownHtml}${complianceHtml}
       <button type="button" class="btn secondary enh-enlarge">${enlargeLabel}</button>`;
     return wrap;
   }
