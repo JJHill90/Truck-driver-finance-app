@@ -37,10 +37,13 @@
           /* ignore body parse */
         }
         const data = await res.clone().json();
+        const mimeType = (data.receipt && data.receipt.mimeType) || "";
         latest = {
           breakdown: data.componentBreakdown || [],
           compliance: data.compliance || null,
           purpose,
+          receiptId: data.receipt && data.receipt.id,
+          isPdf: /pdf/i.test(mimeType),
           token: `${Date.now()}-${Math.random()}`,
         };
       }
@@ -92,8 +95,9 @@
         </div>`;
     }
 
+    const enlargeLabel = data.isPdf ? "Open scanned document" : "Enlarge scanned image";
     wrap.innerHTML = `${breakdownHtml}${complianceHtml}
-      <button type="button" class="btn secondary enh-enlarge">Enlarge scanned image</button>`;
+      <button type="button" class="btn secondary enh-enlarge">${enlargeLabel}</button>`;
     return wrap;
   }
 
@@ -158,7 +162,12 @@
     // Enlarge button inside the enhancement panel.
     if (target.classList && target.classList.contains("enh-enlarge")) {
       const src = currentPreviewImage();
-      if (src) openLightbox(src, false);
+      if (src) {
+        openLightbox(src, false);
+      } else if (latest && latest.receiptId) {
+        // PDFs (and any doc without an inline preview image) open from storage.
+        openLightbox(`/api/haulage/receipts/${latest.receiptId}/file`, latest.isPdf);
+      }
       return;
     }
     // Direct click on a scan preview image.

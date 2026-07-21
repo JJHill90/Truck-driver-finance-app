@@ -98,6 +98,41 @@ describe("buildComponentBreakdown (expense, multi-entry receipt)", () => {
   });
 });
 
+describe("buildComponentBreakdown (income, labels from document text)", () => {
+  const ocr = {
+    documentType: "income",
+    grossTotal: 2000,
+    netPay: 1520,
+    rawTextPreview: [
+      "ACME Freight Pty Ltd - Remittance Advice",
+      "Gross wages: $2,000.00",
+      "PAYG tax withheld: $480.00",
+      "Superannuation: $180.00",
+      "Annual leave loading: $120.00",
+      "Net pay: $1,520.00",
+    ].join("\n"),
+  };
+
+  it("labels each income entry with the document wording and types them", () => {
+    const { components } = buildComponentBreakdown(ocr, true, "2025-26");
+    const byLabel = Object.fromEntries(components.map((c) => [c.label, c]));
+    expect(byLabel["Gross wages"].type).toBe("wages");
+    expect(byLabel["PAYG tax withheld"].type).toBe("tax");
+    expect(byLabel["Superannuation"].type).toBe("super");
+    expect(byLabel["Superannuation"].detected).toBe(true);
+    expect(byLabel["Annual leave loading"].type).toBe("entitlements");
+    expect(byLabel["Net pay"].type).toBe("net");
+  });
+
+  it("detects a super breach from the document (super below 12% of gross)", () => {
+    const breakdown = buildComponentBreakdown(ocr, true, "2025-26");
+    const c = assessIncomeCompliance(ocr, breakdown, "2025-26");
+    const sg = c.checks.find((x) => x.name === "Superannuation Guarantee");
+    expect(sg.status).toBe("breach"); // 180 < 12% of 2000 (240)
+    expect(c.status).toBe("breach");
+  });
+});
+
 describe("assessIncomeCompliance", () => {
   it("flags a breach when super is below the SG minimum", () => {
     const ocr = {
