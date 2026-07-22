@@ -1,6 +1,9 @@
 node_modules
 coverage
 
+# Tesseract.js language models downloaded at runtime into the CWD
+*.traineddata
+
 # Runtime data store & uploaded receipts (dev artifacts)
 data
 
