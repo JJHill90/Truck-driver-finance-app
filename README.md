@@ -108,6 +108,38 @@ profile) is shown on load.
 - `PORT` — server port (default `3000`).
 - `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
 
+## Deploy to an always-on host
+
+The app is a plain Node/Express server, so it runs on any host. It binds
+`0.0.0.0` and honours `PORT`, and there is no build step.
+
+### Render (one-click, real-time updates)
+
+1. Push this repo to GitHub (already done).
+2. In Render: **New → Blueprint**, connect this repo. Render reads `render.yaml`
+   and provisions the `haulage-finance` web service.
+3. It redeploys automatically on every push to the connected branch, and gives a
+   permanent URL like `https://haulage-finance.onrender.com/haulage/`.
+4. (Optional) Set `OPENAI_API_KEY` in the dashboard to enable cloud OCR.
+
+The free plan is reachable but cold-starts after idle and has an **ephemeral
+filesystem** (accounts/receipts reset on redeploy). For always-on + persistent
+data, switch `plan` to `starter` and uncomment the `disk` block in `render.yaml`.
+
+### Docker (any host)
+
+```bash
+docker build -t haulage-finance .
+docker run -p 3000:3000 -v haulage-data:/app/data haulage-finance
+# open http://localhost:3000/haulage/
+```
+
+The `-v haulage-data:/app/data` volume persists the JSON store, receipts and user
+accounts across restarts.
+
+> For production multi-user use, replace the local JSON store with a managed
+> database and serve over HTTPS with `Secure` cookies.
+
 ## API (base `/api/haulage`)
 
 `GET /standards`, `GET /records`, `GET /summary`, `GET /report`, `GET /forecast`,

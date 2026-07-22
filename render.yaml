@@ -1,0 +1,29 @@
+# Render Blueprint — one-click deploy of the Haulage finance app.
+# In the Render dashboard: New → Blueprint → connect this repo. Render detects
+# this file and provisions the service. The app redeploys automatically on every
+# push to the connected branch (real-time updates).
+services:
+  - type: web
+    name: haulage-finance
+    runtime: node
+    plan: free # free tier is reachable but cold-starts after idle; use "starter" for always-on
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /haulage/
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Optional: enable cloud OCR. Set the value in the Render dashboard.
+      - key: OPENAI_API_KEY
+        sync: false
+    # --- Persistent multi-user data (recommended for real testing) -----------
+    # The free plan has an ephemeral filesystem, so accounts/receipts reset on
+    # each deploy/restart. To persist them, switch `plan` to `starter` (or above)
+    # and uncomment this disk mounted at the app's data directory:
+    # disk:
+    #   name: haulage-data
+    #   mountPath: /opt/render/project/src/data
+    #   sizeGB: 1

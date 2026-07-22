@@ -1,0 +1,9 @@
+node_modules
+data
+.git
+coverage
+*.log
+.DS_Store
+.vscode
+.idea
+/opt
