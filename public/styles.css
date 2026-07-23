@@ -243,6 +243,25 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-lightbox iframe { width: 92vw; height: 90vh; border: none; background: #fff; border-radius: 8px; }
 .enh-lightbox-close { position: fixed; top: 16px; right: 22px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 50%; width: 42px; height: 42px; font-size: 1.5rem; line-height: 1; cursor: pointer; }
 
+/* --- Duplicate receipt prompt ------------------------------------------- */
+.enh-dup-modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.enh-dup-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.65); }
+.enh-dup-card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 14px;
+  padding: 18px 20px;
+  width: min(480px, 94vw);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.enh-dup-card h3 { margin: 0 0 8px; }
+.enh-dup-card p { margin: 0 0 10px; }
+.enh-dup-matches { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+.enh-dup-scan { margin-top: 4px !important; }
+.enh-dup-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+
 /* --- Accounts + alerts -------------------------------------------------- */
 #account-panel { border-left: 4px solid var(--accent); }
 .enh-alerts { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; }

@@ -22,21 +22,112 @@
   const fmt = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
 
+  function fmtDateShort(d) {
+    if (!d) return "—";
+    try {
+      return new Date(d).toLocaleDateString("en-AU");
+    } catch {
+      return String(d);
+    }
+  }
+
+  /** Modal: possible duplicate detected — Continue or Cancel. */
+  function promptDuplicateContinue(data) {
+    return new Promise((resolve) => {
+      const existing = document.getElementById("enh-dup-modal");
+      if (existing) existing.remove();
+
+      const matches = (data && data.matches) || [];
+      const o = (data && data.ocrResult) || {};
+      const matchRows = matches
+        .slice(0, 5)
+        .map(
+          (m) =>
+            `<li><strong>${esc(m.vendor || "—")}</strong> · ${esc(fmtDateShort(m.date))} · ${fmt(m.amount)} <span class="muted">(${esc(m.source)})</span></li>`
+        )
+        .join("");
+
+      const modal = document.createElement("div");
+      modal.id = "enh-dup-modal";
+      modal.className = "enh-dup-modal";
+      modal.innerHTML = `
+        <div class="enh-dup-backdrop" data-dup-cancel></div>
+        <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-dup-title">
+          <h3 id="enh-dup-title">Possible duplicate detected</h3>
+          <p>possible duplicate detected, do you wish to continue with the upload?</p>
+          <p class="muted">This file looks similar to an existing entry:</p>
+          <ul class="enh-dup-matches">${matchRows || "<li class='muted'>Matching date, vendor and amount</li>"}</ul>
+          <p class="enh-dup-scan muted">Scanned: <strong>${esc(o.vendor || o.entity || "—")}</strong> · ${esc(fmtDateShort(o.date))} · ${fmt(o.amount ?? o.grossTotal)}</p>
+          <div class="enh-dup-actions">
+            <button type="button" class="btn secondary" data-dup-cancel>Cancel upload</button>
+            <button type="button" class="btn primary" data-dup-continue>Continue upload</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+
+      const finish = (value) => {
+        modal.remove();
+        resolve(value);
+      };
+      modal.querySelectorAll("[data-dup-cancel]").forEach((el) => {
+        el.addEventListener("click", () => finish(false));
+      });
+      modal.querySelector("[data-dup-continue]")?.addEventListener("click", () => finish(true));
+    });
+  }
+
   // --- Capture enriched scan responses by wrapping fetch ------------------
+  // Also intercepts possible-duplicate responses and prompts before saving.
   const origFetch = window.fetch;
   window.fetch = async function (...args) {
-    const res = await origFetch.apply(this, args);
-    try {
-      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
-      if (url && /\/receipts\/scan(\?|$)/.test(url)) {
-        let purpose = "expense";
-        try {
-          const body = args[1] && args[1].body;
-          if (body) purpose = JSON.parse(body).purpose === "income" ? "income" : "expense";
-        } catch {
-          /* ignore body parse */
+    const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+    const options = args[1] || {};
+
+    if (url && /\/receipts\/scan(\?|$)/.test(url)) {
+      let bodyObj = {};
+      try {
+        if (options.body) bodyObj = JSON.parse(options.body);
+      } catch {
+        /* ignore */
+      }
+      const purpose = bodyObj.purpose === "income" ? "income" : "expense";
+
+      let res = await origFetch.apply(this, args);
+      let data = null;
+      try {
+        data = await res.clone().json();
+      } catch {
+        return res;
+      }
+
+      if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
+        const proceed = await promptDuplicateContinue(data);
+        if (!proceed) {
+          return new Response(
+            JSON.stringify({
+              error: "Upload cancelled — possible duplicate detected.",
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } }
+          );
         }
-        const data = await res.clone().json();
+        bodyObj.forceDuplicate = true;
+        res = await origFetch(url, {
+          ...options,
+          method: options.method || "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+          body: JSON.stringify(bodyObj),
+        });
+        try {
+          data = await res.clone().json();
+        } catch {
+          data = null;
+        }
+      }
+
+      if (data && data.receipt) {
         const mimeType = (data.receipt && data.receipt.mimeType) || "";
         latest = {
           breakdown: data.componentBreakdown || [],
@@ -48,10 +139,10 @@
           token: `${Date.now()}-${Math.random()}`,
         };
       }
-    } catch {
-      /* non-fatal */
+      return res;
     }
-    return res;
+
+    return origFetch.apply(this, args);
   };
 
   // --- Render the panel into a scan-review box ----------------------------

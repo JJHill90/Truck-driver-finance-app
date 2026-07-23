@@ -80,3 +80,9 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   Without that disk, every deploy wipes users — the admin list then only shows
   `Haulage_Admin`. Drivers must register on the **same hosted URL**; local
   laptop accounts do not appear on Render.
+- **Duplicate scan guard:** `/receipts/scan` runs OCR then
+  `lib/duplicate-receipt.js` matches existing expenses/income/receipts on
+  **date + vendor + amount**. If matches exist and `forceDuplicate` is not set,
+  the API returns `possibleDuplicate` without saving. `enhancements.js` shows
+  “possible duplicate detected, do you wish to continue with the upload?” —
+  Cancel returns 409 to `app.js`; Continue re-posts with `forceDuplicate: true`.

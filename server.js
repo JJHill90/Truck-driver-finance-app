@@ -24,6 +24,7 @@ const {
   labelAmountFromScan,
   labelAmountFromConfirm,
 } = require("./lib/document-label");
+const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -515,14 +516,36 @@ api.post("/receipts/scan", async (req, res, next) => {
     const scanPurpose = purpose === "income" ? "income" : "expense";
     const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown);
     const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
+    const scanAmount =
+      labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
     const labeledName = buildDocumentFilename({
       date: ocrResult.date,
-      amount:
-        labelAmountFromScan(ocrResult, scanPurpose) ??
-        (primaryTotal ? primaryTotal.amount : null),
+      amount: scanAmount,
       mimeType: mimeType || "image/jpeg",
       originalFilename: filename || "receipt.jpg",
     });
+
+    const forceDuplicate = Boolean((req.body || {}).forceDuplicate);
+    const duplicateMatches = findDuplicateMatches(
+      records,
+      ocrResult,
+      scanPurpose,
+      primaryTotal ? primaryTotal.amount : null
+    );
+    if (duplicateMatches.length && !forceDuplicate) {
+      res.json({
+        possibleDuplicate: true,
+        message: "possible duplicate detected, do you wish to continue with the upload?",
+        matches: duplicateMatches,
+        ocrResult,
+        detectedTotals,
+        componentBreakdown,
+        breakdownKind,
+        compliance,
+        payPeriod: payPeriod || null,
+      });
+      return;
+    }
 
     const receipt = storage.addReceipt(records, {
       source: "scan",
@@ -545,6 +568,8 @@ api.post("/receipts/scan", async (req, res, next) => {
       breakdownKind,
       compliance,
       payPeriod: payPeriod || null,
+      possibleDuplicate: false,
+      matches: duplicateMatches,
     });
   } catch (err) {
     next(err);
