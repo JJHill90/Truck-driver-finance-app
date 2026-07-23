@@ -1362,9 +1362,9 @@ function renderStats() {
   const s = state.summary;
   if (!s) return;
   document.getElementById("stat-grid").innerHTML = `
-    <div class="stat-card income"><div class="label">Assessable income</div><div class="value">${fmt(s.income.assessableTotal)}</div><div class="sub">${s.income.breakdown.length} income types</div></div>
+    <div class="stat-card income"><div class="label">Gross Income</div><div class="value">${fmt(s.income.assessableTotal)}</div><div class="sub">${s.income.breakdown.length} income types</div></div>
     <div class="stat-card expense"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses.deductibleTotal)}</div><div class="sub">Gross spend ${fmt(s.expenses.grossTotal)}</div></div>
-    <div class="stat-card tax"><div class="label">Est. taxable income</div><div class="value">${fmt(s.taxEstimate.taxableIncome)}</div><div class="sub">Effective rate ${s.taxEstimate.effectiveRate}%</div></div>
+    <div class="stat-card tax"><div class="label">Net Taxable Income</div><div class="value">${fmt(s.taxEstimate.taxableIncome)}</div><div class="sub">Effective rate ${s.taxEstimate.effectiveRate}%</div></div>
     <div class="stat-card tax"><div class="label">Est. tax (inc. Medicare)</div><div class="value">${fmt(s.taxEstimate.totalTax)}</div><div class="sub">Income tax ${fmt(s.taxEstimate.incomeTax)}</div></div>
   `;
 
