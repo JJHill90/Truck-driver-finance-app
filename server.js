@@ -222,6 +222,121 @@ api.get("/alerts", (req, res) => {
   res.json({ alerts: buildAlerts(getRecords(req)), user: req.user || null });
 });
 
+// --- Primary-mod admin ---------------------------------------------------
+function requireAdmin(req, res) {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in as the primary mod to continue." });
+    return false;
+  }
+  if (!auth.isAdminUser(req.user)) {
+    res.status(403).json({ error: "Primary mod access required." });
+    return false;
+  }
+  return true;
+}
+
+function userRecordsSummary(username) {
+  const file = auth.recordsFileFor(username);
+  // Prefer the live in-memory store when this user is already cached (e.g. they
+  // are signed in elsewhere on this process); otherwise read from disk.
+  const records = recordsCache.has(username)
+    ? recordsCache.get(username)
+    : storage.loadRecords(file);
+  const fy = records.profile?.financialYear || getCurrentFinancialYear();
+  const summary = summariseYear(records, profileFor(records, fy));
+  applyHistoricalRates(summary, records, fy);
+  return {
+    user: auth.getUser(username),
+    profile: records.profile || {},
+    counts: {
+      expenses: (records.expenses || []).length,
+      income: (records.income || []).length,
+      receipts: (records.receipts || []).length,
+    },
+    totals: {
+      financialYear: fy,
+      grossIncome: summary.income?.assessableTotal ?? 0,
+      deductibleExpenses: summary.expenses?.deductibleTotal ?? 0,
+      netTaxableIncome: summary.taxEstimate?.taxableIncome ?? 0,
+      estimatedTax: summary.taxEstimate?.totalTax ?? 0,
+    },
+  };
+}
+
+api.get("/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  auth.ensurePrimaryAdmin();
+  const users = auth.listUsers().map((u) => {
+    try {
+      const snap = userRecordsSummary(u.username);
+      return { ...u, counts: snap.counts, totals: snap.totals, profileName: snap.profile.name || "" };
+    } catch (err) {
+      return { ...u, counts: { expenses: 0, income: 0, receipts: 0 }, totals: null, error: err.message };
+    }
+  });
+  res.json({ users, admin: auth.getUser(req.user) });
+});
+
+api.get("/admin/users/:username", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const target = auth.getUser(req.params.username);
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const file = auth.recordsFileFor(target.username);
+  const records = recordsCache.has(target.username)
+    ? recordsCache.get(target.username)
+    : storage.loadRecords(file);
+  const fy = req.query.financialYear || records.profile?.financialYear || getCurrentFinancialYear();
+  const summary = summariseYear(records, profileFor(records, fy));
+  applyHistoricalRates(summary, records, fy);
+
+  const receipts = (records.receipts || []).map((r) => ({
+    id: r.id,
+    filename: r.filename,
+    mimeType: r.mimeType,
+    createdAt: r.createdAt,
+    linkedExpenseId: r.linkedExpenseId || null,
+    linkedIncomeId: r.linkedIncomeId || null,
+    hasImage: Boolean(r.imagePath),
+  }));
+
+  res.json({
+    user: target,
+    profile: records.profile || {},
+    expenses: records.expenses || [],
+    income: records.income || [],
+    receipts,
+    vendors: storage.listVendors(records),
+    summary,
+  });
+});
+
+api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const target = auth.getUser(req.params.username);
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const records = recordsCache.has(target.username)
+    ? recordsCache.get(target.username)
+    : storage.loadRecords(auth.recordsFileFor(target.username));
+  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
+  const info = receipt?.imagePath ? storage.getReceiptFileInfo(receipt.imagePath) : null;
+  if (!info) {
+    res.status(404).json({ error: "Receipt file not found." });
+    return;
+  }
+  res.setHeader("Content-Type", info.mime);
+  if (req.query.download) {
+    const downloadName = String(receipt.filename || info.filename || "document").replace(/"/g, "");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  }
+  res.sendFile(info.filePath);
+});
+
 // --- Reference data ------------------------------------------------------
 api.get("/standards", (_req, res) => {
   res.json({
@@ -532,6 +647,7 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
+  auth.ensurePrimaryAdmin();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Haulage finance app running at http://localhost:${PORT}/haulage/`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");

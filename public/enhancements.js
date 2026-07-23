@@ -271,7 +271,10 @@
       outEl.classList.add("hidden");
       inEl.classList.remove("hidden");
       const nameEl = byId("auth-current-user");
-      if (nameEl) nameEl.textContent = user.username;
+      if (nameEl) {
+        nameEl.textContent = user.username;
+        if (user.isAdmin) nameEl.textContent += " (primary mod)";
+      }
       const presets = user.presets || {};
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
@@ -279,6 +282,170 @@
       outEl.classList.remove("hidden");
       inEl.classList.add("hidden");
     }
+    const adminPanel = byId("admin-panel");
+    if (adminPanel) {
+      if (user && user.isAdmin) adminPanel.classList.remove("hidden");
+      else adminPanel.classList.add("hidden");
+    }
+  }
+
+  const fmt = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function fmtDate(d) {
+    if (!d) return "—";
+    try {
+      return new Date(d).toLocaleDateString("en-AU");
+    } catch {
+      return String(d);
+    }
+  }
+
+  let adminSelected = null;
+
+  function renderAdminList(users) {
+    const list = byId("admin-user-list");
+    if (!list) return;
+    if (!users || !users.length) {
+      list.innerHTML = `<p class="admin-empty">No other profiles yet — when users register, they appear here.</p>`;
+      return;
+    }
+    list.innerHTML = users
+      .map((u) => {
+        const totals = u.totals || {};
+        const counts = u.counts || {};
+        const badge = u.isAdmin ? `<span class="admin-badge">primary mod</span>` : "";
+        const active = adminSelected === u.username ? " active" : "";
+        return `<button type="button" class="admin-user-row${active}" data-admin-user="${esc(u.username)}">
+          <div>
+            <div class="admin-user-name">${esc(u.username)}${badge}</div>
+            <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
+          </div>
+          <div class="admin-user-totals">
+            <div>Gross ${fmt(totals.grossIncome)}</div>
+            <div class="muted">Taxable ${fmt(totals.netTaxableIncome)}</div>
+          </div>
+        </button>`;
+      })
+      .join("");
+
+    list.querySelectorAll("[data-admin-user]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        void openAdminUser(btn.getAttribute("data-admin-user"));
+      });
+    });
+  }
+
+  function renderAdminDetail(data) {
+    const detail = byId("admin-user-detail");
+    if (!detail) return;
+    if (!data) {
+      detail.classList.add("hidden");
+      detail.innerHTML = "";
+      return;
+    }
+    const s = data.summary || {};
+    const profile = data.profile || {};
+    const expenses = (data.expenses || []).slice(0, 40);
+    const income = (data.income || []).slice(0, 40);
+    const receipts = data.receipts || [];
+
+    const expenseRows = expenses
+      .map(
+        (e) =>
+          `<tr><td>${esc(fmtDate(e.date))}</td><td>${esc(e.vendor || e.description || "—")}</td><td>${esc(e.category || "")}</td><td class="amount">${fmt(e.amount)}</td></tr>`
+      )
+      .join("");
+    const incomeRows = income
+      .map(
+        (i) =>
+          `<tr><td>${esc(fmtDate(i.date))}</td><td>${esc(i.entity || i.payer || "—")}</td><td>${esc(i.type || "")}</td><td class="amount">${fmt(i.grossTotal ?? i.amount)}</td></tr>`
+      )
+      .join("");
+    const receiptRows = receipts
+      .map((r) => {
+        const link = r.hasImage
+          ? `<a href="${API}/admin/users/${encodeURIComponent(data.user.username)}/receipts/${r.id}/file?download=1" target="_blank" rel="noopener">Download</a>`
+          : "—";
+        return `<tr><td>${esc(r.filename || r.id)}</td><td>${esc(r.mimeType || "")}</td><td>${esc(fmtDate(r.createdAt))}</td><td>${link}</td></tr>`;
+      })
+      .join("");
+
+    detail.classList.remove("hidden");
+    detail.innerHTML = `
+      <div class="admin-detail-head">
+        <h3>${esc(data.user.username)}${data.user.isAdmin ? ' <span class="admin-badge">primary mod</span>' : ""}</h3>
+        <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
+      </div>
+      <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
+      <div class="admin-stat-row">
+        <div class="admin-stat"><div class="label">Gross Income</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
+        <div class="admin-stat"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses && s.expenses.deductibleTotal)}</div></div>
+        <div class="admin-stat"><div class="label">Net Taxable Income</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.taxableIncome)}</div></div>
+        <div class="admin-stat"><div class="label">Est. tax</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.totalTax)}</div></div>
+      </div>
+      <div class="admin-section">
+        <h4>Income (${income.length}${data.income && data.income.length > income.length ? "+" : ""})</h4>
+        <div class="admin-table-wrap">${
+          incomeRows
+            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Entity</th><th>Type</th><th>Gross</th></tr></thead><tbody>${incomeRows}</tbody></table>`
+            : `<p class="admin-empty">No income entries.</p>`
+        }</div>
+      </div>
+      <div class="admin-section">
+        <h4>Expenses (${expenses.length}${data.expenses && data.expenses.length > expenses.length ? "+" : ""})</h4>
+        <div class="admin-table-wrap">${
+          expenseRows
+            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th></tr></thead><tbody>${expenseRows}</tbody></table>`
+            : `<p class="admin-empty">No expense entries.</p>`
+        }</div>
+      </div>
+      <div class="admin-section">
+        <h4>Receipts (${receipts.length})</h4>
+        <div class="admin-table-wrap">${
+          receiptRows
+            ? `<table class="admin-table"><thead><tr><th>File</th><th>Type</th><th>Added</th><th></th></tr></thead><tbody>${receiptRows}</tbody></table>`
+            : `<p class="admin-empty">No scanned files.</p>`
+        }</div>
+      </div>`;
+
+    byId("admin-detail-close")?.addEventListener("click", () => {
+      adminSelected = null;
+      renderAdminDetail(null);
+      const list = byId("admin-user-list");
+      list?.querySelectorAll(".admin-user-row.active").forEach((el) => el.classList.remove("active"));
+    });
+  }
+
+  async function loadAdminUsers() {
+    const panel = byId("admin-panel");
+    if (!panel || panel.classList.contains("hidden")) return;
+    const data = await apiGet("/admin/users");
+    if (data.error) {
+      byId("admin-user-list").innerHTML = `<p class="admin-empty">${esc(data.error)}</p>`;
+      return;
+    }
+    renderAdminList(data.users || []);
+  }
+
+  async function openAdminUser(username) {
+    adminSelected = username;
+    byId("admin-user-list")
+      ?.querySelectorAll(".admin-user-row")
+      .forEach((el) => {
+        el.classList.toggle("active", el.getAttribute("data-admin-user") === username);
+      });
+    const detail = byId("admin-user-detail");
+    if (detail) {
+      detail.classList.remove("hidden");
+      detail.innerHTML = `<p class="muted">Loading ${esc(username)}…</p>`;
+    }
+    const data = await apiGet(`/admin/users/${encodeURIComponent(username)}`);
+    if (data.error) {
+      detail.innerHTML = `<p class="admin-empty">${esc(data.error)}</p>`;
+      return;
+    }
+    renderAdminDetail(data);
   }
 
   function renderAlerts(alerts, user) {
@@ -369,6 +536,13 @@
         }
       });
     }
+
+    const adminRefresh = byId("admin-refresh");
+    if (adminRefresh) {
+      adminRefresh.addEventListener("click", () => {
+        void loadAdminUsers();
+      });
+    }
   }
 
   function wirePdfDownload() {
@@ -395,6 +569,7 @@
     try {
       const me = await apiGet("/auth/me");
       showAuthState(me.user);
+      if (me.user && me.user.isAdmin) await loadAdminUsers();
       const alertData = await apiGet("/alerts");
       renderAlerts(alertData.alerts, alertData.user);
     } catch {
