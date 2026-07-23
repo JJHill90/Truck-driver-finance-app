@@ -511,3 +511,53 @@
     start();
   }
 })();
+
+/* --- Receipt gallery: show labeled filename (DD.MM.YY AUD$…) ------------- */
+(function () {
+  "use strict";
+  /* global state */
+
+  const LABEL_RE = /^\d{2}\.\d{2}\.\d{2}\s+AUD\$/;
+
+  function findReceipt(id) {
+    try {
+      const receipts = state && state.records && state.records.receipts ? state.records.receipts : [];
+      return receipts.find((r) => r.id === id);
+    } catch {
+      return null;
+    }
+  }
+
+  function labelGalleryCards() {
+    const gallery = document.getElementById("receipt-gallery");
+    if (!gallery) return;
+    gallery.querySelectorAll(".receipt-card[data-receipt-id]").forEach((card) => {
+      if (card.dataset.enhLabeled === "1") return;
+      const receipt = findReceipt(card.dataset.receiptId);
+      if (!receipt || !receipt.filename) return;
+      const name = String(receipt.filename);
+      if (!LABEL_RE.test(name) && name === "manual-entry") return;
+      const strong = card.querySelector(".receipt-card-meta strong");
+      if (strong) {
+        strong.textContent = name.replace(/\.[a-z0-9]+$/i, "");
+        strong.title = name;
+      }
+      card.setAttribute("aria-label", `View ${name}`);
+      card.dataset.enhLabeled = "1";
+    });
+  }
+
+  function start() {
+    const gallery = document.getElementById("receipt-gallery");
+    if (!gallery) return;
+    const mo = new MutationObserver(() => labelGalleryCards());
+    mo.observe(gallery, { childList: true, subtree: true });
+    labelGalleryCards();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

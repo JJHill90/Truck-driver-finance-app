@@ -19,6 +19,11 @@ const { extractPdfText } = require("./lib/pdf-text");
 const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
 const { getFinancialYearForDate } = require("./lib/ato-standards");
 const { buildReportPdf } = require("./lib/report-pdf");
+const {
+  buildDocumentFilename,
+  labelAmountFromScan,
+  labelAmountFromConfirm,
+} = require("./lib/document-label");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -392,9 +397,21 @@ api.post("/receipts/scan", async (req, res, next) => {
       }
     }
 
+    const scanPurpose = purpose === "income" ? "income" : "expense";
+    const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown);
+    const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
+    const labeledName = buildDocumentFilename({
+      date: ocrResult.date,
+      amount:
+        labelAmountFromScan(ocrResult, scanPurpose) ??
+        (primaryTotal ? primaryTotal.amount : null),
+      mimeType: mimeType || "image/jpeg",
+      originalFilename: filename || "receipt.jpg",
+    });
+
     const receipt = storage.addReceipt(records, {
       source: "scan",
-      filename: filename || "receipt.jpg",
+      filename: labeledName,
       mimeType: mimeType || "image/jpeg",
       dataUrl: imageBase64,
       ocrResult,
@@ -408,7 +425,7 @@ api.post("/receipts/scan", async (req, res, next) => {
         hasImage: Boolean(receipt.imagePath),
       },
       ocrResult,
-      detectedTotals: mergeDetectedTotals(ocrResult, componentBreakdown),
+      detectedTotals,
       componentBreakdown,
       breakdownKind,
       compliance,
@@ -443,9 +460,15 @@ api.post("/receipts/:id/confirm", (req, res) => {
     if (receipt) {
       receipt.linkedIncomeId = entry.id;
       receipt.manual = payload;
+      receipt.filename = buildDocumentFilename({
+        date: payload.date || entry.date,
+        amount: labelAmountFromConfirm(payload, "income"),
+        mimeType: receipt.mimeType,
+        originalFilename: receipt.filename,
+      });
     }
     persist(req);
-    res.json({ entry });
+    res.json({ entry, receipt: receipt ? { id: receipt.id, filename: receipt.filename } : null });
     return;
   }
 
@@ -453,9 +476,15 @@ api.post("/receipts/:id/confirm", (req, res) => {
   if (receipt) {
     receipt.linkedExpenseId = entry.id;
     receipt.manual = payload;
+    receipt.filename = buildDocumentFilename({
+      date: payload.date || entry.date,
+      amount: labelAmountFromConfirm(payload, "expense"),
+      mimeType: receipt.mimeType,
+      originalFilename: receipt.filename,
+    });
   }
   persist(req);
-  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+  res.json({ entry, analysis: calcExpenseDeduction(entry), receipt: receipt ? { id: receipt.id, filename: receipt.filename } : null });
 });
 
 api.get("/receipts/:id/image", (req, res) => {
@@ -479,7 +508,8 @@ api.get("/receipts/:id/file", (req, res) => {
   }
   res.setHeader("Content-Type", info.mime);
   if (req.query.download) {
-    res.setHeader("Content-Disposition", `attachment; filename="${receipt.filename || info.filename}"`);
+    const downloadName = String(receipt.filename || info.filename || "document").replace(/"/g, "");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   }
   res.sendFile(info.filePath);
 });

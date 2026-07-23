@@ -63,3 +63,9 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   the provided OCR extractors don't parse super/PAYG as named fields, those
   components are estimated/flagged unless a clear scan or `OPENAI_API_KEY`
   surfaces them — the full breach/within-policy grading is covered by unit tests.
+- Scanned expense receipts and income invoices are **labeled on save** as
+  `DD.MM.YY AUD$123.45.ext` (image or PDF). `lib/document-label.js` builds the
+  name; `/receipts/scan` applies an initial OCR-based label and
+  `/receipts/:id/confirm` rewrites it from the approved date/amount (income
+  prefers gross). On-disk files stay UUID-named under `data/receipts/`; the
+  label is `receipt.filename` (downloads, share, gallery title).
