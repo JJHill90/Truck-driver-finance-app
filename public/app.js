@@ -913,7 +913,7 @@ function renderReceiptGallery() {
 
   const receipts = getReceiptsWithImages();
   if (!receipts.length) {
-    el.innerHTML = `<p class="muted">No receipt photos yet — scan or upload a receipt above.</p>`;
+    el.innerHTML = `<p class="muted">No expense receipt photos yet — upload a receipt above.</p>`;
     return;
   }
 
@@ -948,13 +948,14 @@ function renderReceiptGallery() {
 }
 
 function setView(name) {
+  // Scan receipt was merged into Expenses — keep old deep-links working.
+  if (name === "receipts") name = "expenses";
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
   document.getElementById(`view-${name}`)?.classList.add("active");
   document.querySelector(`.nav-btn[data-view="${name}"]`)?.classList.add("active");
   const titles = {
     dashboard: "Dashboard",
-    receipts: "Scan receipt",
     expenses: "Expenses",
     income: "Income & remittances",
     report: "EOFY performance statement",
@@ -962,14 +963,14 @@ function setView(name) {
     profile: "Driver profile",
   };
   document.getElementById("page-title").textContent = titles[name] || name;
-  if ((name === "receipts" || name === "expenses") && state.standards) {
+  if (name === "expenses" && state.standards) {
     populateSelects();
   }
   if (name === "report") {
     void refreshEofyLive();
   }
   if (name === "forecast") loadForecast();
-  if (name === "receipts") renderReceiptGallery();
+  if (name === "expenses") renderReceiptGallery();
   renderExpenseTotals();
 }
 
@@ -1247,7 +1248,7 @@ function getDraftExpenseFromForms() {
   }
 
   const manualForm = document.getElementById("manual-receipt-form");
-  if (manualForm && document.getElementById("view-receipts")?.classList.contains("active")) {
+  if (manualForm && document.getElementById("view-expenses")?.classList.contains("active")) {
     const amount = Number(manualForm.elements.amount?.value);
     const date = manualForm.elements.date?.value;
     if (amount > 0 && date) {
@@ -1467,7 +1468,7 @@ function renderExpenseList() {
   }
 
   if (!rows.length) {
-    el.innerHTML = `<p class="muted">No expenses yet — save from Scan receipt, Add expense, or Approve totals.</p>`;
+    el.innerHTML = `<p class="muted">No expenses yet — upload a receipt, add one manually, or approve scanned totals.</p>`;
     return;
   }
 

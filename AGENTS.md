@@ -86,3 +86,7 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   the API returns `possibleDuplicate` without saving. `enhancements.js` shows
   “possible duplicate detected, do you wish to continue with the upload?” —
   Cancel returns 409 to `app.js`; Continue re-posts with `forceDuplicate: true`.
+- **Expenses tab** includes the former Scan receipt flow (upload, approve
+  totals, manual entry with ABN, receipt gallery) plus expense totals, special
+  claims (km/laundry), and the expense ledger. Nav no longer has a separate
+  Scan receipt item; `setView("receipts")` redirects to `expenses`.

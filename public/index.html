@@ -16,7 +16,6 @@
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-          <button class="nav-btn" data-view="receipts">Scan receipt</button>
           <button class="nav-btn" data-view="expenses">Expenses</button>
           <button class="nav-btn" data-view="income">Income</button>
           <button class="nav-btn" data-view="report">EOFY report</button>
@@ -63,13 +62,14 @@
           </div>
         </section>
 
-        <!-- Scan receipt -->
-        <section id="view-receipts" class="view">
+        <!-- Expenses (includes receipt scan + manual entry) -->
+        <section id="view-expenses" class="view">
           <div class="grid-2">
             <div class="panel">
-              <div class="panel-header"><h2>Upload a receipt</h2></div>
+              <div class="panel-header"><h2>Upload expense receipt</h2></div>
+              <p class="muted">Scan a photo or PDF — approve the totals before they are saved to expenses.</p>
               <div id="upload-zone" class="upload-zone">
-                <p>Drag &amp; drop a receipt photo or PDF here</p>
+                <p>Drag &amp; drop an expense receipt (image or PDF)</p>
                 <button type="button" class="btn primary" id="pick-receipt">Upload file</button>
                 <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
               </div>
@@ -78,7 +78,8 @@
             </div>
 
             <div class="panel">
-              <div class="panel-header"><h2>Add receipt manually</h2></div>
+              <div class="panel-header"><h2>Add expense manually</h2></div>
+              <p class="muted">Enter an expense without a photo, or edit fields filled from a scan.</p>
               <div id="manual-approval-banner" class="banner hidden"></div>
               <form id="manual-receipt-form" class="form-grid">
                 <label>Date<input type="date" name="date" required /></label>
@@ -96,7 +97,7 @@
                 <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
                 <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
                 <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save manual receipt</button>
+                  <button type="submit" class="btn primary">Save expense</button>
                 </div>
               </form>
               <div id="manual-receipt-preview" class="preview-note hidden"></div>
@@ -104,22 +105,26 @@
             </div>
           </div>
 
-          <div class="panel">
-            <div class="panel-header"><h2>Receipt totals</h2></div>
-            <div id="receipt-expense-totals"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header"><h2>Receipt gallery</h2></div>
-            <div id="receipt-gallery" class="receipt-gallery"></div>
-          </div>
-        </section>
-
-        <!-- Expenses -->
-        <section id="view-expenses" class="view">
           <div class="grid-2">
             <div class="panel">
-              <div class="panel-header"><h2>Add expense</h2></div>
+              <div class="panel-header">
+                <h2>Total expenses</h2>
+                <select id="expense-total-period" class="period-select" aria-label="Expense total period">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly" selected>Monthly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <p class="muted">Range: <span id="expense-total-range-label"></span></p>
+              <div id="expense-totals" class="expense-totals-grid"></div>
+              <!-- Kept for app.js receipt-totals renderer (hidden host) -->
+              <div id="receipt-expense-totals" class="hidden" aria-hidden="true"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>Special claims (km / laundry)</h2></div>
+              <p class="muted">Use when the claim needs kilometres, laundry loads, or other method fields.</p>
               <form id="expense-form" class="form-grid">
                 <label>Date<input type="date" name="date" required /></label>
                 <label>Category
@@ -132,25 +137,16 @@
                 <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
                 <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
                 <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save expense</button>
+                  <button type="submit" class="btn primary">Save special claim</button>
                 </div>
               </form>
               <div id="expense-preview" class="preview-note hidden"></div>
             </div>
+          </div>
 
-            <div class="panel">
-              <div class="panel-header">
-                <h2>Total expenses</h2>
-                <select id="expense-total-period" class="period-select" aria-label="Expense total period">
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <p class="muted">Range: <span id="expense-total-range-label"></span></p>
-              <div id="expense-totals" class="expense-totals-grid"></div>
-            </div>
+          <div class="panel">
+            <div class="panel-header"><h2>Expense receipt photos</h2></div>
+            <div id="receipt-gallery" class="receipt-gallery"></div>
           </div>
 
           <div class="panel">
