@@ -58,17 +58,24 @@ describe("auth.recordsFileFor", () => {
 });
 
 describe("auth primary mod / admin", () => {
-  it("makes the first registered user the primary mod", () => {
-    // Isolate by using a unique first user; ensurePrimaryAdmin may already have
-    // promoted an older account in data/users.json, so assert via fresh user + list.
-    const username = uniq();
-    const created = auth.registerUser(username, "secret123");
-    // Fresh DB may already have admins; if this was somehow the only user they'd
-    // be admin. Assert isAdmin is boolean and listUsers includes them.
-    expect(typeof created.isAdmin).toBe("boolean");
-    const listed = auth.listUsers().find((u) => u.username === username);
-    expect(listed).toBeTruthy();
-    expect(listed.isAdmin).toBe(created.isAdmin);
+  it("bootstraps Haulage_Admin with default credentials and sole admin flag", () => {
+    const prevUser = process.env.HAULAGE_ADMIN_USERNAME;
+    const prevPass = process.env.HAULAGE_ADMIN_PASSWORD;
+    process.env.HAULAGE_ADMIN_USERNAME = "Haulage_Admin";
+    process.env.HAULAGE_ADMIN_PASSWORD = "Haulage_Admin";
+    try {
+      const boot = auth.ensureAdminBootstrap();
+      expect(boot.username).toBe("Haulage_Admin");
+      expect(boot.isAdmin).toBe(true);
+      expect(auth.verifyUser("Haulage_Admin", "Haulage_Admin")).not.toBeNull();
+      expect(auth.verifyUser("Haulage_Admin", "wrong-password")).toBeNull();
+      expect(auth.isAdminUser("Haulage_Admin")).toBe(true);
+    } finally {
+      if (prevUser == null) delete process.env.HAULAGE_ADMIN_USERNAME;
+      else process.env.HAULAGE_ADMIN_USERNAME = prevUser;
+      if (prevPass == null) delete process.env.HAULAGE_ADMIN_PASSWORD;
+      else process.env.HAULAGE_ADMIN_PASSWORD = prevPass;
+    }
   });
 
   it("reports isAdminUser consistently with getUser", () => {
@@ -78,10 +85,8 @@ describe("auth primary mod / admin", () => {
     expect(auth.isAdminUser(username)).toBe(Boolean(user.isAdmin));
   });
 
-  it("ensurePrimaryAdmin promotes the earliest user when none is admin", () => {
-    // Force a known state: load users, if we can clear isAdmin on test users we
-    // created, then ensure promotes someone.
-    auth.ensurePrimaryAdmin();
+  it("ensurePrimaryAdmin keeps at least one admin when accounts exist", () => {
+    auth.ensureAdminBootstrap();
     const users = auth.listUsers();
     expect(users.some((u) => u.isAdmin)).toBe(true);
   });

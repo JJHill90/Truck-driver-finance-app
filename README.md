@@ -102,18 +102,19 @@ profile) is shown on load.
 - Without logging in, the app works against a shared **guest** store.
 - This is app-appropriate auth for a self-hosted tool (the "cloud" is the local
   server), not a hardened public identity provider.
-- **Primary mod:** set `HAULAGE_ADMIN_USERNAME=Haulage_Admin` (configured in
-  `render.yaml`) so that account is the sole primary mod. On the Profile tab
-  they see a **Primary mod — user profiles** panel listing every account with
-  Gross Income / Net Taxable Income, and can open any user’s income, expenses
-  and receipt downloads (read-only). If the env var is unset, the first
-  registered account becomes primary mod.
+- **Primary mod:** username `Haulage_Admin` / password `Haulage_Admin` (bootstrapped
+  on server start; override with `HAULAGE_ADMIN_USERNAME` /
+  `HAULAGE_ADMIN_PASSWORD`). On the Profile tab they see **Primary mod — user
+  profiles** and can open any user’s income, expenses and receipt downloads
+  (read-only).
 
 ## Environment variables
 
 - `PORT` — server port (default `3000`).
 - `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
-- `HAULAGE_ADMIN_USERNAME` — optional; username of the primary mod (sole admin).
+- `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
+- `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
+  username is `Haulage_Admin`).
 
 ## Historical financial years (accurate prior-year reconciliation)
 

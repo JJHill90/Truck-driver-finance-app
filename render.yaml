@@ -19,9 +19,12 @@ services:
       # Optional: enable cloud OCR. Set the value in the Render dashboard.
       - key: OPENAI_API_KEY
         sync: false
-      # Primary mod (sole admin) account username.
+      # Primary mod (sole admin) account — password set in Render dashboard / API
+      # (defaults to Haulage_Admin when username is Haulage_Admin).
       - key: HAULAGE_ADMIN_USERNAME
         value: Haulage_Admin
+      - key: HAULAGE_ADMIN_PASSWORD
+        sync: false
     # --- Persistent multi-user data (recommended for real testing) -----------
     # The free plan has an ephemeral filesystem, so accounts/receipts reset on
     # each deploy/restart. To persist them, switch `plan` to `starter` (or above)
