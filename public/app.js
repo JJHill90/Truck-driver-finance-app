@@ -1935,7 +1935,7 @@ async function uploadIncomeFile(file) {
   } finally {
     if (pickBtn) {
       pickBtn.disabled = false;
-      pickBtn.textContent = "Choose file from PC";
+      pickBtn.textContent = "Upload file";
     }
     if (fileInput) fileInput.value = "";
   }
