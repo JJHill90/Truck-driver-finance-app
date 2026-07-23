@@ -16,6 +16,8 @@ const { buildForecast } = require("./lib/forecast");
 const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
+const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
+const { getFinancialYearForDate } = require("./lib/ato-standards");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -242,13 +244,24 @@ api.put("/profile", (req, res) => {
 api.get("/summary", (req, res) => {
   const records = getRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  res.json(summariseYear(records, profileFor(records, fy)));
+  const summary = summariseYear(records, profileFor(records, fy));
+  applyHistoricalRates(summary, records, fy); // year-correct brackets/levies/rates
+  res.json(summary);
 });
 
 api.get("/report", (req, res) => {
   const records = getRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  res.json(buildAccountantReport(records, profileFor(records, fy)));
+  const report = buildAccountantReport(records, profileFor(records, fy));
+  applyHistoricalRates(report.summary, records, fy);
+  // Keep the ATO schedule mapping in sync with the year-corrected deductions.
+  report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
+    schedule: b.atoSchedule,
+    category: b.label,
+    deductibleAmount: b.deductibleTotal,
+    transactionCount: b.count,
+  }));
+  res.json(report);
 });
 
 api.get("/forecast", (req, res) => {
@@ -263,7 +276,18 @@ api.get("/forecast", (req, res) => {
 
 // --- Expenses ------------------------------------------------------------
 api.post("/expenses/preview", (req, res) => {
-  res.json(calcExpenseDeduction(req.body || {}));
+  const payload = req.body || {};
+  const analysis = calcExpenseDeduction(payload);
+  // Use the year's cents-per-km rate (from the entry's date) so the preview
+  // matches how a prior-year car claim will be reconciled.
+  if (payload.category === "vehicle_car" && payload.method === "cents_per_km" && payload.date) {
+    const fy = getFinancialYearForDate(payload.date);
+    const km = Math.min(Number(payload.kilometres) || 0, 5000);
+    const deductible = Math.round(km * centsPerKmForYear(fy) * 100) / 100;
+    analysis.deductibleAmount = deductible;
+    analysis.cappedAmount = deductible;
+  }
+  res.json(analysis);
 });
 
 api.post("/expenses", (req, res) => {

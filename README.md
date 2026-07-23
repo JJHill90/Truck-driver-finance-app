@@ -108,6 +108,23 @@ profile) is shown on load.
 - `PORT` — server port (default `3000`).
 - `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
 
+## Historical financial years (accurate prior-year reconciliation)
+
+Selecting a prior financial year reconciles that year against the ATO rules that
+applied **that year**, not today's. `lib/historical-rates.js` holds verified
+per-year figures and overlays them onto the summary/report:
+
+- **Resident income tax brackets** by year (e.g. 2016-17 32.5% band to $87k;
+  2018-19 to $90k; 2020-21→2023-24 19%/$45k/$120k; 2024-25+ Stage 3 16/30/37/45).
+- **Temporary Budget Repair Levy** (+2% over $180k) for 2014-15 to 2016-17.
+- **Cents-per-km** car rate by year (66/68/72/78/85/88/91¢) and **Super
+  Guarantee** rate by year (9.5%→12%). Medicare levy 2%.
+
+Income/expense/deduction totals are per-year sums; the tax estimate and
+rate-dependent deductions (cents-per-km) use the selected year's rates.
+Note: truck-driver meal *reasonable amounts* currently use the latest ATO figure
+for all years (historical per-year meal amounts not yet encoded).
+
 ## Deploy to an always-on host
 
 The app is a plain Node/Express server, so it runs on any host. It binds
