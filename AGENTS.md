@@ -75,3 +75,8 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   `/receipts/:id/confirm` rewrites it from the approved date/amount (income
   prefers gross). On-disk files stay UUID-named under `data/receipts/`; the
   label is `receipt.filename` (downloads, share, gallery title).
+- **Hosted multi-user (Render):** accounts live under `data/` on a **persistent
+  disk** (`render.yaml` → `haulage-data` at `/opt/render/project/src/data`).
+  Without that disk, every deploy wipes users — the admin list then only shows
+  `Haulage_Admin`. Drivers must register on the **same hosted URL**; local
+  laptop accounts do not appear on Render.
