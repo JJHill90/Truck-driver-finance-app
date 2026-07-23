@@ -53,8 +53,8 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   (`GET /alerts`), and reloads the page after an auth change so `app.js`
   re-fetches user-scoped data. Sessions reset on server restart (accounts/data
   persist); receipt image files are shared under `data/receipts/` (UUID names).
-- **Primary mod admin:** first registered user is `isAdmin` (or
-  `HAULAGE_ADMIN_USERNAME`). Admin-only routes: `GET /admin/users`,
+- **Primary mod admin:** `HAULAGE_ADMIN_USERNAME=Haulage_Admin` (sole admin),
+  otherwise the first registered user. Admin-only routes: `GET /admin/users`,
   `GET /admin/users/:username`, `GET /admin/users/:username/receipts/:id/file`.
   Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
   Read-only — does not switch the signed-in session to the other user.

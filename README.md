@@ -102,12 +102,12 @@ profile) is shown on load.
 - Without logging in, the app works against a shared **guest** store.
 - This is app-appropriate auth for a self-hosted tool (the "cloud" is the local
   server), not a hardened public identity provider.
-- **Primary mod:** the first registered account becomes the primary mod (admin).
-  On the Profile tab they see a **Primary mod — user profiles** panel listing
-  every account with Gross Income / Net Taxable Income, and can open any user’s
-  income, expenses and receipt downloads (read-only). Set
-  `HAULAGE_ADMIN_USERNAME` to force a specific account as the sole primary mod
-  (useful after the first signup was not yours).
+- **Primary mod:** set `HAULAGE_ADMIN_USERNAME=Haulage_Admin` (configured in
+  `render.yaml`) so that account is the sole primary mod. On the Profile tab
+  they see a **Primary mod — user profiles** panel listing every account with
+  Gross Income / Net Taxable Income, and can open any user’s income, expenses
+  and receipt downloads (read-only). If the env var is unset, the first
+  registered account becomes primary mod.
 
 ## Environment variables
 
