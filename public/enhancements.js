@@ -389,3 +389,106 @@
     start();
   }
 })();
+
+/*
+ * Dashboard "Snapshot" → income-vs-expenses pie/donut with the net position in
+ * the centre. Reads the live /summary response and re-renders into
+ * #snapshot-content whenever app.js rewrites it (FY change / new data).
+ */
+(function () {
+  "use strict";
+
+  let latest = null;
+
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const res = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      if (url && /\/summary(\?|$)/.test(url)) {
+        const data = await res.clone().json();
+        if (data && data.income && data.expenses) {
+          latest = data;
+          render();
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    return res;
+  };
+
+  const fmt = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function render() {
+    const host = document.getElementById("snapshot-content");
+    if (!host || !latest) return;
+    if (host.querySelector(".enh-snapshot")) return; // already rendered for this pass
+
+    const income = Number(latest.income.assessableTotal) || 0;
+    const expenses = Number(latest.expenses.grossTotal) || 0;
+    const net = Math.round((income - expenses) * 100) / 100;
+    const total = income + expenses;
+    const incPct = total > 0 ? (income / total) * 100 : 0;
+
+    // Preserve the substantiation message + any warnings app.js just wrote.
+    const msg = (host.querySelector("p.muted") && host.querySelector("p.muted").textContent) || "";
+    const warn = (host.querySelector(".warning-list") && host.querySelector(".warning-list").outerHTML) || "";
+    const afterTax =
+      latest.taxEstimate && latest.taxEstimate.totalTax != null
+        ? income - Number(latest.taxEstimate.totalTax)
+        : null;
+
+    let chart;
+    if (total <= 0) {
+      chart = `<div class="enh-snapshot enh-snapshot-empty">
+          <div class="enh-pie-wrap"><div class="enh-pie enh-pie-empty"></div>
+            <div class="enh-pie-center"><span class="enh-pie-net-label">Net</span><span class="enh-pie-net">${fmt(0)}</span></div>
+          </div>
+          <p class="muted">Add income or expenses to see your position.</p>
+        </div>`;
+    } else {
+      chart = `<div class="enh-snapshot">
+          <div class="enh-pie-wrap">
+            <div class="enh-pie" style="background: conic-gradient(var(--green) 0 ${incPct}%, var(--red) ${incPct}% 100%)"></div>
+            <div class="enh-pie-center">
+              <span class="enh-pie-net-label">Net position</span>
+              <span class="enh-pie-net ${net >= 0 ? "pos" : "neg"}">${fmt(net)}</span>
+            </div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">
+              <li><span class="enh-dot enh-dot-green"></span>Income <strong>${fmt(income)}</strong></li>
+              <li><span class="enh-dot enh-dot-red"></span>Expenses <strong>${fmt(expenses)}</strong></li>
+              <li class="enh-pie-net-row">Net position <strong class="${net >= 0 ? "enh-pos" : "enh-neg"}">${fmt(net)}</strong></li>
+            </ul>
+            ${afterTax != null ? `<p class="muted enh-aftertax">After estimated tax: <strong>${fmt(afterTax)}</strong></p>` : ""}
+          </div>
+        </div>`;
+    }
+
+    host.innerHTML = `${chart}${msg ? `<p class="muted">${esc(msg)}</p>` : ""}${warn}`;
+  }
+
+  const observer = new MutationObserver(() => {
+    const host = document.getElementById("snapshot-content");
+    if (host && latest && !host.querySelector(".enh-snapshot")) render();
+  });
+
+  function start() {
+    const host = document.getElementById("snapshot-content");
+    if (host) observer.observe(host, { childList: true });
+    render();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

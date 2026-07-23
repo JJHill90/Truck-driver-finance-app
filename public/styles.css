@@ -212,6 +212,29 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-pp-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9rem; padding: 3px 0; }
 .enh-pp-row span { color: var(--text-dim); }
 
+/* Dashboard snapshot pie/donut */
+.enh-snapshot { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.enh-pie-wrap { position: relative; width: 168px; height: 168px; flex: 0 0 auto; }
+.enh-pie { position: absolute; inset: 0; border-radius: 50%; }
+.enh-pie-empty { background: var(--bg-2); border: 1px dashed var(--border); }
+.enh-pie-wrap::before { content: ""; position: absolute; top: 50%; left: 50%; width: 58%; height: 58%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 50%; z-index: 1; }
+.enh-pie-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2; pointer-events: none; }
+.enh-pie-net-label { color: var(--text-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.enh-pie-net { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.enh-pie-net.pos { color: var(--green); }
+.enh-pie-net.neg { color: var(--red); }
+.enh-pie-side { flex: 1 1 200px; min-width: 180px; }
+.enh-pie-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.enh-pie-legend li { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+.enh-pie-legend li strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.enh-pie-net-row { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 2px; }
+.enh-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.enh-dot-green { background: var(--green); }
+.enh-dot-red { background: var(--red); }
+.enh-pos { color: var(--green); }
+.enh-neg { color: var(--red); }
+.enh-aftertax { margin: 12px 0 0; }
+
 .enh-zoomable { cursor: zoom-in; }
 .enh-lightbox { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0.82); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .enh-lightbox img { max-width: 94vw; max-height: 92vh; object-fit: contain; border-radius: 8px; cursor: zoom-in; transition: transform 0.15s ease; }
