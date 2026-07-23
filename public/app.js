@@ -257,7 +257,7 @@ async function uploadReceiptFile(file) {
     toast(err.message);
   } finally {
     pickBtn.disabled = false;
-    pickBtn.textContent = "Choose file from PC";
+    pickBtn.textContent = "Upload file";
     fileInput.value = "";
   }
 }
