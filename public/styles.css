@@ -171,6 +171,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 /* Report */
 .report-section { margin-bottom: 20px; }
 .report-actions { margin-bottom: 14px; }
+.report-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Modal */
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 50; }

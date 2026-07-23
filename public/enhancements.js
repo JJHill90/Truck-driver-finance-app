@@ -371,8 +371,27 @@
     }
   }
 
+  function wirePdfDownload() {
+    const btn = byId("download-report-pdf");
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      const fySel = byId("fy-select");
+      const fy = fySel && fySel.value ? fySel.value : "";
+      const url = `${API}/report.pdf${fy ? `?financialYear=${encodeURIComponent(fy)}` : ""}`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `haulage-eofy-${fy || "report"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (window.toast) window.toast("Preparing EOFY PDF…");
+    });
+  }
+
   async function start() {
     wire();
+    wirePdfDownload();
     try {
       const me = await apiGet("/auth/me");
       showAuthState(me.user);

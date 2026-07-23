@@ -18,6 +18,7 @@ const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
 const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
 const { getFinancialYearForDate } = require("./lib/ato-standards");
+const { buildReportPdf } = require("./lib/report-pdf");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -262,6 +263,25 @@ api.get("/report", (req, res) => {
     transactionCount: b.count,
   }));
   res.json(report);
+});
+
+// Accountant-ready EOFY ledger as a downloadable PDF.
+api.get("/report.pdf", (req, res) => {
+  const records = getRecords(req);
+  const fy = req.query.financialYear || records.profile.financialYear;
+  const report = buildAccountantReport(records, profileFor(records, fy));
+  applyHistoricalRates(report.summary, records, fy);
+  report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
+    schedule: b.atoSchedule,
+    category: b.label,
+    deductibleAmount: b.deductibleTotal,
+    transactionCount: b.count,
+  }));
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="haulage-eofy-${fy}.pdf"`);
+  const doc = buildReportPdf(report, records, fy);
+  doc.pipe(res);
+  doc.end();
 });
 
 api.get("/forecast", (req, res) => {
