@@ -6,7 +6,7 @@ services:
   - type: web
     name: haulage-finance
     runtime: node
-    plan: free # free tier is reachable but cold-starts after idle; use "starter" for always-on
+    plan: starter # persistent disk requires a paid plan
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /haulage/
@@ -25,11 +25,8 @@ services:
         value: Haulage_Admin
       - key: HAULAGE_ADMIN_PASSWORD
         sync: false
-    # --- Persistent multi-user data (recommended for real testing) -----------
-    # The free plan has an ephemeral filesystem, so accounts/receipts reset on
-    # each deploy/restart. To persist them, switch `plan` to `starter` (or above)
-    # and uncomment this disk mounted at the app's data directory:
-    # disk:
-    #   name: haulage-data
-    #   mountPath: /opt/render/project/src/data
-    #   sizeGB: 1
+    # Persist accounts + receipts across deploys (required for multi-user admin).
+    disk:
+      name: haulage-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

@@ -306,11 +306,28 @@
   function renderAdminList(users) {
     const list = byId("admin-user-list");
     if (!list) return;
-    if (!users || !users.length) {
-      list.innerHTML = `<p class="admin-empty">No other profiles yet — when users register, they appear here.</p>`;
+    const all = users || [];
+    const others = all.filter((u) => !u.isAdmin);
+    const note = byId("admin-empty-note");
+
+    if (!all.length) {
+      list.innerHTML = `<p class="admin-empty">No profiles yet.</p>`;
+      if (note) {
+        note.textContent =
+          "When drivers register on this same app URL, they appear here. Local accounts from your computer do not show up on the hosted site.";
+      }
       return;
     }
-    list.innerHTML = users
+
+    if (note) {
+      note.textContent = others.length
+        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · click a row to open their ledger (read-only).`
+        : "No other driver profiles yet. Ask users to create an account on this same URL (Profile → Create profile). After that, refresh this list.";
+    }
+
+    // Show drivers first, then the admin account.
+    const ordered = [...others, ...all.filter((u) => u.isAdmin)];
+    list.innerHTML = ordered
       .map((u) => {
         const totals = u.totals || {};
         const counts = u.counts || {};
