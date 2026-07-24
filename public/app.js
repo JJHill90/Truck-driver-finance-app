@@ -290,6 +290,29 @@ function getDetectedTotalsClient(ocr) {
     push(`Detected $${Number(amount).toFixed(2)}`, amount);
   }
   if (totals.length && !totals.some((t) => t.primary)) totals[0].primary = true;
+
+  // Expenses: only approve the overall/largest total (matches server mergeDetectedTotals).
+  if (!isIncome && totals.length) {
+    const isOverall = (label) =>
+      /\b(grand\s*total|total\s*due|amount\s*due|balance\s*due|amount\s*payable|card\s*payment|total)\b/i.test(
+        String(label || "")
+      );
+    const byAmount = new Map();
+    for (const t of totals) {
+      const key = t.amount.toFixed(2);
+      if (!byAmount.has(key)) byAmount.set(key, t);
+    }
+    const deduped = [...byAmount.values()];
+    const overall = deduped.filter((t) => isOverall(t.label));
+    const best = (overall.length ? overall : deduped).reduce((a, b) =>
+      a.amount >= b.amount ? a : b
+    );
+    for (const t of deduped) t.primary = false;
+    best.primary = true;
+    if (!isOverall(best.label)) best.label = "Total";
+    deduped.sort((a, b) => Number(b.primary) - Number(a.primary) || b.amount - a.amount);
+    return deduped;
+  }
   return totals;
 }
 
@@ -398,26 +421,10 @@ function renderReceiptTotalConfirm(box) {
   if (!pending) return;
 
   const o = pending.ocrResult || {};
-  const primary =
-    pending.detectedTotals.find((t) => t.primary)?.amount ??
-    pending.detectedTotals[0]?.amount ??
-    o.amount ??
-    "";
-
-  const hasTotals = pending.detectedTotals.length > 0;
-  const totalsList = hasTotals
-    ? pending.detectedTotals
-        .map(
-          (t, idx) =>
-            `<li>
-              <button type="button" class="detected-total-btn ${t.primary ? "detected-total-primary" : ""}" data-total-idx="${idx}">
-                <span>${escapeHtml(t.label)}</span>
-                <strong>${fmt(t.amount)}</strong>
-              </button>
-            </li>`
-        )
-        .join("")
-    : `<li class="detected-total-empty"><span>No dollar amounts detected automatically</span><span class="muted">Check the receipt preview and enter the total below</span></li>`;
+  // Expenses: approve the overall/largest total only (other line amounts are informational).
+  const primaryTotal =
+    pending.detectedTotals.find((t) => t.primary) || pending.detectedTotals[0] || null;
+  const primary = primaryTotal?.amount ?? o.amount ?? "";
 
   const scanNote =
     o.ocrSource === "pdf"
@@ -439,17 +446,23 @@ function renderReceiptTotalConfirm(box) {
     .filter(Boolean)
     .join("");
 
+  const totalHighlight = primaryTotal
+    ? `<div class="detected-total-single">
+         <span>${escapeHtml(primaryTotal.label || "Total")}</span>
+         <strong>${fmt(primaryTotal.amount)}</strong>
+       </div>`
+    : `<p class="muted">No dollar total detected automatically — type the receipt total below.</p>`;
+
   box.innerHTML = `
     <div class="scan-confirm">
-      <h3>Approve scanned totals?</h3>
+      <h3>Approve scanned total?</h3>
       <p class="muted">
-        <strong>${escapeHtml(pending.filename)}</strong> filled the <strong>Add receipt manually</strong> fields
-        (category, vendor${o.vendorAbn ? ", ABN" : ""}, amount). Approve the dollar total before saving.
+        <strong>${escapeHtml(pending.filename)}</strong> filled the expense fields
+        (category, vendor${o.vendorAbn ? ", ABN" : ""}). Approve the <strong>overall total</strong> before saving — other line amounts do not need to be adjusted.
       </p>
       ${scanNote}
-      <ul class="detected-totals">${totalsList}</ul>
+      ${totalHighlight}
       ${metaBits ? `<div class="scan-confirm-meta">${metaBits}</div>` : ""}
-      <p class="muted select-total-hint">${hasTotals ? "Tap a detected amount to use it, or type a correction — the manual form updates live." : "Type the total shown on your receipt."}</p>
       <label class="scan-confirm-amount-label">Total amount ($)
         <input type="number" id="scan-confirm-amount" step="0.01" min="0" value="${primary}" required />
       </label>
@@ -461,23 +474,6 @@ function renderReceiptTotalConfirm(box) {
       <div id="scan-confirm-details" class="scan-confirm-details hidden"></div>
     </div>
   `;
-
-  box.querySelectorAll("[data-total-idx]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const total = pending.detectedTotals[Number(btn.dataset.totalIdx)];
-      if (!total) return;
-      pending.detectedTotals = pending.detectedTotals.map((t, i) => ({
-        ...t,
-        primary: i === Number(btn.dataset.totalIdx),
-      }));
-      const amountInput = document.getElementById("scan-confirm-amount");
-      if (amountInput) amountInput.value = total.amount;
-      syncAmountToManualForm(total.amount);
-      box.querySelectorAll(".detected-total-btn").forEach((el) => el.classList.remove("detected-total-primary"));
-      btn.classList.add("detected-total-primary");
-      toast(`Using ${fmt(total.amount)} as total`);
-    });
-  });
 
   document.getElementById("scan-confirm-amount")?.addEventListener("input", (e) => {
     syncAmountToManualForm(e.target.value);

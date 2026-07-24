@@ -90,6 +90,11 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   totals, manual entry with ABN, receipt gallery) plus expense totals, special
   claims (km/laundry), and the expense ledger. Nav no longer has a separate
   Scan receipt item; `setView("receipts")` redirects to `expenses`.
+- **Expense scan approval:** when OCR finds multiple line amounts, only the
+  overall/grand total (or largest amount if unlabeled) is primary. The confirm
+  UI asks to approve that single total — other line amounts are informational
+  and do not need adjusting before save. Income scans still show multi-field
+  amounts (gross/net/etc.).
 - **Uploads require login.** `/receipts/scan`, `/receipts/manual`, and
   `/receipts/:id/confirm` return 401 if there is no session — files save into
   `data/users/<name>.json` + `data/receipts/`. Receipts store `purpose`

@@ -13,7 +13,7 @@ const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { buildForecast } = require("./lib/forecast");
-const { extractReceiptData, getDetectedTotals } = require("./lib/receipt-ocr");
+const { extractReceiptData, mergeDetectedTotals } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
 const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
@@ -85,36 +85,7 @@ function clearSessionCookie(res) {
 
 // Merge the typed component breakdown with the provided detected totals,
 // preferring typed labels, de-duplicating by amount, keeping one primary.
-function mergeDetectedTotals(ocrResult, components) {
-  const out = [];
-  const seen = new Set();
-  const add = (label, amount, primary) => {
-    const v = Number(amount);
-    if (!(v > 0)) return;
-    const key = v.toFixed(2);
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ label, amount: v, primary: Boolean(primary) });
-  };
-  for (const c of components) {
-    if (c.detected !== false) add(c.label, c.amount, false);
-  }
-  const hasBreakdown = components.length > 0;
-  for (const t of getDetectedTotals(ocrResult)) {
-    if (hasBreakdown && /^Detected \$/.test(t.label)) continue;
-    add(t.label, t.amount, t.primary);
-  }
-  if (out.length && !out.some((t) => t.primary)) out[0].primary = true;
-  let primarySeen = false;
-  for (const t of out) {
-    if (t.primary) {
-      if (primarySeen) t.primary = false;
-      else primarySeen = true;
-    }
-  }
-  return out;
-}
-
+// For expenses, the primary is the overall/grand total (else the largest amount).
 // Missing-data / compliance alerts for the current user's records.
 function buildAlerts(records) {
   const alerts = [];
@@ -526,8 +497,12 @@ api.post("/receipts/scan", async (req, res, next) => {
     }
 
     const scanPurpose = purpose === "income" ? "income" : "expense";
-    const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown);
+    const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
     const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
+    // Expense approval is for the overall total only — keep OCR amount in sync.
+    if (scanPurpose === "expense" && primaryTotal && primaryTotal.amount > 0) {
+      ocrResult.amount = primaryTotal.amount;
+    }
     const scanAmount =
       labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
     const labeledName = buildDocumentFilename({
