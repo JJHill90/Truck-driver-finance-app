@@ -90,4 +90,31 @@ describe("auth primary mod / admin", () => {
     const users = auth.listUsers();
     expect(users.some((u) => u.isAdmin)).toBe(true);
   });
+
+  it("createUser makes a non-admin driver profile", () => {
+    const username = uniq();
+    const created = auth.createUser(username, "temp-pass-1");
+    expect(created.username).toBe(username);
+    expect(created.isAdmin).toBe(false);
+    expect(auth.verifyUser(username, "temp-pass-1")).not.toBeNull();
+  });
+
+  it("createUser refuses the reserved primary-mod username", () => {
+    expect(() => auth.createUser("Haulage_Admin", "temp-pass-1")).toThrow(/reserved/i);
+  });
+
+  it("deleteUser removes a driver and refuses to delete the primary mod", () => {
+    const username = uniq();
+    auth.createUser(username, "temp-pass-1");
+    const token = auth.createSession(username);
+    expect(auth.getSessionUser(token)).toBe(username);
+
+    const result = auth.deleteUser(username);
+    expect(result.username).toBe(username);
+    expect(auth.getUser(username)).toBeNull();
+    expect(auth.getSessionUser(token)).toBeNull();
+
+    auth.ensureAdminBootstrap();
+    expect(() => auth.deleteUser("Haulage_Admin")).toThrow(/primary mod/i);
+  });
 });

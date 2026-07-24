@@ -291,20 +291,35 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 
 /* --- Primary-mod admin -------------------------------------------------- */
 #admin-panel { border-left: 4px solid var(--blue); }
+.admin-create-form { margin: 12px 0 4px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-2); }
+#admin-create-message:empty { display: none; }
 .admin-user-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .admin-user-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px 16px;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px 12px;
   align-items: center;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-2);
   text-align: left;
+  color: inherit;
+  width: 100%;
+}
+.admin-user-row-main {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
   cursor: pointer;
   color: inherit;
   font: inherit;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  align-items: center;
   width: 100%;
 }
 .admin-user-row:hover { border-color: var(--blue); }
@@ -312,6 +327,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .admin-user-row .admin-user-name { font-weight: 700; }
 .admin-user-row .admin-user-meta { color: var(--text-dim); font-size: 0.82rem; margin-top: 2px; }
 .admin-user-row .admin-user-totals { text-align: right; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.admin-user-row-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .admin-badge {
   display: inline-block;
   margin-left: 8px;
@@ -357,5 +373,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   .grid-2, .form-grid, .expense-totals-grid { grid-template-columns: 1fr; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .admin-user-row { grid-template-columns: 1fr; }
+  .admin-user-row-main { grid-template-columns: 1fr; }
   .admin-user-row .admin-user-totals { text-align: left; }
+  .admin-user-row-actions { justify-content: flex-start; }
 }

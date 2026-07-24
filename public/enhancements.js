@@ -344,6 +344,16 @@
     return res.json().catch(() => ({}));
   }
 
+  async function apiDelete(path) {
+    const res = await fetch(`${API}${path}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -395,6 +405,32 @@
 
   let adminSelected = null;
 
+  function setAdminCreateMessage(msg, isError) {
+    const el = byId("admin-create-message");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.style.color = isError ? "var(--red)" : "";
+  }
+
+  async function deleteAdminUser(username) {
+    const ok = window.confirm(
+      `Delete profile "${username}"?\n\nTheir login, expenses, income, and scanned files will be permanently removed. This cannot be undone.`
+    );
+    if (!ok) return;
+    try {
+      await apiDelete(`/admin/users/${encodeURIComponent(username)}`);
+      if (adminSelected === username) {
+        adminSelected = null;
+        renderAdminDetail(null);
+      }
+      if (window.toast) window.toast(`Deleted ${username}`);
+      await loadAdminUsers();
+    } catch (e) {
+      if (window.toast) window.toast(e.message);
+      else window.alert(e.message);
+    }
+  }
+
   function renderAdminList(users) {
     const list = byId("admin-user-list");
     if (!list) return;
@@ -406,15 +442,15 @@
       list.innerHTML = `<p class="admin-empty">No profiles yet.</p>`;
       if (note) {
         note.textContent =
-          "When drivers register on this same app URL, they appear here. Local accounts from your computer do not show up on the hosted site.";
+          "Create a driver profile above, or ask them to register on this same app URL.";
       }
       return;
     }
 
     if (note) {
       note.textContent = others.length
-        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · click a row to open their ledger (read-only).`
-        : "No other driver profiles yet. Ask users to create an account on this same URL (Profile → Create profile). After that, refresh this list.";
+        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · open a row to review (read-only), or delete a profile you no longer need.`
+        : "No other driver profiles yet. Create one above when someone requests access.";
     }
 
     // Show drivers first, then the admin account.
@@ -425,22 +461,35 @@
         const counts = u.counts || {};
         const badge = u.isAdmin ? `<span class="admin-badge">primary mod</span>` : "";
         const active = adminSelected === u.username ? " active" : "";
-        return `<button type="button" class="admin-user-row${active}" data-admin-user="${esc(u.username)}">
-          <div>
-            <div class="admin-user-name">${esc(u.username)}${badge}</div>
-            <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
-          </div>
-          <div class="admin-user-totals">
-            <div>Gross ${fmt(totals.grossIncome)}</div>
-            <div class="muted">Taxable ${fmt(totals.netTaxableIncome)}</div>
-          </div>
-        </button>`;
+        const deleteBtn = u.isAdmin
+          ? ""
+          : `<button type="button" class="btn danger small" data-admin-del="${esc(u.username)}">Delete</button>`;
+        return `<div class="admin-user-row${active}">
+          <button type="button" class="admin-user-row-main" data-admin-user="${esc(u.username)}">
+            <div>
+              <div class="admin-user-name">${esc(u.username)}${badge}</div>
+              <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
+            </div>
+            <div class="admin-user-totals">
+              <div>Gross ${fmt(totals.grossIncome)}</div>
+              <div class="muted">Taxable ${fmt(totals.netTaxableIncome)}</div>
+            </div>
+          </button>
+          <div class="admin-user-row-actions">${deleteBtn}</div>
+        </div>`;
       })
       .join("");
 
     list.querySelectorAll("[data-admin-user]").forEach((btn) => {
       btn.addEventListener("click", () => {
         void openAdminUser(btn.getAttribute("data-admin-user"));
+      });
+    });
+    list.querySelectorAll("[data-admin-del]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void deleteAdminUser(btn.getAttribute("data-admin-del"));
       });
     });
   }
@@ -480,10 +529,12 @@
       })
       .join("");
 
+    const canDelete = data.user && !data.user.isAdmin;
     detail.classList.remove("hidden");
     detail.innerHTML = `
       <div class="admin-detail-head">
         <h3>${esc(data.user.username)}${data.user.isAdmin ? ' <span class="admin-badge">primary mod</span>' : ""}</h3>
+        ${canDelete ? `<button type="button" class="btn danger" id="admin-detail-delete">Delete profile</button>` : ""}
         <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
@@ -523,6 +574,9 @@
       renderAdminDetail(null);
       const list = byId("admin-user-list");
       list?.querySelectorAll(".admin-user-row.active").forEach((el) => el.classList.remove("active"));
+    });
+    byId("admin-detail-delete")?.addEventListener("click", () => {
+      void deleteAdminUser(data.user.username);
     });
   }
 
@@ -650,6 +704,27 @@
     if (adminRefresh) {
       adminRefresh.addEventListener("click", () => {
         void loadAdminUsers();
+      });
+    }
+
+    const createForm = byId("admin-create-user-form");
+    if (createForm) {
+      createForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = (byId("admin-new-username") || {}).value || "";
+        const password = (byId("admin-new-password") || {}).value || "";
+        setAdminCreateMessage("Creating profile…");
+        try {
+          const data = await apiPost("/admin/users", { username, password });
+          setAdminCreateMessage(
+            `Created ${data.user.username}. Share the username and temporary password so they can log in and change it if needed.`
+          );
+          createForm.reset();
+          if (window.toast) window.toast(`Created profile ${data.user.username}`);
+          await loadAdminUsers();
+        } catch (err) {
+          setAdminCreateMessage(err.message, true);
+        }
       });
     }
   }

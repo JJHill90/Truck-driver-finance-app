@@ -1,3 +1,4 @@
+const fs = require("fs");
 const path = require("path");
 const express = require("express");
 
@@ -307,6 +308,53 @@ api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   }
   res.sendFile(info.filePath);
+});
+
+api.post("/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { username, password } = req.body || {};
+  try {
+    const user = auth.createUser(username, password);
+    // Seed an empty per-user records file so the profile is ready immediately.
+    storage.loadRecords(auth.recordsFileFor(user.username));
+    res.status(201).json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.delete("/admin/users/:username", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const targetName = req.params.username;
+  if (auth.usernameKey(targetName) === auth.usernameKey(req.user)) {
+    res.status(400).json({ error: "You cannot delete your own primary mod account." });
+    return;
+  }
+  try {
+    const target = auth.getUser(targetName);
+    if (!target) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+    const recordsFile = auth.recordsFileFor(target.username);
+    let records = null;
+    if (recordsCache.has(target.username)) {
+      records = recordsCache.get(target.username);
+    } else if (fs.existsSync(recordsFile)) {
+      records = storage.loadRecords(recordsFile);
+    }
+    if (records) {
+      for (const r of records.receipts || []) {
+        if (r.imagePath) storage.deleteReceiptFile(r.imagePath);
+      }
+    }
+    auth.deleteUser(target.username);
+    recordsCache.delete(target.username);
+    if (fs.existsSync(recordsFile)) fs.unlinkSync(recordsFile);
+    res.json({ ok: true, username: target.username });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // --- Reference data ------------------------------------------------------

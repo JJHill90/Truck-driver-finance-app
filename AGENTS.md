@@ -56,9 +56,11 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
 - **Primary mod admin:** bootstraps `Haulage_Admin` / `Haulage_Admin` on startup
   via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
   `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
+  `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
+  (wipe account + records + receipt files; cannot delete primary mod),
   `GET /admin/users/:username`, `GET /admin/users/:username/receipts/:id/file`.
   Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
-  Read-only — does not switch the signed-in session to the other user.
+  Opening another user is read-only and does not switch your signed-in session.
 - Scan enrichment is layered on without editing the provided files:
   `lib/document-breakdown.js` computes the typed component breakdown + ATO
   compliance and `server.js` folds it into the `/receipts/scan` response

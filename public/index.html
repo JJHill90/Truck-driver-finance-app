@@ -299,7 +299,15 @@
               <h2>Primary mod — user profiles</h2>
               <button type="button" class="btn secondary" id="admin-refresh">Refresh</button>
             </div>
-            <p class="muted">You are the primary mod. Open any user’s profile to review their income, expenses, and receipts (read-only).</p>
+            <p class="muted">Create profiles for drivers who request access, open any profile to review their ledger (read-only), or delete a profile you no longer need. The primary mod account cannot be deleted.</p>
+            <form id="admin-create-user-form" class="form-grid admin-create-form">
+              <label>Username<input type="text" id="admin-new-username" name="username" autocomplete="off" placeholder="e.g. dave.hill" required /></label>
+              <label>Temporary password<input type="text" id="admin-new-password" name="password" autocomplete="new-password" placeholder="At least 6 characters" required /></label>
+              <div class="span-2 form-actions">
+                <button type="submit" class="btn primary" id="admin-create-user">Create profile</button>
+              </div>
+            </form>
+            <p class="muted" id="admin-create-message"></p>
             <p class="muted" id="admin-empty-note"></p>
             <div id="admin-user-list" class="admin-user-list"></div>
             <div id="admin-user-detail" class="admin-user-detail hidden"></div>
