@@ -11,6 +11,7 @@ const state = {
   financialYear: null, // set to current AU FY on init
   fyUserSelected: false,
   forecastMode: "realtime",
+  forecastPeriod: "yearly",
   expenseTotalPeriod: loadSavedPeriod(),
 };
 
@@ -2242,20 +2243,45 @@ async function loadForecast() {
   renderForecast();
 }
 
+function forecastPeriodDivisor(period) {
+  if (period === "monthly") return 12;
+  if (period === "quarterly") return 4;
+  return 1;
+}
+
+function scaleForecastAmount(yearlyAmount, period) {
+  const n = Number(yearlyAmount) || 0;
+  const divisor = forecastPeriodDivisor(period);
+  return Math.round((n / divisor) * 100) / 100;
+}
+
 function renderForecast() {
   const f = state.forecast;
   if (!f) return;
+  const period = ["monthly", "quarterly", "yearly"].includes(state.forecastPeriod)
+    ? state.forecastPeriod
+    : "yearly";
+  const periodLabel =
+    period === "monthly" ? "Monthly" : period === "quarterly" ? "Quarterly" : "Yearly";
+  const income = scaleForecastAmount(f.projected.income, period);
+  const deductions = scaleForecastAmount(f.projected.deductions, period);
+  const tax = scaleForecastAmount(f.projected.totalTax, period);
+  const net = scaleForecastAmount(f.projected.netAfterTax, period);
+
   document.getElementById("forecast-progress").innerHTML = `
     <p>${f.yearProgress.daysElapsed} of ${f.yearProgress.daysTotal} days (${f.yearProgress.percentComplete}%)</p>
     <div class="progress-bar"><span style="width:${f.yearProgress.percentComplete}%"></span></div>
     <p class="muted">YTD income ${fmt(f.yearToDate.income)} · YTD deductions ${fmt(f.yearToDate.deductions)}</p>
   `;
   document.getElementById("forecast-stats").innerHTML = `
-    <div class="stat-card income"><div class="label">Projected income</div><div class="value">${fmt(f.projected.income)}</div></div>
-    <div class="stat-card expense"><div class="label">Projected deductions</div><div class="value">${fmt(f.projected.deductions)}</div></div>
-    <div class="stat-card tax"><div class="label">Projected tax</div><div class="value">${fmt(f.projected.totalTax)}</div></div>
-    <div class="stat-card income"><div class="label">Projected net (after tax)</div><div class="value">${fmt(f.projected.netAfterTax)}</div><div class="sub">~${fmt(f.projected.averageMonthlyNet)}/month</div></div>
+    <div class="stat-card income"><div class="label">Projected income</div><div class="value">${fmt(income)}</div><div class="sub">${periodLabel}</div></div>
+    <div class="stat-card expense"><div class="label">Projected deductions</div><div class="value">${fmt(deductions)}</div><div class="sub">${periodLabel}</div></div>
+    <div class="stat-card tax"><div class="label">Projected tax</div><div class="value">${fmt(tax)}</div><div class="sub">${periodLabel}</div></div>
+    <div class="stat-card income"><div class="label">Projected net (after tax)</div><div class="value">${fmt(net)}</div><div class="sub">${period === "yearly" ? `~${fmt(f.projected.averageMonthlyNet)}/month` : periodLabel}</div></div>
   `;
+  const periodSelect = document.getElementById("forecast-total-period");
+  if (periodSelect && periodSelect.value !== period) periodSelect.value = period;
+
   document.getElementById("forecast-scenarios").innerHTML = `
     <table class="data"><thead><tr><th>Scenario</th><th>Income</th><th>Deductions</th><th>Tax</th><th>Net</th></tr></thead>
     <tbody>${f.scenarios.map((s) => `<tr><td>${s.name}</td><td class="amount">${fmt(s.projectedIncome)}</td><td class="amount">${fmt(s.projectedDeductions)}</td><td class="amount">${fmt(s.projectedTax)}</td><td class="amount">${fmt(s.projectedNet)}</td></tr>`).join("")}</tbody></table>
@@ -2270,6 +2296,13 @@ document.querySelectorAll("[data-forecast-mode]").forEach((btn) => {
     document.getElementById("manual-forecast-form").classList.toggle("hidden", state.forecastMode !== "manual");
     loadForecast();
   });
+});
+
+document.getElementById("forecast-total-period")?.addEventListener("change", (e) => {
+  const period = e.target.value;
+  if (!["monthly", "quarterly", "yearly"].includes(period)) return;
+  state.forecastPeriod = period;
+  renderForecast();
 });
 
 document.getElementById("manual-forecast-form").addEventListener("submit", async (e) => {

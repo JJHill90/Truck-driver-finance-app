@@ -246,7 +246,17 @@
             </form>
             <div id="forecast-progress" class="forecast-progress"></div>
           </div>
-          <div id="forecast-stats" class="stat-grid"></div>
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Projected totals</h2>
+              <select id="forecast-total-period" class="period-select" aria-label="Forecast total period">
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly" selected>Yearly</option>
+              </select>
+            </div>
+            <div id="forecast-stats" class="stat-grid"></div>
+          </div>
           <div class="panel">
             <div class="panel-header"><h2>Scenarios</h2></div>
             <div id="forecast-scenarios"></div>
