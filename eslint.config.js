@@ -1,28 +1,46 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import tseslint from 'typescript-eslint'
+const js = require("@eslint/js");
+const globals = require("globals");
 
-export default tseslint.config(
-  { ignores: ['dist', 'coverage'] },
+module.exports = [
+  // Provided verbatim modules (frontend + backend logic) are excluded from lint.
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ['**/*.{ts,tsx}'],
+    ignores: [
+      "node_modules",
+      "data",
+      "public/app.js",
+      "lib/ato-standards.js",
+      "lib/tax-calculator.js",
+      "lib/forecast.js",
+      "lib/storage.js",
+      "lib/receipt-ocr.js",
+      "lib/receipt-ocr-money.js",
+      "lib/local-receipt-ocr.js",
+      "lib/income-document-ocr.js",
+    ],
+  },
+  js.configs.recommended,
+  {
+    files: ["**/*.js"],
     languageOptions: {
-      ecmaVersion: 2020,
-      globals: globals.browser,
-    },
-    plugins: {
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: { ...globals.node },
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
+      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
-)
+  {
+    files: ["public/**/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { ...globals.browser },
+    },
+  },
+  {
+    files: ["**/*.test.js"],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.vitest },
+    },
+  },
+];

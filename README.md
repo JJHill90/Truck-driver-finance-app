@@ -1,11 +1,47 @@
 # Truck-driver-finance-app
 
-**TruckLedger** — a lightweight finance tracker for truck drivers to log loads,
-fuel, tolls and other expenses, and instantly see net earnings on the road.
+**Haulage** — a finance tool for Australian truck drivers to track work expenses
+and income/remittances, capture receipts, and produce a live EOFY performance
+statement, tax estimate and financial forecast.
 
-Built with **Vite + React + TypeScript**. Transactions are persisted locally in
-the browser via `localStorage`, so the app runs fully client-side with no
-backend required.
+The frontend is a framework-free single-page app (`public/app.js`) served by a
+small **Node.js + Express** backend that stores data in a local JSON file
+(`data/driver-records.json`) and receipt files under `data/receipts/`. No
+database is required.
+
+> **Receipt/payslip OCR:** works out of the box with **local OCR** (Tesseract.js)
+> plus a manual approve-totals step. If `OPENAI_API_KEY` is set, cloud OCR
+> (OpenAI `gpt-4o-mini` vision) is used and merged with the local result. PDF
+> income documents are parsed via `pdf-parse`. No key is required to run.
+
+### Scan enrichment (breakdown + ATO compliance)
+
+When a document is scanned, the total is broken down into typed components and
+checked against ATO transport-industry standards:
+
+- **Income (payslip/remittance):** components for Wages/gross, PAYG tax,
+  Superannuation, Entitlements/allowances, GST and Net pay; compliance checks for
+  the Super Guarantee rate (12% for 2025-26+), PAYG withholding and net
+  reconciliation. Undetected components (e.g. super) are estimated and flagged.
+- **Expense:** line-item breakdown plus checks for ATO reasonable-amount meal
+  caps and the $300 substantiation threshold.
+
+For income documents the **pay period and payment date** are extracted (e.g.
+"Pay Period From: 17/06/2026 To: 23/06/2026", "Payment Date: 25/06/2026"), the
+weekly cycle window it falls into is derived (e.g. Wed→Tue), and all of it is
+shown in the review panel and saved with the entry so it appears in filing.
+
+For long-haul drivers the breakdown also adds a separate **Overnight/Driver
+Daily Allowance** line — the exact ATO reasonable daily meal amount for employee
+truck drivers (TD 2025/4: $31.15 + $35.55 + $61.30 = **$128.00/day**, sourced
+from `ato-standards.js`) × days in the pay period. It is shown whether or not the
+payslip lists a "Travel Allowance", as a clearly-badged estimate (meals only,
+excludes accommodation) that is not counted as actual income.
+
+The scanned image is shown during review and can be clicked to enlarge (a
+lightbox) so totals are easy to read before approving. This enrichment lives in
+`lib/document-breakdown.js` (backend) and `public/enhancements.js` (UI layer),
+leaving the provided `app.js` untouched.
 
 ## Requirements
 
@@ -15,35 +51,123 @@ backend required.
 ## Getting started
 
 ```bash
-npm install      # install dependencies
-npm run dev      # start the dev server at http://localhost:5173
+npm install
+npm start
 ```
+
+Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
 
 ## Scripts
 
-| Command             | Description                                     |
-| ------------------- | ----------------------------------------------- |
-| `npm run dev`       | Start the Vite dev server (HMR) on port `5173`. |
-| `npm run build`     | Type-check and build the production bundle.     |
-| `npm run preview`   | Preview the production build locally.           |
-| `npm run lint`      | Run ESLint over the project.                    |
-| `npm test`          | Run the unit/component test suite (Vitest).     |
-| `npm run test:watch`| Run tests in watch mode.                        |
+| Command          | Description                                                  |
+| ---------------- | ------------------------------------------------------------ |
+| `npm start`      | Start the Express server + UI on port `3000`.                |
+| `npm run dev`    | Same, with `node --watch` auto-restart on file changes.      |
+| `npm run lint`   | Run ESLint over server/lib code.                             |
+| `npm test`       | Run backend unit tests (Vitest) for the tax/analysis logic.  |
 
 ## Project structure
 
 ```
-src/
-  App.tsx              # Main UI: add transactions, summary cards, ledger
-  App.test.tsx         # Component tests (Testing Library + Vitest)
-  lib/
-    finance.ts         # Pure domain logic (totals, categories, formatting)
-    finance.test.ts     # Unit tests for domain logic
-    useLocalStorage.ts # Persistence hook
-  test/setup.ts        # Test environment setup (jest-dom matchers)
+server.js               Express app: static UI + JSON API under /api/haulage
+tax-calculator.test.js  Unit tests for the ATO tax/deduction logic
+lib/                    Provided backend modules (verbatim):
+  ato-standards.js      ATO categories, income types, caps, FY helpers
+  tax-calculator.js     Tax brackets, deduction analysis, year summary/report
+  forecast.js           EOFY projection + scenarios
+  storage.js            JSON-file store + receipt image persistence
+  receipt-ocr.js        OCR orchestration (OpenAI + local + merge)
+  local-receipt-ocr.js  Tesseract.js money/text extraction
+  income-document-ocr.js Payslip/remittance + PDF parsing
+  receipt-ocr-money.js  Money parsing helpers
+public/
+  index.html            App shell / all DOM the frontend expects
+  app.js                Frontend SPA (provided verbatim)
+  styles.css            Styles
+  truck.svg             Icon
+data/                   Runtime store + receipts (git-ignored)
 ```
 
-## Deployment
+## Accounts (multi-user profiles)
 
-Configured for Netlify (see `netlify.toml`): build command `npm run build`,
-publish directory `dist`, with an SPA fallback redirect.
+Under the **Profile** tab, a first-time user can create a profile with a
+username + password; existing users log in there too. Each account has its own
+private data store (receipts, income, EOFY projections, tax values and presets),
+so after logging in all of that user's data loads immediately. A missing-data
+alert banner (e.g. expenses needing receipts, no income recorded, incomplete
+profile) is shown on load.
+
+- Accounts persist to `data/users.json`; per-user records to `data/users/<name>.json`.
+- Passwords are stored as salted PBKDF2 hashes; the session is an HttpOnly cookie.
+- Without logging in, the app works against a shared **guest** store.
+- This is app-appropriate auth for a self-hosted tool (the "cloud" is the local
+  server), not a hardened public identity provider.
+- **Primary mod:** username `Haulage_Admin` / password `Haulage_Admin` (bootstrapped
+  on server start; override with `HAULAGE_ADMIN_USERNAME` /
+  `HAULAGE_ADMIN_PASSWORD`). On the Profile tab they see **Primary mod — user
+  profiles** and can open any user’s income, expenses and receipt downloads
+  (read-only).
+
+## Environment variables
+
+- `PORT` — server port (default `3000`).
+- `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
+- `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
+- `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
+  username is `Haulage_Admin`).
+
+## Historical financial years (accurate prior-year reconciliation)
+
+Selecting a prior financial year reconciles that year against the ATO rules that
+applied **that year**, not today's. `lib/historical-rates.js` holds verified
+per-year figures and overlays them onto the summary/report:
+
+- **Resident income tax brackets** by year (e.g. 2016-17 32.5% band to $87k;
+  2018-19 to $90k; 2020-21→2023-24 19%/$45k/$120k; 2024-25+ Stage 3 16/30/37/45).
+- **Temporary Budget Repair Levy** (+2% over $180k) for 2014-15 to 2016-17.
+- **Cents-per-km** car rate by year (66/68/72/78/85/88/91¢) and **Super
+  Guarantee** rate by year (9.5%→12%). Medicare levy 2%.
+
+Income/expense/deduction totals are per-year sums; the tax estimate and
+rate-dependent deductions (cents-per-km) use the selected year's rates.
+Note: truck-driver meal *reasonable amounts* currently use the latest ATO figure
+for all years (historical per-year meal amounts not yet encoded).
+
+## Deploy to an always-on host
+
+The app is a plain Node/Express server, so it runs on any host. It binds
+`0.0.0.0` and honours `PORT`, and there is no build step.
+
+### Render (one-click, real-time updates)
+
+1. Push this repo to GitHub (already done).
+2. In Render: **New → Blueprint**, connect this repo. Render reads `render.yaml`
+   and provisions the `haulage-finance` web service.
+3. It redeploys automatically on every push to the connected branch, and gives a
+   permanent URL like `https://haulage-finance.onrender.com/haulage/`.
+4. (Optional) Set `OPENAI_API_KEY` in the dashboard to enable cloud OCR.
+
+The free plan is reachable but cold-starts after idle and has an **ephemeral
+filesystem** (accounts/receipts reset on redeploy). For always-on + persistent
+data, switch `plan` to `starter` and uncomment the `disk` block in `render.yaml`.
+
+### Docker (any host)
+
+```bash
+docker build -t haulage-finance .
+docker run -p 3000:3000 -v haulage-data:/app/data haulage-finance
+# open http://localhost:3000/haulage/
+```
+
+The `-v haulage-data:/app/data` volume persists the JSON store, receipts and user
+accounts across restarts.
+
+> For production multi-user use, replace the local JSON store with a managed
+> database and serve over HTTPS with `Secure` cookies.
+
+## API (base `/api/haulage`)
+
+`GET /standards`, `GET /records`, `GET /summary`, `GET /report`, `GET /forecast`,
+`PUT /profile`, `POST|DELETE /expenses`, `POST /expenses/preview`,
+`POST|DELETE /income`, `POST /receipts/scan`, `POST /receipts/manual`,
+`POST /receipts/:id/confirm`, `GET /receipts/:id/image`, `GET /receipts/:id/file`.
