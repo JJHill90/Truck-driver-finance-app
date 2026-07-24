@@ -351,7 +351,12 @@ api.get("/standards", (_req, res) => {
 
 api.get("/records", (req, res) => {
   const records = getRecords(req);
-  res.json({ ...records, vendors: storage.listVendors(records) });
+  const receipts = (records.receipts || []).map((r) => ({
+    ...r,
+    hasImage: Boolean(r.imagePath),
+    dataUrl: undefined,
+  }));
+  res.json({ ...records, receipts, vendors: storage.listVendors(records) });
 });
 
 // --- Profile -------------------------------------------------------------
@@ -463,6 +468,13 @@ api.delete("/income/:id", (req, res) => {
 // --- Receipts ------------------------------------------------------------
 api.post("/receipts/scan", async (req, res, next) => {
   try {
+    if (!req.user) {
+      res.status(401).json({
+        error:
+          "Log in to your profile before uploading — receipts and payslips save to your account.",
+      });
+      return;
+    }
     const records = getRecords(req);
     const { imageBase64, mimeType, filename, purpose } = req.body || {};
     if (!imageBase64) {
@@ -549,6 +561,7 @@ api.post("/receipts/scan", async (req, res, next) => {
 
     const receipt = storage.addReceipt(records, {
       source: "scan",
+      purpose: scanPurpose,
       filename: labeledName,
       mimeType: mimeType || "image/jpeg",
       dataUrl: imageBase64,
@@ -560,6 +573,7 @@ api.post("/receipts/scan", async (req, res, next) => {
         id: receipt.id,
         filename: receipt.filename,
         mimeType: receipt.mimeType,
+        purpose: receipt.purpose,
         hasImage: Boolean(receipt.imagePath),
       },
       ocrResult,
@@ -577,6 +591,12 @@ api.post("/receipts/scan", async (req, res, next) => {
 });
 
 api.post("/receipts/manual", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({
+      error: "Log in to your profile before saving — entries are stored on your account.",
+    });
+    return;
+  }
   const records = getRecords(req);
   const { expense } = storage.addManualReceipt(records, req.body || {});
   persist(req);
@@ -584,6 +604,12 @@ api.post("/receipts/manual", (req, res) => {
 });
 
 api.post("/receipts/:id/confirm", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({
+      error: "Log in to your profile before saving — entries are stored on your account.",
+    });
+    return;
+  }
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const { confirmed, purpose, ...payload } = req.body || {};
@@ -598,6 +624,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
   if (purpose === "income") {
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     if (receipt) {
+      receipt.purpose = "income";
       receipt.linkedIncomeId = entry.id;
       receipt.manual = payload;
       receipt.filename = buildDocumentFilename({
@@ -608,12 +635,13 @@ api.post("/receipts/:id/confirm", (req, res) => {
       });
     }
     persist(req);
-    res.json({ entry, receipt: receipt ? { id: receipt.id, filename: receipt.filename } : null });
+    res.json({ entry, receipt: receipt ? { id: receipt.id, filename: receipt.filename, purpose: receipt.purpose } : null });
     return;
   }
 
   const entry = storage.addExpense(records, { ...payload, receiptId: receipt?.id || null });
   if (receipt) {
+    receipt.purpose = "expense";
     receipt.linkedExpenseId = entry.id;
     receipt.manual = payload;
     receipt.filename = buildDocumentFilename({
@@ -624,7 +652,11 @@ api.post("/receipts/:id/confirm", (req, res) => {
     });
   }
   persist(req);
-  res.json({ entry, analysis: calcExpenseDeduction(entry), receipt: receipt ? { id: receipt.id, filename: receipt.filename } : null });
+  res.json({
+    entry,
+    analysis: calcExpenseDeduction(entry),
+    receipt: receipt ? { id: receipt.id, filename: receipt.filename, purpose: receipt.purpose } : null,
+  });
 });
 
 api.get("/receipts/:id/image", (req, res) => {

@@ -114,6 +114,7 @@
         res = await origFetch(url, {
           ...options,
           method: options.method || "POST",
+          credentials: options.credentials || "same-origin",
           headers: {
             "Content-Type": "application/json",
             ...(options.headers || {}),

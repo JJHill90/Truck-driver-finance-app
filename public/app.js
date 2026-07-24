@@ -59,6 +59,7 @@ async function api(path, opts = {}) {
   try {
     res = await fetch(`${API}${path}`, {
       headers: { "Content-Type": "application/json", ...opts.headers },
+      credentials: "same-origin",
       ...opts,
     });
   } catch (err) {
@@ -785,20 +786,40 @@ function findReceipt(id) {
   return (state.records?.receipts || []).find((r) => r.id === id);
 }
 
-function getReceiptsWithImages() {
-  return (state.records?.receipts || []).filter((r) => r.hasImage || r.imagePath);
+function getReceiptsWithImages(purpose) {
+  return (state.records?.receipts || []).filter((r) => {
+    if (!(r.hasImage || r.imagePath)) return false;
+    if (!purpose) return true;
+    const p =
+      r.purpose ||
+      (r.linkedIncomeId ? "income" : r.linkedExpenseId ? "expense" : null) ||
+      (r.ocrResult?.documentType === "income" ? "income" : "expense");
+    return p === purpose;
+  });
 }
 
 function receiptSummary(receipt) {
   const expense = (state.records?.expenses || []).find(
     (e) => e.receiptId === receipt.id || e.id === receipt.linkedExpenseId
   );
+  const income = (state.records?.income || []).find(
+    (i) => i.receiptId === receipt.id || i.id === receipt.linkedIncomeId
+  );
   const manual = receipt.manual;
   const ocr = receipt.ocrResult || {};
   return {
-    date: manual?.date || expense?.date || ocr.date || receipt.createdAt?.slice(0, 10),
-    vendor: manual?.vendor || expense?.vendor || ocr.vendor || receipt.filename || "Receipt",
-    amount: manual?.amount ?? expense?.amount ?? ocr.amount ?? null,
+    date: manual?.date || expense?.date || income?.date || ocr.date || receipt.createdAt?.slice(0, 10),
+    vendor:
+      manual?.vendor ||
+      manual?.entity ||
+      expense?.vendor ||
+      income?.entity ||
+      income?.payer ||
+      ocr.entity ||
+      ocr.vendor ||
+      receipt.filename ||
+      "Receipt",
+    amount: manual?.amount ?? expense?.amount ?? income?.grossTotal ?? income?.amount ?? ocr.amount ?? null,
   };
 }
 
@@ -911,7 +932,7 @@ function renderReceiptGallery() {
   const el = document.getElementById("receipt-gallery");
   if (!el) return;
 
-  const receipts = getReceiptsWithImages();
+  const receipts = getReceiptsWithImages("expense");
   if (!receipts.length) {
     el.innerHTML = `<p class="muted">No expense receipt photos yet — upload a receipt above.</p>`;
     return;
@@ -938,10 +959,49 @@ function renderReceiptGallery() {
     })
     .join("");
 
-  el.querySelectorAll(".receipt-card").forEach((btn) => {
+  el.querySelectorAll("[data-receipt-id]").forEach((btn) => {
     btn.addEventListener("click", () => openReceiptViewer(btn.dataset.receiptId));
   });
+  el.querySelectorAll("[data-receipt-thumb]").forEach((img) => {
+    loadReceiptThumbnail(img.dataset.receiptThumb, img);
+  });
+}
 
+function renderIncomeGallery() {
+  const el = document.getElementById("income-gallery");
+  if (!el) return;
+
+  const receipts = getReceiptsWithImages("income");
+  if (!receipts.length) {
+    el.innerHTML = `<p class="muted">No payslip / remittance files yet — upload one above.</p>`;
+    return;
+  }
+
+  el.innerHTML = receipts
+    .map((r) => {
+      const s = receiptSummary(r);
+      const pdf = isReceiptPdf(r);
+      const title = s.vendor || r.filename || "Income document";
+      return `
+        <button type="button" class="receipt-card" data-receipt-id="${r.id}" aria-label="View ${escapeHtml(title)}">
+          <div class="receipt-card-thumb${pdf ? " is-pdf" : ""}">
+            ${
+              pdf
+                ? '<span class="receipt-pdf-icon">PDF</span>'
+                : `<img data-receipt-thumb="${r.id}" alt="" loading="lazy" />`
+            }
+          </div>
+          <div class="receipt-card-meta">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${fmtDate(s.date)}${s.amount != null ? ` · ${fmt(s.amount)}` : ""}</span>
+          </div>
+        </button>`;
+    })
+    .join("");
+
+  el.querySelectorAll("[data-receipt-id]").forEach((btn) => {
+    btn.addEventListener("click", () => openReceiptViewer(btn.dataset.receiptId));
+  });
   el.querySelectorAll("[data-receipt-thumb]").forEach((img) => {
     loadReceiptThumbnail(img.dataset.receiptThumb, img);
   });
@@ -971,6 +1031,7 @@ function setView(name) {
   }
   if (name === "forecast") loadForecast();
   if (name === "expenses") renderReceiptGallery();
+  if (name === "income") renderIncomeGallery();
   renderExpenseTotals();
 }
 
@@ -2473,6 +2534,7 @@ async function refreshAll() {
   renderIncomeList();
   renderVendorList();
   renderReceiptGallery();
+  renderIncomeGallery();
   renderExpenseTotals();
 }
 

@@ -39,6 +39,7 @@ describe("findDuplicateMatches", () => {
     receipts: [
       {
         id: "r1",
+        purpose: "expense",
         filename: "23.07.26 AUD$42.50.png",
         ocrResult: { date: "2026-07-23", vendor: "Sample Roadhouse", amount: 42.5 },
       },
@@ -55,6 +56,16 @@ describe("findDuplicateMatches", () => {
     expect(matches.some((m) => m.source === "expense" && m.id === "e1")).toBe(true);
     expect(matches.some((m) => m.source === "receipt" && m.id === "r1")).toBe(true);
     expect(matches.some((m) => m.id === "e2")).toBe(false);
+  });
+
+  it("does not treat expense receipts as income duplicates", () => {
+    const matches = findDuplicateMatches(
+      records,
+      { date: "2026-07-23", vendor: "Sample Roadhouse", amount: 42.5, documentType: "income" },
+      "income",
+      42.5
+    );
+    expect(matches.some((m) => m.source === "receipt")).toBe(false);
   });
 
   it("finds income duplicates by date, entity, gross", () => {

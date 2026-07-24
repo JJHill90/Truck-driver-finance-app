@@ -90,3 +90,9 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   totals, manual entry with ABN, receipt gallery) plus expense totals, special
   claims (km/laundry), and the expense ledger. Nav no longer has a separate
   Scan receipt item; `setView("receipts")` redirects to `expenses`.
+- **Uploads require login.** `/receipts/scan`, `/receipts/manual`, and
+  `/receipts/:id/confirm` return 401 if there is no session — files save into
+  `data/users/<name>.json` + `data/receipts/`. Receipts store `purpose`
+  (`expense`|`income`); expense/income galleries filter by purpose. Duplicate
+  matching is also purpose-scoped so an expense receipt does not block a
+  payslip upload.
