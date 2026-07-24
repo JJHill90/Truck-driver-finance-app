@@ -925,6 +925,69 @@ function closeReceiptViewer() {
   document.body.style.overflow = "";
 }
 
+async function deleteScannedPhoto(receiptId, { closeViewer = false } = {}) {
+  const receipt = findReceipt(receiptId);
+  if (!receipt) return false;
+  const label = receipt.filename || "this scanned photo";
+  const ok = window.confirm(
+    `Delete ${label}?\n\nThe photo/file will be removed. Linked expense or income ledger entries stay — only the scanned file is deleted.`
+  );
+  if (!ok) return false;
+
+  try {
+    await api(`/receipts/${receiptId}`, { method: "DELETE" });
+    receiptImageCache.delete(receiptId);
+    if (closeViewer || activeReceiptId === receiptId) closeReceiptViewer();
+    await refreshAll();
+    toast("Scanned photo deleted");
+    return true;
+  } catch (err) {
+    toast(err.message || "Could not delete photo");
+    return false;
+  }
+}
+
+function bindReceiptGallery(el) {
+  el.querySelectorAll("[data-receipt-id]").forEach((btn) => {
+    btn.addEventListener("click", () => openReceiptViewer(btn.dataset.receiptId));
+  });
+  el.querySelectorAll("[data-del-receipt]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void deleteScannedPhoto(btn.dataset.delReceipt);
+    });
+  });
+  el.querySelectorAll("[data-receipt-thumb]").forEach((img) => {
+    loadReceiptThumbnail(img.dataset.receiptThumb, img);
+  });
+}
+
+function receiptGalleryCardHtml(r, title) {
+  const s = receiptSummary(r);
+  const pdf = isReceiptPdf(r);
+  const heading = title || s.vendor || r.filename || "Receipt";
+  return `
+    <div class="receipt-card" data-receipt-card="${r.id}">
+      <button type="button" class="receipt-card-open" data-receipt-id="${r.id}" aria-label="View ${escapeHtml(heading)}">
+        <div class="receipt-card-thumb${pdf ? " is-pdf" : ""}">
+          ${
+            pdf
+              ? '<span class="receipt-pdf-icon">PDF</span>'
+              : `<img data-receipt-thumb="${r.id}" alt="" loading="lazy" />`
+          }
+        </div>
+        <div class="receipt-card-meta">
+          <strong>${escapeHtml(heading)}</strong>
+          <span>${fmtDate(s.date)}${s.amount != null ? ` · ${fmt(s.amount)}` : ""}</span>
+        </div>
+      </button>
+      <div class="receipt-card-actions">
+        <button type="button" class="btn danger small" data-del-receipt="${r.id}">Delete</button>
+      </div>
+    </div>`;
+}
+
 function renderReceiptGallery() {
   const el = document.getElementById("receipt-gallery");
   if (!el) return;
@@ -935,33 +998,8 @@ function renderReceiptGallery() {
     return;
   }
 
-  el.innerHTML = receipts
-    .map((r) => {
-      const s = receiptSummary(r);
-      const pdf = isReceiptPdf(r);
-      return `
-        <button type="button" class="receipt-card" data-receipt-id="${r.id}" aria-label="View ${escapeHtml(s.vendor)}">
-          <div class="receipt-card-thumb${pdf ? " is-pdf" : ""}">
-            ${
-              pdf
-                ? '<span class="receipt-pdf-icon">PDF</span>'
-                : `<img data-receipt-thumb="${r.id}" alt="" loading="lazy" />`
-            }
-          </div>
-          <div class="receipt-card-meta">
-            <strong>${escapeHtml(s.vendor)}</strong>
-            <span>${fmtDate(s.date)}${s.amount != null ? ` · ${fmt(s.amount)}` : ""}</span>
-          </div>
-        </button>`;
-    })
-    .join("");
-
-  el.querySelectorAll("[data-receipt-id]").forEach((btn) => {
-    btn.addEventListener("click", () => openReceiptViewer(btn.dataset.receiptId));
-  });
-  el.querySelectorAll("[data-receipt-thumb]").forEach((img) => {
-    loadReceiptThumbnail(img.dataset.receiptThumb, img);
-  });
+  el.innerHTML = receipts.map((r) => receiptGalleryCardHtml(r)).join("");
+  bindReceiptGallery(el);
 }
 
 function renderIncomeGallery() {
@@ -977,31 +1015,10 @@ function renderIncomeGallery() {
   el.innerHTML = receipts
     .map((r) => {
       const s = receiptSummary(r);
-      const pdf = isReceiptPdf(r);
-      const title = s.vendor || r.filename || "Income document";
-      return `
-        <button type="button" class="receipt-card" data-receipt-id="${r.id}" aria-label="View ${escapeHtml(title)}">
-          <div class="receipt-card-thumb${pdf ? " is-pdf" : ""}">
-            ${
-              pdf
-                ? '<span class="receipt-pdf-icon">PDF</span>'
-                : `<img data-receipt-thumb="${r.id}" alt="" loading="lazy" />`
-            }
-          </div>
-          <div class="receipt-card-meta">
-            <strong>${escapeHtml(title)}</strong>
-            <span>${fmtDate(s.date)}${s.amount != null ? ` · ${fmt(s.amount)}` : ""}</span>
-          </div>
-        </button>`;
+      return receiptGalleryCardHtml(r, s.vendor || r.filename || "Income document");
     })
     .join("");
-
-  el.querySelectorAll("[data-receipt-id]").forEach((btn) => {
-    btn.addEventListener("click", () => openReceiptViewer(btn.dataset.receiptId));
-  });
-  el.querySelectorAll("[data-receipt-thumb]").forEach((img) => {
-    loadReceiptThumbnail(img.dataset.receiptThumb, img);
-  });
+  bindReceiptGallery(el);
 }
 
 function setView(name) {
@@ -2600,6 +2617,9 @@ async function init() {
   });
   document.getElementById("receipt-viewer-share")?.addEventListener("click", () => {
     if (activeReceiptId) shareReceiptFile(activeReceiptId);
+  });
+  document.getElementById("receipt-viewer-delete")?.addEventListener("click", () => {
+    if (activeReceiptId) void deleteScannedPhoto(activeReceiptId, { closeViewer: true });
   });
   document.querySelectorAll("[data-close-viewer]").forEach((el) => {
     el.addEventListener("click", closeReceiptViewer);

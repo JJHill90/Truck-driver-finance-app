@@ -815,9 +815,10 @@
   function labelGalleryCards() {
     const gallery = document.getElementById("receipt-gallery");
     if (!gallery) return;
-    gallery.querySelectorAll(".receipt-card[data-receipt-id]").forEach((card) => {
+    gallery.querySelectorAll(".receipt-card[data-receipt-card], .receipt-card[data-receipt-id]").forEach((card) => {
       if (card.dataset.enhLabeled === "1") return;
-      const receipt = findReceipt(card.dataset.receiptId);
+      const receiptId = card.dataset.receiptCard || card.dataset.receiptId;
+      const receipt = findReceipt(receiptId);
       if (!receipt || !receipt.filename) return;
       const name = String(receipt.filename);
       if (!LABEL_RE.test(name) && name === "manual-entry") return;
@@ -826,7 +827,8 @@
         strong.textContent = name.replace(/\.[a-z0-9]+$/i, "");
         strong.title = name;
       }
-      card.setAttribute("aria-label", `View ${name}`);
+      const openBtn = card.querySelector(".receipt-card-open") || card;
+      openBtn.setAttribute("aria-label", `View ${name}`);
       card.dataset.enhLabeled = "1";
     });
   }

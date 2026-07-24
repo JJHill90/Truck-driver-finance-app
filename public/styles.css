@@ -168,7 +168,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 
 /* Receipt gallery */
 .receipt-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.receipt-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; }
+.receipt-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 0; overflow: hidden; text-align: left; display: flex; flex-direction: column; }
+.receipt-card-open { background: transparent; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; width: 100%; }
 .receipt-card-thumb { aspect-ratio: 4/3; background: var(--bg-2); display: flex; align-items: center; justify-content: center; }
 .receipt-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .receipt-card-thumb.is-pdf { color: var(--text-dim); font-weight: 800; }
@@ -176,6 +177,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .receipt-card-meta { padding: 8px 10px; display: flex; flex-direction: column; }
 .receipt-card-meta strong { font-size: 0.9rem; }
 .receipt-card-meta span { color: var(--text-dim); font-size: 0.78rem; }
+.receipt-card-actions { padding: 0 10px 10px; display: flex; justify-content: flex-end; }
 
 /* Forecast */
 .forecast-progress { margin-top: 12px; }

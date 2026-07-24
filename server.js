@@ -634,6 +634,21 @@ api.post("/receipts/:id/confirm", (req, res) => {
   });
 });
 
+api.delete("/receipts/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to delete scanned photos from your profile." });
+    return;
+  }
+  const records = getRecords(req);
+  const removed = storage.deleteReceipt(records, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Receipt not found." });
+    return;
+  }
+  persist(req);
+  res.json({ ok: true });
+});
+
 api.get("/receipts/:id/image", (req, res) => {
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
