@@ -677,6 +677,7 @@
         setMessage("Creating profile…");
         try {
           await apiPost("/auth/register", readCreds());
+          resetReviewShown();
           window.location.reload();
         } catch (e) {
           setMessage(e.message, true);
@@ -688,6 +689,7 @@
         setMessage("Logging in…");
         try {
           await apiPost("/auth/login", readCreds());
+          resetReviewShown();
           window.location.reload();
         } catch (e) {
           setMessage(e.message, true);
@@ -701,6 +703,7 @@
         } catch {
           /* ignore */
         }
+        resetReviewShown();
         window.location.reload();
       });
     }
@@ -766,6 +769,32 @@
     });
   }
 
+  // "Review needed" is shown once per login session (not re-shown as the user
+  // updates their expense/income uploads). The flag lives in sessionStorage and
+  // is reset on any auth change so the next login shows it again once.
+  const REVIEW_FLAG = "enh-review-shown";
+  function reviewAlreadyShown() {
+    try {
+      return sessionStorage.getItem(REVIEW_FLAG) === "1";
+    } catch {
+      return false;
+    }
+  }
+  function markReviewShown() {
+    try {
+      sessionStorage.setItem(REVIEW_FLAG, "1");
+    } catch {
+      /* ignore */
+    }
+  }
+  function resetReviewShown() {
+    try {
+      sessionStorage.removeItem(REVIEW_FLAG);
+    } catch {
+      /* ignore */
+    }
+  }
+
   async function start() {
     wire();
     wirePdfDownload();
@@ -773,8 +802,13 @@
       const me = await apiGet("/auth/me");
       showAuthState(me.user);
       if (me.user && me.user.isAdmin) await loadAdminUsers();
-      const alertData = await apiGet("/alerts");
-      renderAlerts(alertData.alerts, alertData.user);
+      // Only fetch/show the review banner the first time this session — once on
+      // login — so it does not keep reappearing as uploads are added/updated.
+      if (!reviewAlreadyShown()) {
+        const alertData = await apiGet("/alerts");
+        renderAlerts(alertData.alerts, alertData.user);
+        markReviewShown();
+      }
     } catch {
       /* non-fatal */
     }
