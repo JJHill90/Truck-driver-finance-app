@@ -71,6 +71,14 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   the provided OCR extractors don't parse super/PAYG as named fields, those
   components are estimated/flagged unless a clear scan or `OPENAI_API_KEY`
   surfaces them — the full breach/within-policy grading is covered by unit tests.
+- **Scanned / image-only PDFs** (a photo or scan saved as a PDF, no text layer)
+ are OCR'd via `lib/pdf-ocr.js`: it rasterises pages with **`mupdf`** and reruns
+ the provided `extractTotalsWithTesseract`. `server.js` `/receipts/scan` calls
+ this fallback only when the PDF text layer yields no dollar total
+ (`pdfResultNeedsOcr`), for both expense and income docs. Note `mupdf` is an
+ **ESM-only** package with top-level await, so this CommonJS repo loads it via
+ dynamic `import()` (lazy, cached) — do not `require()` it. No native build is
+ needed (pure WASM), so it runs on Render as-is.
 - Scanned expense receipts and income invoices are **labeled on save** as
   `DD.MM.YY AUD$123.45.ext` (image or PDF). `lib/document-label.js` builds the
   name; `/receipts/scan` applies an initial OCR-based label and
