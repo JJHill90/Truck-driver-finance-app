@@ -1063,8 +1063,11 @@
     }
     const chosen = chosenFy[cfg.key] || "all";
 
-    select.innerHTML = optionsHtml(cfg.purpose, chosen);
-    select.value = chosen;
+    // Only rebuild options when they actually change, so an open dropdown is
+    // not clobbered by the initial settle poll.
+    const nextOptions = optionsHtml(cfg.purpose, chosen);
+    if (select.innerHTML !== nextOptions) select.innerHTML = nextOptions;
+    if (select.value !== chosen) select.value = chosen;
     if (select.value !== chosen) {
       select.value = "all";
       chosenFy[cfg.key] = "all";
