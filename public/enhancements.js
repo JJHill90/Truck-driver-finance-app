@@ -1495,6 +1495,196 @@
   }
 })();
 
+/* --- Allowance caps: total allowance vs total spend ------------------------
+ * Replaces the static daily-cap list in #allowance-caps with a live
+ * "allowance vs actual spend" readout for the ATO meal/travel allowance
+ * categories, based on the driver's own receipts. Spend and the allowance
+ * "earned" (daily cap x number of days with a receipt) are summed over a
+ * selectable period (Day / Week / Month / Financial year). Because it sums by
+ * each receipt's date, uploading older-dated receipts retroactively updates the
+ * totals. Layered over app.js (kept verbatim) by taking over #allowance-caps.
+ */
+(function () {
+  "use strict";
+
+  // Allowance categories → how to read their daily cap from summary.allowances.
+  const CATS = [
+    { id: "meals_breakfast", label: "Breakfast", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.breakfast && a.truckDriverMealsDaily.breakfast.cap },
+    { id: "meals_lunch", label: "Lunch", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.lunch && a.truckDriverMealsDaily.lunch.cap },
+    { id: "meals_dinner", label: "Dinner", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.dinner && a.truckDriverMealsDaily.dinner.cap },
+    { id: "overtime_meals", label: "Overtime meal", cap: (a) => a && a.overtimeMealCap },
+    { id: "accommodation", label: "Accommodation", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
+    { id: "incidentals", label: "Incidentals", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
+  ];
+
+  const PERIODS = [
+    { key: "day", label: "Day" },
+    { key: "week", label: "Week" },
+    { key: "month", label: "Month" },
+    { key: "year", label: "Year" },
+  ];
+
+  let period = "year"; // default so historical (older-dated) receipts are visible
+
+  const money = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+  function isoOf(dt) {
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  }
+
+  function fyWindow(fy) {
+    const startYear = Number(String(fy || "").split("-")[0]);
+    if (!startYear) return null;
+    return {
+      start: `${startYear}-07-01`,
+      end: `${startYear + 1}-06-30`,
+      label: `FY ${String(fy).replace("-", "–")}`,
+    };
+  }
+
+  function windowFor(p) {
+    const now = new Date();
+    if (p === "day") {
+      const s = isoOf(now);
+      return { start: s, end: s, label: `Today (${s})` };
+    }
+    if (p === "week") {
+      const dow = (now.getDay() + 6) % 7; // Monday = 0
+      const mon = new Date(now);
+      mon.setDate(now.getDate() - dow);
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      return { start: isoOf(mon), end: isoOf(sun), label: "This week" };
+    }
+    if (p === "month") {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: isoOf(first), end: isoOf(last), label: "This month" };
+    }
+    // year → the selected financial year
+    let fy = null;
+    try {
+      fy = state && state.financialYear;
+    } catch {
+      fy = null;
+    }
+    return fyWindow(fy) || fyWindow(isoFallbackFy());
+  }
+
+  function isoFallbackFy() {
+    const now = new Date();
+    const start = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${start}-${String(start + 1).slice(-2)}`;
+  }
+
+  function compute(win) {
+    let expenses = [];
+    let allowances = {};
+    try {
+      expenses = (state.records && state.records.expenses) || [];
+      allowances = (state.summary && state.summary.allowances) || {};
+    } catch {
+      expenses = [];
+    }
+    let totalAllow = 0;
+    let totalSpend = 0;
+    const rows = CATS.map((c) => {
+      const cap = Number(c.cap(allowances)) || 0;
+      const items = expenses.filter(
+        (e) => e.category === c.id && e.date >= win.start && e.date <= win.end
+      );
+      const spend = items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const days = new Set(items.map((e) => String(e.date).slice(0, 10))).size;
+      const allow = cap * days;
+      totalAllow += allow;
+      totalSpend += spend;
+      return { label: c.label, cap, days, allow, spend };
+    });
+    return { rows, totalAllow, totalSpend };
+  }
+
+  function render(container) {
+    const win = windowFor(period);
+    const { rows, totalAllow, totalSpend } = compute(win);
+    const remaining = totalAllow - totalSpend;
+    const over = totalSpend > totalAllow;
+
+    const options = PERIODS.map(
+      (p) => `<option value="${p.key}"${p.key === period ? " selected" : ""}>${p.label}</option>`
+    ).join("");
+
+    const rowHtml = rows
+      .map((r) => {
+        const tag =
+          r.days === 0
+            ? ""
+            : r.spend > r.allow
+              ? ' <span class="tag amber">over</span>'
+              : ' <span class="tag green">within</span>';
+        return `<div class="cap-row">
+          <span>${r.label} <small class="muted">cap ${money(r.cap)}/day · ${r.days} day${r.days === 1 ? "" : "s"}</small></span>
+          <span>${money(r.spend)} / ${money(r.allow)}${tag}</span>
+        </div>`;
+      })
+      .join("");
+
+    container.innerHTML = `
+      <div class="allowance-vs-spend cap-list">
+        <div class="cap-row allowance-period-row">
+          <span>Period</span>
+          <span><select class="period-select allowance-period" aria-label="Allowance period">${options}</select></span>
+        </div>
+        <div class="cap-row allowance-total"><span><strong>Total allowance (${win.label})</strong></span><span><strong>${money(totalAllow)}</strong></span></div>
+        <div class="cap-row allowance-total"><span><strong>Total spend</strong></span><span><strong>${money(totalSpend)}</strong></span></div>
+        <div class="cap-row allowance-total"><span>${over ? "Over allowance" : "Remaining"}</span><span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span></div>
+        <div class="allowance-divider"></div>
+        ${rowHtml}
+        <p class="muted allowance-hint">Spend / allowance per category. Allowance = ATO daily cap × days with a receipt; totals include receipts dated in the selected period.</p>
+      </div>
+    `;
+
+    const sel = container.querySelector(".allowance-period");
+    if (sel) {
+      sel.addEventListener("change", () => {
+        period = sel.value;
+        render(container);
+      });
+    }
+  }
+
+  function maybeRender() {
+    const container = document.getElementById("allowance-caps");
+    if (!container) return;
+    // Only take over once app.js has populated the panel; skip if already ours.
+    if (container.querySelector(".allowance-vs-spend")) return;
+    if (!container.children.length) return;
+    render(container);
+  }
+
+  function start() {
+    const container = document.getElementById("allowance-caps");
+    if (!container) return;
+    new MutationObserver(maybeRender).observe(container, { childList: true });
+    maybeRender();
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks += 1;
+      maybeRender();
+      if (ticks >= 10) clearInterval(iv);
+    }, 400);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
 /* --- Title-case a few dynamic headings rendered by app.js ------------------
  * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
  * section headings are corrected here after each render.
