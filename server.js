@@ -32,6 +32,7 @@ const {
 } = require("./lib/document-label");
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
+const { sanitizeIncomeFields, buildIncomeDescription } = require("./lib/income-labels");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -502,7 +503,8 @@ api.delete("/expenses/:id", (req, res) => {
 // --- Income --------------------------------------------------------------
 api.post("/income", (req, res) => {
   const records = getRecords(req);
-  const entry = storage.addIncome(records, req.body || {});
+  const body = sanitizeIncomeFields({ ...(req.body || {}) });
+  const entry = storage.addIncome(records, body);
   persist(req);
   res.json({ entry });
 });
@@ -626,6 +628,13 @@ api.post("/receipts/scan", async (req, res, next) => {
       if (filing) {
         ocrResult.description = ocrResult.description ? `${ocrResult.description} · ${filing}` : filing;
       }
+    }
+
+    // Income uploads: strip any "cheque" payment-method wording and label with
+    // payslip / pay-period terminology (with the pay-period date).
+    if (purpose === "income") {
+      sanitizeIncomeFields(ocrResult);
+      ocrResult.description = buildIncomeDescription(ocrResult);
     }
 
     const scanPurpose = purpose === "income" ? "income" : "expense";
@@ -758,6 +767,8 @@ api.post("/receipts/:id/confirm", (req, res) => {
   }
 
   if (purpose === "income") {
+    sanitizeIncomeFields(payload);
+    if (!payload.description) payload.description = buildIncomeDescription(payload);
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     if (receipt) {
       receipt.purpose = "income";
