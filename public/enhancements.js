@@ -922,3 +922,211 @@
     start();
   }
 })();
+
+/* --- Per-financial-year selector on the document photo galleries ---------
+ * Segments "Expense receipt photos" and "Income document photos" by Australian
+ * financial year, with a dropdown (same style as the top-of-screen FY picker)
+ * pinned to the top-right of each gallery panel header. Layered on app.js
+ * without editing it: the selector is injected into the panel header (a sibling
+ * of the gallery container, so app.js re-renders don't wipe it) and matching is
+ * done by hiding cards whose FY differs from the selected one.
+ */
+(function () {
+  "use strict";
+  /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear */
+
+  const GALLERIES = [
+    { containerId: "receipt-gallery", purpose: "expense", key: "expense" },
+    { containerId: "income-gallery", purpose: "income", key: "income" },
+  ];
+
+  // Remembers each gallery's chosen FY ("all" or e.g. "2025-26"); null = not set.
+  const chosenFy = { expense: null, income: null };
+
+  /** Australian FY for a date (1 Jul – 30 Jun), mirroring the server. */
+  function fyForDate(dateStr) {
+    const raw = String(dateStr || "").trim();
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    let year;
+    let month; // 0-based
+    if (m) {
+      year = Number(m[1]);
+      month = Number(m[2]) - 1;
+    } else {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return null;
+      year = d.getFullYear();
+      month = d.getMonth();
+    }
+    const startYear = month >= 6 ? year : year - 1;
+    return `${startYear}-${String(startYear + 1).slice(-2)}`;
+  }
+
+  function findReceipt(id) {
+    try {
+      return (state.records.receipts || []).find((r) => r.id === id) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** FY of a receipt, using the same date app.js shows on the card. */
+  function receiptFy(receipt) {
+    if (!receipt) return null;
+    let date = null;
+    try {
+      if (typeof receiptSummary === "function") date = receiptSummary(receipt).date;
+    } catch {
+      date = null;
+    }
+    if (!date) date = (receipt.ocrResult && receipt.ocrResult.date) || receipt.createdAt || null;
+    return fyForDate(date);
+  }
+
+  function fyLabel(fy) {
+    try {
+      if (typeof formatFinancialYearLabel === "function") return formatFinancialYearLabel(fy);
+    } catch {
+      /* fall through */
+    }
+    return `FY ${fy}`;
+  }
+
+  /** Options: "All", then every FY present in this gallery + current + top FY. */
+  function optionsHtml(purpose, selected) {
+    const set = new Set();
+    let list = [];
+    try {
+      if (typeof getReceiptsWithImages === "function") list = getReceiptsWithImages(purpose) || [];
+    } catch {
+      list = [];
+    }
+    for (const r of list) {
+      const fy = receiptFy(r);
+      if (fy) set.add(fy);
+    }
+    try {
+      if (typeof getCurrentFinancialYear === "function") set.add(getCurrentFinancialYear());
+    } catch {
+      /* ignore */
+    }
+    if (state && state.financialYear) set.add(state.financialYear);
+    if (selected && selected !== "all") set.add(selected);
+
+    const years = [...set].sort(
+      (a, b) => Number(b.split("-")[0]) - Number(a.split("-")[0])
+    );
+    return [`<option value="all">All financial years</option>`]
+      .concat(years.map((y) => `<option value="${y}">${fyLabel(y)}</option>`))
+      .join("");
+  }
+
+  function ensureSelector(cfg) {
+    const container = document.getElementById(cfg.containerId);
+    if (!container) return null;
+    const panel = container.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return null;
+
+    let picker = header.querySelector(".gallery-fy-picker");
+    if (!picker) {
+      picker = document.createElement("div");
+      picker.className = "fy-picker gallery-fy-picker";
+      picker.innerHTML =
+        `<label for="gallery-fy-${cfg.key}">Financial year</label>` +
+        `<select id="gallery-fy-${cfg.key}" class="gallery-fy-select" aria-label="Filter document photos by financial year"></select>`;
+      header.appendChild(picker);
+      const select = picker.querySelector("select");
+      select.addEventListener("change", () => {
+        chosenFy[cfg.key] = select.value;
+        applyFilter(cfg);
+      });
+    }
+
+    if (!panel.querySelector(".gallery-fy-empty")) {
+      const note = document.createElement("p");
+      note.className = "muted gallery-fy-empty hidden";
+      container.insertAdjacentElement("afterend", note);
+    }
+    return picker.querySelector("select");
+  }
+
+  function applyFilter(cfg) {
+    const container = document.getElementById(cfg.containerId);
+    if (!container) return;
+    const select = ensureSelector(cfg);
+    if (!select) return;
+
+    // Default to the top-of-screen FY once it is known; until then show all.
+    if (chosenFy[cfg.key] == null && state && state.financialYear) {
+      chosenFy[cfg.key] = state.financialYear;
+    }
+    const chosen = chosenFy[cfg.key] || "all";
+
+    // Only rebuild options when they actually change, so an open dropdown is
+    // not clobbered by the initial settle poll.
+    const nextOptions = optionsHtml(cfg.purpose, chosen);
+    if (select.innerHTML !== nextOptions) select.innerHTML = nextOptions;
+    if (select.value !== chosen) select.value = chosen;
+    if (select.value !== chosen) {
+      select.value = "all";
+      chosenFy[cfg.key] = "all";
+    }
+    const active = select.value;
+
+    const cards = container.querySelectorAll(
+      ".receipt-card[data-receipt-card], .receipt-card[data-receipt-id]"
+    );
+    let total = 0;
+    let shown = 0;
+    cards.forEach((card) => {
+      total += 1;
+      const id = card.dataset.receiptCard || card.dataset.receiptId;
+      const fy = receiptFy(findReceipt(id));
+      const match = active === "all" || fy === active;
+      card.style.display = match ? "" : "none";
+      if (match) shown += 1;
+    });
+
+    const panel = container.closest(".panel");
+    const note = panel && panel.querySelector(".gallery-fy-empty");
+    if (note) {
+      if (total > 0 && shown === 0) {
+        const kind = cfg.purpose === "income" ? "income documents" : "expense receipts";
+        const where = active === "all" ? "any financial year" : `FY ${active.replace("-", "–")}`;
+        note.textContent = `No ${kind} for ${where}. Switch the financial year above to see others.`;
+        note.classList.remove("hidden");
+      } else {
+        note.classList.add("hidden");
+      }
+    }
+  }
+
+  function start() {
+    let bound = false;
+    for (const cfg of GALLERIES) {
+      const container = document.getElementById(cfg.containerId);
+      if (!container) continue;
+      bound = true;
+      const mo = new MutationObserver(() => applyFilter(cfg));
+      mo.observe(container, { childList: true });
+      applyFilter(cfg);
+    }
+    // The top FY picker re-renders the galleries, but a light poll lets the
+    // selectors also settle once initial data has loaded.
+    if (bound) {
+      let ticks = 0;
+      const iv = setInterval(() => {
+        ticks += 1;
+        for (const cfg of GALLERIES) applyFilter(cfg);
+        if (ticks >= 10) clearInterval(iv);
+      }, 400);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

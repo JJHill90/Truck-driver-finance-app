@@ -56,6 +56,11 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
 .fy-picker { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-dim); }
 .fy-chip { background: var(--panel-2); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px; color: var(--text); font-weight: 700; }
 
+/* Per-gallery FY selector (pinned top-right of the gallery panel header). */
+.panel-header .gallery-fy-picker { flex: 0 0 auto; margin-left: auto; }
+.gallery-fy-picker select { padding: 6px 9px; font-size: 0.85rem; }
+.gallery-fy-empty { margin: 6px 2px 0; }
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
