@@ -646,7 +646,8 @@ api.post("/receipts/:id/confirm", (req, res) => {
   const { confirmed, purpose, ...payload } = req.body || {};
 
   if (!confirmed) {
-    if (receipt) receipt.manual = payload;
+    // Discard = cancel the upload entirely (remove file + receipt record).
+    if (receipt) storage.deleteReceipt(records, receipt.id);
     persist(req);
     res.json({ ok: true, discarded: true });
     return;

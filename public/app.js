@@ -241,6 +241,7 @@ async function uploadReceiptFile(file) {
       detectedTotals: totals,
       filename: file.name,
       kind: prepared.kind,
+      purpose: "expense",
       step: "review",
       awaitingApproval: true,
     };
@@ -335,6 +336,39 @@ function clearManualReceiptFields() {
   if (form.elements.vendorAbn) form.elements.vendorAbn.value = "";
   document.getElementById("manual-receipt-preview")?.classList.add("hidden");
   setManualFormApprovalState(false);
+}
+
+function clearExpenseScanUi() {
+  clearManualReceiptFields();
+  const preview = document.getElementById("receipt-preview");
+  if (preview) {
+    preview.classList.add("hidden");
+    preview.innerHTML = "";
+  }
+  const box = document.getElementById("scan-result");
+  if (box) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+  }
+  const fileInput = document.getElementById("receipt-file");
+  if (fileInput) fileInput.value = "";
+}
+
+function clearIncomeScanUi() {
+  clearIncomeFormFields();
+  setIncomeFormApprovalState(false);
+  const preview = document.getElementById("income-preview");
+  if (preview) {
+    preview.classList.add("hidden");
+    preview.innerHTML = "";
+  }
+  const box = document.getElementById("income-scan-result");
+  if (box) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+  }
+  const fileInput = document.getElementById("income-file");
+  if (fileInput) fileInput.value = "";
 }
 
 function setManualFormApprovalState(pending) {
@@ -636,18 +670,48 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
 
   const isIncomeScan = pending.purpose === "income";
   const box = document.getElementById(isIncomeScan ? "income-scan-result" : "scan-result");
+
+  // Discard: remove the scanned file entirely and reset the upload UI.
+  if (!confirmed) {
+    const receiptId = pending.receiptId;
+    box?.querySelectorAll(".scan-confirm-actions").forEach((el) => el.classList.add("hidden"));
+    box?.insertAdjacentHTML(
+      "beforeend",
+      `<p class="muted saving-note">Discarding upload…</p>`
+    );
+    try {
+      if (receiptId) {
+        await api(`/receipts/${receiptId}`, { method: "DELETE" });
+        receiptImageCache.delete(receiptId);
+      }
+      pendingReceiptConfirm = null;
+      if (isIncomeScan) clearIncomeScanUi();
+      else clearExpenseScanUi();
+      toast("Upload discarded");
+      await refreshAll();
+    } catch (err) {
+      // If delete failed (e.g. already gone), still clear the local pending UI.
+      pendingReceiptConfirm = null;
+      if (isIncomeScan) clearIncomeScanUi();
+      else clearExpenseScanUi();
+      toast(err.message || "Upload discarded");
+      await refreshAll();
+    }
+    return;
+  }
+
   const payload = isIncomeScan
     ? readIncomeScanConfirmPayload()
     : readScanConfirmPayload(showDetails);
 
-  if (confirmed && (!Number.isFinite(payload.amount) || payload.amount <= 0)) {
+  if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
     toast("Enter a valid total amount from the document");
     document.getElementById(isIncomeScan ? "income-confirm-amount" : "scan-confirm-amount")?.focus();
     return;
   }
 
   // Never block approve just because category select was cleared — fall back to OCR/default
-  if (confirmed && !isIncomeScan && !payload.category) {
+  if (!isIncomeScan && !payload.category) {
     payload.category = pending.ocrResult?.suggestedCategory || "other_work";
     const catSel = document.getElementById("manual-receipt-category");
     if (catSel) catSel.value = payload.category;
@@ -657,17 +721,16 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
   box?.insertAdjacentHTML("beforeend", `<p class="muted saving-note">Saving approved totals…</p>`);
 
   try {
-    if (confirmed && !isIncomeScan) {
+    if (!isIncomeScan) {
       applyTotalsToManualFields(payload);
-    }
-    if (confirmed && isIncomeScan) {
+    } else {
       prefillIncomeForm(pending.ocrResult, payload);
     }
 
     const result = await api(`/receipts/${pending.receiptId}/confirm`, {
       method: "POST",
       body: JSON.stringify({
-        confirmed,
+        confirmed: true,
         purpose: isIncomeScan ? "income" : "expense",
         ...payload,
       }),
@@ -680,7 +743,7 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
       setManualFormApprovalState(false);
     }
 
-    if (confirmed && result.entry) {
+    if (result.entry) {
       if (isIncomeScan) {
         const e = result.entry;
         box.innerHTML = `
@@ -708,23 +771,10 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
       clearManualReceiptFields();
       await afterExpenseSaved(result.entry, `${fmt(result.entry.amount)} added to Expenses`);
       return;
-    } else {
-      if (isIncomeScan) {
-        clearIncomeFormFields();
-        box.innerHTML = `
-          <h3>Totals discarded</h3>
-          <p class="muted">Document file is saved. Enter details manually when ready.</p>
-        `;
-      } else {
-        clearManualReceiptFields();
-        box.innerHTML = `
-          <h3>Totals discarded</h3>
-          <p class="muted">Receipt photo is saved. Enter details manually when ready.</p>
-        `;
-      }
-      toast("Totals discarded — enter manually if needed");
-      await refreshAll();
     }
+
+    toast("Saved");
+    await refreshAll();
   } catch (err) {
     if (isIncomeScan) setIncomeFormApprovalState(true);
     else setManualFormApprovalState(true);
