@@ -32,7 +32,11 @@ const {
 } = require("./lib/document-label");
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
-const { sanitizeIncomeFields, buildIncomeDescription } = require("./lib/income-labels");
+const {
+  sanitizeIncomeFields,
+  buildIncomeDescription,
+  stripChequeTokens,
+} = require("./lib/income-labels");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -634,6 +638,12 @@ api.post("/receipts/scan", async (req, res, next) => {
     // payslip / pay-period terminology (with the pay-period date).
     if (purpose === "income") {
       sanitizeIncomeFields(ocrResult);
+      // rawText/preview feed the scan-review "raw text" display, so clean those
+      // too (analyzeScan has already consumed rawText above).
+      if (typeof ocrResult.rawText === "string") ocrResult.rawText = stripChequeTokens(ocrResult.rawText);
+      if (typeof ocrResult.rawTextPreview === "string") {
+        ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
+      }
       ocrResult.description = buildIncomeDescription(ocrResult);
     }
 
