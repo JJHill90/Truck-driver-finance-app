@@ -61,6 +61,11 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
 .gallery-fy-picker select { padding: 6px 9px; font-size: 0.85rem; }
 .gallery-fy-empty { margin: 6px 2px 0; }
 
+/* Ledger "Uploaded" column + refresh-dates action. */
+.income-ledger .uploaded-col, .expense-ledger .uploaded-col { white-space: nowrap; }
+td.uploaded-col { font-size: 0.85rem; }
+.panel-header .refresh-invoice-dates-btn { margin-left: auto; flex: 0 0 auto; }
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
