@@ -70,6 +70,15 @@ td.uploaded-col { font-size: 0.85rem; }
 .ledger-header-actions .ledger-fy-picker { margin-left: 0; flex: 0 0 auto; }
 .ledger-fy-empty { margin: 8px 2px 0; }
 
+/* Allowance caps: allowance-vs-spend readout. */
+.allowance-vs-spend .allowance-period-row select { padding: 4px 8px; font-size: 0.82rem; }
+.allowance-vs-spend .allowance-total span:last-child { font-variant-numeric: tabular-nums; }
+.allowance-vs-spend .amount-over { color: var(--red); font-weight: 700; }
+.allowance-vs-spend .amount-under { color: var(--green, #12b76a); font-weight: 700; }
+.allowance-vs-spend .allowance-divider { height: 1px; background: var(--border); margin: 8px 0; }
+.allowance-vs-spend .allowance-hint { font-size: 0.72rem; margin: 8px 0 0; }
+.allowance-vs-spend .tag.amber { background: #7c2d12; color: #fed7aa; }
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
