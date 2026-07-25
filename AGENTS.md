@@ -82,6 +82,12 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   Without that disk, every deploy wipes users — the admin list then only shows
   `Haulage_Admin`. Drivers must register on the **same hosted URL**; local
   laptop accounts do not appear on Render.
+- **Render deploy branch must be `main`.** Service `haulage-finance`
+  (`srv-d9ga1gernols73c55bm0`) auto-deploys on commit. There is one shared app
+  build for admin and every driver profile (per-user data only differs under
+  `data/users/`). If the dashboard Production Branch is left on an old
+  `cursor/…` feature branch, merges to `main` will not reach users — switch the
+  branch back to `main` and redeploy.
 - **Duplicate scan guard:** `/receipts/scan` runs OCR then
   `lib/duplicate-receipt.js` matches existing expenses/income/receipts on
   **date + vendor + amount**. If matches exist and `forceDuplicate` is not set,
