@@ -14,9 +14,14 @@ const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { buildForecast } = require("./lib/forecast");
-const { extractReceiptData, mergeDetectedTotals } = require("./lib/receipt-ocr");
+const {
+  extractReceiptData,
+  mergeDetectedTotals,
+  normalizeOcrResult,
+} = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
+const { ocrPdfViaRaster, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
 const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
 const { getFinancialYearForDate } = require("./lib/ato-standards");
 const { buildReportPdf } = require("./lib/report-pdf");
@@ -500,8 +505,9 @@ api.post("/receipts/scan", async (req, res, next) => {
       res.status(400).json({ error: "Missing image data." });
       return;
     }
+    const ocrPurpose = purpose === "income" ? "income" : "expense";
     const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
-      purpose: purpose === "income" ? "income" : "expense",
+      purpose: ocrPurpose,
     });
 
     // For PDFs, capture the FULL document text (the provided extractor only
@@ -513,6 +519,59 @@ api.post("/receipts/scan", async (req, res, next) => {
         if (fullText) ocrResult.rawText = fullText;
       } catch (e) {
         console.warn("PDF full-text extraction failed:", e.message);
+      }
+
+      // Scanned / photo PDFs have no text layer, so the text-based extractor
+      // above finds no dollar totals. Rasterise the pages and OCR the images so
+      // those documents read like a photographed receipt/payslip.
+      if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+        try {
+          const rasterOcr = await ocrPdfViaRaster(imageBase64, { purpose: ocrPurpose });
+          if (rasterOcr && !pdfResultNeedsOcr(rasterOcr, ocrPurpose)) {
+            const combined = normalizeOcrResult({
+              ...ocrResult,
+              documentType: ocrPurpose === "income" ? "income" : ocrResult.documentType,
+              amount: rasterOcr.amount ?? ocrResult.amount,
+              gst: rasterOcr.gst ?? ocrResult.gst,
+              grossTotal: rasterOcr.grossTotal ?? ocrResult.grossTotal,
+              taxableIncome: rasterOcr.taxableIncome ?? ocrResult.taxableIncome,
+              gstAmount: rasterOcr.gstAmount ?? ocrResult.gstAmount,
+              netPay: rasterOcr.netPay ?? ocrResult.netPay,
+              // The text layer had no total, so its vendor/date/etc. are
+              // unreliable (often page markers like "-- 1 of 1 --"). Prefer the
+              // values read from the rasterised image.
+              date: rasterOcr.date || ocrResult.date || null,
+              vendor: rasterOcr.vendor || ocrResult.vendor || "",
+              entity: rasterOcr.entity || rasterOcr.vendor || ocrResult.entity || "",
+              vendorAbn: rasterOcr.vendorAbn || ocrResult.vendorAbn || "",
+              suggestedCategory:
+                (rasterOcr.suggestedCategory && rasterOcr.suggestedCategory !== "other_work"
+                  ? rasterOcr.suggestedCategory
+                  : null) ||
+                ocrResult.suggestedCategory ||
+                rasterOcr.suggestedCategory,
+              suggestedIncomeType:
+                ocrResult.suggestedIncomeType || rasterOcr.suggestedIncomeType || null,
+              lineItems:
+                rasterOcr.lineItems && rasterOcr.lineItems.length
+                  ? rasterOcr.lineItems
+                  : ocrResult.lineItems,
+              candidateAmounts: [
+                ...(ocrResult.candidateAmounts || []),
+                ...(rasterOcr.candidateAmounts || []),
+              ],
+              payPeriod: ocrResult.payPeriod || rasterOcr.payPeriod || "",
+              rawText: rasterOcr.rawText || ocrResult.rawText || "",
+              ocrSource: [ocrResult.ocrSource, "pdf-raster-ocr"]
+                .filter(Boolean)
+                .join("+"),
+              notes: "Read from scanned PDF image. Confirm the total below.",
+            });
+            Object.assign(ocrResult, combined);
+          }
+        } catch (e) {
+          console.warn("PDF image OCR fallback failed:", e.message);
+        }
       }
     }
 
