@@ -31,6 +31,7 @@ const {
   labelAmountFromConfirm,
 } = require("./lib/document-label");
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
+const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -56,8 +57,32 @@ function fileForUser(user) {
 }
 function recordsForUser(user) {
   const key = user || "__guest__";
-  if (!recordsCache.has(key)) recordsCache.set(key, storage.loadRecords(fileForUser(user)));
+  if (!recordsCache.has(key)) {
+    const rec = storage.loadRecords(fileForUser(user));
+    recordsCache.set(key, rec);
+    maybeBackfillInvoiceDates(rec, user);
+  }
   return recordsCache.get(key);
+}
+
+// One-time (per user) background repair of rows saved with the upload date
+// instead of the scanned invoice date. Flagged so it runs once and never
+// overrides dates the user later edits; runs in the background so it does not
+// block the first request. Re-runnable on demand via the maintenance endpoint.
+function maybeBackfillInvoiceDates(records, user) {
+  if (!records || (records.meta && records.meta.invoiceDateRefreshV1)) return;
+  records.meta = records.meta || {};
+  records.meta.invoiceDateRefreshV1 = true; // set first to avoid re-entry
+  refreshInvoiceDatesFromScans(records, { openai })
+    .then((result) => {
+      if (result.updated || records.meta) storage.saveRecords(records, fileForUser(user));
+      if (result.updated) {
+        console.log(
+          `Invoice-date backfill for ${user || "guest"}: updated ${result.updated} of ${result.scanned} rescanned.`
+        );
+      }
+    })
+    .catch((err) => console.warn("Invoice-date backfill failed:", err.message));
 }
 function getRecords(req) {
   return recordsForUser(req.user);
@@ -675,6 +700,26 @@ api.post("/receipts/scan", async (req, res, next) => {
       possibleDuplicate: false,
       matches: duplicateMatches,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Repair rows saved with the upload date: re-OCR the stored scans and set the
+// real invoice date (only for rows still showing the upload day). Returns a
+// summary so the UI can report how many were fixed.
+api.post("/maintenance/refresh-invoice-dates", async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Log in to refresh your document dates." });
+      return;
+    }
+    const records = getRecords(req);
+    const result = await refreshInvoiceDatesFromScans(records, { openai });
+    records.meta = records.meta || {};
+    records.meta.invoiceDateRefreshV1 = true;
+    persist(req);
+    res.json(result);
   } catch (err) {
     next(err);
   }
