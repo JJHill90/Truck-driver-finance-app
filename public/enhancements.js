@@ -365,7 +365,26 @@
     el.style.color = isError ? "var(--red)" : "var(--text-dim)";
   }
 
+  function updateBrandSignedIn(username) {
+    const brand = document.querySelector(".sidebar-brand");
+    if (!brand) return;
+    let badge = brand.querySelector(".brand-signed-in");
+    if (username) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "brand-signed-in";
+        brand.appendChild(badge);
+      }
+      badge.textContent = `(signed in as ${username})`;
+      badge.hidden = false;
+    } else if (badge) {
+      badge.hidden = true;
+      badge.textContent = "";
+    }
+  }
+
   function showAuthState(user) {
+    updateBrandSignedIn(user && user.username ? user.username : null);
     const outEl = byId("auth-logged-out");
     const inEl = byId("auth-logged-in");
     if (!outEl || !inEl) return;
@@ -1293,6 +1312,63 @@
         for (const cfg of LEDGERS) enhance(cfg);
         if (ticks >= 10) clearInterval(iv);
       }, 400);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Title-case a few dynamic headings rendered by app.js ------------------
+ * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
+ * section headings are corrected here after each render.
+ */
+(function () {
+  "use strict";
+
+  const TITLE_MAP = {
+    "Income & remittances": "Income & Remittances",
+    "Driver profile": "Driver Profile",
+  };
+  const REPORT_MAP = {
+    "Income & remittances": "Income & Remittances",
+    "Expense deductions (ATO schedules)": "Expense Deductions (ATO schedules)",
+    "Tax estimate": "Tax Estimate",
+  };
+
+  function fixPageTitle() {
+    const el = document.getElementById("page-title");
+    if (!el) return;
+    const next = TITLE_MAP[el.textContent.trim()];
+    if (next && el.textContent !== next) el.textContent = next;
+  }
+
+  function fixReportHeadings() {
+    const el = document.getElementById("report-content");
+    if (!el) return;
+    el.querySelectorAll("h3").forEach((h) => {
+      const next = REPORT_MAP[h.textContent.trim()];
+      if (next && h.textContent !== next) h.textContent = next;
+    });
+  }
+
+  function start() {
+    const title = document.getElementById("page-title");
+    if (title) {
+      new MutationObserver(fixPageTitle).observe(title, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      fixPageTitle();
+    }
+    const report = document.getElementById("report-content");
+    if (report) {
+      new MutationObserver(fixReportHeadings).observe(report, { childList: true, subtree: true });
+      fixReportHeadings();
     }
   }
 
