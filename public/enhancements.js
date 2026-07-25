@@ -1159,12 +1159,44 @@
  */
 (function () {
   "use strict";
-  /* global API, fmtDate, toast, refreshAll */
+  /* global API, fmtDate, toast, refreshAll, applyFinancialYear */
 
   const LEDGERS = [
     { listId: "income-list", tableSel: "table.income-ledger", idAttr: "data-income-id", type: "income" },
     { listId: "expense-list", tableSel: "table.expense-ledger", idAttr: "data-expense-id", type: "expense" },
   ];
+
+  const fmtCurrency = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  /** Australian FY for a date (1 Jul – 30 Jun), mirroring the server. */
+  function fyForDate(dateStr) {
+    const raw = String(dateStr || "").trim();
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    let year;
+    let month;
+    if (m) {
+      year = Number(m[1]);
+      month = Number(m[2]) - 1;
+    } else {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return null;
+      year = d.getFullYear();
+      month = d.getMonth();
+    }
+    const startYear = month >= 6 ? year : year - 1;
+    return `${startYear}-${String(startYear + 1).slice(-2)}`;
+  }
+
+  function currentFy() {
+    try {
+      if (state && state.financialYear) return state.financialYear;
+    } catch {
+      /* ignore */
+    }
+    const top = document.getElementById("fy-select");
+    return top ? top.value : null;
+  }
 
   function findEntry(type, id) {
     try {
@@ -1245,6 +1277,17 @@
     table.dataset.uploadedCol = "1";
   }
 
+  /** Shared top-right actions container in a ledger panel header. */
+  function ledgerActions(header) {
+    let box = header.querySelector(".ledger-header-actions");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "ledger-header-actions";
+      header.appendChild(box);
+    }
+    return box;
+  }
+
   function ensureRefreshButton(cfg) {
     const list = document.getElementById(cfg.listId);
     if (!list) return;
@@ -1259,7 +1302,135 @@
     btn.title =
       "Re-scan uploaded documents and set each row's date to the invoice date, not the upload date.";
     btn.addEventListener("click", () => runRefresh(btn));
-    header.appendChild(btn);
+    ledgerActions(header).appendChild(btn);
+  }
+
+  // FY dropdown (same style as the photo galleries) that drives the app's
+  // financial year, so the ledger, its totals and the dashboard all move
+  // together when it changes.
+  function ensureFyPicker(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    const box = ledgerActions(header);
+    if (box.querySelector(".ledger-fy-picker")) return;
+
+    const picker = document.createElement("div");
+    picker.className = "fy-picker gallery-fy-picker ledger-fy-picker";
+    picker.innerHTML =
+      `<label for="ledger-fy-${cfg.type}">Financial year</label>` +
+      `<select id="ledger-fy-${cfg.type}" class="ledger-fy-select" aria-label="Show ledger for financial year"></select>`;
+    box.appendChild(picker);
+    const select = picker.querySelector("select");
+    select.addEventListener("change", () => {
+      const fy = select.value;
+      if (typeof applyFinancialYear === "function") {
+        applyFinancialYear(fy);
+      } else {
+        try {
+          state.financialYear = fy;
+        } catch {
+          /* ignore */
+        }
+        applyLedgerFyFilter(cfg);
+      }
+    });
+  }
+
+  /** Mirror the top FY picker's options and select the active year. */
+  function syncFyOptions(select) {
+    const top = document.getElementById("fy-select");
+    if (top && top.innerHTML && select.innerHTML !== top.innerHTML) {
+      select.innerHTML = top.innerHTML;
+    }
+    const fy = currentFy();
+    if (fy && select.value !== fy) {
+      select.value = fy;
+      if (select.value !== fy) {
+        requestAnimationFrame(() => {
+          select.value = fy;
+        });
+      }
+    }
+  }
+
+  /** Show only the selected FY's rows and recompute the ledger's total. */
+  function applyLedgerFyFilter(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const table = list.querySelector(cfg.tableSel);
+    if (!table) return;
+    const panel = list.closest(".panel");
+    const select = panel && panel.querySelector(".ledger-fy-select");
+    if (select) syncFyOptions(select);
+
+    const fy = currentFy();
+    if (!fy) return;
+
+    let sum = 0;
+    let shown = 0;
+    let total = 0;
+    table.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      total += 1;
+      const id = tr.getAttribute(cfg.idAttr);
+      const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
+      const entry = findEntry(cfg.type, id);
+      const match = isDraft || (entry && fyForDate(entry.date) === fy);
+      tr.style.display = match ? "" : "none";
+      if (match) {
+        shown += 1;
+        if (entry) sum += Number(entry.amount) || 0;
+      }
+    });
+
+    updateLedgerTotal(cfg, table, fy, sum);
+    updateEmptyNote(cfg, panel, fy, shown, total);
+  }
+
+  function updateLedgerTotal(cfg, table, fy, sum) {
+    const label = `Financial year total (FY ${String(fy).replace("-", "–")})`;
+    if (cfg.type === "expense") {
+      const row = table.querySelector("tfoot tr.running-total-row");
+      if (!row) return;
+      const labelCell = row.querySelector("td");
+      const amountCell = row.querySelector("td.amount");
+      if (labelCell) labelCell.innerHTML = `<strong>${label}</strong>`;
+      if (amountCell) amountCell.innerHTML = `<strong>${fmtCurrency(sum)}</strong>`;
+      return;
+    }
+    // Income ledger has no footer in app.js — add one for the FY total.
+    let tfoot = table.querySelector("tfoot.ledger-fy-foot");
+    if (!tfoot) {
+      const cols = table.querySelectorAll("thead th").length || 6;
+      const labelSpan = Math.max(1, cols - 2);
+      tfoot = document.createElement("tfoot");
+      tfoot.className = "ledger-fy-foot";
+      tfoot.innerHTML = `<tr><td colspan="${labelSpan}"><strong></strong></td><td class="amount"><strong></strong></td><td></td></tr>`;
+      table.appendChild(tfoot);
+    }
+    const tr = tfoot.querySelector("tr");
+    tr.querySelector("td").innerHTML = `<strong>${label}</strong>`;
+    tr.querySelector("td.amount").innerHTML = `<strong>${fmtCurrency(sum)}</strong>`;
+  }
+
+  function updateEmptyNote(cfg, panel, fy, shown, total) {
+    if (!panel) return;
+    let note = panel.querySelector(".ledger-fy-empty");
+    if (total > 0 && shown === 0) {
+      if (!note) {
+        note = document.createElement("p");
+        note.className = "muted ledger-fy-empty";
+        const list = panel.querySelector(`#${cfg.listId}`);
+        (list || panel).insertAdjacentElement("afterend", note);
+      }
+      const kind = cfg.type === "income" ? "income" : "expenses";
+      note.textContent = `No ${kind} recorded for FY ${String(fy).replace("-", "–")}. Switch the financial year above to see other years.`;
+      note.hidden = false;
+    } else if (note) {
+      note.hidden = true;
+    }
   }
 
   async function runRefresh(btn) {
@@ -1291,8 +1462,10 @@
 
   function enhance(cfg) {
     ensureRefreshButton(cfg);
+    ensureFyPicker(cfg);
     const table = document.querySelector(`#${cfg.listId} ${cfg.tableSel}`);
     if (table) addUploadedColumn(table, cfg.idAttr, cfg.type);
+    applyLedgerFyFilter(cfg);
   }
 
   function start() {
