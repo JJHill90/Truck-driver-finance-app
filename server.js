@@ -547,9 +547,17 @@ api.post("/receipts/scan", async (req, res, next) => {
     const scanPurpose = purpose === "income" ? "income" : "expense";
     const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
     const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
-    // Expense approval is for the overall total only — keep OCR amount in sync.
-    if (scanPurpose === "expense" && primaryTotal && primaryTotal.amount > 0) {
-      ocrResult.amount = primaryTotal.amount;
+    // Keep OCR amount fields in sync with the primary detected total for the confirm UI.
+    if (primaryTotal && primaryTotal.amount > 0) {
+      if (scanPurpose === "expense") {
+        ocrResult.amount = primaryTotal.amount;
+      } else {
+        if (!(Number(ocrResult.grossTotal) > 0)) ocrResult.grossTotal = primaryTotal.amount;
+        if (!(Number(ocrResult.taxableIncome) > 0)) ocrResult.taxableIncome = primaryTotal.amount;
+        if (!(Number(ocrResult.amount) > 0)) {
+          ocrResult.amount = Number(ocrResult.netPay) > 0 ? ocrResult.netPay : primaryTotal.amount;
+        }
+      }
     }
     const scanAmount =
       labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
