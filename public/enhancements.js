@@ -383,8 +383,28 @@
     }
   }
 
+  // Only the administrator (Haulage_Admin) can add or alter data; show a notice
+  // to everyone else (guests and non-admin users) explaining the read-only mode.
+  function renderReadonlyNotice(user) {
+    const main = document.querySelector(".main");
+    if (!main) return;
+    const existing = byId("enh-readonly-notice");
+    if (existing) existing.remove();
+    if (user && user.isAdmin) return; // admin can edit — no notice
+    const bar = document.createElement("div");
+    bar.id = "enh-readonly-notice";
+    bar.className = "enh-readonly-notice";
+    bar.innerHTML = user
+      ? `<strong>Read-only.</strong> Only the administrator (Haulage_Admin) can add or edit data on this app.`
+      : `<strong>You're not signed in.</strong> The app is read-only — sign in as the administrator (Haulage_Admin) on the Profile tab to add or edit data.`;
+    const topbar = main.querySelector(".topbar");
+    if (topbar && topbar.nextSibling) main.insertBefore(bar, topbar.nextSibling);
+    else main.insertBefore(bar, main.firstChild);
+  }
+
   function showAuthState(user) {
     updateBrandSignedIn(user && user.username ? user.username : null);
+    renderReadonlyNotice(user);
     const outEl = byId("auth-logged-out");
     const inEl = byId("auth-logged-in");
     if (!outEl || !inEl) return;
