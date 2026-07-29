@@ -3,16 +3,22 @@ const path = require("path");
 const express = require("express");
 
 const {
-  listCategories,
   listIncomeTypes,
   CATEGORY_GROUPS,
   DRIVER_TYPES,
   getCurrentFinancialYear,
   getCategoryMeta,
 } = require("./lib/ato-standards");
+const {
+  ensureMealsRegistered,
+  listMenuCategories,
+  normalizeExpenseCategoryId,
+} = require("./lib/expense-menu");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
+
+ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
 const {
   extractReceiptData,
@@ -420,7 +426,7 @@ api.delete("/admin/users/:username", (req, res) => {
 // --- Reference data ------------------------------------------------------
 api.get("/standards", (_req, res) => {
   res.json({
-    categories: listCategories(),
+    categories: listMenuCategories(),
     categoryGroups: CATEGORY_GROUPS,
     incomeTypes: listIncomeTypes(),
     driverTypes: DRIVER_TYPES,
@@ -501,7 +507,8 @@ api.get("/forecast", (req, res) => {
 
 // --- Expenses ------------------------------------------------------------
 api.post("/expenses/preview", (req, res) => {
-  const payload = req.body || {};
+  const payload = { ...(req.body || {}) };
+  if (payload.category) payload.category = normalizeExpenseCategoryId(payload.category);
   const analysis = calcExpenseDeduction(payload);
   // Use the year's cents-per-km rate (from the entry's date) so the preview
   // matches how a prior-year car claim will be reconciled.
@@ -517,7 +524,9 @@ api.post("/expenses/preview", (req, res) => {
 
 api.post("/expenses", (req, res) => {
   const records = getRecords(req);
-  const entry = storage.addExpense(records, req.body || {});
+  const body = { ...(req.body || {}) };
+  if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  const entry = storage.addExpense(records, body);
   persist(req);
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
@@ -670,6 +679,8 @@ api.post("/receipts/scan", async (req, res, next) => {
         ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
       }
       ocrResult.description = buildIncomeDescription(ocrResult);
+    } else if (ocrResult.suggestedCategory) {
+      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
     }
 
     const scanPurpose = purpose === "income" ? "income" : "expense";
@@ -777,7 +788,9 @@ api.post("/receipts/manual", (req, res) => {
     return;
   }
   const records = getRecords(req);
-  const { expense } = storage.addManualReceipt(records, req.body || {});
+  const body = { ...(req.body || {}) };
+  if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  const { expense } = storage.addManualReceipt(records, body);
   persist(req);
   res.json({ entry: expense, analysis: calcExpenseDeduction(expense) });
 });
@@ -821,7 +834,11 @@ api.post("/receipts/:id/confirm", (req, res) => {
     return;
   }
 
-  const entry = storage.addExpense(records, { ...payload, receiptId: receipt?.id || null });
+  const expensePayload = { ...payload, receiptId: receipt?.id || null };
+  if (expensePayload.category) {
+    expensePayload.category = normalizeExpenseCategoryId(expensePayload.category);
+  }
+  const entry = storage.addExpense(records, expensePayload);
   if (receipt) {
     receipt.purpose = "expense";
     receipt.linkedExpenseId = entry.id;

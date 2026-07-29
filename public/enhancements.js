@@ -1542,15 +1542,27 @@
   const AEST_TZ = "Australia/Sydney";
 
   // Allowance categories → how to read their daily cap from summary.allowances.
+  // Meals are one combined daily cap (breakfast+lunch+dinner); spend uses `meals`
+  // plus any legacy breakfast/lunch/dinner rows still on file.
   const CATS = [
-    { id: "meals_breakfast", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.breakfast && a.truckDriverMealsDaily.breakfast.cap },
-    { id: "meals_lunch", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.lunch && a.truckDriverMealsDaily.lunch.cap },
-    { id: "meals_dinner", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.dinner && a.truckDriverMealsDaily.dinner.cap },
-    { id: "overtime_meals", cap: (a) => a && a.overtimeMealCap },
-    { id: "accommodation", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
-    { id: "incidentals", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
+    {
+      id: "meals",
+      spendIds: ["meals", "meals_breakfast", "meals_lunch", "meals_dinner"],
+      cap: (a) => {
+        const m = a && a.truckDriverMealsDaily;
+        if (!m) return 0;
+        return (
+          (Number(m.breakfast && m.breakfast.cap) || 0) +
+          (Number(m.lunch && m.lunch.cap) || 0) +
+          (Number(m.dinner && m.dinner.cap) || 0)
+        );
+      },
+    },
+    { id: "overtime_meals", spendIds: ["overtime_meals"], cap: (a) => a && a.overtimeMealCap },
+    { id: "accommodation", spendIds: ["accommodation"], cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
+    { id: "incidentals", spendIds: ["incidentals"], cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
   ];
-  const CAT_IDS = new Set(CATS.map((c) => c.id));
+  const SPEND_IDS = new Set(CATS.flatMap((c) => c.spendIds));
 
   let midnightTimer = null;
   let renderedAestDay = null;
@@ -1607,7 +1619,7 @@
     const today = aestIsoOf();
     const dailyAllow = CATS.reduce((s, c) => s + (Number(c.cap(allowances)) || 0), 0);
     const spend = expenses
-      .filter((e) => CAT_IDS.has(e.category) && String(e.date || "").slice(0, 10) === today)
+      .filter((e) => SPEND_IDS.has(e.category) && String(e.date || "").slice(0, 10) === today)
       .reduce((s, e) => s + (Number(e.amount) || 0), 0);
     return { today, dailyAllow, spend };
   }
@@ -1651,7 +1663,7 @@
           <span>${over ? "Over allowance" : "Remaining today"}</span>
           <span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span>
         </div>
-        <p class="muted allowance-hint">One daily lump sum: breakfast, lunch, dinner, overtime meal, accommodation and incidentals caps combined. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
+        <p class="muted allowance-hint">One daily lump sum: meals (combined), overtime meal, accommodation and incidentals caps. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
       </div>
     `;
     scheduleMidnightReset(container);
