@@ -3,7 +3,6 @@ const path = require("path");
 const express = require("express");
 
 const {
-  listIncomeTypes,
   CATEGORY_GROUPS,
   DRIVER_TYPES,
   getCurrentFinancialYear,
@@ -15,6 +14,7 @@ const {
   listSpecialClaimCategories,
   normalizeExpenseCategoryId,
 } = require("./lib/expense-menu");
+const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -430,7 +430,7 @@ api.get("/standards", (_req, res) => {
     categories: listMenuCategories(),
     specialClaimCategories: listSpecialClaimCategories(),
     categoryGroups: CATEGORY_GROUPS,
-    incomeTypes: listIncomeTypes(),
+    incomeTypes: listMenuIncomeTypes(),
     driverTypes: DRIVER_TYPES,
     financialYear: getCurrentFinancialYear(),
   });
@@ -544,6 +544,7 @@ api.delete("/expenses/:id", (req, res) => {
 api.post("/income", (req, res) => {
   const records = getRecords(req);
   const body = sanitizeIncomeFields({ ...(req.body || {}) });
+  if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
   persist(req);
   res.json({ entry });
@@ -681,6 +682,10 @@ api.post("/receipts/scan", async (req, res, next) => {
         ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
       }
       ocrResult.description = buildIncomeDescription(ocrResult);
+      if (ocrResult.suggestedIncomeType) {
+        ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
+      }
+      if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
     } else if (ocrResult.suggestedCategory) {
       ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
     }
@@ -818,6 +823,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
 
   if (purpose === "income") {
     sanitizeIncomeFields(payload);
+    if (payload.type) payload.type = normalizeIncomeTypeId(payload.type);
     if (!payload.description) payload.description = buildIncomeDescription(payload);
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     if (receipt) {
