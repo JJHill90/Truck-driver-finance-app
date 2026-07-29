@@ -181,6 +181,31 @@ api.use((req, _res, next) => {
   next();
 });
 
+// Only the primary mod (Haulage_Admin) may add or alter data. Everyone else —
+// guests and non-admin users — has read-only access. Reads (GET/HEAD) plus the
+// login/logout flow and the read-only expense preview stay open to all.
+const OPEN_WRITE_PATHS = new Set(["/auth/login", "/auth/logout", "/expenses/preview"]);
+api.use((req, res, next) => {
+  const method = (req.method || "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    next();
+    return;
+  }
+  if (OPEN_WRITE_PATHS.has(req.path)) {
+    next();
+    return;
+  }
+  if (req.user && auth.isAdminUser(req.user)) {
+    next();
+    return;
+  }
+  res.status(403).json({
+    error: req.user
+      ? "Read-only access — only the administrator (Haulage_Admin) can add or change data."
+      : "Sign in as the administrator (Haulage_Admin) to add or change data. The app is read-only until then.",
+  });
+});
+
 // --- Auth ----------------------------------------------------------------
 api.post("/auth/register", (req, res) => {
   const { username, password, presets } = req.body || {};
