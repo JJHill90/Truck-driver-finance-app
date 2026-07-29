@@ -1663,7 +1663,7 @@
           <span>${over ? "Over allowance" : "Remaining today"}</span>
           <span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span>
         </div>
-        <p class="muted allowance-hint">One daily lump sum: meals (combined), overtime meal, accommodation and incidentals caps. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
+        <p class="muted allowance-hint">One daily lump sum: food/meals (combined), overtime meal, accommodation and incidentals caps. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
       </div>
     `;
     scheduleMidnightReset(container);
