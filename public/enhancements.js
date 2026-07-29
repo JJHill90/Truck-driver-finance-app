@@ -1755,3 +1755,72 @@
     start();
   }
 })();
+
+/* --- Keep Special claims (+ Profile preset) on the filtered category menu --
+ * app.js fills #expense-category from state.standards.categories already; this
+ * layer re-applies the same filtered/renamed list (preferring
+ * specialClaimCategories from /standards) and keeps the Profile default
+ * category select in sync.
+ */
+(function () {
+  "use strict";
+
+  function fillSelect(sel, html, { allowEmptyLabel } = {}) {
+    if (!sel) return;
+    const prev = sel.value;
+    const body = allowEmptyLabel
+      ? html.replace(/^<option value="">Choose category…<\/option>/, '<option value="">None</option>')
+      : html;
+    sel.innerHTML = body;
+    if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  }
+
+  function applyFilteredCategoryMenus() {
+    const appState = globalThis.state;
+    const buildOpts = globalThis.buildCategorySelectOptions;
+    if (!appState || !appState.standards || typeof buildOpts !== "function") return;
+
+    const cats =
+      (appState.standards.specialClaimCategories && appState.standards.specialClaimCategories.length
+        ? appState.standards.specialClaimCategories
+        : appState.standards.categories) || [];
+    if (!cats.length) return;
+
+    const html = buildOpts(cats, appState.standards.categoryGroups);
+
+    // Special claims (km / laundry) — same filtered menu as manual expenses
+    fillSelect(document.getElementById("expense-category"), html);
+
+    // Manual expense entry (keep in sync if standards were refreshed)
+    fillSelect(document.getElementById("manual-receipt-category"), html);
+
+    // Profile default category
+    fillSelect(document.getElementById("preset-category"), html, { allowEmptyLabel: true });
+  }
+
+  function patchPopulate() {
+    const orig = globalThis.populateCategorySelects;
+    if (typeof orig !== "function") return;
+    globalThis.populateCategorySelects = function patchedPopulateCategorySelects() {
+      orig.apply(this, arguments);
+      applyFilteredCategoryMenus();
+    };
+  }
+
+  function start() {
+    patchPopulate();
+    applyFilteredCategoryMenus();
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks += 1;
+      applyFilteredCategoryMenus();
+      if (ticks >= 15) clearInterval(iv);
+    }, 400);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

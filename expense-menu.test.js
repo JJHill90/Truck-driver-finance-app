@@ -1,5 +1,6 @@
 const {
   listMenuCategories,
+  listSpecialClaimCategories,
   normalizeExpenseCategoryId,
   COMBINED_MEALS_CAP,
   ensureMealsRegistered,
@@ -26,6 +27,12 @@ describe("expense menu", () => {
     expect(ids).not.toContain("parking_tolls");
     expect(ids).not.toContain("load_restraint");
     expect(ids).not.toContain("vehicle_truck");
+  });
+
+  it("exposes the same filtered menu for special claims", () => {
+    expect(listSpecialClaimCategories().map((c) => c.id)).toEqual(
+      listMenuCategories().map((c) => c.id)
+    );
   });
 
   it("exposes a single Food/Meals category with combined ATO cap", () => {
