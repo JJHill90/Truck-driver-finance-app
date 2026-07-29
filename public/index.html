@@ -287,7 +287,11 @@
               <p class="muted">Your data below is private to this profile. Presets pre-fill new entries.</p>
               <div class="form-grid">
                 <label>Default work-use %<input id="preset-workuse" type="number" min="0" max="100" placeholder="100" /></label>
-                <label>Default expense category<input id="preset-category" placeholder="e.g. fuel" /></label>
+                <label>Default expense category
+                  <select id="preset-category" class="category-select" aria-label="Default expense category">
+                    <option value="">None</option>
+                  </select>
+                </label>
                 <div class="span-2 form-actions">
                   <button type="button" class="btn primary" id="auth-save-presets">Save presets</button>
                 </div>

@@ -12,6 +12,7 @@ const {
 const {
   ensureMealsRegistered,
   listMenuCategories,
+  listSpecialClaimCategories,
   normalizeExpenseCategoryId,
 } = require("./lib/expense-menu");
 const storage = require("./lib/storage");
@@ -427,6 +428,7 @@ api.delete("/admin/users/:username", (req, res) => {
 api.get("/standards", (_req, res) => {
   res.json({
     categories: listMenuCategories(),
+    specialClaimCategories: listSpecialClaimCategories(),
     categoryGroups: CATEGORY_GROUPS,
     incomeTypes: listIncomeTypes(),
     driverTypes: DRIVER_TYPES,
