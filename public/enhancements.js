@@ -1529,93 +1529,73 @@
   }
 })();
 
-/* --- Allowance caps: total allowance vs total spend ------------------------
- * Replaces the static daily-cap list in #allowance-caps with a live
- * "allowance vs actual spend" readout for the ATO meal/travel allowance
- * categories, based on the driver's own receipts. Spend and the allowance
- * "earned" (daily cap x number of days with a receipt) are summed over a
- * selectable period (Day / Week / Month / Financial year). Because it sums by
- * each receipt's date, uploading older-dated receipts retroactively updates the
- * totals. Layered over app.js (kept verbatim) by taking over #allowance-caps.
+/* --- Allowance caps: one daily lump sum (AEST) -----------------------------
+ * Replaces the static daily-cap list in #allowance-caps with a single combined
+ * "daily allowance vs today's spend" readout. All ATO meal/travel category
+ * daily caps are summed into one lump; spend is the sum of matching receipts
+ * dated today in Australia/Sydney. Totals reset at 00:00 AEST each day.
+ * Layered over app.js (kept verbatim) by taking over #allowance-caps.
  */
 (function () {
   "use strict";
 
+  const AEST_TZ = "Australia/Sydney";
+
   // Allowance categories → how to read their daily cap from summary.allowances.
   const CATS = [
-    { id: "meals_breakfast", label: "Breakfast", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.breakfast && a.truckDriverMealsDaily.breakfast.cap },
-    { id: "meals_lunch", label: "Lunch", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.lunch && a.truckDriverMealsDaily.lunch.cap },
-    { id: "meals_dinner", label: "Dinner", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.dinner && a.truckDriverMealsDaily.dinner.cap },
-    { id: "overtime_meals", label: "Overtime meal", cap: (a) => a && a.overtimeMealCap },
-    { id: "accommodation", label: "Accommodation", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
-    { id: "incidentals", label: "Incidentals", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
+    { id: "meals_breakfast", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.breakfast && a.truckDriverMealsDaily.breakfast.cap },
+    { id: "meals_lunch", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.lunch && a.truckDriverMealsDaily.lunch.cap },
+    { id: "meals_dinner", cap: (a) => a && a.truckDriverMealsDaily && a.truckDriverMealsDaily.dinner && a.truckDriverMealsDaily.dinner.cap },
+    { id: "overtime_meals", cap: (a) => a && a.overtimeMealCap },
+    { id: "accommodation", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
+    { id: "incidentals", cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
   ];
+  const CAT_IDS = new Set(CATS.map((c) => c.id));
 
-  const PERIODS = [
-    { key: "day", label: "Day" },
-    { key: "week", label: "Week" },
-    { key: "month", label: "Month" },
-    { key: "year", label: "Year" },
-  ];
-
-  let period = "year"; // default so historical (older-dated) receipts are visible
+  let midnightTimer = null;
+  let renderedAestDay = null;
 
   const money = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
 
-  function pad2(n) {
-    return String(n).padStart(2, "0");
-  }
-  function isoOf(dt) {
-    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  function aestParts(date = new Date()) {
+    const fmt = new Intl.DateTimeFormat("en-AU", {
+      timeZone: AEST_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    const out = {};
+    for (const p of fmt.formatToParts(date)) {
+      if (p.type !== "literal") out[p.type] = p.value;
+    }
+    return out;
   }
 
-  function fyWindow(fy) {
-    const startYear = Number(String(fy || "").split("-")[0]);
-    if (!startYear) return null;
-    return {
-      start: `${startYear}-07-01`,
-      end: `${startYear + 1}-06-30`,
-      label: `FY ${String(fy).replace("-", "–")}`,
-    };
+  function aestIsoOf(date = new Date()) {
+    const p = aestParts(date);
+    return `${p.year}-${p.month}-${p.day}`;
   }
 
-  function windowFor(p) {
-    const now = new Date();
-    if (p === "day") {
-      const s = isoOf(now);
-      return { start: s, end: s, label: `Today (${s})` };
+  /** Milliseconds until the next calendar day starts in Australia/Sydney. */
+  function msUntilNextAestMidnight() {
+    const today = aestIsoOf();
+    let lo = 0;
+    let hi = 26 * 60 * 60 * 1000; // cover DST 25h days
+    const now = Date.now();
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (aestIsoOf(new Date(now + mid)) === today) lo = mid + 1;
+      else hi = mid;
     }
-    if (p === "week") {
-      const dow = (now.getDay() + 6) % 7; // Monday = 0
-      const mon = new Date(now);
-      mon.setDate(now.getDate() - dow);
-      const sun = new Date(mon);
-      sun.setDate(mon.getDate() + 6);
-      return { start: isoOf(mon), end: isoOf(sun), label: "This week" };
-    }
-    if (p === "month") {
-      const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      return { start: isoOf(first), end: isoOf(last), label: "This month" };
-    }
-    // year → the selected financial year
-    let fy = null;
-    try {
-      fy = state && state.financialYear;
-    } catch {
-      fy = null;
-    }
-    return fyWindow(fy) || fyWindow(isoFallbackFy());
+    return Math.max(lo, 1000);
   }
 
-  function isoFallbackFy() {
-    const now = new Date();
-    const start = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-    return `${start}-${String(start + 1).slice(-2)}`;
-  }
-
-  function compute(win) {
+  function computeDaily() {
     let expenses = [];
     let allowances = {};
     try {
@@ -1624,77 +1604,65 @@
     } catch {
       expenses = [];
     }
-    let totalAllow = 0;
-    let totalSpend = 0;
-    const rows = CATS.map((c) => {
-      const cap = Number(c.cap(allowances)) || 0;
-      const items = expenses.filter(
-        (e) => e.category === c.id && e.date >= win.start && e.date <= win.end
-      );
-      const spend = items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-      const days = new Set(items.map((e) => String(e.date).slice(0, 10))).size;
-      const allow = cap * days;
-      totalAllow += allow;
-      totalSpend += spend;
-      return { label: c.label, cap, days, allow, spend };
-    });
-    return { rows, totalAllow, totalSpend };
+    const today = aestIsoOf();
+    const dailyAllow = CATS.reduce((s, c) => s + (Number(c.cap(allowances)) || 0), 0);
+    const spend = expenses
+      .filter((e) => CAT_IDS.has(e.category) && String(e.date || "").slice(0, 10) === today)
+      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    return { today, dailyAllow, spend };
+  }
+
+  function scheduleMidnightReset(container) {
+    if (midnightTimer) {
+      clearTimeout(midnightTimer);
+      midnightTimer = null;
+    }
+    midnightTimer = setTimeout(() => {
+      midnightTimer = null;
+      if (container.isConnected) {
+        render(container);
+        scheduleMidnightReset(container);
+      }
+    }, msUntilNextAestMidnight());
   }
 
   function render(container) {
-    const win = windowFor(period);
-    const { rows, totalAllow, totalSpend } = compute(win);
-    const remaining = totalAllow - totalSpend;
-    const over = totalSpend > totalAllow;
-
-    const options = PERIODS.map(
-      (p) => `<option value="${p.key}"${p.key === period ? " selected" : ""}>${p.label}</option>`
-    ).join("");
-
-    const rowHtml = rows
-      .map((r) => {
-        const tag =
-          r.days === 0
-            ? ""
-            : r.spend > r.allow
-              ? ' <span class="tag amber">over</span>'
-              : ' <span class="tag green">within</span>';
-        return `<div class="cap-row">
-          <span>${r.label} <small class="muted">cap ${money(r.cap)}/day · ${r.days} day${r.days === 1 ? "" : "s"}</small></span>
-          <span>${money(r.spend)} / ${money(r.allow)}${tag}</span>
-        </div>`;
-      })
-      .join("");
+    const { today, dailyAllow, spend } = computeDaily();
+    renderedAestDay = today;
+    const remaining = dailyAllow - spend;
+    const over = spend > dailyAllow;
+    const tag = over
+      ? ' <span class="tag amber">over</span>'
+      : spend > 0
+        ? ' <span class="tag green">within</span>'
+        : "";
 
     container.innerHTML = `
       <div class="allowance-vs-spend cap-list">
-        <div class="cap-row allowance-period-row">
-          <span>Period</span>
-          <span><select class="period-select allowance-period" aria-label="Allowance period">${options}</select></span>
+        <div class="cap-row allowance-total">
+          <span><strong>Daily allowance</strong> <small class="muted">combined ATO caps · ${today} AEST</small></span>
+          <span><strong>${money(dailyAllow)}</strong></span>
         </div>
-        <div class="cap-row allowance-total"><span><strong>Total allowance (${win.label})</strong></span><span><strong>${money(totalAllow)}</strong></span></div>
-        <div class="cap-row allowance-total"><span><strong>Total spend</strong></span><span><strong>${money(totalSpend)}</strong></span></div>
-        <div class="cap-row allowance-total"><span>${over ? "Over allowance" : "Remaining"}</span><span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span></div>
-        <div class="allowance-divider"></div>
-        ${rowHtml}
-        <p class="muted allowance-hint">Spend / allowance per category. Allowance = ATO daily cap × days with a receipt; totals include receipts dated in the selected period.</p>
+        <div class="cap-row allowance-total">
+          <span><strong>Today's spend</strong> <small class="muted">resets 00:00 AEST</small></span>
+          <span><strong>${money(spend)}</strong>${tag}</span>
+        </div>
+        <div class="cap-row allowance-total">
+          <span>${over ? "Over allowance" : "Remaining today"}</span>
+          <span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span>
+        </div>
+        <p class="muted allowance-hint">One daily lump sum: breakfast, lunch, dinner, overtime meal, accommodation and incidentals caps combined. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
       </div>
     `;
-
-    const sel = container.querySelector(".allowance-period");
-    if (sel) {
-      sel.addEventListener("change", () => {
-        period = sel.value;
-        render(container);
-      });
-    }
+    scheduleMidnightReset(container);
   }
 
   function maybeRender() {
     const container = document.getElementById("allowance-caps");
     if (!container) return;
-    // Only take over once app.js has populated the panel; skip if already ours.
-    if (container.querySelector(".allowance-vs-spend")) return;
+    const today = aestIsoOf();
+    // Take over once app.js has populated the panel; also re-render after AEST day rollover.
+    if (container.querySelector(".allowance-vs-spend") && renderedAestDay === today) return;
     if (!container.children.length) return;
     render(container);
   }
