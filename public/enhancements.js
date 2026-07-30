@@ -1456,30 +1456,17 @@
   }
 
   /**
-   * app.js puts an "outside period" tag in the Vendor / details cell when the
-   * expense date falls outside the selected day/week/month/year total filter.
-   * That is intentional (not a vendor/ABN error) — move it onto the Date cell
-   * with clearer wording so it is not read as a vendor problem.
+   * app.js still marks out-of-range expense rows (`out-of-period` class) and
+   * excludes them from period totals. Hide the visual "outside period" tag for
+   * a cleaner ledger — the period rule itself is unchanged.
    */
-  function clarifyOutsidePeriodTags(cfg) {
+  function hideOutsidePeriodTags(cfg) {
     if (cfg.type !== "expense") return;
     const list = document.getElementById(cfg.listId);
     if (!list) return;
-    list.querySelectorAll("table.expense-ledger tbody tr").forEach((tr) => {
-      const cells = tr.querySelectorAll("td");
-      if (cells.length < 3) return;
-      const dateCell = cells[0];
-      const vendorCell = cells[2];
-      const tags = [...vendorCell.querySelectorAll("span.tag")].filter((t) =>
-        /outside\s+period/i.test(t.textContent || "")
-      );
-      for (const tag of tags) {
-        tag.textContent = "Outside selected period";
-        tag.title =
-          "This expense date is outside the day/week/month/year filter used for expense totals above — not a vendor or ABN error.";
-        tag.classList.add("enh-outside-period");
-        if (!dateCell.contains(tag)) dateCell.appendChild(document.createTextNode(" "));
-        dateCell.appendChild(tag);
+    list.querySelectorAll("table.expense-ledger span.tag").forEach((tag) => {
+      if (/outside\s+(selected\s+)?period/i.test(tag.textContent || "")) {
+        tag.remove();
       }
     });
   }
@@ -1488,7 +1475,7 @@
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
     applyLedgerFyFilter(cfg);
-    clarifyOutsidePeriodTags(cfg);
+    hideOutsidePeriodTags(cfg);
   }
 
   function start() {

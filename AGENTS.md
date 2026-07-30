@@ -116,10 +116,9 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   **business type** (e.g. Woolworths/Coles/ALDI → `groceries_travel`, Bunnings →
   `tools_equipment`), that category always overrides weak OCR (`other_work`) and
   conflicting remembered defaults. Otherwise vendor memory + text heuristics apply.
-- **“Outside selected period” on expenses.** The expense ledger tag means the
-  row’s date is outside the day/week/month/year filter used for expense totals
-  — not a vendor/ABN error. `enhancements.js` moves it onto the Date cell with
-  clearer wording (app.js still renders the original tag in Vendor / details).
+- **Expense period filter (no visual tag).** Rows outside the selected
+  day/week/month/year still get `out-of-period` and stay out of period totals;
+  `enhancements.js` removes the “outside period” label so the ledger stays clean.
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.
