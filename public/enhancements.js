@@ -1184,16 +1184,15 @@
   }
 })();
 
-/* --- Ledger "Uploaded" column + "Refresh invoice dates" action ------------
- * The Date column shows the invoice date; this adds a separate "Uploaded"
- * column (when the file was uploaded) to both the income and expense ledgers,
- * and a button that re-scans uploaded documents and repairs any row still
- * showing the upload date instead of the scanned invoice date. Layered on
+/* --- Ledger "Refresh invoice dates" + FY filter ---------------------------
+ * Adds a button that re-scans documents and repairs rows still showing the
+ * upload date instead of the invoice date, plus a FY picker on each ledger.
+ * (No separate "Uploaded" column — Date is the invoice date.) Layered on
  * app.js (kept verbatim) by post-processing the rendered tables.
  */
 (function () {
   "use strict";
-  /* global API, fmtDate, toast, refreshAll, applyFinancialYear */
+  /* global API, toast, refreshAll, applyFinancialYear */
 
   const LEDGERS = [
     { listId: "income-list", tableSel: "table.income-ledger", idAttr: "data-income-id", type: "income" },
@@ -1239,76 +1238,6 @@
     } catch {
       return null;
     }
-  }
-
-  function formatDay(value) {
-    if (!value) return "—";
-    if (typeof fmtDate === "function") {
-      try {
-        const out = fmtDate(String(value).slice(0, 10));
-        if (out && out !== "—") return out;
-      } catch {
-        /* fall through */
-      }
-    }
-    try {
-      const d = new Date(value);
-      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("en-AU");
-    } catch {
-      /* ignore */
-    }
-    return String(value).slice(0, 10);
-  }
-
-  /** When a ledger row's document was uploaded (linked receipt, else created). */
-  function uploadedDisplay(entry) {
-    if (!entry) return "—";
-    let iso = null;
-    if (entry.receiptId) {
-      try {
-        const r = (state.records.receipts || []).find((x) => x.id === entry.receiptId);
-        if (r) iso = r.createdAt;
-      } catch {
-        iso = null;
-      }
-    }
-    iso = iso || entry.createdAt || entry.uploadedDate || null;
-    return iso ? formatDay(iso) : "—";
-  }
-
-  function addUploadedColumn(table, idAttr, type) {
-    if (!table || table.dataset.uploadedCol) return;
-
-    const headRow = table.querySelector("thead tr");
-    if (headRow) {
-      const firstTh = headRow.querySelector("th");
-      const th = document.createElement("th");
-      th.className = "uploaded-col";
-      th.textContent = "Uploaded";
-      if (firstTh) firstTh.insertAdjacentElement("afterend", th);
-      else headRow.appendChild(th);
-    }
-
-    table.querySelectorAll(`tbody tr[${idAttr}]`).forEach((tr) => {
-      const entry = findEntry(type, tr.getAttribute(idAttr));
-      const td = document.createElement("td");
-      td.className = "uploaded-col muted";
-      td.textContent = uploadedDisplay(entry);
-      const firstTd = tr.querySelector("td");
-      if (firstTd) firstTd.insertAdjacentElement("afterend", td);
-      else tr.appendChild(td);
-    });
-
-    // Expense ledger has a tfoot with spanning label cells; widen them by one.
-    table.querySelectorAll("tfoot tr").forEach((tr) => {
-      const cell = tr.querySelector("td[colspan]");
-      if (cell) {
-        const c = parseInt(cell.getAttribute("colspan"), 10) || 1;
-        cell.setAttribute("colspan", String(c + 1));
-      }
-    });
-
-    table.dataset.uploadedCol = "1";
   }
 
   /** Shared top-right actions container in a ledger panel header. */
@@ -1497,8 +1426,6 @@
   function enhance(cfg) {
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
-    const table = document.querySelector(`#${cfg.listId} ${cfg.tableSel}`);
-    if (table) addUploadedColumn(table, cfg.idAttr, cfg.type);
     applyLedgerFyFilter(cfg);
   }
 

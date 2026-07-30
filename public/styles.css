@@ -62,9 +62,7 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
 .gallery-fy-picker select { padding: 6px 9px; font-size: 0.85rem; }
 .gallery-fy-empty { margin: 6px 2px 0; }
 
-/* Ledger "Uploaded" column + refresh-dates action. */
-.income-ledger .uploaded-col, .expense-ledger .uploaded-col { white-space: nowrap; }
-td.uploaded-col { font-size: 0.85rem; }
+/* Ledger header actions (refresh-dates + FY picker). */
 .ledger-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .ledger-header-actions .refresh-invoice-dates-btn { flex: 0 0 auto; }
 .ledger-header-actions .ledger-fy-picker { margin-left: 0; flex: 0 0 auto; }
