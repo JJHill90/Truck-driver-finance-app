@@ -119,6 +119,11 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
 - **Expense period filter (no visual tag).** Rows outside the selected
   day/week/month/year still get `out-of-period` and stay out of period totals;
   `enhancements.js` removes the “outside period” label so the ledger stays clean.
+- **Ledger edit + month filter.** Expense/income rows get an **Edit** button
+  (beside Delete) that opens a modal and `PUT /expenses/:id` or `PUT /income/:id`
+  via `lib/ledger-edit.js` (receipt links preserved). Each ledger also has a
+  **Show** month dropdown (All year / Jul–Jun within the selected FY) to shorten
+  long lists; choice is stored in `localStorage` (`haulage-ledger-month-*`).
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.

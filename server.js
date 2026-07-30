@@ -18,6 +18,7 @@ const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-men
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const { refineExpenseDetectedTotals } = require("./lib/expense-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
+const { updateExpense, updateIncome } = require("./lib/ledger-edit");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -569,6 +570,24 @@ api.post("/expenses", (req, res) => {
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
 
+api.put("/expenses/:id", (req, res) => {
+  const records = getRecords(req);
+  const body = normalizePayloadDate({ ...(req.body || {}) });
+  if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  const entry = updateExpense(records, req.params.id, body);
+  if (!entry) {
+    res.status(404).json({ error: "Expense not found." });
+    return;
+  }
+  rememberVendor(records, {
+    name: body.vendor != null ? body.vendor : entry.vendor,
+    abn: body.vendorAbn != null ? body.vendorAbn : entry.vendorAbn,
+    category: body.category || entry.category,
+  });
+  persist(req);
+  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+});
+
 api.delete("/expenses/:id", (req, res) => {
   const records = getRecords(req);
   const removed = storage.deleteEntry(records, "expense", req.params.id);
@@ -582,6 +601,19 @@ api.post("/income", (req, res) => {
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
+  persist(req);
+  res.json({ entry });
+});
+
+api.put("/income/:id", (req, res) => {
+  const records = getRecords(req);
+  const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
+  if (body.type) body.type = normalizeIncomeTypeId(body.type);
+  const entry = updateIncome(records, req.params.id, body);
+  if (!entry) {
+    res.status(404).json({ error: "Income not found." });
+    return;
+  }
   persist(req);
   res.json({ entry });
 });
