@@ -203,7 +203,9 @@
         matchBits.push(`Vendor ${esc(data.vendor)}`);
       }
       if (data.vendorAbn) matchBits.push(`ABN ${esc(data.vendorAbn)}`);
-      if (data.categorySource === "vendor_memory") {
+      if (data.categorySource === "business_type") {
+        matchBits.push("Category set from business type (ABN / business name)");
+      } else if (data.categorySource === "vendor_memory") {
         matchBits.push("Category from previous saves for this business");
       } else if (data.categorySource === "text_heuristic") {
         matchBits.push("Category suggested from receipt wording");
@@ -1453,10 +1455,40 @@
     }
   }
 
+  /**
+   * app.js puts an "outside period" tag in the Vendor / details cell when the
+   * expense date falls outside the selected day/week/month/year total filter.
+   * That is intentional (not a vendor/ABN error) — move it onto the Date cell
+   * with clearer wording so it is not read as a vendor problem.
+   */
+  function clarifyOutsidePeriodTags(cfg) {
+    if (cfg.type !== "expense") return;
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    list.querySelectorAll("table.expense-ledger tbody tr").forEach((tr) => {
+      const cells = tr.querySelectorAll("td");
+      if (cells.length < 3) return;
+      const dateCell = cells[0];
+      const vendorCell = cells[2];
+      const tags = [...vendorCell.querySelectorAll("span.tag")].filter((t) =>
+        /outside\s+period/i.test(t.textContent || "")
+      );
+      for (const tag of tags) {
+        tag.textContent = "Outside selected period";
+        tag.title =
+          "This expense date is outside the day/week/month/year filter used for expense totals above — not a vendor or ABN error.";
+        tag.classList.add("enh-outside-period");
+        if (!dateCell.contains(tag)) dateCell.appendChild(document.createTextNode(" "));
+        dateCell.appendChild(tag);
+      }
+    });
+  }
+
   function enhance(cfg) {
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
     applyLedgerFyFilter(cfg);
+    clarifyOutsidePeriodTags(cfg);
   }
 
   function start() {
