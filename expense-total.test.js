@@ -1,0 +1,83 @@
+const {
+  extractLabeledExpenseTotals,
+  pickBestExpenseTotal,
+  refineExpenseDetectedTotals,
+} = require("./lib/expense-total");
+const { buildComponentBreakdown } = require("./lib/document-breakdown");
+const { mergeDetectedTotals } = require("./lib/receipt-ocr");
+
+describe("extractLabeledExpenseTotals", () => {
+  it("finds SALE TOTAL and TOTAL amounts on the same line", () => {
+    const text = `
+      Diesel 150.00
+      VISA 45.00
+      SALE TOTAL $187.50
+    `;
+    const hits = extractLabeledExpenseTotals(text);
+    expect(hits[0].amount).toBe(187.5);
+    expect(hits[0].label).toMatch(/sale total/i);
+  });
+
+  it("finds TOTAL on the next line after the label", () => {
+    const text = "Coffee 4.50\nTOTAL\n$62.40\n";
+    const hits = extractLabeledExpenseTotals(text);
+    expect(hits.some((h) => h.amount === 62.4 && /total/i.test(h.label))).toBe(true);
+  });
+
+  it("ignores subtotal and card tenders as payable totals", () => {
+    const text = `
+      SUBTOTAL 100.00
+      VISA 100.00
+      TOTAL GST 9.09
+    `;
+    const hits = extractLabeledExpenseTotals(text);
+    expect(hits.every((h) => h.amount !== 9.09 || h.rank < 80)).toBe(true);
+    expect(hits.find((h) => /visa/i.test(h.raw))).toBeUndefined();
+  });
+});
+
+describe("pickBestExpenseTotal", () => {
+  it("prefers SALE TOTAL over a smaller OCR/VISA amount", () => {
+    const best = pickBestExpenseTotal({
+      ocrAmount: 45,
+      rawText: "VISA 45.00\nSALE TOTAL 187.50\n",
+      lineItems: [
+        { description: "VISA", amount: 45 },
+        { description: "SALE TOTAL", amount: 187.5 },
+      ],
+    });
+    expect(best.amount).toBe(187.5);
+    expect(best.label).toMatch(/sale total/i);
+    expect(best.rank).toBeGreaterThanOrEqual(90);
+  });
+
+  it("prefers TOTAL over largest line item when OCR amount is wrong", () => {
+    const best = pickBestExpenseTotal({
+      ocrAmount: 45,
+      rawText: "Item A 45.00\nItem B 120.25\nTOTAL 187.50\n",
+    });
+    expect(best.amount).toBe(187.5);
+  });
+});
+
+describe("breakdown + refine pipeline", () => {
+  it("locks Grand/Sale total to SALE TOTAL even when ocr.amount is a card tender", () => {
+    const ocr = {
+      amount: 45,
+      rawText: "Diesel 150.00\nAdBlue 20.45\nCoffee 4.50\nVISA 45.00\nSALE TOTAL 187.50\n",
+      lineItems: [
+        { description: "Diesel", amount: 150 },
+        { description: "VISA", amount: 45 },
+      ],
+    };
+    const { components } = buildComponentBreakdown(ocr, false);
+    const grand = components.find((c) => c.type === "total");
+    expect(grand.amount).toBe(187.5);
+
+    const merged = mergeDetectedTotals(ocr, components, "expense");
+    const refined = refineExpenseDetectedTotals(merged, ocr, components);
+    const primary = refined.find((t) => t.primary);
+    expect(primary.amount).toBe(187.5);
+    expect(primary.label).toMatch(/total/i);
+  });
+});
