@@ -130,10 +130,16 @@
 
       if (data && data.receipt) {
         const mimeType = (data.receipt && data.receipt.mimeType) || "";
+        const ocr = data.ocrResult || {};
         latest = {
           breakdown: data.componentBreakdown || [],
           compliance: data.compliance || null,
           payPeriod: data.payPeriod || null,
+          vendorMatch: ocr.vendorMatch || null,
+          categorySource: ocr.categorySource || null,
+          suggestedCategory: ocr.suggestedCategory || null,
+          vendorAbn: ocr.vendorAbn || null,
+          vendor: ocr.vendor || ocr.entity || null,
           purpose,
           receiptId: data.receipt && data.receipt.id,
           isPdf: /pdf/i.test(mimeType),
@@ -184,6 +190,30 @@
         </div>`;
     }
 
+    let vendorHtml = "";
+    if (data.vendorMatch || data.vendorAbn || data.categorySource) {
+      const matchBits = [];
+      if (data.vendorMatch) {
+        matchBits.push(
+          data.vendorMatch.source === "abn"
+            ? `Matched known business by ABN (${esc(data.vendorMatch.name || data.vendor || "—")})`
+            : `Matched known business by name (${esc(data.vendorMatch.name || data.vendor || "—")})`
+        );
+      } else if (data.vendor) {
+        matchBits.push(`Vendor ${esc(data.vendor)}`);
+      }
+      if (data.vendorAbn) matchBits.push(`ABN ${esc(data.vendorAbn)}`);
+      if (data.categorySource === "vendor_memory") {
+        matchBits.push("Category from previous saves for this business");
+      } else if (data.categorySource === "text_heuristic") {
+        matchBits.push("Category suggested from receipt wording");
+      }
+      vendorHtml = `<div class="enh-section enh-vendor-match">
+          <h4>Business / ABN</h4>
+          <p class="muted">${matchBits.join(" · ")}</p>
+        </div>`;
+    }
+
     let complianceHtml = "";
     const comp = data.compliance;
     if (comp) {
@@ -203,7 +233,7 @@
     }
 
     const enlargeLabel = data.isPdf ? "Open scanned document" : "Enlarge scanned image";
-    wrap.innerHTML = `${payPeriodHtml}${breakdownHtml}${complianceHtml}
+    wrap.innerHTML = `${vendorHtml}${payPeriodHtml}${breakdownHtml}${complianceHtml}
       <button type="button" class="btn secondary enh-enlarge">${enlargeLabel}</button>`;
     return wrap;
   }

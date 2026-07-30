@@ -17,6 +17,7 @@ const {
 const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const { refineExpenseDetectedTotals } = require("./lib/expense-total");
+const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -559,6 +560,11 @@ api.post("/expenses", (req, res) => {
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const entry = storage.addExpense(records, body);
+  rememberVendor(records, {
+    name: body.vendor || entry.vendor,
+    abn: body.vendorAbn || entry.vendorAbn,
+    category: body.category || entry.category,
+  });
   persist(req);
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
@@ -671,6 +677,17 @@ api.post("/receipts/scan", async (req, res, next) => {
           console.warn("PDF image OCR fallback failed:", e.message);
         }
       }
+    }
+
+    // ABN + business name memory: fill vendor/ABN from prior saves and suggest
+    // a category (meals, training, …) before compliance/breakdown runs.
+    enrichOcrFromVendors(
+      ocrResult,
+      records.vendors || [],
+      purpose === "income" ? "income" : "expense"
+    );
+    if (purpose !== "income" && ocrResult.suggestedCategory) {
+      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
     }
 
     // Enrich: typed component breakdown + ATO compliance assessment.
@@ -838,6 +855,11 @@ api.post("/receipts/manual", (req, res) => {
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const { expense } = storage.addManualReceipt(records, body);
+  rememberVendor(records, {
+    name: body.vendor || expense.vendor,
+    abn: body.vendorAbn || expense.vendorAbn,
+    category: body.category || expense.category,
+  });
   persist(req);
   res.json({ entry: expense, analysis: calcExpenseDeduction(expense) });
 });
@@ -867,6 +889,10 @@ api.post("/receipts/:id/confirm", (req, res) => {
     if (payload.type) payload.type = normalizeIncomeTypeId(payload.type);
     if (!payload.description) payload.description = buildIncomeDescription(payload);
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
+    rememberVendor(records, {
+      name: payload.entity || payload.vendor || payload.payer || entry.entity,
+      abn: payload.vendorAbn || payload.abn || entry.vendorAbn,
+    });
     if (receipt) {
       receipt.purpose = "income";
       receipt.linkedIncomeId = entry.id;
@@ -888,6 +914,11 @@ api.post("/receipts/:id/confirm", (req, res) => {
     expensePayload.category = normalizeExpenseCategoryId(expensePayload.category);
   }
   const entry = storage.addExpense(records, expensePayload);
+  rememberVendor(records, {
+    name: expensePayload.vendor || entry.vendor,
+    abn: expensePayload.vendorAbn || entry.vendorAbn,
+    category: expensePayload.category || entry.category,
+  });
   if (receipt) {
     receipt.purpose = "expense";
     receipt.linkedExpenseId = entry.id;
