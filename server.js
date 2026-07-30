@@ -16,6 +16,7 @@ const {
 } = require("./lib/expense-menu");
 const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
+const { refineExpenseDetectedTotals } = require("./lib/expense-total");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -727,7 +728,10 @@ api.post("/receipts/scan", async (req, res, next) => {
     }
 
     const scanPurpose = purpose === "income" ? "income" : "expense";
-    const detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
+    let detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
+    if (scanPurpose === "expense") {
+      detectedTotals = refineExpenseDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
+    }
     const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
     // Keep OCR amount fields in sync with the primary detected total for the confirm UI.
     if (primaryTotal && primaryTotal.amount > 0) {
