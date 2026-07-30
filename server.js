@@ -15,6 +15,7 @@ const {
   normalizeExpenseCategoryId,
 } = require("./lib/expense-menu");
 const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
+const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -104,6 +105,31 @@ function persist(req) {
 }
 function profileFor(records, financialYear) {
   return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
+}
+
+/** Prefer labeled invoice/payment dates so FY placement follows the document day. */
+function applyResolvedDocumentDate(ocrResult, purpose, payPeriod) {
+  if (!ocrResult || typeof ocrResult !== "object") return null;
+  const rawText = ocrResult.rawText || ocrResult.rawTextPreview || "";
+  const resolved = resolveDocumentDate({
+    ocrDate: ocrResult.date,
+    rawText,
+    purpose: purpose === "income" ? "income" : "expense",
+    payPeriod,
+  });
+  if (resolved) ocrResult.date = resolved;
+  else if (ocrResult.date) {
+    const iso = toIsoAusDate(ocrResult.date);
+    if (iso) ocrResult.date = iso;
+  }
+  return ocrResult.date || null;
+}
+
+function normalizePayloadDate(payload) {
+  if (!payload || payload.date == null || payload.date === "") return payload;
+  const iso = toIsoAusDate(payload.date);
+  if (iso) payload.date = iso;
+  return payload;
 }
 
 function parseCookies(req) {
@@ -512,7 +538,7 @@ api.get("/forecast", (req, res) => {
 
 // --- Expenses ------------------------------------------------------------
 api.post("/expenses/preview", (req, res) => {
-  const payload = { ...(req.body || {}) };
+  const payload = normalizePayloadDate({ ...(req.body || {}) });
   if (payload.category) payload.category = normalizeExpenseCategoryId(payload.category);
   const analysis = calcExpenseDeduction(payload);
   // Use the year's cents-per-km rate (from the entry's date) so the preview
@@ -529,7 +555,7 @@ api.post("/expenses/preview", (req, res) => {
 
 api.post("/expenses", (req, res) => {
   const records = getRecords(req);
-  const body = { ...(req.body || {}) };
+  const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const entry = storage.addExpense(records, body);
   persist(req);
@@ -546,7 +572,7 @@ api.delete("/expenses/:id", (req, res) => {
 // --- Income --------------------------------------------------------------
 api.post("/income", (req, res) => {
   const records = getRecords(req);
-  const body = sanitizeIncomeFields({ ...(req.body || {}) });
+  const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
   persist(req);
@@ -661,7 +687,6 @@ api.post("/receipts/scan", async (req, res, next) => {
     if (payPeriod) {
       ocrResult.payPeriodInfo = payPeriod;
       if (payPeriod.text && !ocrResult.payPeriod) ocrResult.payPeriod = payPeriod.text;
-      if (payPeriod.paymentDate && !ocrResult.date) ocrResult.date = payPeriod.paymentDate;
       const filing = [
         payPeriod.text && payPeriod.from ? `Pay period ${payPeriod.text}` : null,
         payPeriod.paymentDateLabel ? `Paid ${payPeriod.paymentDateLabel}` : null,
@@ -673,6 +698,14 @@ api.post("/receipts/scan", async (req, res, next) => {
         ocrResult.description = ocrResult.description ? `${ocrResult.description} · ${filing}` : filing;
       }
     }
+
+    // Resolve AU invoice/payment date (prefer labeled dates over YTD/period starts)
+    // so the entry lands in the correct financial year.
+    applyResolvedDocumentDate(
+      ocrResult,
+      purpose === "income" ? "income" : "expense",
+      payPeriod
+    );
 
     // Income uploads: strip any "cheque" payment-method wording and label with
     // payslip / pay-period terminology (with the pay-period date).
@@ -798,7 +831,7 @@ api.post("/receipts/manual", (req, res) => {
     return;
   }
   const records = getRecords(req);
-  const body = { ...(req.body || {}) };
+  const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const { expense } = storage.addManualReceipt(records, body);
   persist(req);
@@ -826,6 +859,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
 
   if (purpose === "income") {
     sanitizeIncomeFields(payload);
+    normalizePayloadDate(payload);
     if (payload.type) payload.type = normalizeIncomeTypeId(payload.type);
     if (!payload.description) payload.description = buildIncomeDescription(payload);
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
@@ -845,7 +879,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     return;
   }
 
-  const expensePayload = { ...payload, receiptId: receipt?.id || null };
+  const expensePayload = normalizePayloadDate({ ...payload, receiptId: receipt?.id || null });
   if (expensePayload.category) {
     expensePayload.category = normalizeExpenseCategoryId(expensePayload.category);
   }
