@@ -111,6 +111,10 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
+- **AU dates → FY.** Scans resolve the document date via `lib/aus-date.js`:
+  `DD/MM/YYYY` is day/month (so `08/05/2026` → `2026-05-08` → FY **2025-26**).
+  Labeled invoice/payment dates beat a leading YTD/period-start date that local
+  OCR often grabs first. Confirm/save payloads are coerced the same way.
 - **Login required to write.** Guests (no session) get `403` on mutating API
   routes — sign in on the Profile tab first. Any signed-in profile can add/edit
   their own data; admin-only routes (`/admin/*`) still require `Haulage_Admin`.
