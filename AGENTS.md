@@ -111,6 +111,9 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
+- **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
+  **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
+  tenders (VISA/EFT) and line items do not become the approved total.
 - **AU dates → FY.** Scans resolve the document date via `lib/aus-date.js`:
   `DD/MM/YYYY` is day/month (so `08/05/2026` → `2026-05-08` → FY **2025-26**).
   Labeled invoice/payment dates beat a leading YTD/period-start date that local
