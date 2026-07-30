@@ -111,6 +111,10 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
+- **ABN + vendor memory.** Scans use `lib/vendor-enrichment.js`: ABN is the key
+  reference to remembered business names; after confirm, the vendor’s default
+  category (meals, training, …) is stored and applied on later scans. Text
+  heuristics also suggest categories when OCR is weak (`other_work`).
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.
