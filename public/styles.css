@@ -65,7 +65,43 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
 /* Ledger header actions (refresh-dates + FY picker). */
 .ledger-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .ledger-header-actions .refresh-invoice-dates-btn { flex: 0 0 auto; }
-.ledger-header-actions .ledger-fy-picker { margin-left: 0; flex: 0 0 auto; }
+.ledger-header-actions .ledger-fy-picker,
+.ledger-header-actions .ledger-month-picker { margin-left: 0; flex: 0 0 auto; }
+
+/* Ledger edit modal */
+.enh-ledger-edit-card { width: min(520px, 94vw); max-height: 88vh; overflow: auto; }
+.enh-ledger-edit-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 10px;
+}
+.enh-ledger-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.enh-ledger-edit-form label:nth-child(n + 5) { grid-column: 1 / -1; }
+.enh-ledger-edit-form .enh-edit-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.enh-ledger-edit-form input,
+.enh-ledger-edit-form select,
+.enh-ledger-edit-form textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.enh-ledger-edit-form .enh-dup-actions { grid-column: 1 / -1; margin-top: 4px; }
+.enh-edit-error { color: var(--accent); margin: 8px 0 0; }
 .ledger-fy-empty { margin: 8px 2px 0; }
 
 /* Allowance caps: allowance-vs-spend readout. */

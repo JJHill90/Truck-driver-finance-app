@@ -1216,23 +1216,49 @@
   }
 })();
 
-/* --- Ledger "Refresh invoice dates" + FY filter ---------------------------
- * Adds a button that re-scans documents and repairs rows still showing the
- * upload date instead of the invoice date, plus a FY picker on each ledger.
- * (No separate "Uploaded" column — Date is the invoice date.) Layered on
- * app.js (kept verbatim) by post-processing the rendered tables.
+/* --- Ledger refresh, FY/month filters, and row edit ----------------------
+ * Layered on app.js (kept verbatim) by post-processing the rendered tables:
+ * refresh invoice dates, FY picker, month dropdown (to shorten long lists),
+ * hide outside-period tags, and Edit next to Delete (PUT /expenses|/income).
  */
 (function () {
   "use strict";
-  /* global API, toast, refreshAll, applyFinancialYear */
+  /* global API, toast, refreshAll, applyFinancialYear, buildCategorySelectOptions */
 
   const LEDGERS = [
     { listId: "income-list", tableSel: "table.income-ledger", idAttr: "data-income-id", type: "income" },
     { listId: "expense-list", tableSel: "table.expense-ledger", idAttr: "data-expense-id", type: "expense" },
   ];
 
+  const MONTH_NAMES = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
   const fmtCurrency = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function esc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function apiBase() {
+    return typeof API !== "undefined" && API ? API : `${window.location.origin}/api/haulage`;
+  }
 
   /** Australian FY for a date (1 Jul – 30 Jun), mirroring the server. */
   function fyForDate(dateStr) {
@@ -1270,6 +1296,52 @@
     } catch {
       return null;
     }
+  }
+
+  function periodStorageKey(type) {
+    return `haulage-ledger-month-${type}`;
+  }
+
+  function getMonthFilter(type) {
+    try {
+      return localStorage.getItem(periodStorageKey(type)) || "all";
+    } catch {
+      return "all";
+    }
+  }
+
+  function setMonthFilter(type, value) {
+    try {
+      localStorage.setItem(periodStorageKey(type), value || "all");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Jul–Jun month options for an Australian financial year id like 2025-26. */
+  function monthsForFy(fy) {
+    const startYear = Number(String(fy || "").slice(0, 4));
+    if (!Number.isFinite(startYear)) return [];
+    const out = [];
+    for (let m = 7; m <= 12; m += 1) {
+      out.push({
+        value: `${startYear}-${String(m).padStart(2, "0")}`,
+        label: `${MONTH_NAMES[m - 1]} ${startYear}`,
+      });
+    }
+    for (let m = 1; m <= 6; m += 1) {
+      const y = startYear + 1;
+      out.push({
+        value: `${y}-${String(m).padStart(2, "0")}`,
+        label: `${MONTH_NAMES[m - 1]} ${y}`,
+      });
+    }
+    return out;
+  }
+
+  function entryMonthKey(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})/);
+    return m ? `${m[1]}-${m[2]}` : null;
   }
 
   /** Shared top-right actions container in a ledger panel header. */
@@ -1329,9 +1401,49 @@
         } catch {
           /* ignore */
         }
-        applyLedgerFyFilter(cfg);
+        applyLedgerFilters(cfg);
       }
     });
+  }
+
+  /** Month dropdown within the selected FY — shortens long ledgers. */
+  function ensureMonthPicker(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    const box = ledgerActions(header);
+    if (box.querySelector(".ledger-month-picker")) return;
+
+    const picker = document.createElement("div");
+    picker.className = "fy-picker gallery-fy-picker ledger-month-picker";
+    picker.innerHTML =
+      `<label for="ledger-month-${cfg.type}">Show</label>` +
+      `<select id="ledger-month-${cfg.type}" class="ledger-month-select" aria-label="Filter ledger by month"></select>`;
+    box.appendChild(picker);
+    const select = picker.querySelector("select");
+    select.addEventListener("change", () => {
+      setMonthFilter(cfg.type, select.value);
+      applyLedgerFilters(cfg);
+    });
+  }
+
+  function syncMonthOptions(cfg, select) {
+    if (!select) return;
+    const fy = currentFy();
+    const months = monthsForFy(fy);
+    const prev = getMonthFilter(cfg.type);
+    const valid = prev === "all" || months.some((m) => m.value === prev);
+    const chosen = valid ? prev : "all";
+    if (!valid) setMonthFilter(cfg.type, "all");
+
+    const opts = [`<option value="all">All year</option>`].concat(
+      months.map((m) => `<option value="${esc(m.value)}">${esc(m.label)}</option>`)
+    );
+    const html = opts.join("");
+    if (select.innerHTML !== html) select.innerHTML = html;
+    if (select.value !== chosen) select.value = chosen;
   }
 
   /** Mirror the top FY picker's options and select the active year. */
@@ -1351,18 +1463,21 @@
     }
   }
 
-  /** Show only the selected FY's rows and recompute the ledger's total. */
-  function applyLedgerFyFilter(cfg) {
+  /** Show only the selected FY (+ optional month) rows and recompute totals. */
+  function applyLedgerFilters(cfg) {
     const list = document.getElementById(cfg.listId);
     if (!list) return;
     const table = list.querySelector(cfg.tableSel);
     if (!table) return;
     const panel = list.closest(".panel");
-    const select = panel && panel.querySelector(".ledger-fy-select");
-    if (select) syncFyOptions(select);
+    const fySelect = panel && panel.querySelector(".ledger-fy-select");
+    const monthSelect = panel && panel.querySelector(".ledger-month-select");
+    if (fySelect) syncFyOptions(fySelect);
+    if (monthSelect) syncMonthOptions(cfg, monthSelect);
 
     const fy = currentFy();
     if (!fy) return;
+    const month = getMonthFilter(cfg.type);
 
     let sum = 0;
     let shown = 0;
@@ -1372,7 +1487,10 @@
       const id = tr.getAttribute(cfg.idAttr);
       const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
       const entry = findEntry(cfg.type, id);
-      const match = isDraft || (entry && fyForDate(entry.date) === fy);
+      let match = isDraft || (entry && fyForDate(entry.date) === fy);
+      if (match && !isDraft && month !== "all" && entry) {
+        match = entryMonthKey(entry.date) === month;
+      }
       tr.style.display = match ? "" : "none";
       if (match) {
         shown += 1;
@@ -1380,22 +1498,29 @@
       }
     });
 
-    updateLedgerTotal(cfg, table, fy, sum);
-    updateEmptyNote(cfg, panel, fy, shown, total);
+    updateLedgerTotal(cfg, table, fy, month, sum);
+    updateEmptyNote(cfg, panel, fy, month, shown, total);
   }
 
-  function updateLedgerTotal(cfg, table, fy, sum) {
-    const label = `Financial year total (FY ${String(fy).replace("-", "–")})`;
+  function monthLabel(fy, month) {
+    if (!month || month === "all") {
+      return `Financial year total (FY ${String(fy).replace("-", "–")})`;
+    }
+    const hit = monthsForFy(fy).find((m) => m.value === month);
+    return hit ? `${hit.label} total` : `Month total (${month})`;
+  }
+
+  function updateLedgerTotal(cfg, table, fy, month, sum) {
+    const label = monthLabel(fy, month);
     if (cfg.type === "expense") {
       const row = table.querySelector("tfoot tr.running-total-row");
       if (!row) return;
       const labelCell = row.querySelector("td");
       const amountCell = row.querySelector("td.amount");
-      if (labelCell) labelCell.innerHTML = `<strong>${label}</strong>`;
+      if (labelCell) labelCell.innerHTML = `<strong>${esc(label)}</strong>`;
       if (amountCell) amountCell.innerHTML = `<strong>${fmtCurrency(sum)}</strong>`;
       return;
     }
-    // Income ledger has no footer in app.js — add one for the FY total.
     let tfoot = table.querySelector("tfoot.ledger-fy-foot");
     if (!tfoot) {
       const cols = table.querySelectorAll("thead th").length || 6;
@@ -1406,11 +1531,11 @@
       table.appendChild(tfoot);
     }
     const tr = tfoot.querySelector("tr");
-    tr.querySelector("td").innerHTML = `<strong>${label}</strong>`;
+    tr.querySelector("td").innerHTML = `<strong>${esc(label)}</strong>`;
     tr.querySelector("td.amount").innerHTML = `<strong>${fmtCurrency(sum)}</strong>`;
   }
 
-  function updateEmptyNote(cfg, panel, fy, shown, total) {
+  function updateEmptyNote(cfg, panel, fy, month, shown, total) {
     if (!panel) return;
     let note = panel.querySelector(".ledger-fy-empty");
     if (total > 0 && shown === 0) {
@@ -1421,7 +1546,12 @@
         (list || panel).insertAdjacentElement("afterend", note);
       }
       const kind = cfg.type === "income" ? "income" : "expenses";
-      note.textContent = `No ${kind} recorded for FY ${String(fy).replace("-", "–")}. Switch the financial year above to see other years.`;
+      if (month && month !== "all") {
+        const hit = monthsForFy(fy).find((m) => m.value === month);
+        note.textContent = `No ${kind} for ${hit ? hit.label : month}. Choose “All year” or another month.`;
+      } else {
+        note.textContent = `No ${kind} recorded for FY ${String(fy).replace("-", "–")}. Switch the financial year above to see other years.`;
+      }
       note.hidden = false;
     } else if (note) {
       note.hidden = true;
@@ -1433,9 +1563,7 @@
     btn.disabled = true;
     btn.textContent = "Refreshing…";
     try {
-      const base =
-        typeof API !== "undefined" && API ? API : `${window.location.origin}/api/haulage`;
-      const res = await fetch(`${base}/maintenance/refresh-invoice-dates`, {
+      const res = await fetch(`${apiBase()}/maintenance/refresh-invoice-dates`, {
         method: "POST",
         headers: { "content-type": "application/json" },
       });
@@ -1471,11 +1599,191 @@
     });
   }
 
+  /** Inject Edit beside Delete on each saved ledger row. */
+  function injectEditButtons(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const attr = `data-edit-${cfg.type}`;
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      const id = tr.getAttribute(cfg.idAttr);
+      if (!id || id === "__draft__" || tr.classList.contains("draft-row")) return;
+      const actions = tr.querySelector(".row-actions");
+      if (!actions || actions.querySelector(`[${attr}]`)) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn secondary small";
+      btn.textContent = "Edit";
+      btn.setAttribute(attr, id);
+      btn.title = `Edit this ${cfg.type} entry`;
+      const del = actions.querySelector(`[data-del-${cfg.type}]`);
+      if (del) actions.insertBefore(btn, del);
+      else actions.appendChild(btn);
+    });
+  }
+
+  function categoryOptionsHtml(selected) {
+    try {
+      const cats =
+        (state.standards &&
+          (state.standards.specialClaimCategories || state.standards.categories)) ||
+        [];
+      const groups = (state.standards && state.standards.categoryGroups) || [];
+      if (typeof buildCategorySelectOptions === "function" && cats.length) {
+        let html = buildCategorySelectOptions(cats, groups);
+        if (selected) {
+          html = html.replace(
+            `value="${selected}"`,
+            `value="${selected}" selected`
+          );
+        }
+        return html;
+      }
+    } catch {
+      /* fall through */
+    }
+    return `<option value="${esc(selected || "")}">${esc(selected || "Choose…")}</option>`;
+  }
+
+  function incomeTypeOptionsHtml(selected) {
+    let types = [];
+    try {
+      types = (state.standards && state.standards.incomeTypes) || [];
+    } catch {
+      types = [];
+    }
+    if (!types.length) {
+      return `<option value="${esc(selected || "")}">${esc(selected || "Choose…")}</option>`;
+    }
+    return types
+      .map((t) => {
+        const id = t.id || t;
+        const label = t.label || String(id).replace(/_/g, " ");
+        const sel = id === selected ? " selected" : "";
+        return `<option value="${esc(id)}"${sel}>${esc(label)}</option>`;
+      })
+      .join("");
+  }
+
+  function closeEditModal() {
+    document.getElementById("enh-ledger-edit-modal")?.remove();
+  }
+
+  function openEditModal(type, id) {
+    const entry = findEntry(type, id);
+    if (!entry) {
+      if (typeof toast === "function") toast("Entry not found — refresh and try again.");
+      return;
+    }
+    closeEditModal();
+
+    const modal = document.createElement("div");
+    modal.id = "enh-ledger-edit-modal";
+    modal.className = "enh-dup-modal enh-ledger-edit-modal";
+
+    const isExpense = type === "expense";
+    const title = isExpense ? "Edit expense" : "Edit income";
+    const fields = isExpense
+      ? `
+        <label>Date<input name="date" type="date" required value="${esc(entry.date || "")}"></label>
+        <label>Category<select name="category" required>${categoryOptionsHtml(entry.category)}</select></label>
+        <label>Amount (AUD)<input name="amount" type="number" step="0.01" min="0" required value="${esc(entry.amount)}"></label>
+        <label>Vendor / business<input name="vendor" type="text" value="${esc(entry.vendor || "")}"></label>
+        <label>ABN<input name="vendorAbn" type="text" inputmode="numeric" value="${esc(entry.vendorAbn || "")}"></label>
+        <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
+        <label>Work-use %<input name="workUsePercent" type="number" min="0" max="100" step="1" value="${esc(entry.workUsePercent ?? 100)}"></label>
+        <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
+        <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
+      `
+      : `
+        <label>Date<input name="date" type="date" required value="${esc(entry.date || "")}"></label>
+        <label>Type<select name="type" required>${incomeTypeOptionsHtml(entry.type)}</select></label>
+        <label>Amount (AUD)<input name="amount" type="number" step="0.01" min="0" required value="${esc(entry.amount)}"></label>
+        <label>Entity / payer<input name="entity" type="text" value="${esc(entry.entity || entry.payer || "")}"></label>
+        <label>Gross total<input name="grossTotal" type="number" step="0.01" min="0" value="${esc(entry.grossTotal ?? entry.amount ?? "")}"></label>
+        <label>Taxable income<input name="taxableIncome" type="number" step="0.01" min="0" value="${esc(entry.taxableIncome ?? entry.amount ?? "")}"></label>
+        <label>GST<input name="gstAmount" type="number" step="0.01" min="0" value="${esc(entry.gstAmount ?? 0)}"></label>
+        <label>Net pay<input name="netPay" type="number" step="0.01" min="0" value="${esc(entry.netPay ?? "")}"></label>
+        <label>Pay period<input name="payPeriod" type="text" value="${esc(entry.payPeriod || "")}"></label>
+        <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
+        <label>Notes<textarea name="summaryNotes" rows="2">${esc(entry.summaryNotes || "")}</textarea></label>
+      `;
+
+    modal.innerHTML = `
+      <div class="enh-dup-backdrop" data-edit-close></div>
+      <div class="enh-dup-card enh-ledger-edit-card" role="dialog" aria-modal="true" aria-labelledby="enh-ledger-edit-title">
+        <h3 id="enh-ledger-edit-title">${esc(title)}</h3>
+        <p class="muted">Change scanned or manual fields, then save. Photo links stay attached.</p>
+        <form id="enh-ledger-edit-form" class="enh-ledger-edit-form">${fields}
+          <div class="enh-dup-actions">
+            <button type="button" class="btn secondary" data-edit-close>Cancel</button>
+            <button type="submit" class="btn">Save changes</button>
+          </div>
+        </form>
+        <p class="enh-edit-error muted" hidden></p>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll("[data-edit-close]").forEach((el) => {
+      el.addEventListener("click", closeEditModal);
+    });
+
+    const form = modal.querySelector("#enh-ledger-edit-form");
+    const errEl = modal.querySelector(".enh-edit-error");
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(form);
+      const payload = {};
+      for (const [key, value] of fd.entries()) payload[key] = value;
+      if (isExpense) {
+        payload.reimbursed = Boolean(form.querySelector('[name="reimbursed"]')?.checked);
+        payload.workUsePercent = Number(payload.workUsePercent);
+        payload.amount = Number(payload.amount);
+      } else {
+        payload.amount = Number(payload.amount);
+        payload.grossTotal = payload.grossTotal === "" ? null : Number(payload.grossTotal);
+        payload.taxableIncome = payload.taxableIncome === "" ? null : Number(payload.taxableIncome);
+        payload.gstAmount = payload.gstAmount === "" ? 0 : Number(payload.gstAmount);
+        payload.netPay = payload.netPay === "" ? null : Number(payload.netPay);
+        payload.payer = payload.entity;
+      }
+
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+      if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+      }
+      try {
+        const res = await fetch(`${apiBase()}/${isExpense ? "expenses" : "income"}/${id}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not save changes.");
+        closeEditModal();
+        if (typeof toast === "function") toast(isExpense ? "Expense updated" : "Income updated");
+        if (typeof refreshAll === "function") await refreshAll();
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message || "Save failed.";
+          errEl.hidden = false;
+        } else if (typeof toast === "function") toast(err.message);
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
   function enhance(cfg) {
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
-    applyLedgerFyFilter(cfg);
+    ensureMonthPicker(cfg);
+    applyLedgerFilters(cfg);
     hideOutsidePeriodTags(cfg);
+    injectEditButtons(cfg);
   }
 
   function start() {
@@ -1496,6 +1804,20 @@
         if (ticks >= 10) clearInterval(iv);
       }, 400);
     }
+
+    document.addEventListener("click", (e) => {
+      const exp = e.target.closest("[data-edit-expense]");
+      if (exp) {
+        e.preventDefault();
+        openEditModal("expense", exp.getAttribute("data-edit-expense"));
+        return;
+      }
+      const inc = e.target.closest("[data-edit-income]");
+      if (inc) {
+        e.preventDefault();
+        openEditModal("income", inc.getAttribute("data-edit-income"));
+      }
+    });
   }
 
   if (document.readyState === "loading") {
