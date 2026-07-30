@@ -111,6 +111,11 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
+- **Login required to write.** Guests (no session) get `403` on mutating API
+  routes — sign in on the Profile tab first. Any signed-in profile can add/edit
+  their own data; admin-only routes (`/admin/*`) still require `Haulage_Admin`.
+  Open without login: `GET`s, `/auth/login`, `/auth/logout`, `/auth/register`,
+  and `/expenses/preview`.
 - **Uploads require login.** `/receipts/scan`, `/receipts/manual`, and
   `/receipts/:id/confirm` return 401 if there is no session — files save into
   `data/users/<name>.json` + `data/receipts/`. Receipts store `purpose`
