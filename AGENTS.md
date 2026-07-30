@@ -112,9 +112,14 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
 - **ABN + vendor memory.** Scans use `lib/vendor-enrichment.js`: ABN is the key
-  reference to remembered business names; after confirm, the vendor’s default
-  category (meals, training, …) is stored and applied on later scans. Text
-  heuristics also suggest categories when OCR is weak (`other_work`).
+  reference to remembered business names. Once ABN/name establish a known
+  **business type** (e.g. Woolworths/Coles/ALDI → `groceries_travel`, Bunnings →
+  `tools_equipment`), that category always overrides weak OCR (`other_work`) and
+  conflicting remembered defaults. Otherwise vendor memory + text heuristics apply.
+- **“Outside selected period” on expenses.** The expense ledger tag means the
+  row’s date is outside the day/week/month/year filter used for expense totals
+  — not a vendor/ABN error. `enhancements.js` moves it onto the Date cell with
+  clearer wording (app.js still renders the original tag in Vendor / details).
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.

@@ -3,6 +3,7 @@ const {
   extractAbnFromText,
   findKnownVendor,
   suggestCategoryFromText,
+  inferBusinessTypeCategory,
   enrichOcrFromVendors,
   rememberVendor,
   formatAbn,
@@ -31,6 +32,26 @@ describe("suggestCategoryFromText", () => {
     expect(suggestCategoryFromText("Heavy vehicle driver training course", "HV Training Co")).toBe(
       "training_education"
     );
+  });
+
+  it("suggests groceries_travel for supermarket wording", () => {
+    expect(suggestCategoryFromText("TOTAL 45.00", "Woolworths")).toBe("groceries_travel");
+  });
+});
+
+describe("inferBusinessTypeCategory", () => {
+  it("maps Woolworths / Coles by name to groceries_travel", () => {
+    expect(inferBusinessTypeCategory({ name: "Woolworths" })).toBe("groceries_travel");
+    expect(inferBusinessTypeCategory({ name: "Coles Supermarket" })).toBe("groceries_travel");
+    expect(inferBusinessTypeCategory({ name: "ALDI" })).toBe("groceries_travel");
+  });
+
+  it("maps Woolworths Group ABN to groceries_travel", () => {
+    expect(inferBusinessTypeCategory({ abn: "88 000 014 675" })).toBe("groceries_travel");
+  });
+
+  it("maps Bunnings to tools_equipment", () => {
+    expect(inferBusinessTypeCategory({ name: "Bunnings Warehouse" })).toBe("tools_equipment");
   });
 });
 
@@ -81,6 +102,39 @@ describe("enrichOcrFromVendors", () => {
     expect(ocr.vendorAbn).toBe("53 004 085 616");
     expect(ocr.suggestedCategory).toBe("meals");
   });
+
+  it("forces groceries_travel for Woolworths even when OCR says other_work", () => {
+    const ocr = {
+      vendor: "Woolworths",
+      vendorAbn: "",
+      suggestedCategory: "other_work",
+      rawText: "WOOLWORTHS\nABN 88 000 014 675\nTOTAL 62.40",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.suggestedCategory).toBe("groceries_travel");
+    expect(ocr.categorySource).toBe("business_type");
+  });
+
+  it("overrides wrong strong OCR and bad vendor memory with business type", () => {
+    const vendors = [
+      {
+        id: "w1",
+        name: "Woolworths Group",
+        abn: "88000014675",
+        defaultCategory: "tools_equipment",
+      },
+    ];
+    const ocr = {
+      vendor: "Woolworths",
+      vendorAbn: "88 000 014 675",
+      suggestedCategory: "office_admin",
+      rawText: "WOOLWORTHS",
+    };
+    enrichOcrFromVendors(ocr, vendors, "expense");
+    expect(ocr.suggestedCategory).toBe("groceries_travel");
+    expect(ocr.categorySource).toBe("business_type");
+    expect(vendors[0].defaultCategory).toBe("groceries_travel");
+  });
 });
 
 describe("rememberVendor", () => {
@@ -102,6 +156,16 @@ describe("rememberVendor", () => {
     enrichOcrFromVendors(ocr, records.vendors, "expense");
     expect(ocr.vendor).toBe("Roadhouse Cafe");
     expect(ocr.suggestedCategory).toBe("meals");
+  });
+
+  it("stores groceries_travel for Woolworths even if confirm category was other_work", () => {
+    const records = { vendors: [] };
+    const v = rememberVendor(records, {
+      name: "Woolworths",
+      abn: "88 000 014 675",
+      category: "other_work",
+    });
+    expect(v.defaultCategory).toBe("groceries_travel");
   });
 });
 
