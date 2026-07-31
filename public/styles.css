@@ -12,7 +12,9 @@
   --red: #f87171;
   --blue: #60a5fa;
   --radius: 14px;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-brand: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-family: var(--font-ui);
   color-scheme: dark;
 }
 
@@ -22,6 +24,210 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
 .hidden { display: none !important; }
 .muted { color: var(--text-dim); }
 .small { font-size: 0.82rem; }
+
+/* --- Title / login gate ------------------------------------------------- */
+body.auth-locked {
+  overflow: hidden;
+}
+body.auth-locked .app-shell {
+  visibility: hidden;
+  pointer-events: none;
+}
+body:not(.auth-locked) .title-screen {
+  display: none !important;
+}
+
+.title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: clamp(28px, 6vw, 72px);
+  overflow: hidden;
+  isolation: isolate;
+}
+.title-screen-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(120% 80% at 70% 10%, rgba(245, 158, 11, 0.22), transparent 55%),
+    radial-gradient(90% 60% at 15% 80%, rgba(96, 165, 250, 0.12), transparent 50%),
+    linear-gradient(165deg, #08101c 0%, #0e1626 38%, #152036 72%, #1a1205 100%);
+  animation: title-sky-shift 14s ease-in-out infinite alternate;
+}
+.title-screen-road {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(8, 16, 28, 0.35) 18%, #0a1220 55%, #070d18 100%);
+  clip-path: polygon(0 28%, 100% 8%, 100% 100%, 0 100%);
+}
+.title-screen-road::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 48%;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--accent) 0 28px,
+    transparent 28px 52px
+  );
+  opacity: 0.55;
+  transform: perspective(240px) rotateX(48deg) scaleY(0.7);
+  animation: title-road-scroll 1.8s linear infinite;
+}
+.title-screen-truck {
+  position: absolute;
+  right: max(-4vw, -40px);
+  bottom: 6%;
+  width: min(58vw, 520px);
+  height: auto;
+  z-index: 2;
+  opacity: 0.92;
+  filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 28px rgba(245, 158, 11, 0.25));
+  animation: title-truck-drift 5.5s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.title-screen-content {
+  position: relative;
+  z-index: 3;
+  width: min(440px, 100%);
+  animation: title-content-in 0.7s ease both;
+}
+.title-screen-brand {
+  margin: 0 0 10px;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(2.8rem, 8vw, 4.4rem);
+  line-height: 0.92;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
+}
+.title-screen-brand::after {
+  content: "";
+  display: block;
+  width: 3.2rem;
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  animation: title-accent-pulse 2.4s ease-in-out infinite;
+}
+.title-screen-headline {
+  margin: 18px 0 10px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: clamp(1.25rem, 2.6vw, 1.55rem);
+  line-height: 1.25;
+  color: var(--text);
+  max-width: 22ch;
+}
+.title-screen-sub {
+  margin: 0 0 22px;
+  color: var(--text-dim);
+  font-size: 1rem;
+  max-width: 36ch;
+}
+.title-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 360px;
+}
+.title-auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+.title-auth-form input {
+  font: inherit;
+  color: var(--text);
+  background: rgba(14, 22, 38, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  backdrop-filter: blur(6px);
+}
+.title-auth-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+.title-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+.title-auth-actions .btn.primary {
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35);
+  animation: title-cta-glow 2.8s ease-in-out infinite;
+}
+.title-auth-message {
+  min-height: 1.3em;
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+.title-auth-message.is-error { color: var(--red); }
+
+@keyframes title-content-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes title-truck-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-14px, -6px, 0); }
+}
+@keyframes title-road-scroll {
+  from { background-position: 0 0; }
+  to { background-position: 80px 0; }
+}
+@keyframes title-sky-shift {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.08); }
+}
+@keyframes title-accent-pulse {
+  0%, 100% { width: 3.2rem; opacity: 1; }
+  50% { width: 4.4rem; opacity: 0.85; }
+}
+@keyframes title-cta-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2); }
+  50% { box-shadow: 0 0 22px 2px rgba(245, 158, 11, 0.35); }
+}
+
+@media (max-width: 720px) {
+  .title-screen {
+    align-items: center;
+    padding: 28px 20px 40px;
+  }
+  .title-screen-truck {
+    width: min(88vw, 360px);
+    right: 50%;
+    bottom: auto;
+    top: 8%;
+    transform: translateX(50%);
+    opacity: 0.35;
+    animation: none;
+  }
+  .title-screen-content {
+    width: 100%;
+  }
+  .title-screen-headline { max-width: none; }
+}
 
 /* Layout shell */
 .app-shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
@@ -33,7 +239,18 @@ body { background: var(--bg); color: var(--text); line-height: 1.5; }
   top: 0;
   height: 100vh;
 }
-.sidebar-brand { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-weight: 800; font-size: 1.2rem; padding: 0 8px 18px; }
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 0 8px 18px;
+}
 .sidebar-brand img { width: 30px; height: 30px; }
 .brand-signed-in { flex-basis: 100%; font-style: italic; font-weight: 500; font-size: 0.72rem; color: var(--text-dim); margin-top: 2px; }
 .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }

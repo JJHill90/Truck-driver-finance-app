@@ -4,15 +4,56 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>Haulage — Truck Driver Finance</title>
+    <title>Haulage Finance — Truck Driver Finance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="auth-locked">
+    <!-- Title / login gate — shown until a session exists -->
+    <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
+      <div class="title-screen-sky" aria-hidden="true"></div>
+      <div class="title-screen-road" aria-hidden="true"></div>
+      <img class="title-screen-truck" src="./truck.svg" alt="" aria-hidden="true" />
+      <div class="title-screen-content">
+        <p id="title-brand" class="title-screen-brand">Haulage Finance</p>
+        <h1 class="title-screen-headline">Track the road. File with confidence.</h1>
+        <p class="title-screen-sub">
+          Work expenses, remittances and EOFY estimates built for Australian truck drivers.
+        </p>
+        <form id="title-auth-form" class="title-auth-form" autocomplete="on">
+          <label>
+            Username
+            <input id="title-auth-username" name="username" autocomplete="username" placeholder="e.g. dave.hill" />
+          </label>
+          <label>
+            Password
+            <input
+              id="title-auth-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="At least 6 characters"
+            />
+          </label>
+          <div class="title-auth-actions">
+            <button type="submit" class="btn primary" id="title-auth-login">Log in</button>
+            <button type="button" class="btn secondary" id="title-auth-register">Create profile</button>
+          </div>
+        </form>
+        <p id="title-auth-message" class="title-auth-message" role="status"></p>
+      </div>
+    </div>
+
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
-          <span>Haulage</span>
+          <span>Haulage Finance</span>
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn" data-view="profile">Profile</button>
