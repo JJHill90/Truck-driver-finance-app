@@ -1,6 +1,6 @@
 # Truck-driver-finance-app
 
-**Haulage** — a finance tool for Australian truck drivers to track work expenses
+**Haulage Finance** — a finance tool for Australian truck drivers to track work expenses
 and income/remittances, capture receipts, and produce a live EOFY performance
 statement, tax estimate and financial forecast.
 

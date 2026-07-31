@@ -2,10 +2,10 @@
 
 ## Project overview
 
-**Haulage** (repo `Truck-driver-finance-app`) is a finance tool for Australian
-truck drivers: work expenses, income/remittances, receipt/payslip OCR, a live
-EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
-`lint`, `test`) are in `README.md`.
+**Haulage Finance** (repo `Truck-driver-finance-app`) is a finance tool for
+Australian truck drivers: work expenses, income/remittances, receipt/payslip
+OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
+`dev`, `lint`, `test`) are in `README.md`.
 
 - Frontend: framework-free SPA in `public/app.js` (provided verbatim). The
   backend + `public/index.html` exist to satisfy the exact DOM ids and API
@@ -20,6 +20,11 @@ EOFY report, tax estimate and forecast. Standard commands (`start`, `dev`,
   Listens on port `3000` bound to `0.0.0.0`; open the UI at
   **`http://localhost:3000/haulage/`** (root `/` 302-redirects there). `PORT`
   overrides the port.
+- **Title screen gate.** `#title-screen` covers the app until `/auth/me` has a
+  user; `body.auth-locked` hides `.app-shell`. Login/register on the title form
+  (same `/auth/*` APIs) then reload into the main menu. Logout returns to the
+  title screen. Branding is **Haulage Finance** (Figtree + Barlow Condensed,
+  same navy/amber palette).
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API.

@@ -397,6 +397,79 @@
     el.style.color = isError ? "var(--red)" : "var(--text-dim)";
   }
 
+  function setTitleMessage(text, isError) {
+    const el = byId("title-auth-message");
+    if (!el) return;
+    el.textContent = text || "";
+    el.classList.toggle("is-error", Boolean(isError));
+  }
+
+  function unlockApp() {
+    document.body.classList.remove("auth-locked");
+    const screen = byId("title-screen");
+    if (screen) screen.setAttribute("aria-hidden", "true");
+  }
+
+  function lockApp() {
+    document.body.classList.add("auth-locked");
+    const screen = byId("title-screen");
+    if (screen) screen.setAttribute("aria-hidden", "false");
+  }
+
+  function readTitleCreds() {
+    return {
+      username: (byId("title-auth-username") || {}).value || "",
+      password: (byId("title-auth-password") || {}).value || "",
+    };
+  }
+
+  function wireTitleScreen() {
+    const form = byId("title-auth-form");
+    const loginBtn = byId("title-auth-login");
+    const registerBtn = byId("title-auth-register");
+    if (!form || form.dataset.wired) return;
+    form.dataset.wired = "1";
+
+    async function doLogin() {
+      setTitleMessage("Logging in…");
+      try {
+        await apiPost("/auth/login", readTitleCreds());
+        resetReviewShown();
+        window.location.reload();
+      } catch (e) {
+        setTitleMessage(e.message, true);
+      }
+    }
+
+    async function doRegister() {
+      setTitleMessage("Creating profile…");
+      try {
+        await apiPost("/auth/register", readTitleCreds());
+        resetReviewShown();
+        window.location.reload();
+      } catch (e) {
+        setTitleMessage(e.message, true);
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      void doLogin();
+    });
+    if (loginBtn) {
+      loginBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        void doLogin();
+      });
+    }
+    if (registerBtn) {
+      registerBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        void doRegister();
+      });
+    }
+  }
+
   function updateBrandSignedIn(username) {
     const brand = document.querySelector(".sidebar-brand");
     if (!brand) return;
@@ -829,20 +902,29 @@
 
   async function start() {
     wire();
+    wireTitleScreen();
     wirePdfDownload();
     try {
       const me = await apiGet("/auth/me");
-      showAuthState(me.user);
-      if (me.user && me.user.isAdmin) await loadAdminUsers();
-      // Only fetch/show the review banner the first time this session — once on
-      // login — so it does not keep reappearing as uploads are added/updated.
-      if (!reviewAlreadyShown()) {
-        const alertData = await apiGet("/alerts");
-        renderAlerts(alertData.alerts, alertData.user);
-        markReviewShown();
+      if (me.user && me.user.username) {
+        unlockApp();
+        showAuthState(me.user);
+        if (me.user.isAdmin) await loadAdminUsers();
+        // Only fetch/show the review banner the first time this session — once on
+        // login — so it does not keep reappearing as uploads are added/updated.
+        if (!reviewAlreadyShown()) {
+          const alertData = await apiGet("/alerts");
+          renderAlerts(alertData.alerts, alertData.user);
+          markReviewShown();
+        }
+      } else {
+        lockApp();
+        showAuthState(null);
+        // Focus the title login field for keyboard users.
+        byId("title-auth-username")?.focus();
       }
     } catch {
-      /* non-fatal */
+      lockApp();
     }
   }
 
