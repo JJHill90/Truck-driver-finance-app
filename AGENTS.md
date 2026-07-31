@@ -25,6 +25,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   (same `/auth/*` APIs) then reload into the main menu. Logout returns to the
   title screen. Branding is **Haulage Finance** (Figtree + Barlow Condensed,
   same navy/amber palette).
+- **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
+  from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
+  Auto-updates as salary is typed; saved as `profile.licenceClass`. This is
+  separate from ATO travel **salary bands** (band1/2/3), which the tax
+  calculator still derives from salary for allowance caps.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API.

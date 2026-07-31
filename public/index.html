@@ -365,14 +365,18 @@
               <label>Name<input type="text" name="name" placeholder="Full name" /></label>
               <label>Driver type<select id="driver-type" name="driverType"></select></label>
               <label>Employer<input type="text" name="employer" placeholder="Company" /></label>
-              <label>Annual salary ($)<input type="number" name="annualSalary" step="0.01" min="0" /></label>
-              <label>Salary band
-                <select name="salaryBand">
-                  <option value="band1">Band 1</option>
-                  <option value="band2">Band 2</option>
-                  <option value="band3">Band 3</option>
+              <label>Annual salary ($)<input type="number" name="annualSalary" step="0.01" min="0" id="profile-annual-salary" /></label>
+              <label>Licence class
+                <select name="licenceClass" id="profile-licence-class" aria-label="Licence class from salary">
+                  <option value="lr_mr">LR/MR — Light/Medium Rigid ($58k–$75k)</option>
+                  <option value="hr">HR — Heavy Rigid ($70k–$88k)</option>
+                  <option value="hc">HC — Heavy Combination ($79k–$110k)</option>
+                  <option value="mc">MC — Multi-Combination ($110k–$160k+)</option>
                 </select>
               </label>
+              <p class="muted small span-2" id="licence-class-hint">
+                Licence class updates from annual salary (LR/MR → HR → HC → MC).
+              </p>
               <label>Financial year<select id="profile-financial-year" name="financialYear"></select></label>
               <label class="checkbox span-2"><input type="checkbox" name="tfnSupplied" /> TFN supplied to employer</label>
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>

@@ -2204,3 +2204,88 @@
     start();
   }
 })();
+
+/* --- Profile licence class from annual salary -----------------------------
+ * Replaces Band 1/2/3 with LR/MR → HR → HC → MC. When the driver enters
+ * annual salary (especially on first use), the licence class select follows
+ * progressive dollar floors. ATO travel "salary bands" stay separate (derived
+ * in the tax calculator from salary, not this UI field).
+ */
+(function () {
+  "use strict";
+
+  const FLOORS = [
+    { id: "mc", min: 110000, label: "MC" },
+    { id: "hc", min: 79000, label: "HC" },
+    { id: "hr", min: 70000, label: "HR" },
+    { id: "lr_mr", min: 0, label: "LR/MR" },
+  ];
+
+  const HINTS = {
+    lr_mr: "LR/MR — typically $58k–$75k (local couriers, light distribution).",
+    hr: "HR — typically $70k–$88k (local freight, bus, waste).",
+    hc: "HC — typically $79k–$110k (semi-trailers / B-doubles).",
+    mc: "MC — typically $110k–$160k+ (road trains, interstate linehaul).",
+  };
+
+  function licenceFromSalary(salary) {
+    const n = Number(salary);
+    const amount = Number.isFinite(n) && n > 0 ? n : 0;
+    for (const row of FLOORS) {
+      if (amount >= row.min) return row.id;
+    }
+    return "lr_mr";
+  }
+
+  function setHint(id) {
+    const hint = document.getElementById("licence-class-hint");
+    if (!hint) return;
+    hint.textContent =
+      HINTS[id] ||
+      "Licence class updates from annual salary (LR/MR → HR → HC → MC).";
+  }
+
+  function syncLicenceFromSalary() {
+    const salaryInput =
+      document.getElementById("profile-annual-salary") ||
+      document.querySelector('#profile-form input[name="annualSalary"]');
+    const select = document.getElementById("profile-licence-class");
+    if (!salaryInput || !select) return;
+    const next = licenceFromSalary(salaryInput.value);
+    if (select.value !== next) select.value = next;
+    setHint(next);
+  }
+
+  function start() {
+    const salaryInput =
+      document.getElementById("profile-annual-salary") ||
+      document.querySelector('#profile-form input[name="annualSalary"]');
+    const select = document.getElementById("profile-licence-class");
+    if (!salaryInput || !select) return;
+
+    // Salary drives the class (first use and later edits). Manual tweaks are
+    // allowed, but typing a new salary re-applies the threshold rule.
+    salaryInput.addEventListener("input", syncLicenceFromSalary);
+    salaryInput.addEventListener("change", syncLicenceFromSalary);
+    select.addEventListener("change", () => setHint(select.value));
+
+    // After app.js populates the form from saved profile, align class to salary.
+    syncLicenceFromSalary();
+    let ticks = 0;
+    let lastSalary = salaryInput.value;
+    const iv = setInterval(() => {
+      ticks += 1;
+      if (salaryInput.value !== lastSalary || ticks <= 3) {
+        lastSalary = salaryInput.value;
+        syncLicenceFromSalary();
+      }
+      if (ticks >= 20) clearInterval(iv);
+    }, 300);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
