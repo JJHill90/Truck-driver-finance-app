@@ -19,6 +19,11 @@ const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const { refineExpenseDetectedTotals } = require("./lib/expense-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
+const {
+  listLicenceClasses,
+  getLicenceClassForSalary,
+  normalizeLicenceClassId,
+} = require("./lib/licence-class");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -464,6 +469,7 @@ api.get("/standards", (_req, res) => {
     categoryGroups: CATEGORY_GROUPS,
     incomeTypes: listMenuIncomeTypes(),
     driverTypes: DRIVER_TYPES,
+    licenceClasses: listLicenceClasses(),
     financialYear: getCurrentFinancialYear(),
   });
 });
@@ -481,7 +487,18 @@ api.get("/records", (req, res) => {
 // --- Profile -------------------------------------------------------------
 api.put("/profile", (req, res) => {
   const records = getRecords(req);
-  const profile = storage.updateProfile(records, req.body || {});
+  const body = { ...(req.body || {}) };
+  if (body.annualSalary != null && body.annualSalary !== "") {
+    body.annualSalary = Number(body.annualSalary);
+  }
+  // Licence class (LR/MR → MC) follows annual salary when omitted or invalid.
+  const fromSalary = getLicenceClassForSalary(body.annualSalary ?? records.profile?.annualSalary);
+  const normalised = normalizeLicenceClassId(body.licenceClass);
+  body.licenceClass = normalised || fromSalary;
+  // Drop legacy Band 1/2/3 UI field if a client still posts it — ATO travel
+  // bands are derived from salary in the tax calculator, not stored here.
+  delete body.salaryBand;
+  const profile = storage.updateProfile(records, body);
   persist(req);
   res.json({ profile });
 });
