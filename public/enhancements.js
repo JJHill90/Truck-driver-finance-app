@@ -981,9 +981,19 @@
     const total = income + expenses;
     const incPct = total > 0 ? (income / total) * 100 : 0;
 
-    // Preserve the substantiation message + any warnings app.js just wrote.
+    // Preserve the substantiation message. Drop dashboard-noise warnings such
+    // as "Unknown expense category." — those are not useful on this page.
     const msg = (host.querySelector("p.muted") && host.querySelector("p.muted").textContent) || "";
-    const warn = (host.querySelector(".warning-list") && host.querySelector(".warning-list").outerHTML) || "";
+    const warnList = host.querySelector(".warning-list");
+    let warn = "";
+    if (warnList) {
+      const kept = [...warnList.querySelectorAll("li")].filter(
+        (li) => !/unknown\s+expense\s+categor/i.test(li.textContent || "")
+      );
+      if (kept.length) {
+        warn = `<ul class="warning-list">${kept.map((li) => li.outerHTML).join("")}</ul>`;
+      }
+    }
     const afterTax =
       latest.taxEstimate && latest.taxEstimate.totalTax != null
         ? income - Number(latest.taxEstimate.totalTax)
