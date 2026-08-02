@@ -125,10 +125,13 @@ function applyResolvedDocumentDate(ocrResult, purpose, payPeriod) {
     purpose: purpose === "income" ? "income" : "expense",
     payPeriod,
   });
-  if (resolved) ocrResult.date = resolved;
-  else if (ocrResult.date) {
-    const iso = toIsoAusDate(ocrResult.date);
-    if (iso) ocrResult.date = iso;
+  if (resolved) {
+    ocrResult.date = resolved;
+  } else {
+    // Drop far-future / unparsable OCR dates (e.g. 20/07/70 → 2070) so the
+    // confirm form falls back to today instead of inventing FY 2070-71.
+    const iso = ocrResult.date ? toIsoAusDate(ocrResult.date) : null;
+    ocrResult.date = iso || null;
   }
   return ocrResult.date || null;
 }
@@ -137,6 +140,7 @@ function normalizePayloadDate(payload) {
   if (!payload || payload.date == null || payload.date === "") return payload;
   const iso = toIsoAusDate(payload.date);
   if (iso) payload.date = iso;
+  else payload.date = "";
   return payload;
 }
 

@@ -3,23 +3,36 @@ const {
   financialYearForAusDate,
   extractBestDocumentDate,
   resolveDocumentDate,
+  expandTwoDigitYear,
+  isPlausibleDocumentYear,
 } = require("./lib/aus-date");
+
+/** Fixed "today" so year-window tests do not drift. */
+const NOW = new Date(2026, 7, 2); // 2 Aug 2026
 
 describe("toIsoAusDate", () => {
   it("treats DD/MM/YYYY as Australian (08/05/2026 → 8 May 2026)", () => {
-    expect(toIsoAusDate("08/05/2026")).toBe("2026-05-08");
-    expect(toIsoAusDate("8/5/26")).toBe("2026-05-08");
-    expect(toIsoAusDate("08.05.2026")).toBe("2026-05-08");
+    expect(toIsoAusDate("08/05/2026", NOW)).toBe("2026-05-08");
+    expect(toIsoAusDate("8/5/26", NOW)).toBe("2026-05-08");
+    expect(toIsoAusDate("08.05.2026", NOW)).toBe("2026-05-08");
   });
 
   it("accepts ISO and long AU forms", () => {
-    expect(toIsoAusDate("2026-05-08")).toBe("2026-05-08");
-    expect(toIsoAusDate("8 May 2026")).toBe("2026-05-08");
+    expect(toIsoAusDate("2026-05-08", NOW)).toBe("2026-05-08");
+    expect(toIsoAusDate("8 May 2026", NOW)).toBe("2026-05-08");
   });
 
   it("rejects impossible calendar dates", () => {
-    expect(toIsoAusDate("32/13/2026")).toBeNull();
-    expect(toIsoAusDate("2026-13-01")).toBeNull();
+    expect(toIsoAusDate("32/13/2026", NOW)).toBeNull();
+    expect(toIsoAusDate("2026-13-01", NOW)).toBeNull();
+  });
+
+  it("rejects far-future OCR years (20/07/70 → not 2070)", () => {
+    expect(expandTwoDigitYear(70, NOW)).toBeNull();
+    expect(isPlausibleDocumentYear(2070, NOW)).toBe(false);
+    expect(toIsoAusDate("20/07/70", NOW)).toBeNull();
+    expect(toIsoAusDate("2070-07-20", NOW)).toBeNull();
+    expect(toIsoAusDate("20/07/26", NOW)).toBe("2026-07-20");
   });
 });
 
@@ -78,5 +91,29 @@ describe("extractBestDocumentDate / resolveDocumentDate", () => {
     expect(resolveDocumentDate({ ocrDate: "2026-05-08", rawText: text, purpose: "expense" })).toBe(
       "2026-05-08"
     );
+  });
+
+  it("does not invent FY 2070 from an OCR year misread as 70", () => {
+    const text = "WOOLWORTHS\n20/07/70\nTOTAL $62.40";
+    const resolved = resolveDocumentDate({
+      ocrDate: "2070-07-20",
+      rawText: text,
+      purpose: "expense",
+      now: NOW,
+    });
+    expect(resolved).toBeNull();
+    expect(toIsoAusDate("2070-07-20", NOW)).toBeNull();
+  });
+
+  it("prefers a plausible date when OCR also offers a far-future year", () => {
+    const text = "Receipt date 20/07/26\nPrinted 20/07/70\nTOTAL $18.00";
+    const resolved = resolveDocumentDate({
+      ocrDate: "2070-07-20",
+      rawText: text,
+      purpose: "expense",
+      now: NOW,
+    });
+    expect(resolved).toBe("2026-07-20");
+    expect(financialYearForAusDate(resolved, NOW)).toBe("2026-27");
   });
 });

@@ -141,6 +141,9 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   `DD/MM/YYYY` is day/month (so `08/05/2026` → `2026-05-08` → FY **2025-26**).
   Labeled invoice/payment dates beat a leading YTD/period-start date that local
   OCR often grabs first. Confirm/save payloads are coerced the same way.
+  Document years are clamped to **today − 20 … today + 1**; two-digit years
+  outside that window (e.g. OCR `70` → 2070) are rejected so far-future FYs
+  are not created — the confirm date then falls back empty/today.
 - **Login required to write.** Guests (no session) get `403` on mutating API
   routes — sign in on the Profile tab first. Any signed-in profile can add/edit
   their own data; admin-only routes (`/admin/*`) still require `Haulage_Admin`.
