@@ -32,7 +32,10 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   calculator still derives from salary for allowance caps.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
-  `file://`) on the same origin as the API.
+  `file://`) on the same origin as the API. If `fetch` fails, app.js’s default
+  toast says “start the server (npm start)…” — `enhancements.js` intercepts
+  `/api/haulage` network failures, retries once (~1.5s, helps hosted cold starts),
+  and surfaces a connection/wake-up message on non-localhost hosts instead.
 - This project is **CommonJS** (no `"type": "module"` in `package.json`); the
   provided `lib/` modules use `require`/`module.exports`. Keep new server code
   CommonJS.
