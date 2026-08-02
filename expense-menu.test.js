@@ -6,6 +6,8 @@ const {
   ensureMealsRegistered,
   HIDDEN_FROM_MENU,
   LABEL_OVERRIDES,
+  CAR_CLAIM_CATEGORY_IDS,
+  CAR_CLAIM_LABEL_OVERRIDES,
 } = require("./lib/expense-menu");
 const { calcExpenseDeduction } = require("./lib/tax-calculator");
 const { TRUCK_DRIVER_MEALS } = require("./lib/ato-standards");
@@ -29,10 +31,28 @@ describe("expense menu", () => {
     expect(ids).not.toContain("vehicle_truck");
   });
 
-  it("exposes the same filtered menu for special claims", () => {
-    expect(listSpecialClaimCategories().map((c) => c.id)).toEqual(
-      listMenuCategories().map((c) => c.id)
+  it("exposes ATO car-related categories for Car Expenses/Claims", () => {
+    const car = listSpecialClaimCategories();
+    expect(car.map((c) => c.id)).toEqual(CAR_CLAIM_CATEGORY_IDS);
+    expect(car.every((c) => c.group === "Car expenses (ATO work-related)")).toBe(true);
+    expect(car.find((c) => c.id === "vehicle_car").label).toBe(
+      CAR_CLAIM_LABEL_OVERRIDES.vehicle_car
     );
+    expect(car.find((c) => c.id === "parking_tolls").label).toBe(
+      CAR_CLAIM_LABEL_OVERRIDES.parking_tolls
+    );
+    // Laundry and meals stay on the general menu, not car claims.
+    expect(car.map((c) => c.id)).not.toContain("laundry");
+    expect(car.map((c) => c.id)).not.toContain("meals");
+    expect(car.map((c) => c.id)).not.toContain("vehicle_truck");
+  });
+
+  it("keeps car claims independent from the general expense menu", () => {
+    const menuIds = listMenuCategories().map((c) => c.id);
+    const carIds = listSpecialClaimCategories().map((c) => c.id);
+    expect(carIds).not.toEqual(menuIds);
+    expect(menuIds).toContain("meals");
+    expect(menuIds).toContain("laundry");
   });
 
   it("exposes a single Food/Meals category with combined ATO cap", () => {

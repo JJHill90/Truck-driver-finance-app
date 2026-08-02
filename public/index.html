@@ -155,8 +155,11 @@
             </div>
 
             <div class="panel">
-              <div class="panel-header"><h2>Special claims (km / laundry)</h2></div>
-              <p class="muted">Use when the claim needs kilometres, laundry loads, or other method fields.</p>
+              <div class="panel-header"><h2>Car Expenses/Claims</h2></div>
+              <p class="muted">
+                Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
+                Enter date, vendor, amount and notes as usual; choose a car category below.
+              </p>
               <form id="expense-form" class="form-grid">
                 <label>Date<input type="date" name="date" required /></label>
                 <label>Category
@@ -169,7 +172,7 @@
                 <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
                 <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
                 <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save special claim</button>
+                  <button type="submit" class="btn primary">Save car claim</button>
                 </div>
               </form>
               <div id="expense-preview" class="preview-note hidden"></div>
@@ -395,6 +398,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js"></script>
+    <script src="./enhancements.js?v=car-claims-3"></script>
   </body>
 </html>
