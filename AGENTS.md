@@ -136,6 +136,9 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   to the FY dropdown (`localStorage` `haulage-ledger-week-*` /
   `haulage-gallery-week-*`); income ledger still uses a month dropdown
   (`haulage-ledger-month-*`). “All weeks” keeps full-year search.
+  On each new **Monday** (local time), `enhancements.js` registers an empty week
+  slot (`haulage-started-weeks`), sets `haulage-active-week-start`, points expense
+  filters at that week, and toasts — no blank expense row is invented.
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.

@@ -1100,6 +1100,111 @@
   }
 })();
 
+/* --- Shared Mon–Sun week helpers (expense ledger + galleries + Monday roll) */
+(function () {
+  "use strict";
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function toIsoLocal(dt) {
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  }
+
+  function weekStartMonday(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(dt.getTime())) return null;
+    const day = dt.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    return toIsoLocal(dt);
+  }
+
+  function weekEndSunday(startIso) {
+    const m = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    dt.setDate(dt.getDate() + 6);
+    return toIsoLocal(dt);
+  }
+
+  function weekLabel(startIso, endIso) {
+    const a = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const b = String(endIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!a || !b) return startIso || "";
+    const left = `${a[3]}/${a[2]}`;
+    const right = `${b[3]}/${b[2]}`;
+    if (a[1] !== b[1]) return `${left}/${a[1].slice(-2)} – ${right}/${b[1].slice(-2)}`;
+    return `${left} – ${right}`;
+  }
+
+  function currentWeekStart(now = new Date()) {
+    return weekStartMonday(toIsoLocal(now));
+  }
+
+  const STARTED_KEY = "haulage-started-weeks";
+  const ACTIVE_KEY = "haulage-active-week-start";
+
+  function listStartedWeeks() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STARTED_KEY) || "[]");
+      return Array.isArray(raw) ? raw.filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Persist a week slot the driver can open even before any receipt is saved. */
+  function registerStartedWeek(startIso) {
+    if (!startIso || !/^\d{4}-\d{2}-\d{2}$/.test(startIso)) return;
+    const list = listStartedWeeks();
+    if (!list.includes(startIso)) {
+      list.push(startIso);
+      list.sort();
+      try {
+        localStorage.setItem(STARTED_KEY, JSON.stringify(list));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function getActiveWeekStart() {
+    try {
+      return localStorage.getItem(ACTIVE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function setActiveWeekStart(startIso) {
+    if (!startIso || !/^\d{4}-\d{2}-\d{2}$/.test(startIso)) return;
+    try {
+      localStorage.setItem(ACTIVE_KEY, startIso);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  globalThis.HaulageWeeks = {
+    pad2,
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    currentWeekStart,
+    listStartedWeeks,
+    registerStartedWeek,
+    getActiveWeekStart,
+    setActiveWeekStart,
+    ACTIVE_KEY,
+    STARTED_KEY,
+  };
+})();
+
 /* --- Per-financial-year (+ week) selector on the document photo galleries -
  * Segments "Expense receipt photos" and "Income document photos" by Australian
  * financial year. Expense receipts also get a Mon–Sun week dropdown
@@ -1107,7 +1212,7 @@
  */
 (function () {
   "use strict";
-  /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear */
+  /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear, HaulageWeeks */
 
   const GALLERIES = [
     { containerId: "receipt-gallery", purpose: "expense", key: "expense", weekFilter: true },
@@ -1118,44 +1223,14 @@
   const chosenFy = { expense: null, income: null };
   const chosenWeek = { expense: null, income: null };
 
-  function pad2(n) {
-    return String(n).padStart(2, "0");
-  }
-
-  function toIsoLocal(dt) {
-    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
-  }
-
-  /** Monday-start week containing dateStr (YYYY-MM-DD). */
-  function weekStartMonday(dateStr) {
-    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    if (Number.isNaN(dt.getTime())) return null;
-    const day = dt.getDay(); // 0 Sun … 6 Sat
-    const diff = day === 0 ? -6 : 1 - day;
-    dt.setDate(dt.getDate() + diff);
-    return toIsoLocal(dt);
-  }
-
-  function weekEndSunday(startIso) {
-    const m = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    dt.setDate(dt.getDate() + 6);
-    return toIsoLocal(dt);
-  }
-
-  /** Label like 27/07 – 02/08 (adds year when the week crosses years). */
-  function weekLabel(startIso, endIso) {
-    const a = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const b = String(endIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!a || !b) return startIso || "";
-    const left = `${a[3]}/${a[2]}`;
-    const right = `${b[3]}/${b[2]}`;
-    if (a[1] !== b[1]) return `${left}/${a[1].slice(-2)} – ${right}/${b[1].slice(-2)}`;
-    return `${left} – ${right}`;
-  }
+  const {
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    listStartedWeeks,
+    registerStartedWeek,
+  } = HaulageWeeks;
 
   function weekStorageKey(key) {
     return `haulage-gallery-week-${key}`;
@@ -1311,6 +1386,9 @@
       weekPicker.querySelector("select").addEventListener("change", (e) => {
         chosenWeek[cfg.key] = e.target.value;
         setStoredWeek(cfg.key, e.target.value);
+        if (e.target.value && e.target.value !== "all") {
+          registerStartedWeek(e.target.value);
+        }
         applyFilter(cfg);
       });
     }
@@ -1341,11 +1419,19 @@
       if (!start) continue;
       if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
     }
+    // Weeks the app has opened for the driver (including empty new Mondays).
+    for (const start of listStartedWeeks()) {
+      if (fy && fy !== "all" && fyForDate(start) !== fy && fyForDate(weekEndSunday(start)) !== fy) {
+        continue;
+      }
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
     // Always offer the current week when it falls in the selected FY.
     const today = toIsoLocal(new Date());
     const curStart = weekStartMonday(today);
     if (curStart && (!fy || fy === "all" || fyForDate(curStart) === fy || fyForDate(weekEndSunday(curStart)) === fy)) {
       if (!map.has(curStart)) map.set(curStart, { start: curStart, end: weekEndSunday(curStart) });
+      registerStartedWeek(curStart);
     }
     return [...map.values()].sort((a, b) => b.start.localeCompare(a.start));
   }
@@ -1463,6 +1549,15 @@
         if (ticks >= 10) clearInterval(iv);
       }, 400);
     }
+
+    // Monday rollover: jump expense gallery to the new week entry.
+    window.addEventListener("haulage:new-week", (ev) => {
+      const startIso = ev.detail && ev.detail.weekStart;
+      if (!startIso) return;
+      chosenWeek.expense = startIso;
+      setStoredWeek("expense", startIso);
+      applyFilter(GALLERIES[0]);
+    });
   }
 
   if (document.readyState === "loading") {
@@ -1595,42 +1690,14 @@
     }
   }
 
-  function pad2(n) {
-    return String(n).padStart(2, "0");
-  }
-
-  function toIsoLocal(dt) {
-    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
-  }
-
-  function weekStartMonday(dateStr) {
-    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return null;
-    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    if (Number.isNaN(dt.getTime())) return null;
-    const day = dt.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    dt.setDate(dt.getDate() + diff);
-    return toIsoLocal(dt);
-  }
-
-  function weekEndSunday(startIso) {
-    const m = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return null;
-    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    dt.setDate(dt.getDate() + 6);
-    return toIsoLocal(dt);
-  }
-
-  function weekLabel(startIso, endIso) {
-    const a = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    const b = String(endIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!a || !b) return startIso || "";
-    const left = `${a[3]}/${a[2]}`;
-    const right = `${b[3]}/${b[2]}`;
-    if (a[1] !== b[1]) return `${left}/${a[1].slice(-2)} – ${right}/${b[1].slice(-2)}`;
-    return `${left} – ${right}`;
-  }
+  const {
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    listStartedWeeks,
+    registerStartedWeek,
+  } = HaulageWeeks;
 
   /** Jul–Jun month options for an Australian financial year id like 2025-26. */
   function monthsForFy(fy) {
@@ -1766,6 +1833,9 @@
     box.appendChild(picker);
     picker.querySelector("select").addEventListener("change", (e) => {
       setWeekFilter(cfg.type, e.target.value);
+      if (e.target.value && e.target.value !== "all") {
+        registerStartedWeek(e.target.value);
+      }
       applyLedgerFilters(cfg);
     });
   }
@@ -1786,6 +1856,10 @@
       if (!start) continue;
       if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
     }
+    for (const start of listStartedWeeks()) {
+      if (fy && fyForDate(start) !== fy && fyForDate(weekEndSunday(start)) !== fy) continue;
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
     const todayStart = weekStartMonday(toIsoLocal(new Date()));
     if (
       todayStart &&
@@ -1794,6 +1868,7 @@
       if (!map.has(todayStart)) {
         map.set(todayStart, { start: todayStart, end: weekEndSunday(todayStart) });
       }
+      registerStartedWeek(todayStart);
     }
     return [...map.values()].sort((a, b) => b.start.localeCompare(a.start));
   }
@@ -2235,6 +2310,81 @@
         openEditModal("income", inc.getAttribute("data-edit-income"));
       }
     });
+
+    // Monday rollover: switch expense ledger onto the new week entry.
+    window.addEventListener("haulage:new-week", (ev) => {
+      const startIso = ev.detail && ev.detail.weekStart;
+      if (!startIso) return;
+      setWeekFilter("expense", startIso);
+      const expenseCfg = LEDGERS.find((c) => c.type === "expense");
+      if (expenseCfg) enhance(expenseCfg);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Monday week rollover -------------------------------------------------
+ * When the local calendar advances to a new Monday, open an empty week slot
+ * (haulage-started-weeks) and point expense ledger + gallery filters there.
+ * Does not invent blank expense rows — the "entry" is the week dropdown slot.
+ */
+(function () {
+  "use strict";
+
+  const weeks = globalThis.HaulageWeeks;
+  if (!weeks) return;
+
+  const {
+    currentWeekStart,
+    weekEndSunday,
+    weekLabel,
+    registerStartedWeek,
+    getActiveWeekStart,
+    setActiveWeekStart,
+  } = weeks;
+
+  function announce(startIso) {
+    const label = weekLabel(startIso, weekEndSunday(startIso));
+    const msg = `New week started (${label}). Expense views are set to this week — add your first entry when ready.`;
+    if (typeof window.toast === "function") window.toast(msg);
+  }
+
+  function checkRollover() {
+    const thisMon = currentWeekStart();
+    if (!thisMon) return;
+    const prev = getActiveWeekStart();
+    registerStartedWeek(thisMon);
+    if (prev === thisMon) return;
+
+    const rolledFromPriorWeek = Boolean(prev);
+    setActiveWeekStart(thisMon);
+
+    try {
+      localStorage.setItem("haulage-ledger-week-expense", thisMon);
+      localStorage.setItem("haulage-gallery-week-expense", thisMon);
+    } catch {
+      /* ignore */
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("haulage:new-week", { detail: { weekStart: thisMon } })
+    );
+
+    if (rolledFromPriorWeek) announce(thisMon);
+  }
+
+  function start() {
+    checkRollover();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkRollover();
+    });
+    window.addEventListener("focus", () => checkRollover());
+    setInterval(checkRollover, 60_000);
   }
 
   if (document.readyState === "loading") {
