@@ -283,7 +283,11 @@ body:not(.auth-locked) .title-screen {
 .ledger-header-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .ledger-header-actions .refresh-invoice-dates-btn { flex: 0 0 auto; }
 .ledger-header-actions .ledger-fy-picker,
-.ledger-header-actions .ledger-month-picker { margin-left: 0; flex: 0 0 auto; }
+.ledger-header-actions .ledger-month-picker,
+.ledger-header-actions .ledger-week-picker { margin-left: 0; flex: 0 0 auto; }
+.panel-header .gallery-week-picker { flex: 0 0 auto; }
+.gallery-week-picker select,
+.ledger-week-picker select { min-width: 9.5rem; }
 
 /* Ledger edit modal */
 .enh-ledger-edit-card { width: min(520px, 94vw); max-height: 88vh; overflow: auto; }
@@ -381,6 +385,15 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 26px; text-align: center; color: var(--text-dim); }
 .upload-zone.drag-over { border-color: var(--accent); background: rgba(245, 158, 11, 0.08); }
 .upload-zone .btn { margin-top: 10px; }
+/* Slightly larger primary upload control so it reads clearly in the drop zone. */
+.upload-zone .btn.primary,
+#pick-receipt,
+#pick-income {
+  padding: 12px 22px;
+  font-size: 1rem;
+  font-weight: 700;
+  min-width: 10.5rem;
+}
 .preview { margin-top: 14px; }
 .preview img { max-width: 100%; border-radius: 10px; border: 1px solid var(--border); }
 .preview-note { margin-top: 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; }
