@@ -1160,15 +1160,11 @@
   /** Persist a week slot the driver can open even before any receipt is saved. */
   function registerStartedWeek(startIso) {
     if (!startIso || !/^\d{4}-\d{2}-\d{2}$/.test(startIso)) return;
-    const list = listStartedWeeks();
-    if (!list.includes(startIso)) {
-      list.push(startIso);
-      list.sort();
-      try {
-        localStorage.setItem(STARTED_KEY, JSON.stringify(list));
-      } catch {
-        /* ignore */
-      }
+    const list = [...new Set([...listStartedWeeks(), startIso])].sort();
+    try {
+      localStorage.setItem(STARTED_KEY, JSON.stringify(list));
+    } catch {
+      /* ignore */
     }
   }
 
