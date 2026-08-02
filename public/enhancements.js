@@ -1715,10 +1715,8 @@
 
   function categoryOptionsHtml(selected) {
     try {
-      const cats =
-        (state.standards &&
-          (state.standards.specialClaimCategories || state.standards.categories)) ||
-        [];
+      // Ledger edit uses the full expense menu — not the car-only claims list.
+      const cats = (state.standards && state.standards.categories) || [];
       const groups = (state.standards && state.standards.categoryGroups) || [];
       if (typeof buildCategorySelectOptions === "function" && cats.length) {
         let html = buildCategorySelectOptions(cats, groups);
@@ -2146,14 +2144,25 @@
   }
 })();
 
-/* --- Keep Special claims (+ Profile preset) on the filtered category menu --
- * app.js fills #expense-category from state.standards.categories already; this
- * layer re-applies the same filtered/renamed list (preferring
- * specialClaimCategories from /standards) and keeps the Profile default
- * category select in sync.
+/* --- Category menus: car claims vs general expense / profile --------------
+ * app.js fills selects from state.standards.categories (including on every
+ * setView("expenses")). This layer re-applies afterwards:
+ *   - #expense-category (Car Expenses/Claims) → specialClaimCategories (ATO car)
+ *   - manual receipt + Profile default → filtered general expense menu
  */
 (function () {
   "use strict";
+  /* global populateCategorySelects, populateSelects, setView, categoryLabel */
+
+  // Keep in sync with lib/expense-menu.js CAR_CLAIM_CATEGORY_IDS.
+  const CAR_CLAIM_IDS = [
+    "vehicle_car",
+    "fuel",
+    "repairs_maintenance",
+    "tyres",
+    "registration_insurance",
+    "parking_tolls",
+  ];
 
   function fillSelect(sel, html, { allowEmptyLabel } = {}) {
     if (!sel) return;
@@ -2161,51 +2170,130 @@
     const body = allowEmptyLabel
       ? html.replace(/^<option value="">Choose category…<\/option>/, '<option value="">None</option>')
       : html;
+    if (sel.innerHTML === body) {
+      if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+      return;
+    }
     sel.innerHTML = body;
     if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
   }
 
+  function carClaimCategories() {
+    // `state` is a top-level const in app.js (global lexical) — not on window.
+    const fromApi = (state && state.standards && state.standards.specialClaimCategories) || [];
+    const allow = new Set(CAR_CLAIM_IDS);
+    const filtered = fromApi.filter((c) => allow.has(c.id));
+    if (filtered.length) return filtered;
+    const all = (state && state.standards && state.standards.categories) || [];
+    return CAR_CLAIM_IDS.map((id) => {
+      const hit = all.find((c) => c.id === id) || {
+        id,
+        label: id.replace(/_/g, " "),
+        group: "Car expenses",
+      };
+      return { ...hit, id, group: "Car expenses (ATO work-related)" };
+    });
+  }
+
+  /** True when #expense-category still has the general (non-car) menu. */
+  function expenseSelectNeedsCarFilter() {
+    const sel = document.getElementById("expense-category");
+    if (!sel) return false;
+    const allow = new Set(CAR_CLAIM_IDS);
+    return [...sel.options].some((o) => o.value && !allow.has(o.value));
+  }
+
   function applyFilteredCategoryMenus() {
-    const appState = globalThis.state;
-    const buildOpts = globalThis.buildCategorySelectOptions;
-    if (!appState || !appState.standards || typeof buildOpts !== "function") return;
+    if (!state || !state.standards || typeof buildCategorySelectOptions !== "function") return;
 
-    const cats =
-      (appState.standards.specialClaimCategories && appState.standards.specialClaimCategories.length
-        ? appState.standards.specialClaimCategories
-        : appState.standards.categories) || [];
-    if (!cats.length) return;
+    const menuCats = state.standards.categories || [];
+    if (!menuCats.length) return;
 
-    const html = buildOpts(cats, appState.standards.categoryGroups);
+    const menuHtml = buildCategorySelectOptions(menuCats, state.standards.categoryGroups);
+    const carHtml = buildCategorySelectOptions(carClaimCategories(), []);
 
-    // Special claims (km / laundry) — same filtered menu as manual expenses
-    fillSelect(document.getElementById("expense-category"), html);
+    // Car Expenses/Claims — always the ATO car allowlist (never the full menu).
+    fillSelect(document.getElementById("expense-category"), carHtml);
 
-    // Manual expense entry (keep in sync if standards were refreshed)
-    fillSelect(document.getElementById("manual-receipt-category"), html);
+    // Manual expense entry (general work expenses)
+    fillSelect(document.getElementById("manual-receipt-category"), menuHtml);
 
     // Profile default category
-    fillSelect(document.getElementById("preset-category"), html, { allowEmptyLabel: true });
+    fillSelect(document.getElementById("preset-category"), menuHtml, { allowEmptyLabel: true });
+  }
+
+  function afterPopulate(fn) {
+    if (typeof fn !== "function") return fn;
+    return function patchedPopulate() {
+      const result = fn.apply(this, arguments);
+      applyFilteredCategoryMenus();
+      return result;
+    };
   }
 
   function patchPopulate() {
-    const orig = globalThis.populateCategorySelects;
-    if (typeof orig !== "function") return;
-    globalThis.populateCategorySelects = function patchedPopulateCategorySelects() {
-      orig.apply(this, arguments);
-      applyFilteredCategoryMenus();
+    // Patch window bindings used by nav/refresh. Also patch setView so a visit
+    // to Expenses re-applies the car allowlist after app.js re-fills selects.
+    if (typeof populateCategorySelects === "function") {
+      globalThis.populateCategorySelects = afterPopulate(populateCategorySelects);
+    }
+    if (typeof populateSelects === "function") {
+      globalThis.populateSelects = afterPopulate(populateSelects);
+    }
+    if (typeof setView === "function") {
+      const origSetView = setView;
+      globalThis.setView = function patchedSetView() {
+        const result = origSetView.apply(this, arguments);
+        applyFilteredCategoryMenus();
+        return result;
+      };
+    }
+  }
+
+  /** Ledger / totals: resolve labels for car-claim ids hidden from the general menu. */
+  function patchCategoryLabel() {
+    if (typeof categoryLabel !== "function") return;
+    const orig = categoryLabel;
+    globalThis.categoryLabel = function patchedCategoryLabel(id) {
+      try {
+        const car =
+          state &&
+          state.standards &&
+          state.standards.specialClaimCategories &&
+          state.standards.specialClaimCategories.find((c) => c.id === id);
+        if (car && car.label) return car.label;
+      } catch {
+        /* fall through */
+      }
+      return orig.apply(this, arguments);
     };
   }
 
   function start() {
     patchPopulate();
+    patchCategoryLabel();
     applyFilteredCategoryMenus();
-    let ticks = 0;
-    const iv = setInterval(() => {
-      ticks += 1;
-      applyFilteredCategoryMenus();
-      if (ticks >= 15) clearInterval(iv);
-    }, 400);
+
+    document.addEventListener(
+      "mousedown",
+      (e) => {
+        if (e.target && e.target.id === "expense-category" && expenseSelectNeedsCarFilter()) {
+          applyFilteredCategoryMenus();
+        }
+      },
+      true
+    );
+
+    const sel = document.getElementById("expense-category");
+    if (sel) {
+      const mo = new MutationObserver(() => {
+        if (expenseSelectNeedsCarFilter()) applyFilteredCategoryMenus();
+      });
+      mo.observe(sel, { childList: true });
+    }
+    setInterval(() => {
+      if (expenseSelectNeedsCarFilter()) applyFilteredCategoryMenus();
+    }, 500);
   }
 
   if (document.readyState === "loading") {
