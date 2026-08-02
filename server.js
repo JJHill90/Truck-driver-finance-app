@@ -3,7 +3,6 @@ const path = require("path");
 const express = require("express");
 
 const {
-  CATEGORY_GROUPS,
   DRIVER_TYPES,
   getCurrentFinancialYear,
   getCategoryMeta,
@@ -11,6 +10,7 @@ const {
 const {
   ensureMealsRegistered,
   listMenuCategories,
+  listMenuCategoryGroups,
   listSpecialClaimCategories,
   normalizeExpenseCategoryId,
 } = require("./lib/expense-menu");
@@ -470,7 +470,7 @@ api.get("/standards", (_req, res) => {
   res.json({
     categories: listMenuCategories(),
     specialClaimCategories: listSpecialClaimCategories(),
-    categoryGroups: CATEGORY_GROUPS,
+    categoryGroups: listMenuCategoryGroups(),
     incomeTypes: listMenuIncomeTypes(),
     driverTypes: DRIVER_TYPES,
     licenceClasses: listLicenceClasses(),

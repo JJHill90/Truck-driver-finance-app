@@ -1,11 +1,13 @@
 const {
   listMenuCategories,
+  listMenuCategoryGroups,
   listSpecialClaimCategories,
   normalizeExpenseCategoryId,
   COMBINED_MEALS_CAP,
   ensureMealsRegistered,
   HIDDEN_FROM_MENU,
   LABEL_OVERRIDES,
+  MEDICAL_GROUP,
   CAR_CLAIM_CATEGORY_IDS,
   CAR_CLAIM_LABEL_OVERRIDES,
 } = require("./lib/expense-menu");
@@ -17,18 +19,20 @@ describe("expense menu", () => {
     ensureMealsRegistered();
   });
 
-  it("hides snacks, split meals, AdBlue, cabin, restraints and truck maintenance", () => {
+  it("hides the whole Vehicle & fuel group from general expense menus", () => {
     const ids = listMenuCategories().map((c) => c.id);
     for (const id of HIDDEN_FROM_MENU) {
       expect(ids).not.toContain(id);
     }
+    expect(ids).not.toContain("vehicle_car");
+    expect(ids).not.toContain("registration_insurance");
     expect(ids).not.toContain("fuel");
     expect(ids).not.toContain("tyres");
     expect(ids).not.toContain("repairs_maintenance");
-    expect(ids).not.toContain("weighbridge");
     expect(ids).not.toContain("parking_tolls");
-    expect(ids).not.toContain("load_restraint");
     expect(ids).not.toContain("vehicle_truck");
+    expect(listMenuCategoryGroups()).not.toContain("Vehicle & fuel");
+    expect(listMenuCategories().some((c) => c.group === "Vehicle & fuel")).toBe(false);
   });
 
   it("exposes ATO car-related categories for Car Expenses/Claims", () => {
@@ -53,6 +57,8 @@ describe("expense menu", () => {
     expect(carIds).not.toEqual(menuIds);
     expect(menuIds).toContain("meals");
     expect(menuIds).toContain("laundry");
+    expect(menuIds).not.toContain("vehicle_car");
+    expect(carIds).toContain("vehicle_car");
   });
 
   it("exposes a single Food/Meals category with combined ATO cap", () => {
@@ -67,14 +73,18 @@ describe("expense menu", () => {
     expect(COMBINED_MEALS_CAP).toBeCloseTo(expected, 2);
   });
 
-  it("applies display renames for cleaning, logbook and medical", () => {
+  it("puts Medical equipment under a Medical group", () => {
+    const medical = listMenuCategories().find((c) => c.id === "compulsory_assessment");
+    expect(medical).toBeTruthy();
+    expect(medical.label).toBe("Medical equipment");
+    expect(medical.group).toBe(MEDICAL_GROUP);
+    expect(listMenuCategoryGroups()).toContain("Medical");
+    expect(listMenuCategoryGroups().indexOf("Medical")).toBeGreaterThan(
+      listMenuCategoryGroups().indexOf("Professional & fees")
+    );
     const byId = Object.fromEntries(listMenuCategories().map((c) => [c.id, c.label]));
     expect(byId.cleaning_supplies).toBe(LABEL_OVERRIDES.cleaning_supplies);
     expect(byId.office_admin).toBe(LABEL_OVERRIDES.office_admin);
-    expect(byId.compulsory_assessment).toBe(LABEL_OVERRIDES.compulsory_assessment);
-    expect(byId.cleaning_supplies).toBe("Truck cleaning (truck washing)");
-    expect(byId.office_admin).toBe("Logbook/Work Diary/EWD (Purchase and subscription)");
-    expect(byId.compulsory_assessment).toBe("Medical equipment");
   });
 
   it("maps legacy meal ids onto meals", () => {

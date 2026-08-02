@@ -116,9 +116,10 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   totals, manual entry with ABN, receipt gallery) plus expense totals,
   **Car Expenses/Claims** (ATO D1 cents/km or logbook, plus fuel / repairs /
   tyres / rego–insurance / parking–tolls via `listSpecialClaimCategories`), and
-  the expense ledger. Laundry and other non-car claims stay on the general
-  expense menus. Nav no longer has a separate Scan receipt item;
-  `setView("receipts")` redirects to `expenses`.
+  the expense ledger. The general expense menus hide the whole **Vehicle & fuel**
+  group (car claims only via Car Expenses/Claims) and show a **Medical** group
+  containing Medical equipment (`compulsory_assessment`). Nav no longer has a
+  separate Scan receipt item; `setView("receipts")` redirects to `expenses`.
 - **Expense scan approval:** when OCR finds multiple line amounts, only the
   overall/grand total (or largest amount if unlabeled) is primary. The confirm
   UI asks to approve that single total — other line amounts are informational
