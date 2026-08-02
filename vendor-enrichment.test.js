@@ -7,6 +7,8 @@ const {
   enrichOcrFromVendors,
   rememberVendor,
   formatAbn,
+  looksLikeJunkVendor,
+  resolveCanonicalVendor,
 } = require("./lib/vendor-enrichment");
 
 describe("ABN helpers", () => {
@@ -179,5 +181,84 @@ describe("findKnownVendor", () => {
     const hit = findKnownVendor(vendors, { vendorAbn: "53 004 085 616", vendor: "Other" });
     expect(hit.source).toBe("abn");
     expect(hit.vendor.name).toBe("Alpha");
+  });
+});
+
+describe("canonical vendor names from OCR junk", () => {
+  it("flags TAX INVOICE and consonant salad as junk vendors", () => {
+    expect(looksLikeJunkVendor("TAX INVOICE")).toBe(true);
+    expect(looksLikeJunkVendor("XqR7m")).toBe(true);
+    expect(looksLikeJunkVendor("")).toBe(true);
+    expect(looksLikeJunkVendor("Joe's Roadhouse")).toBe(false);
+    expect(looksLikeJunkVendor("7-Eleven")).toBe(false);
+  });
+
+  it("resolves garbled 7-Eleven spellings in the vendor field", () => {
+    expect(resolveCanonicalVendor({ vendor: "7 EIEVEN" }).name).toBe("7-Eleven");
+    expect(resolveCanonicalVendor({ vendor: "seven eleven" }).name).toBe("7-Eleven");
+    expect(resolveCanonicalVendor({ vendor: "l-eleven" }).name).toBe("7-Eleven");
+    expect(resolveCanonicalVendor({ vendor: "7eleven" }).name).toBe("7-Eleven");
+  });
+
+  it("pulls 7-Eleven from receipt text when OCR vendor is random letters", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "XqR7m",
+      text: "XqR7m\n7 EIEVEN STORE 2145\nDIESEL\nTOTAL 80.00",
+    });
+    expect(hit.name).toBe("7-Eleven");
+    expect(hit.source).toBe("raw_text");
+  });
+
+  it("does not replace a plausible independent vendor with a brand later on the docket", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "Joe's Roadhouse",
+      text: "Joe's Roadhouse\nBP Fleet card accepted\nTOTAL 20.00",
+    });
+    expect(hit).toBeNull();
+  });
+
+  it("enrichOcrFromVendors rewrites junk vendor to 7-Eleven", () => {
+    const ocr = {
+      vendor: "TAX INVOICE",
+      vendorAbn: "",
+      suggestedCategory: "other_work",
+      rawText: "TAX INVOICE\n7-ELEVEN\nABN 12 345 678 901\nTOTAL 15.50",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.vendor).toBe("7-Eleven");
+    expect(ocr.vendorCanonical.name).toBe("7-Eleven");
+  });
+
+  it("tidies near-correct chain spellings (Woolworths / McDonald's)", () => {
+    const wool = {
+      vendor: "WOOLWORTHS",
+      suggestedCategory: "other_work",
+      rawText: "WOOLWORTHS\nTOTAL 40.00",
+    };
+    enrichOcrFromVendors(wool, [], "expense");
+    expect(wool.vendor).toBe("Woolworths");
+    expect(wool.suggestedCategory).toBe("groceries_travel");
+
+    const maccas = {
+      vendor: "Mcdona1ds",
+      suggestedCategory: "other_work",
+      rawText: "Mcdona1ds\nMeal deal\nTOTAL 12.00",
+    };
+    enrichOcrFromVendors(maccas, [], "expense");
+    expect(maccas.vendor).toBe("McDonald's");
+    expect(maccas.suggestedCategory).toBe("meals");
+  });
+
+  it("prefers remembered spelling when OCR name loosely matches", () => {
+    const vendors = [{ id: "v7", name: "7-Eleven", abn: "", defaultCategory: null }];
+    const ocr = {
+      vendor: "7 Eleven Pty",
+      vendorAbn: "",
+      suggestedCategory: "other_work",
+      rawText: "7 Eleven Pty\nTOTAL 9.00",
+    };
+    enrichOcrFromVendors(ocr, vendors, "expense");
+    expect(ocr.vendor).toBe("7-Eleven");
+    expect(ocr.vendorMatch.source).toBe("name");
   });
 });

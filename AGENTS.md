@@ -126,6 +126,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   **business type** (e.g. Woolworths/Coles/ALDI → `groceries_travel`, Bunnings →
   `tools_equipment`), that category always overrides weak OCR (`other_work`) and
   conflicting remembered defaults. Otherwise vendor memory + text heuristics apply.
+  **Canonical chain names:** after OCR, enrichment rewrites junk/boilerplate
+  vendor strings (e.g. `TAX INVOICE`, `7 EIEVEN`, random letters) to clean names
+  like `7-Eleven` when the brand appears in the vendor field or receipt header —
+  without editing the verbatim OCR modules. Plausible independent names are left
+  alone.
 - **Expense period filter (no visual tag).** Rows outside the selected
   day/week/month/year still get `out-of-period` and stay out of period totals;
   `enhancements.js` removes the “outside period” label so the ledger stays clean.
