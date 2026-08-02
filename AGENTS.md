@@ -129,11 +129,16 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
 - **Expense period filter (no visual tag).** Rows outside the selected
   day/week/month/year still get `out-of-period` and stay out of period totals;
   `enhancements.js` removes the “outside period” label so the ledger stays clean.
-- **Ledger edit + month filter.** Expense/income rows get an **Edit** button
+- **Ledger edit + period filter.** Expense/income rows get an **Edit** button
   (beside Delete) that opens a modal and `PUT /expenses/:id` or `PUT /income/:id`
-  via `lib/ledger-edit.js` (receipt links preserved). Each ledger also has a
-  **Show** month dropdown (All year / Jul–Jun within the selected FY) to shorten
-  long lists; choice is stored in `localStorage` (`haulage-ledger-month-*`).
+  via `lib/ledger-edit.js` (receipt links preserved). Expense ledger + expense
+  receipt gallery filter by **week** (Mon–Sun labels like `27/07 – 02/08`) next
+  to the FY dropdown (`localStorage` `haulage-ledger-week-*` /
+  `haulage-gallery-week-*`); income ledger still uses a month dropdown
+  (`haulage-ledger-month-*`). “All weeks” keeps full-year search.
+  On each new **Monday** (local time), `enhancements.js` registers an empty week
+  slot (`haulage-started-weeks`), sets `haulage-active-week-start`, points expense
+  filters at that week, and toasts — no blank expense row is invented.
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.

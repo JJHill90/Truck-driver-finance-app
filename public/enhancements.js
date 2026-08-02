@@ -1100,25 +1100,154 @@
   }
 })();
 
-/* --- Per-financial-year selector on the document photo galleries ---------
+/* --- Shared Mon–Sun week helpers (expense ledger + galleries + Monday roll) */
+(function () {
+  "use strict";
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function toIsoLocal(dt) {
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+  }
+
+  function weekStartMonday(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(dt.getTime())) return null;
+    const day = dt.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    return toIsoLocal(dt);
+  }
+
+  function weekEndSunday(startIso) {
+    const m = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    dt.setDate(dt.getDate() + 6);
+    return toIsoLocal(dt);
+  }
+
+  function weekLabel(startIso, endIso) {
+    const a = String(startIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const b = String(endIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!a || !b) return startIso || "";
+    const left = `${a[3]}/${a[2]}`;
+    const right = `${b[3]}/${b[2]}`;
+    if (a[1] !== b[1]) return `${left}/${a[1].slice(-2)} – ${right}/${b[1].slice(-2)}`;
+    return `${left} – ${right}`;
+  }
+
+  function currentWeekStart(now = new Date()) {
+    return weekStartMonday(toIsoLocal(now));
+  }
+
+  const STARTED_KEY = "haulage-started-weeks";
+  const ACTIVE_KEY = "haulage-active-week-start";
+
+  function listStartedWeeks() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STARTED_KEY) || "[]");
+      return Array.isArray(raw) ? raw.filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Persist a week slot the driver can open even before any receipt is saved. */
+  function registerStartedWeek(startIso) {
+    if (!startIso || !/^\d{4}-\d{2}-\d{2}$/.test(startIso)) return;
+    const list = [...new Set([...listStartedWeeks(), startIso])].sort();
+    try {
+      localStorage.setItem(STARTED_KEY, JSON.stringify(list));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function getActiveWeekStart() {
+    try {
+      return localStorage.getItem(ACTIVE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function setActiveWeekStart(startIso) {
+    if (!startIso || !/^\d{4}-\d{2}-\d{2}$/.test(startIso)) return;
+    try {
+      localStorage.setItem(ACTIVE_KEY, startIso);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  globalThis.HaulageWeeks = {
+    pad2,
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    currentWeekStart,
+    listStartedWeeks,
+    registerStartedWeek,
+    getActiveWeekStart,
+    setActiveWeekStart,
+    ACTIVE_KEY,
+    STARTED_KEY,
+  };
+})();
+
+/* --- Per-financial-year (+ week) selector on the document photo galleries -
  * Segments "Expense receipt photos" and "Income document photos" by Australian
- * financial year, with a dropdown (same style as the top-of-screen FY picker)
- * pinned to the top-right of each gallery panel header. Layered on app.js
- * without editing it: the selector is injected into the panel header (a sibling
- * of the gallery container, so app.js re-renders don't wipe it) and matching is
- * done by hiding cards whose FY differs from the selected one.
+ * financial year. Expense receipts also get a Mon–Sun week dropdown
+ * (e.g. 27/07 – 02/08) beside the FY picker so large galleries stay scannable.
  */
 (function () {
   "use strict";
-  /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear */
+  /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear, HaulageWeeks */
 
   const GALLERIES = [
-    { containerId: "receipt-gallery", purpose: "expense", key: "expense" },
-    { containerId: "income-gallery", purpose: "income", key: "income" },
+    { containerId: "receipt-gallery", purpose: "expense", key: "expense", weekFilter: true },
+    { containerId: "income-gallery", purpose: "income", key: "income", weekFilter: false },
   ];
 
   // Remembers each gallery's chosen FY ("all" or e.g. "2025-26"); null = not set.
   const chosenFy = { expense: null, income: null };
+  const chosenWeek = { expense: null, income: null };
+
+  const {
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    listStartedWeeks,
+    registerStartedWeek,
+  } = HaulageWeeks;
+
+  function weekStorageKey(key) {
+    return `haulage-gallery-week-${key}`;
+  }
+
+  function getStoredWeek(key) {
+    try {
+      return localStorage.getItem(weekStorageKey(key));
+    } catch {
+      return null;
+    }
+  }
+
+  function setStoredWeek(key, value) {
+    try {
+      if (!value || value === "all") localStorage.removeItem(weekStorageKey(key));
+      else localStorage.setItem(weekStorageKey(key), value);
+    } catch {
+      /* ignore */
+    }
+  }
 
   /** Australian FY for a date (1 Jul – 30 Jun), mirroring the server. */
   function fyForDate(dateStr) {
@@ -1147,8 +1276,8 @@
     }
   }
 
-  /** FY of a receipt, using the same date app.js shows on the card. */
-  function receiptFy(receipt) {
+  /** Document date of a receipt, using the same date app.js shows on the card. */
+  function receiptDate(receipt) {
     if (!receipt) return null;
     let date = null;
     try {
@@ -1157,7 +1286,13 @@
       date = null;
     }
     if (!date) date = (receipt.ocrResult && receipt.ocrResult.date) || receipt.createdAt || null;
-    return fyForDate(date);
+    const m = String(date || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : null;
+  }
+
+  /** FY of a receipt, using the same date app.js shows on the card. */
+  function receiptFy(receipt) {
+    return fyForDate(receiptDate(receipt));
   }
 
   function fyLabel(fy) {
@@ -1205,17 +1340,51 @@
     const header = panel && panel.querySelector(".panel-header");
     if (!header) return null;
 
-    let picker = header.querySelector(".gallery-fy-picker");
+    let actions = header.querySelector(".gallery-header-actions");
+    if (!actions) {
+      actions = document.createElement("div");
+      actions.className = "ledger-header-actions gallery-header-actions";
+      header.appendChild(actions);
+    }
+
+    // Move any legacy FY picker that was appended directly on the header.
+    header.querySelectorAll(":scope > .gallery-fy-picker").forEach((el) => {
+      actions.appendChild(el);
+    });
+
+    let picker = actions.querySelector(".gallery-fy-picker");
     if (!picker) {
       picker = document.createElement("div");
       picker.className = "fy-picker gallery-fy-picker";
       picker.innerHTML =
         `<label for="gallery-fy-${cfg.key}">Financial year</label>` +
         `<select id="gallery-fy-${cfg.key}" class="gallery-fy-select" aria-label="Filter document photos by financial year"></select>`;
-      header.appendChild(picker);
+      actions.appendChild(picker);
       const select = picker.querySelector("select");
       select.addEventListener("change", () => {
         chosenFy[cfg.key] = select.value;
+        // Changing FY resets week to the current week in that year (or all).
+        if (cfg.weekFilter) {
+          chosenWeek[cfg.key] = null;
+          setStoredWeek(cfg.key, null);
+        }
+        applyFilter(cfg);
+      });
+    }
+
+    if (cfg.weekFilter && !actions.querySelector(".gallery-week-picker")) {
+      const weekPicker = document.createElement("div");
+      weekPicker.className = "fy-picker gallery-fy-picker gallery-week-picker";
+      weekPicker.innerHTML =
+        `<label for="gallery-week-${cfg.key}">Week</label>` +
+        `<select id="gallery-week-${cfg.key}" class="gallery-week-select" aria-label="Filter expense receipts by week"></select>`;
+      actions.appendChild(weekPicker);
+      weekPicker.querySelector("select").addEventListener("change", (e) => {
+        chosenWeek[cfg.key] = e.target.value;
+        setStoredWeek(cfg.key, e.target.value);
+        if (e.target.value && e.target.value !== "all") {
+          registerStartedWeek(e.target.value);
+        }
         applyFilter(cfg);
       });
     }
@@ -1225,14 +1394,78 @@
       note.className = "muted gallery-fy-empty hidden";
       container.insertAdjacentElement("afterend", note);
     }
-    return picker.querySelector("select");
+    return {
+      fySelect: picker.querySelector("select"),
+      weekSelect: actions.querySelector(".gallery-week-select"),
+    };
+  }
+
+  function collectExpenseWeeks(fy) {
+    const map = new Map();
+    let list = [];
+    try {
+      if (typeof getReceiptsWithImages === "function") list = getReceiptsWithImages("expense") || [];
+    } catch {
+      list = [];
+    }
+    for (const r of list) {
+      const date = receiptDate(r);
+      if (!date || (fy && fy !== "all" && fyForDate(date) !== fy)) continue;
+      const start = weekStartMonday(date);
+      if (!start) continue;
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
+    // Weeks the app has opened for the driver (including empty new Mondays).
+    for (const start of listStartedWeeks()) {
+      if (fy && fy !== "all" && fyForDate(start) !== fy && fyForDate(weekEndSunday(start)) !== fy) {
+        continue;
+      }
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
+    // Always offer the current week when it falls in the selected FY.
+    const today = toIsoLocal(new Date());
+    const curStart = weekStartMonday(today);
+    if (curStart && (!fy || fy === "all" || fyForDate(curStart) === fy || fyForDate(weekEndSunday(curStart)) === fy)) {
+      if (!map.has(curStart)) map.set(curStart, { start: curStart, end: weekEndSunday(curStart) });
+      registerStartedWeek(curStart);
+    }
+    return [...map.values()].sort((a, b) => b.start.localeCompare(a.start));
+  }
+
+  function syncGalleryWeekOptions(cfg, weekSelect, fy) {
+    if (!weekSelect) return "all";
+    const weeks = collectExpenseWeeks(fy);
+    const stored = chosenWeek[cfg.key] != null ? chosenWeek[cfg.key] : getStoredWeek(cfg.key);
+    const todayStart = weekStartMonday(toIsoLocal(new Date()));
+    let chosen = stored;
+    if (chosen == null) {
+      // Default: this week when it has (or will have) a slot, else all weeks.
+      chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
+    }
+    if (chosen !== "all" && !weeks.some((w) => w.start === chosen)) {
+      chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
+    }
+    chosenWeek[cfg.key] = chosen;
+
+    const opts = [`<option value="all">All weeks</option>`].concat(
+      weeks.map((w) => {
+        const label = weekLabel(w.start, w.end);
+        const isCurrent = w.start === todayStart ? " (this week)" : "";
+        return `<option value="${w.start}">${label}${isCurrent}</option>`;
+      })
+    );
+    const html = opts.join("");
+    if (weekSelect.innerHTML !== html) weekSelect.innerHTML = html;
+    if (weekSelect.value !== chosen) weekSelect.value = chosen;
+    return weekSelect.value || "all";
   }
 
   function applyFilter(cfg) {
     const container = document.getElementById(cfg.containerId);
     if (!container) return;
-    const select = ensureSelector(cfg);
-    if (!select) return;
+    const sels = ensureSelector(cfg);
+    if (!sels || !sels.fySelect) return;
+    const select = sels.fySelect;
 
     // Default to the top-of-screen FY once it is known; until then show all.
     if (chosenFy[cfg.key] == null && state && state.financialYear) {
@@ -1250,6 +1483,10 @@
       chosenFy[cfg.key] = "all";
     }
     const active = select.value;
+    const week =
+      cfg.weekFilter && sels.weekSelect
+        ? syncGalleryWeekOptions(cfg, sels.weekSelect, active)
+        : "all";
 
     const cards = container.querySelectorAll(
       ".receipt-card[data-receipt-card], .receipt-card[data-receipt-id]"
@@ -1259,8 +1496,13 @@
     cards.forEach((card) => {
       total += 1;
       const id = card.dataset.receiptCard || card.dataset.receiptId;
-      const fy = receiptFy(findReceipt(id));
-      const match = active === "all" || fy === active;
+      const receipt = findReceipt(id);
+      const fy = receiptFy(receipt);
+      let match = active === "all" || fy === active;
+      if (match && week !== "all") {
+        const date = receiptDate(receipt);
+        match = Boolean(date) && weekStartMonday(date) === week;
+      }
       card.style.display = match ? "" : "none";
       if (match) shown += 1;
     });
@@ -1270,8 +1512,12 @@
     if (note) {
       if (total > 0 && shown === 0) {
         const kind = cfg.purpose === "income" ? "income documents" : "expense receipts";
-        const where = active === "all" ? "any financial year" : `FY ${active.replace("-", "–")}`;
-        note.textContent = `No ${kind} for ${where}. Switch the financial year above to see others.`;
+        let where = active === "all" ? "any financial year" : `FY ${active.replace("-", "–")}`;
+        if (week !== "all") {
+          const end = weekEndSunday(week);
+          where += `, week ${weekLabel(week, end)}`;
+        }
+        note.textContent = `No ${kind} for ${where}. Switch the week or financial year above to see others.`;
         note.classList.remove("hidden");
       } else {
         note.classList.add("hidden");
@@ -1299,6 +1545,15 @@
         if (ticks >= 10) clearInterval(iv);
       }, 400);
     }
+
+    // Monday rollover: jump expense gallery to the new week entry.
+    window.addEventListener("haulage:new-week", (ev) => {
+      const startIso = ev.detail && ev.detail.weekStart;
+      if (!startIso) return;
+      chosenWeek.expense = startIso;
+      setStoredWeek("expense", startIso);
+      applyFilter(GALLERIES[0]);
+    });
   }
 
   if (document.readyState === "loading") {
@@ -1394,6 +1649,10 @@
     return `haulage-ledger-month-${type}`;
   }
 
+  function weekLedgerStorageKey(type) {
+    return `haulage-ledger-week-${type}`;
+  }
+
   function getMonthFilter(type) {
     try {
       return localStorage.getItem(periodStorageKey(type)) || "all";
@@ -1409,6 +1668,32 @@
       /* ignore */
     }
   }
+
+  function getWeekFilter(type) {
+    try {
+      return localStorage.getItem(weekLedgerStorageKey(type)) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setWeekFilter(type, value) {
+    try {
+      if (!value || value === "all") localStorage.removeItem(weekLedgerStorageKey(type));
+      else localStorage.setItem(weekLedgerStorageKey(type), value);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const {
+    toIsoLocal,
+    weekStartMonday,
+    weekEndSunday,
+    weekLabel,
+    listStartedWeeks,
+    registerStartedWeek,
+  } = HaulageWeeks;
 
   /** Jul–Jun month options for an Australian financial year id like 2025-26. */
   function monthsForFy(fy) {
@@ -1498,8 +1783,9 @@
     });
   }
 
-  /** Month dropdown within the selected FY — shortens long ledgers. */
+  /** Month dropdown for income ledger (expense uses week-by-week instead). */
   function ensureMonthPicker(cfg) {
+    if (cfg.type === "expense") return;
     const list = document.getElementById(cfg.listId);
     if (!list) return;
     const panel = list.closest(".panel");
@@ -1519,6 +1805,96 @@
       setMonthFilter(cfg.type, select.value);
       applyLedgerFilters(cfg);
     });
+  }
+
+  /** Mon–Sun week dropdown for the expense ledger (e.g. 27/07 – 02/08). */
+  function ensureWeekPicker(cfg) {
+    if (cfg.type !== "expense") return;
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    const box = ledgerActions(header);
+    // Prefer week over the older month picker on expenses.
+    const oldMonth = box.querySelector(".ledger-month-picker");
+    if (oldMonth) oldMonth.remove();
+    if (box.querySelector(".ledger-week-picker")) return;
+
+    const picker = document.createElement("div");
+    picker.className = "fy-picker gallery-fy-picker ledger-week-picker";
+    picker.innerHTML =
+      `<label for="ledger-week-${cfg.type}">Week</label>` +
+      `<select id="ledger-week-${cfg.type}" class="ledger-week-select" aria-label="Filter expense ledger by week"></select>`;
+    box.appendChild(picker);
+    picker.querySelector("select").addEventListener("change", (e) => {
+      setWeekFilter(cfg.type, e.target.value);
+      if (e.target.value && e.target.value !== "all") {
+        registerStartedWeek(e.target.value);
+      }
+      applyLedgerFilters(cfg);
+    });
+  }
+
+  function collectLedgerWeeks(fy) {
+    const map = new Map();
+    let expenses = [];
+    try {
+      expenses = (state.records && state.records.expenses) || [];
+    } catch {
+      expenses = [];
+    }
+    for (const e of expenses) {
+      const date = String(e.date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (fy && fyForDate(date) !== fy) continue;
+      const start = weekStartMonday(date);
+      if (!start) continue;
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
+    for (const start of listStartedWeeks()) {
+      if (fy && fyForDate(start) !== fy && fyForDate(weekEndSunday(start)) !== fy) continue;
+      if (!map.has(start)) map.set(start, { start, end: weekEndSunday(start) });
+    }
+    const todayStart = weekStartMonday(toIsoLocal(new Date()));
+    if (
+      todayStart &&
+      (!fy || fyForDate(todayStart) === fy || fyForDate(weekEndSunday(todayStart)) === fy)
+    ) {
+      if (!map.has(todayStart)) {
+        map.set(todayStart, { start: todayStart, end: weekEndSunday(todayStart) });
+      }
+      registerStartedWeek(todayStart);
+    }
+    return [...map.values()].sort((a, b) => b.start.localeCompare(a.start));
+  }
+
+  function syncWeekOptions(cfg, select) {
+    if (!select) return "all";
+    const fy = currentFy();
+    const weeks = collectLedgerWeeks(fy);
+    const todayStart = weekStartMonday(toIsoLocal(new Date()));
+    let chosen = getWeekFilter(cfg.type);
+    if (chosen == null) {
+      chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
+      setWeekFilter(cfg.type, chosen);
+    }
+    if (chosen !== "all" && !weeks.some((w) => w.start === chosen)) {
+      chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
+      setWeekFilter(cfg.type, chosen);
+    }
+
+    const opts = [`<option value="all">All weeks</option>`].concat(
+      weeks.map((w) => {
+        const label = weekLabel(w.start, w.end);
+        const isCurrent = w.start === todayStart ? " (this week)" : "";
+        return `<option value="${esc(w.start)}">${esc(label)}${esc(isCurrent)}</option>`;
+      })
+    );
+    const html = opts.join("");
+    if (select.innerHTML !== html) select.innerHTML = html;
+    if (select.value !== chosen) select.value = chosen;
+    return select.value || "all";
   }
 
   function syncMonthOptions(cfg, select) {
@@ -1555,7 +1931,7 @@
     }
   }
 
-  /** Show only the selected FY (+ optional month) rows and recompute totals. */
+  /** Show only the selected FY (+ week for expenses / month for income). */
   function applyLedgerFilters(cfg) {
     const list = document.getElementById(cfg.listId);
     if (!list) return;
@@ -1564,12 +1940,22 @@
     const panel = list.closest(".panel");
     const fySelect = panel && panel.querySelector(".ledger-fy-select");
     const monthSelect = panel && panel.querySelector(".ledger-month-select");
+    const weekSelect = panel && panel.querySelector(".ledger-week-select");
     if (fySelect) syncFyOptions(fySelect);
-    if (monthSelect) syncMonthOptions(cfg, monthSelect);
 
     const fy = currentFy();
     if (!fy) return;
-    const month = getMonthFilter(cfg.type);
+
+    let period = "all";
+    let periodKind = "all";
+    if (cfg.type === "expense") {
+      period = syncWeekOptions(cfg, weekSelect);
+      periodKind = "week";
+    } else if (monthSelect) {
+      syncMonthOptions(cfg, monthSelect);
+      period = getMonthFilter(cfg.type);
+      periodKind = "month";
+    }
 
     let sum = 0;
     let shown = 0;
@@ -1580,8 +1966,12 @@
       const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
       const entry = findEntry(cfg.type, id);
       let match = isDraft || (entry && fyForDate(entry.date) === fy);
-      if (match && !isDraft && month !== "all" && entry) {
-        match = entryMonthKey(entry.date) === month;
+      if (match && !isDraft && period !== "all" && entry) {
+        if (periodKind === "week") {
+          match = weekStartMonday(entry.date) === period;
+        } else {
+          match = entryMonthKey(entry.date) === period;
+        }
       }
       tr.style.display = match ? "" : "none";
       if (match) {
@@ -1590,20 +1980,23 @@
       }
     });
 
-    updateLedgerTotal(cfg, table, fy, month, sum);
-    updateEmptyNote(cfg, panel, fy, month, shown, total);
+    updateLedgerTotal(cfg, table, fy, period, periodKind, sum);
+    updateEmptyNote(cfg, panel, fy, period, periodKind, shown, total);
   }
 
-  function monthLabel(fy, month) {
-    if (!month || month === "all") {
+  function periodTotalLabel(fy, period, periodKind) {
+    if (!period || period === "all") {
       return `Financial year total (FY ${String(fy).replace("-", "–")})`;
     }
-    const hit = monthsForFy(fy).find((m) => m.value === month);
-    return hit ? `${hit.label} total` : `Month total (${month})`;
+    if (periodKind === "week") {
+      return `${weekLabel(period, weekEndSunday(period))} total`;
+    }
+    const hit = monthsForFy(fy).find((m) => m.value === period);
+    return hit ? `${hit.label} total` : `Month total (${period})`;
   }
 
-  function updateLedgerTotal(cfg, table, fy, month, sum) {
-    const label = monthLabel(fy, month);
+  function updateLedgerTotal(cfg, table, fy, period, periodKind, sum) {
+    const label = periodTotalLabel(fy, period, periodKind);
     if (cfg.type === "expense") {
       const row = table.querySelector("tfoot tr.running-total-row");
       if (!row) return;
@@ -1627,7 +2020,7 @@
     tr.querySelector("td.amount").innerHTML = `<strong>${fmtCurrency(sum)}</strong>`;
   }
 
-  function updateEmptyNote(cfg, panel, fy, month, shown, total) {
+  function updateEmptyNote(cfg, panel, fy, period, periodKind, shown, total) {
     if (!panel) return;
     let note = panel.querySelector(".ledger-fy-empty");
     if (total > 0 && shown === 0) {
@@ -1638,9 +2031,11 @@
         (list || panel).insertAdjacentElement("afterend", note);
       }
       const kind = cfg.type === "income" ? "income" : "expenses";
-      if (month && month !== "all") {
-        const hit = monthsForFy(fy).find((m) => m.value === month);
-        note.textContent = `No ${kind} for ${hit ? hit.label : month}. Choose “All year” or another month.`;
+      if (period && period !== "all" && periodKind === "week") {
+        note.textContent = `No ${kind} for week ${weekLabel(period, weekEndSunday(period))}. Choose “All weeks” or another week.`;
+      } else if (period && period !== "all") {
+        const hit = monthsForFy(fy).find((m) => m.value === period);
+        note.textContent = `No ${kind} for ${hit ? hit.label : period}. Choose “All year” or another month.`;
       } else {
         note.textContent = `No ${kind} recorded for FY ${String(fy).replace("-", "–")}. Switch the financial year above to see other years.`;
       }
@@ -1873,6 +2268,7 @@
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
     ensureMonthPicker(cfg);
+    ensureWeekPicker(cfg);
     applyLedgerFilters(cfg);
     hideOutsidePeriodTags(cfg);
     injectEditButtons(cfg);
@@ -1910,6 +2306,81 @@
         openEditModal("income", inc.getAttribute("data-edit-income"));
       }
     });
+
+    // Monday rollover: switch expense ledger onto the new week entry.
+    window.addEventListener("haulage:new-week", (ev) => {
+      const startIso = ev.detail && ev.detail.weekStart;
+      if (!startIso) return;
+      setWeekFilter("expense", startIso);
+      const expenseCfg = LEDGERS.find((c) => c.type === "expense");
+      if (expenseCfg) enhance(expenseCfg);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Monday week rollover -------------------------------------------------
+ * When the local calendar advances to a new Monday, open an empty week slot
+ * (haulage-started-weeks) and point expense ledger + gallery filters there.
+ * Does not invent blank expense rows — the "entry" is the week dropdown slot.
+ */
+(function () {
+  "use strict";
+
+  const weeks = globalThis.HaulageWeeks;
+  if (!weeks) return;
+
+  const {
+    currentWeekStart,
+    weekEndSunday,
+    weekLabel,
+    registerStartedWeek,
+    getActiveWeekStart,
+    setActiveWeekStart,
+  } = weeks;
+
+  function announce(startIso) {
+    const label = weekLabel(startIso, weekEndSunday(startIso));
+    const msg = `New week started (${label}). Expense views are set to this week — add your first entry when ready.`;
+    if (typeof window.toast === "function") window.toast(msg);
+  }
+
+  function checkRollover() {
+    const thisMon = currentWeekStart();
+    if (!thisMon) return;
+    const prev = getActiveWeekStart();
+    registerStartedWeek(thisMon);
+    if (prev === thisMon) return;
+
+    const rolledFromPriorWeek = Boolean(prev);
+    setActiveWeekStart(thisMon);
+
+    try {
+      localStorage.setItem("haulage-ledger-week-expense", thisMon);
+      localStorage.setItem("haulage-gallery-week-expense", thisMon);
+    } catch {
+      /* ignore */
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("haulage:new-week", { detail: { weekStart: thisMon } })
+    );
+
+    if (rolledFromPriorWeek) announce(thisMon);
+  }
+
+  function start() {
+    checkRollover();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkRollover();
+    });
+    window.addEventListener("focus", () => checkRollover());
+    setInterval(checkRollover, 60_000);
   }
 
   if (document.readyState === "loading") {
