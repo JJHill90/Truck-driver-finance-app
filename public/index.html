@@ -349,17 +349,17 @@
                 <button type="button" class="btn danger" id="auth-logout">Log out</button>
               </div>
               <p class="muted">Your data below is private to this profile. Presets pre-fill new entries.</p>
-              <div class="form-grid">
+              <div class="profile-security form-grid">
                 <h3 class="span-2 profile-section-title">Email</h3>
-                <p class="muted span-2">Used for username/password recovery and security reminders. Existing profiles without an email should add one here.</p>
+                <p class="muted span-2 profile-security-hint">For recovery and security reminders.</p>
                 <label class="span-2">Email address
                   <input id="auth-profile-email" type="email" autocomplete="email" placeholder="you@example.com" />
                 </label>
                 <div class="span-2 form-actions">
-                  <button type="button" class="btn secondary" id="auth-save-email">Save email</button>
+                  <button type="button" class="btn secondary small" id="auth-save-email">Save email</button>
                 </div>
                 <h3 class="span-2 profile-section-title">Password</h3>
-                <p class="muted span-2">Change your password any time. You’ll be reminded after 90 days.</p>
+                <p class="muted span-2 profile-security-hint">Change any time — you’ll be reminded after 90 days.</p>
                 <label>Current password
                   <input id="auth-current-password" type="password" autocomplete="current-password" placeholder="Current password" />
                 </label>
@@ -368,8 +368,10 @@
                 </label>
                 <p id="auth-new-password-strength" class="muted span-2" role="status"></p>
                 <div class="span-2 form-actions">
-                  <button type="button" class="btn secondary" id="auth-change-password">Change password</button>
+                  <button type="button" class="btn secondary small" id="auth-change-password">Change password</button>
                 </div>
+              </div>
+              <div class="form-grid profile-presets">
                 <h3 class="span-2 profile-section-title">Presets</h3>
                 <label>Default work-use %<input id="preset-workuse" type="number" min="0" max="100" placeholder="100" /></label>
                 <label>Default expense category
