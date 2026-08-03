@@ -59,16 +59,16 @@
           </button>
         </form>
         <form id="title-recover-form" class="title-auth-form hidden" autocomplete="on">
-          <p class="muted">Enter the email on your profile. We’ll send a link to recover your username and set a new password.</p>
+          <p class="muted">Enter the email on your profile. We’ll email a recovery link when mail is configured; otherwise you can continue on this page to reset your password.</p>
           <label>
             Email
             <input id="title-recover-email" name="recover-email" type="email" autocomplete="email" placeholder="you@example.com" />
           </label>
           <div class="title-auth-actions">
-            <button type="submit" class="btn primary" id="title-recover-send">Send recovery link</button>
+            <button type="submit" class="btn primary" id="title-recover-send">Continue recovery</button>
             <button type="button" class="btn secondary" id="title-recover-back">Back to log in</button>
           </div>
-          <p id="title-recover-dev" class="muted small hidden"></p>
+          <div id="title-recover-dev" class="title-recover-fallback hidden"></div>
         </form>
         <p id="title-auth-message" class="title-auth-message" role="status"></p>
       </div>
@@ -445,10 +445,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-<<<<<<< HEAD
-    <script src="./enhancements.js?v=auth-email-1"></script>
-=======
-    <script src="./enhancements.js?v=network-err-1"></script>
->>>>>>> origin/main
+    <script src="./enhancements.js?v=recovery-ux-1"></script>
   </body>
 </html>

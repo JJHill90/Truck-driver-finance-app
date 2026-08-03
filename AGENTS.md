@@ -72,8 +72,9 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   appear in `/alerts`. After 10 failed logins (or “Forgot username / password?”),
   `POST /auth/recover/request` emails a link to `/haulage/recover.html` (reveals
   username + set new password). SMTP optional via `SMTP_HOST`, `SMTP_PORT`,
-  `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `APP_BASE_URL` — without SMTP the API
-  returns `devRecoveryUrl` for local testing.
+  `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `APP_BASE_URL`. Without SMTP the API
+  returns a same-origin `recoveryUrl` and the title-screen UI shows
+  “Continue to reset password” (not an error).
 - **Primary mod admin:** bootstraps `Haulage_Admin` / `Haulage_Admin` on startup
  via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
  `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
