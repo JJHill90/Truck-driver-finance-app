@@ -1072,7 +1072,12 @@ api.post("/receipts/manual", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
-  const { expense } = storage.addManualReceipt(records, body);
+  const { expense, receipt } = storage.addManualReceipt(records, body);
+  // Flag cash purchases without a paper/photo receipt (layered; storage is verbatim).
+  if (body.cashTransaction != null) {
+    expense.cashTransaction = Boolean(body.cashTransaction);
+    if (receipt && receipt.manual) receipt.manual.cashTransaction = expense.cashTransaction;
+  }
   rememberVendor(records, {
     name: body.vendor || expense.vendor,
     abn: body.vendorAbn || expense.vendorAbn,
