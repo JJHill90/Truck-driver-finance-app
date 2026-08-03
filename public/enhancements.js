@@ -367,7 +367,11 @@
       body: JSON.stringify(body || {}),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "Request failed");
+    if (!res.ok) {
+      const err = new Error(data.error || "Request failed");
+      err.data = data;
+      throw err;
+    }
     return data;
   }
 
@@ -420,15 +424,68 @@
     return {
       username: (byId("title-auth-username") || {}).value || "",
       password: (byId("title-auth-password") || {}).value || "",
+      email: (byId("title-auth-email") || {}).value || "",
     };
+  }
+
+  async function refreshPasswordStrength(passwordElId, usernameElId, outElId) {
+    const out = byId(outElId);
+    const password = (byId(passwordElId) || {}).value || "";
+    const userEl = byId(usernameElId);
+    const username = userEl
+      ? String(userEl.value != null && "value" in userEl ? userEl.value : userEl.textContent || "")
+          .replace(/\s*\(primary mod\)\s*$/i, "")
+          .trim()
+      : "";
+    if (!out) return;
+    if (!password) {
+      out.textContent = "";
+      out.dataset.level = "";
+      return;
+    }
+    try {
+      const data = await apiPost("/auth/password-strength", { password, username });
+      out.textContent = data.message || "";
+      out.dataset.level = data.label || "weak";
+      if (data.hints && data.hints.length && data.label !== "strong") {
+        out.textContent = `${data.message} ${data.hints[0]}`;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function showTitleRegisterMode(isRegister) {
+    const emailWrap = byId("title-auth-email-wrap");
+    const hint = byId("title-password-hint");
+    const strength = byId("title-password-strength");
+    const pwd = byId("title-auth-password");
+    if (emailWrap) emailWrap.classList.toggle("hidden", !isRegister);
+    if (hint) hint.classList.toggle("hidden", !isRegister);
+    if (strength) strength.classList.toggle("hidden", !isRegister);
+    if (pwd) {
+      pwd.autocomplete = isRegister ? "new-password" : "current-password";
+      pwd.placeholder = isRegister ? "Strong password (8+ chars)" : "Your password";
+    }
+  }
+
+  function showTitleRecoverMode(show) {
+    const authForm = byId("title-auth-form");
+    const recoverForm = byId("title-recover-form");
+    if (authForm) authForm.classList.toggle("hidden", show);
+    if (recoverForm) recoverForm.classList.toggle("hidden", !show);
   }
 
   function wireTitleScreen() {
     const form = byId("title-auth-form");
     const loginBtn = byId("title-auth-login");
     const registerBtn = byId("title-auth-register");
+    const forgotBtn = byId("title-auth-forgot");
+    const recoverForm = byId("title-recover-form");
     if (!form || form.dataset.wired) return;
     form.dataset.wired = "1";
+
+    let registerMode = false;
 
     async function doLogin() {
       setTitleMessage("Logging in…");
@@ -438,19 +495,53 @@
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
+        if (/recover|failed sign-ins|Forgot/i.test(e.message || "")) {
+          showTitleRecoverMode(true);
+          const data = e.data || {};
+          const dev = byId("title-recover-dev");
+          if (dev && data.devRecoveryUrl) {
+            dev.classList.remove("hidden");
+            dev.innerHTML = `Dev preview (email not configured): <a href="${esc(data.devRecoveryUrl)}">open recovery page</a> — username <strong>${esc(data.devUsername || "")}</strong>`;
+          }
+        }
       }
     }
 
     async function doRegister() {
+      if (!registerMode) {
+        registerMode = true;
+        showTitleRegisterMode(true);
+        setTitleMessage(
+          "Choose a strong password and add your email so you can recover this profile later.",
+          false
+        );
+        byId("title-auth-email")?.focus();
+        return;
+      }
       setTitleMessage("Creating profile…");
       try {
-        await apiPost("/auth/register", readTitleCreds());
+        const creds = readTitleCreds();
+        if (!creds.email) {
+          setTitleMessage("Email is required when creating a profile.", true);
+          return;
+        }
+        await apiPost("/auth/register", creds);
         resetReviewShown();
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
       }
     }
+
+    byId("title-auth-password")?.addEventListener("input", () => {
+      if (registerMode) {
+        void refreshPasswordStrength(
+          "title-auth-password",
+          "title-auth-username",
+          "title-password-strength"
+        );
+      }
+    });
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -459,6 +550,8 @@
     if (loginBtn) {
       loginBtn.addEventListener("click", (e) => {
         e.preventDefault();
+        registerMode = false;
+        showTitleRegisterMode(false);
         void doLogin();
       });
     }
@@ -466,6 +559,36 @@
       registerBtn.addEventListener("click", (e) => {
         e.preventDefault();
         void doRegister();
+      });
+    }
+    if (forgotBtn) {
+      forgotBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        showTitleRecoverMode(true);
+        setTitleMessage("");
+      });
+    }
+    byId("title-recover-back")?.addEventListener("click", () => {
+      showTitleRecoverMode(false);
+      setTitleMessage("");
+    });
+    if (recoverForm && !recoverForm.dataset.wired) {
+      recoverForm.dataset.wired = "1";
+      recoverForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        setTitleMessage("Sending recovery link…");
+        const email = (byId("title-recover-email") || {}).value || "";
+        try {
+          const data = await apiPost("/auth/recover/request", { email });
+          setTitleMessage(data.message || "Check your email for a recovery link.");
+          const dev = byId("title-recover-dev");
+          if (dev && data.devRecoveryUrl) {
+            dev.classList.remove("hidden");
+            dev.innerHTML = `Dev preview (email not configured): <a href="${esc(data.devRecoveryUrl)}">open recovery page</a> — username <strong>${esc(data.devUsername || "")}</strong>`;
+          }
+        } catch (err) {
+          setTitleMessage(err.message, true);
+        }
       });
     }
   }
@@ -501,6 +624,8 @@
         nameEl.textContent = user.username;
         if (user.isAdmin) nameEl.textContent += " (primary mod)";
       }
+      const emailEl = byId("auth-profile-email");
+      if (emailEl) emailEl.value = user.email || "";
       const presets = user.presets || {};
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
@@ -592,7 +717,7 @@
           <button type="button" class="admin-user-row-main" data-admin-user="${esc(u.username)}">
             <div>
               <div class="admin-user-name">${esc(u.username)}${badge}</div>
-              <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
+              <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${esc(u.email || "no email")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
             </div>
             <div class="admin-user-totals">
               <div>Gross ${fmt(totals.grossIncome)}</div>
@@ -662,6 +787,7 @@
         <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
+      <p class="muted">Account email: <strong>${esc((data.user && data.user.email) || "not set")}</strong></p>
       <div class="admin-stat-row">
         <div class="admin-stat"><div class="label">Gross Income</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
         <div class="admin-stat"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses && s.expenses.deductibleTotal)}</div></div>
@@ -741,16 +867,24 @@
     let bar = byId("enh-alerts");
     if (bar) bar.remove();
     if (!alerts || !alerts.length) return;
+    // /alerts may return a public user object or a bare username string.
     bar = document.createElement("div");
     bar.id = "enh-alerts";
     bar.className = "enh-alerts";
     const items = alerts
-      .map(
-        (a) =>
-          `<li class="enh-alert enh-alert-${esc(a.level || "info")}">${esc(a.message)}</li>`
-      )
+      .map((a) => {
+        const code = a.code || "";
+        const goProfile =
+          code === "missing_email" || code === "password_age"
+            ? ` <button type="button" class="btn link enh-alert-go-profile" data-alert-code="${esc(code)}">Open Profile</button>`
+            : "";
+        return `<li class="enh-alert enh-alert-${esc(a.level || "info")}">${esc(a.message)}${goProfile}</li>`;
+      })
       .join("");
-    const who = user ? `Signed in as ${esc(user)}` : "Guest (create a profile to save your data)";
+    const whoName = user && typeof user === "object" ? user.username : user;
+    const who = whoName
+      ? `Signed in as ${esc(whoName)}`
+      : "Guest (create a profile to save your data)";
     bar.innerHTML = `
       <div class="enh-alerts-head">
         <strong>Review needed</strong>
@@ -759,6 +893,14 @@
       </div>
       <ul class="enh-alerts-list">${items}</ul>`;
     bar.querySelector(".enh-alerts-close").addEventListener("click", () => bar.remove());
+    bar.querySelectorAll(".enh-alert-go-profile").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const nav = document.querySelector('.nav-btn[data-view="profile"]');
+        if (nav) nav.click();
+        else if (typeof window.setView === "function") window.setView("profile");
+        byId("auth-profile-email")?.focus();
+      });
+    });
     const topbar = main.querySelector(".topbar");
     if (topbar && topbar.nextSibling) main.insertBefore(bar, topbar.nextSibling);
     else main.insertBefore(bar, main.firstChild);
@@ -768,6 +910,7 @@
     return {
       username: (byId("auth-username") || {}).value || "",
       password: (byId("auth-password") || {}).value || "",
+      email: (byId("auth-email") || {}).value || "",
     };
   }
 
@@ -776,12 +919,30 @@
     const login = byId("auth-login");
     const logout = byId("auth-logout");
     const savePresets = byId("auth-save-presets");
+    const saveEmail = byId("auth-save-email");
+    const changePassword = byId("auth-change-password");
+
+    byId("auth-password")?.addEventListener("input", () => {
+      void refreshPasswordStrength("auth-password", "auth-username", "auth-password-strength");
+    });
+    byId("auth-new-password")?.addEventListener("input", () => {
+      void refreshPasswordStrength(
+        "auth-new-password",
+        "auth-current-user",
+        "auth-new-password-strength"
+      );
+    });
 
     if (register) {
       register.addEventListener("click", async () => {
-        setMessage("Creating profile…");
+        setMessage("Creating profile… Use a strong password and include your email.");
         try {
-          await apiPost("/auth/register", readCreds());
+          const creds = readCreds();
+          if (!creds.email) {
+            setMessage("Email is required when creating a profile.", true);
+            return;
+          }
+          await apiPost("/auth/register", creds);
           resetReviewShown();
           window.location.reload();
         } catch (e) {
@@ -812,6 +973,39 @@
         window.location.reload();
       });
     }
+    if (saveEmail) {
+      saveEmail.addEventListener("click", async () => {
+        try {
+          const data = await apiPost("/auth/email", {
+            email: (byId("auth-profile-email") || {}).value || "",
+          });
+          showAuthState(data.user);
+          if (window.toast) window.toast("Email saved");
+          const alertData = await apiGet("/alerts");
+          renderAlerts(alertData.alerts, alertData.user);
+        } catch (e) {
+          if (window.toast) window.toast(e.message);
+        }
+      });
+    }
+    if (changePassword) {
+      changePassword.addEventListener("click", async () => {
+        try {
+          const data = await apiPost("/auth/change-password", {
+            currentPassword: (byId("auth-current-password") || {}).value || "",
+            newPassword: (byId("auth-new-password") || {}).value || "",
+          });
+          showAuthState(data.user);
+          if (byId("auth-current-password")) byId("auth-current-password").value = "";
+          if (byId("auth-new-password")) byId("auth-new-password").value = "";
+          if (window.toast) window.toast("Password updated");
+          const alertData = await apiGet("/alerts");
+          renderAlerts(alertData.alerts, alertData.user);
+        } catch (e) {
+          if (window.toast) window.toast(e.message);
+        }
+      });
+    }
     if (savePresets) {
       savePresets.addEventListener("click", async () => {
         const presets = {
@@ -840,9 +1034,10 @@
         e.preventDefault();
         const username = (byId("admin-new-username") || {}).value || "";
         const password = (byId("admin-new-password") || {}).value || "";
+        const email = (byId("admin-new-email") || {}).value || "";
         setAdminCreateMessage("Creating profile…");
         try {
-          const data = await apiPost("/admin/users", { username, password });
+          const data = await apiPost("/admin/users", { username, password, email });
           setAdminCreateMessage(
             `Created ${data.user.username}. Share the username and temporary password so they can log in and change it if needed.`
           );

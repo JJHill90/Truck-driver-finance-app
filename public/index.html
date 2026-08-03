@@ -32,6 +32,10 @@
             Username
             <input id="title-auth-username" name="username" autocomplete="username" placeholder="e.g. dave.hill" />
           </label>
+          <label id="title-auth-email-wrap" class="hidden">
+            Email
+            <input id="title-auth-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
+          </label>
           <label>
             Password
             <input
@@ -39,13 +43,32 @@
               name="password"
               type="password"
               autocomplete="current-password"
-              placeholder="At least 6 characters"
+              placeholder="Strong password (8+ chars)"
             />
           </label>
+          <p id="title-password-strength" class="title-password-strength muted hidden" role="status"></p>
+          <p id="title-password-hint" class="title-password-hint muted hidden">
+            Create a strong password: 12+ characters with upper &amp; lower case, a number and a symbol. Avoid common words.
+          </p>
           <div class="title-auth-actions">
             <button type="submit" class="btn primary" id="title-auth-login">Log in</button>
             <button type="button" class="btn secondary" id="title-auth-register">Create profile</button>
           </div>
+          <button type="button" class="btn link title-forgot-btn" id="title-auth-forgot">
+            Forgot username / password?
+          </button>
+        </form>
+        <form id="title-recover-form" class="title-auth-form hidden" autocomplete="on">
+          <p class="muted">Enter the email on your profile. We’ll send a link to recover your username and set a new password.</p>
+          <label>
+            Email
+            <input id="title-recover-email" name="recover-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          </label>
+          <div class="title-auth-actions">
+            <button type="submit" class="btn primary" id="title-recover-send">Send recovery link</button>
+            <button type="button" class="btn secondary" id="title-recover-back">Back to log in</button>
+          </div>
+          <p id="title-recover-dev" class="muted small hidden"></p>
         </form>
         <p id="title-auth-message" class="title-auth-message" role="status"></p>
       </div>
@@ -303,10 +326,12 @@
           <div class="panel" id="account-panel">
             <div id="auth-logged-out">
               <div class="panel-header"><h2>Create your profile / Log in</h2></div>
-              <p class="muted">Save your receipts, income, EOFY figures and presets to your own profile in the app cloud. New here? Pick a username and password to get started.</p>
+              <p class="muted">Save your receipts, income, EOFY figures and presets to your own profile. New here? Choose a username, email and a strong password.</p>
               <form id="auth-form" class="form-grid" autocomplete="on">
                 <label>Username<input id="auth-username" name="username" autocomplete="username" placeholder="e.g. dave.hill" /></label>
-                <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="At least 6 characters" /></label>
+                <label>Email<input id="auth-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+                <label>Password<input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Strong password (8+ chars)" /></label>
+                <p id="auth-password-strength" class="muted span-2" role="status"></p>
                 <div class="span-2 form-actions">
                   <button type="button" class="btn primary" id="auth-register">Create profile</button>
                   <button type="button" class="btn secondary" id="auth-login">Log in</button>
@@ -321,6 +346,27 @@
               </div>
               <p class="muted">Your data below is private to this profile. Presets pre-fill new entries.</p>
               <div class="form-grid">
+                <h3 class="span-2 profile-section-title">Email</h3>
+                <p class="muted span-2">Used for username/password recovery and security reminders. Existing profiles without an email should add one here.</p>
+                <label class="span-2">Email address
+                  <input id="auth-profile-email" type="email" autocomplete="email" placeholder="you@example.com" />
+                </label>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn secondary" id="auth-save-email">Save email</button>
+                </div>
+                <h3 class="span-2 profile-section-title">Password</h3>
+                <p class="muted span-2">Change your password any time. You’ll be reminded after 90 days.</p>
+                <label>Current password
+                  <input id="auth-current-password" type="password" autocomplete="current-password" placeholder="Current password" />
+                </label>
+                <label>New password
+                  <input id="auth-new-password" type="password" autocomplete="new-password" placeholder="Strong new password" />
+                </label>
+                <p id="auth-new-password-strength" class="muted span-2" role="status"></p>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn secondary" id="auth-change-password">Change password</button>
+                </div>
+                <h3 class="span-2 profile-section-title">Presets</h3>
                 <label>Default work-use %<input id="preset-workuse" type="number" min="0" max="100" placeholder="100" /></label>
                 <label>Default expense category
                   <select id="preset-category" class="category-select" aria-label="Default expense category">
@@ -341,7 +387,8 @@
             <p class="muted">Create profiles for drivers who request access, open any profile to review their ledger (read-only), or delete a profile you no longer need. The primary mod account cannot be deleted.</p>
             <form id="admin-create-user-form" class="form-grid admin-create-form">
               <label>Username<input type="text" id="admin-new-username" name="username" autocomplete="off" placeholder="e.g. dave.hill" required /></label>
-              <label>Temporary password<input type="text" id="admin-new-password" name="password" autocomplete="new-password" placeholder="At least 6 characters" required /></label>
+              <label>Email (optional)<input type="email" id="admin-new-email" name="email" autocomplete="off" placeholder="driver@example.com" /></label>
+              <label>Temporary password<input type="text" id="admin-new-password" name="password" autocomplete="new-password" placeholder="Strong password (8+ chars)" required /></label>
               <div class="span-2 form-actions">
                 <button type="submit" class="btn primary" id="admin-create-user">Create profile</button>
               </div>
@@ -398,6 +445,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=car-claims-3"></script>
+    <script src="./enhancements.js?v=auth-email-1"></script>
   </body>
 </html>

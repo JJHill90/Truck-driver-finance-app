@@ -90,18 +90,21 @@ data/                   Runtime store + receipts (git-ignored)
 
 ## Accounts (multi-user profiles)
 
-Under the **Profile** tab, a first-time user can create a profile with a
-username + password; existing users log in there too. Each account has its own
-private data store (receipts, income, EOFY projections, tax values and presets),
-so after logging in all of that user's data loads immediately. A missing-data
-alert banner (e.g. expenses needing receipts, no income recorded, incomplete
-profile) is shown on load.
+Under the **Profile** tab (or the title screen), a first-time user creates a
+profile with username, **email**, and a **strong password**; existing users log
+in there too. Each account has its own private data store (receipts, income,
+EOFY projections, tax values and presets). A missing-data alert banner is shown
+on load — including prompts when email is missing or the password is older than
+90 days.
 
 - Accounts persist to `data/users.json`; per-user records to `data/users/<name>.json`.
 - Passwords are stored as salted PBKDF2 hashes; the session is an HttpOnly cookie.
+- Strength checks live in `lib/password-strength.js` (length, classes, common-password blocklist).
+- **Forgot password / 10 failed logins:** request recovery with the profile email;
+  the link opens `/haulage/recover.html`, reveals the username, and lets the user
+  set a new strong password. Without SMTP configured, the API returns
+  `devRecoveryUrl` for local testing.
 - Without logging in, the app works against a shared **guest** store.
-- This is app-appropriate auth for a self-hosted tool (the "cloud" is the local
-  server), not a hardened public identity provider.
 - **Primary mod:** username `Haulage_Admin` / password `Haulage_Admin` (bootstrapped
   on server start; override with `HAULAGE_ADMIN_USERNAME` /
   `HAULAGE_ADMIN_PASSWORD`). On the Profile tab they see **Primary mod — user
@@ -115,6 +118,9 @@ profile) is shown on load.
 - `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
 - `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
   username is `Haulage_Admin`).
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
+  `APP_BASE_URL` — optional outbound email for recovery links and 90-day
+  password reminders (`lib/mail.js`).
 
 ## Historical financial years (accurate prior-year reconciliation)
 
