@@ -27,6 +27,7 @@ describe("updateExpense", () => {
       vendorAbn: "88 000 014 675",
       description: "groceries",
       workUsePercent: 80,
+      cashTransaction: true,
     });
     expect(updated.id).toBe("e1");
     expect(updated.receiptId).toBe("r1");
@@ -38,6 +39,7 @@ describe("updateExpense", () => {
     expect(updated.vendorAbn).toBe("88000014675");
     expect(updated.description).toBe("groceries");
     expect(updated.workUsePercent).toBe(80);
+    expect(updated.cashTransaction).toBe(true);
     expect(updated.updatedAt).toBeTruthy();
   });
 

@@ -129,8 +129,36 @@
   }
 
   window.fetch = async function (...args) {
-    const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
-    const options = args[1] || {};
+    let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+    let options = args[1] || {};
+
+    // Inject cash-transaction flag from the manual expense form (app.js
+    // builds its own payload and does not read this checkbox).
+    if (
+      url &&
+      /\/receipts\/manual(\?|$)/.test(url) &&
+      String(options.method || "GET").toUpperCase() === "POST" &&
+      typeof options.body === "string"
+    ) {
+      try {
+        const bodyObj = JSON.parse(options.body);
+        const cashEl = document.querySelector(
+          "#manual-receipt-form [name=cashTransaction], #manual-cash-transaction"
+        );
+        if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
+        options = {
+          ...options,
+          body: JSON.stringify(bodyObj),
+          headers: {
+            "Content-Type": "application/json",
+            ...(options.headers || {}),
+          },
+        };
+        args = [url, options];
+      } catch {
+        /* leave body as-is */
+      }
+    }
 
     const runScanOrPassthrough = async () => {
       if (url && /\/receipts\/scan(\?|$)/.test(url)) {
@@ -2363,6 +2391,29 @@
     });
   }
 
+  /** Show a Cash tag on expense ledger rows marked cashTransaction. */
+  function injectCashTags(cfg) {
+    if (cfg.type !== "expense") return;
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const expenses =
+      (typeof state !== "undefined" && state.records && state.records.expenses) || [];
+    list.querySelectorAll("tbody tr[data-expense-id]").forEach((tr) => {
+      const id = tr.getAttribute("data-expense-id");
+      if (!id || id === "__draft__") return;
+      const entry = expenses.find((e) => e && e.id === id);
+      if (!entry || !entry.cashTransaction) return;
+      const detailCell = tr.querySelector("td:nth-child(3)");
+      if (!detailCell || detailCell.querySelector(".tag-cash")) return;
+      const tag = document.createElement("span");
+      tag.className = "tag tag-cash";
+      tag.textContent = "Cash";
+      tag.title = "Cash transaction — may not have a receipt";
+      detailCell.appendChild(document.createTextNode(" "));
+      detailCell.appendChild(tag);
+    });
+  }
+
   /** Inject Edit beside Delete on each saved ledger row. */
   function injectEditButtons(cfg) {
     const list = document.getElementById(cfg.listId);
@@ -2454,6 +2505,7 @@
         <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
         <label>Work-use %<input name="workUsePercent" type="number" min="0" max="100" step="1" value="${esc(entry.workUsePercent ?? 100)}"></label>
         <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
+        <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (may not have a receipt)</label>
         <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
       `
       : `
@@ -2499,6 +2551,9 @@
       for (const [key, value] of fd.entries()) payload[key] = value;
       if (isExpense) {
         payload.reimbursed = Boolean(form.querySelector('[name="reimbursed"]')?.checked);
+        payload.cashTransaction = Boolean(
+          form.querySelector('[name="cashTransaction"]')?.checked
+        );
         payload.workUsePercent = Number(payload.workUsePercent);
         payload.amount = Number(payload.amount);
       } else {
@@ -2546,6 +2601,7 @@
     ensureWeekPicker(cfg);
     applyLedgerFilters(cfg);
     hideOutsidePeriodTags(cfg);
+    injectCashTags(cfg);
     injectEditButtons(cfg);
   }
 
