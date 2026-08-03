@@ -102,8 +102,8 @@ on load — including prompts when email is missing or the password is older tha
 - Strength checks live in `lib/password-strength.js` (length, classes, common-password blocklist).
 - **Forgot password / 10 failed logins:** request recovery with the profile email;
   the link opens `/haulage/recover.html`, reveals the username, and lets the user
-  set a new strong password. Without SMTP configured, the API returns
-  `devRecoveryUrl` for local testing.
+  set a new strong password. Without SMTP configured, the UI shows an in-app
+  “Continue to reset password” button (`recoveryUrl`) instead of sending mail.
 - Without logging in, the app works against a shared **guest** store.
 - **Primary mod:** username `Haulage_Admin` / password `Haulage_Admin` (bootstrapped
   on server start; override with `HAULAGE_ADMIN_USERNAME` /

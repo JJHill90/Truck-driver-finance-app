@@ -25,6 +25,20 @@ services:
         value: Haulage_Admin
       - key: HAULAGE_ADMIN_PASSWORD
         sync: false
+      # Optional outbound email (recovery links + 90-day password reminders).
+      # Without these, recovery still works in-browser via a same-origin link.
+      - key: APP_BASE_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
     # Persist accounts + receipts across deploys (required for multi-user admin).
     disk:
       name: haulage-data

@@ -210,6 +210,26 @@ body:not(.auth-locked) .title-screen {
   margin-left: 0.5rem;
   vertical-align: baseline;
 }
+.title-recover-fallback {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border, #2a3a55);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.15);
+  display: grid;
+  gap: 10px;
+}
+.title-recover-fallback-msg {
+  margin: 0;
+  color: var(--text-dim, #9fb0c9);
+  font-size: 0.92rem;
+}
+.title-recover-continue {
+  display: inline-flex;
+  justify-content: center;
+  text-align: center;
+  text-decoration: none;
+}
 .title-forgot-btn,
 .btn.link {
   background: none;

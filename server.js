@@ -305,8 +305,12 @@ api.post("/auth/login", async (req, res) => {
               username: recovery.username,
               resetUrl,
             });
+            // Same-origin path so the UI can continue without SMTP / email delivery.
+            const recoveryPath = `/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+            payload.emailSent = Boolean(sent.sent);
             if (!sent.sent) {
-              payload.devRecoveryUrl = resetUrl;
+              payload.recoveryUrl = recoveryPath;
+              payload.devRecoveryUrl = resetUrl; // legacy alias
               payload.devUsername = recovery.username;
             }
           }
@@ -400,6 +404,7 @@ api.post("/auth/recover/request", async (req, res) => {
   const email = (req.body || {}).email;
   const generic = {
     ok: true,
+    emailSent: false,
     message:
       "If that email is registered, we sent a recovery link. Check your inbox (and spam).",
   };
@@ -407,15 +412,24 @@ api.post("/auth/recover/request", async (req, res) => {
     const recovery = auth.createRecoveryTokenForEmail(email);
     if (recovery.found) {
       const base = mail.appBaseUrl(req);
-      const resetUrl = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+      const recoveryPath = `/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+      const resetUrl = `${base}${recoveryPath}`;
       const sent = await mail.sendRecoveryEmail({
         to: recovery.email,
         username: recovery.username,
         resetUrl,
       });
-      if (!sent.sent) {
-        // Dev / no SMTP: include the link so local testing still works.
-        generic.devRecoveryUrl = resetUrl;
+      generic.emailSent = Boolean(sent.sent);
+      if (sent.sent) {
+        generic.message =
+          "If that email is registered, we sent a recovery link. Check your inbox (and spam).";
+      } else {
+        // No SMTP (or send failed): continue in-browser with a same-origin link.
+        // Do not treat this as an error — hosted installs often have no mail yet.
+        generic.message =
+          "Email delivery is not configured on this server. Use the recovery link below to reset your password (expires in 1 hour).";
+        generic.recoveryUrl = recoveryPath;
+        generic.devRecoveryUrl = resetUrl; // legacy alias
         generic.devUsername = recovery.username;
       }
     }

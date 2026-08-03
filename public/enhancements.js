@@ -530,6 +530,29 @@
     const recoverForm = byId("title-recover-form");
     if (authForm) authForm.classList.toggle("hidden", show);
     if (recoverForm) recoverForm.classList.toggle("hidden", !show);
+    if (!show) {
+      const linkBox = byId("title-recover-dev");
+      if (linkBox) {
+        linkBox.classList.add("hidden");
+        linkBox.innerHTML = "";
+      }
+    }
+  }
+
+  /** Show same-origin recovery CTA when SMTP/email delivery is unavailable. */
+  function showRecoveryLinkFallback(data) {
+    const box = byId("title-recover-dev");
+    if (!box) return;
+    const url = data.recoveryUrl || data.devRecoveryUrl;
+    if (!url) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <p class="title-recover-fallback-msg">Continue below to reveal your username and choose a new password.</p>
+      <a class="btn primary title-recover-continue" href="${esc(url)}">Continue to reset password</a>`;
   }
 
   function wireTitleScreen() {
@@ -554,10 +577,13 @@
         if (/recover|failed sign-ins|Forgot/i.test(e.message || "")) {
           showTitleRecoverMode(true);
           const data = e.data || {};
-          const dev = byId("title-recover-dev");
-          if (dev && data.devRecoveryUrl) {
-            dev.classList.remove("hidden");
-            dev.innerHTML = `Dev preview (email not configured): <a href="${esc(data.devRecoveryUrl)}">open recovery page</a> — username <strong>${esc(data.devUsername || "")}</strong>`;
+          if (data.recoveryUrl || data.devRecoveryUrl) {
+            setTitleMessage(
+              e.message ||
+                "Too many failed sign-ins. Continue below to reset your password.",
+              true
+            );
+            showRecoveryLinkFallback(data);
           }
         }
       }
@@ -637,10 +663,10 @@
         try {
           const data = await apiPost("/auth/recover/request", { email });
           setTitleMessage(data.message || "Check your email for a recovery link.");
-          const dev = byId("title-recover-dev");
-          if (dev && data.devRecoveryUrl) {
-            dev.classList.remove("hidden");
-            dev.innerHTML = `Dev preview (email not configured): <a href="${esc(data.devRecoveryUrl)}">open recovery page</a> — username <strong>${esc(data.devUsername || "")}</strong>`;
+          if (data.recoveryUrl || data.devRecoveryUrl) {
+            showRecoveryLinkFallback(data);
+          } else {
+            showRecoveryLinkFallback({});
           }
         } catch (err) {
           setTitleMessage(err.message, true);
