@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./truck.svg" />
+    <title>Recover account — Haulage Finance</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="recover-page">
+    <main class="recover-card">
+      <p class="recover-brand">Haulage Finance</p>
+      <h1>Recover your account</h1>
+      <p class="muted" id="recover-status">Checking your recovery link…</p>
+      <div id="recover-ready" class="hidden">
+        <p>
+          Your username is <strong id="recover-username">—</strong>.
+          Choose a new strong password below.
+        </p>
+        <form id="recover-form" class="form-grid">
+          <label class="span-2">
+            New password
+            <input id="recover-password" type="password" autocomplete="new-password" required />
+          </label>
+          <label class="span-2">
+            Confirm password
+            <input id="recover-password2" type="password" autocomplete="new-password" required />
+          </label>
+          <p id="recover-strength" class="muted span-2" role="status"></p>
+          <div class="span-2 form-actions">
+            <button type="submit" class="btn primary">Save new password &amp; sign in</button>
+          </div>
+        </form>
+      </div>
+      <p id="recover-message" class="muted" role="status"></p>
+      <p class="muted small"><a href="./">Back to Haulage Finance</a></p>
+    </main>
+    <script>
+      (function () {
+        const API = `${window.location.origin}/api/haulage`;
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token") || "";
+        const statusEl = document.getElementById("recover-status");
+        const readyEl = document.getElementById("recover-ready");
+        const msgEl = document.getElementById("recover-message");
+        const userEl = document.getElementById("recover-username");
+        const strengthEl = document.getElementById("recover-strength");
+
+        function setMsg(text, isError) {
+          msgEl.textContent = text || "";
+          msgEl.style.color = isError ? "var(--red, #b00020)" : "";
+        }
+
+        async function peek() {
+          if (!token) {
+            statusEl.textContent = "This recovery link is missing a token.";
+            return;
+          }
+          const res = await fetch(`${API}/auth/recover/peek?token=${encodeURIComponent(token)}`);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            statusEl.textContent = data.error || "Invalid recovery link.";
+            return;
+          }
+          statusEl.textContent = "Link verified. Set a new password to continue.";
+          userEl.textContent = data.username || "—";
+          readyEl.classList.remove("hidden");
+        }
+
+        async function refreshStrength() {
+          const password = document.getElementById("recover-password").value;
+          const username = userEl.textContent || "";
+          const res = await fetch(`${API}/auth/password-strength`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password, username }),
+          });
+          const data = await res.json().catch(() => ({}));
+          strengthEl.textContent = data.message || "";
+          strengthEl.dataset.level = data.label || "weak";
+        }
+
+        document.getElementById("recover-password").addEventListener("input", () => {
+          void refreshStrength();
+        });
+
+        document.getElementById("recover-form").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const password = document.getElementById("recover-password").value;
+          const password2 = document.getElementById("recover-password2").value;
+          if (password !== password2) {
+            setMsg("Passwords do not match.", true);
+            return;
+          }
+          setMsg("Saving…");
+          const res = await fetch(`${API}/auth/recover/reset`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ token, password }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            setMsg(data.error || "Could not reset password.", true);
+            return;
+          }
+          setMsg("Password updated — taking you to Haulage Finance…");
+          window.location.href = "./";
+        });
+
+        void peek();
+      })();
+    </script>
+  </body>
+</html>

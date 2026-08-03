@@ -233,6 +233,9 @@ const OPEN_WRITE_PATHS = new Set([
   "/auth/login",
   "/auth/logout",
   "/auth/register",
+  "/auth/recover/request",
+  "/auth/recover/reset",
+  "/auth/password-strength",
   "/expenses/preview",
 ]);
 api.use((req, res, next) => {
@@ -255,10 +258,17 @@ api.use((req, res, next) => {
 });
 
 // --- Auth ----------------------------------------------------------------
+const mail = require("./lib/mail");
+
+api.post("/auth/password-strength", (req, res) => {
+  const { password, username } = req.body || {};
+  res.json(auth.scorePassword(password, username));
+});
+
 api.post("/auth/register", (req, res) => {
-  const { username, password, presets } = req.body || {};
+  const { username, password, email, presets } = req.body || {};
   try {
-    const user = auth.registerUser(username, password, presets);
+    const user = auth.registerUser(username, password, presets, email);
     const token = auth.createSession(user.username);
     recordsForUser(user.username); // initialise their store
     setSessionCookie(res, token);
@@ -268,16 +278,73 @@ api.post("/auth/register", (req, res) => {
   }
 });
 
-api.post("/auth/login", (req, res) => {
+api.post("/auth/login", async (req, res) => {
   const { username, password } = req.body || {};
-  const user = auth.verifyUser(username, password);
-  if (!user) {
-    res.status(401).json({ error: "Invalid username or password." });
+  const result = auth.attemptLogin(username, password);
+  if (!result.user) {
+    let err = "Invalid username or password.";
+    const payload = {
+      error: err,
+      needsRecovery: result.needsRecovery,
+      failedLoginCount: result.failedLoginCount,
+    };
+    // On the 10th failed attempt, email a recovery link (once) when the
+    // account has an email on file.
+    if (result.needsRecovery && result.failedLoginCount === auth.MAX_FAILED_LOGINS) {
+      err = `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). Check your email for a recovery link, or use “Forgot username / password?”.`;
+      payload.error = err;
+      try {
+        const existing = auth.getUser(username);
+        if (existing && existing.email) {
+          const recovery = auth.createRecoveryTokenForEmail(existing.email);
+          if (recovery.found) {
+            const base = mail.appBaseUrl(req);
+            const resetUrl = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+            const sent = await mail.sendRecoveryEmail({
+              to: recovery.email,
+              username: recovery.username,
+              resetUrl,
+            });
+            if (!sent.sent) {
+              payload.devRecoveryUrl = resetUrl;
+              payload.devUsername = recovery.username;
+            }
+          }
+        } else {
+          err =
+            `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). This profile has no email — ask the primary mod for a password reset, or recover once an email is on file.`;
+          payload.error = err;
+        }
+      } catch (mailErr) {
+        console.warn("[auth] auto-recovery email failed:", mailErr.message);
+      }
+    } else if (result.needsRecovery) {
+      err = `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). Use “Forgot username / password?” to recover via email.`;
+      payload.error = err;
+    }
+    res.status(401).json(payload);
     return;
   }
+  const user = result.user;
   const token = auth.createSession(user.username);
   recordsForUser(user.username);
   setSessionCookie(res, token);
+
+  // Periodic email reminder when password is older than 90 days.
+  try {
+    const due = auth.consumePasswordReminder(user.username);
+    if (due && due.email) {
+      const base = mail.appBaseUrl(req);
+      await mail.sendPasswordAgeEmail({
+        to: due.email,
+        username: due.username,
+        changeUrl: `${base}/haulage/#profile`,
+      });
+    }
+  } catch (err) {
+    console.warn("[auth] password-age email failed:", err.message);
+  }
+
   res.json({ user });
 });
 
@@ -299,8 +366,92 @@ api.post("/auth/presets", (req, res) => {
   res.json({ user: auth.updatePresets(req.user, req.body || {}) });
 });
 
+api.post("/auth/email", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to update your email." });
+    return;
+  }
+  try {
+    const user = auth.updateEmail(req.user, (req.body || {}).email);
+    res.json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/change-password", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to change your password." });
+    return;
+  }
+  const { currentPassword, newPassword } = req.body || {};
+  try {
+    const user = auth.changePassword(req.user, currentPassword, newPassword);
+    // Password change clears sessions — issue a fresh cookie.
+    const token = auth.createSession(user.username);
+    setSessionCookie(res, token);
+    res.json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/recover/request", async (req, res) => {
+  const email = (req.body || {}).email;
+  const generic = {
+    ok: true,
+    message:
+      "If that email is registered, we sent a recovery link. Check your inbox (and spam).",
+  };
+  try {
+    const recovery = auth.createRecoveryTokenForEmail(email);
+    if (recovery.found) {
+      const base = mail.appBaseUrl(req);
+      const resetUrl = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+      const sent = await mail.sendRecoveryEmail({
+        to: recovery.email,
+        username: recovery.username,
+        resetUrl,
+      });
+      if (!sent.sent) {
+        // Dev / no SMTP: include the link so local testing still works.
+        generic.devRecoveryUrl = resetUrl;
+        generic.devUsername = recovery.username;
+      }
+    }
+    res.json(generic);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.get("/auth/recover/peek", (req, res) => {
+  try {
+    const info = auth.peekRecovery(req.query.token);
+    res.json(info);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/recover/reset", (req, res) => {
+  const { token, password } = req.body || {};
+  try {
+    const user = auth.resetPasswordWithToken(token, password);
+    const session = auth.createSession(user.username);
+    recordsForUser(user.username);
+    setSessionCookie(res, session);
+    res.json({ user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 api.get("/alerts", (req, res) => {
-  res.json({ alerts: buildAlerts(getRecords(req)), user: req.user || null });
+  const alerts = buildAlerts(getRecords(req));
+  const user = req.user ? auth.getUser(req.user) : null;
+  if (user) alerts.push(...auth.accountAlerts(user));
+  res.json({ alerts, user: user || req.user || null });
 });
 
 // --- Primary-mod admin ---------------------------------------------------
@@ -420,9 +571,9 @@ api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
 
 api.post("/admin/users", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const { username, password } = req.body || {};
+  const { username, password, email } = req.body || {};
   try {
-    const user = auth.createUser(username, password);
+    const user = auth.createUser(username, password, {}, email);
     // Seed an empty per-user records file so the profile is ready immediately.
     storage.loadRecords(auth.recordsFileFor(user.username));
     res.status(201).json({ user });

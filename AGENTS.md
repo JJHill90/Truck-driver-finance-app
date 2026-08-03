@@ -57,23 +57,31 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   `*.test.js` files ARE linted. `npm test` (Vitest, `globals: true`) covers
   `tax-calculator.test.js` and `document-breakdown.test.js`. No build step.
 - Multi-user accounts are layered on without editing the provided files.
-  `lib/auth.js` stores accounts in `data/users.json` (salted PBKDF2) and holds
-  sessions in memory (tokens); `server.js` reads the `haulage_sid` HttpOnly
-  cookie, resolves `req.user`, and scopes every route to that user's own records
-  file (`data/users/<name>.json`) via a per-user cache — anonymous requests use a
-  shared guest store. `public/enhancements.js` renders the Profile-tab account
-  panel (register/login/logout/presets) and a missing-data alert banner
-  (`GET /alerts`), and reloads the page after an auth change so `app.js`
-  re-fetches user-scoped data. Sessions reset on server restart (accounts/data
-  persist); receipt image files are shared under `data/receipts/` (UUID names).
+ `lib/auth.js` stores accounts in `data/users.json` (salted PBKDF2) and holds
+ sessions in memory (tokens); `server.js` reads the `haulage_sid` HttpOnly
+ cookie, resolves `req.user`, and scopes every route to that user's own records
+ file (`data/users/<name>.json`) via a per-user cache — anonymous requests use a
+ shared guest store. `public/enhancements.js` renders the Profile-tab account
+ panel (register/login/logout/presets) and a missing-data alert banner
+ (`GET /alerts`), and reloads the page after an auth change so `app.js`
+ re-fetches user-scoped data. Sessions reset on server restart (accounts/data
+ persist); receipt image files are shared under `data/receipts/` (UUID names).
+- **Email + recovery + password age.** Self-register requires an email and a
+  password that passes `lib/password-strength.js` (fair/strong). Profile can
+  update email / change password. Missing email and passwords older than 90 days
+  appear in `/alerts`. After 10 failed logins (or “Forgot username / password?”),
+  `POST /auth/recover/request` emails a link to `/haulage/recover.html` (reveals
+  username + set new password). SMTP optional via `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `APP_BASE_URL` — without SMTP the API
+  returns `devRecoveryUrl` for local testing.
 - **Primary mod admin:** bootstraps `Haulage_Admin` / `Haulage_Admin` on startup
-  via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
-  `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
-  `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
-  (wipe account + records + receipt files; cannot delete primary mod),
-  `GET /admin/users/:username`, `GET /admin/users/:username/receipts/:id/file`.
-  Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
-  Opening another user is read-only and does not switch your signed-in session.
+ via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
+ `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
+ `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
+ (wipe account + records + receipt files; cannot delete primary mod),
+ `GET /admin/users/:username`, `GET /admin/users/:username/receipts/:id/file`.
+ Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
+ Opening another user is read-only and does not switch your signed-in session.
 - Scan enrichment is layered on without editing the provided files:
   `lib/document-breakdown.js` computes the typed component breakdown + ATO
   compliance and `server.js` folds it into the `/receipts/scan` response
