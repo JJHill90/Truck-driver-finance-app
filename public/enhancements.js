@@ -78,78 +78,134 @@
 
   // --- Capture enriched scan responses by wrapping fetch ------------------
   // Also intercepts possible-duplicate responses and prompts before saving.
+  // Network failures on /api/haulage get a clear message (hosted vs local) and
+  // one short retry — app.js otherwise always says "npm start" / localhost.
   const origFetch = window.fetch;
+
+  function isLocalDevHost() {
+    const h = String(window.location.hostname || "");
+    return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+  }
+
+  function isHaulageApiUrl(url) {
+    return Boolean(url && /\/api\/haulage(?:\/|$|\?)/.test(String(url)));
+  }
+
+  function networkErrorMessage() {
+    if (window.location.protocol === "file:") {
+      return "Open the app at http://localhost:3000/haulage/ — not as a local file.";
+    }
+    if (isLocalDevHost()) {
+      return `Network error — start the server (npm start) and open http://localhost:${window.location.port || 3000}/haulage/`;
+    }
+    return "Network error — check your connection and try again. If the site was idle, wait a moment and retry (the server may be waking up).";
+  }
+
+  function networkErrorResponse() {
+    return new Response(JSON.stringify({ error: networkErrorMessage() }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function haulageFetchWithRetry(run) {
+    try {
+      return await run();
+    } catch (err) {
+      if (err && err.name === "AbortError") throw err;
+      // One retry covers brief blips and hosted cold-starts (e.g. Render idle).
+      await sleep(1500);
+      try {
+        return await run();
+      } catch (err2) {
+        if (err2 && err2.name === "AbortError") throw err2;
+        return networkErrorResponse();
+      }
+    }
+  }
+
   window.fetch = async function (...args) {
     const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
     const options = args[1] || {};
 
-    if (url && /\/receipts\/scan(\?|$)/.test(url)) {
-      let bodyObj = {};
-      try {
-        if (options.body) bodyObj = JSON.parse(options.body);
-      } catch {
-        /* ignore */
-      }
-      const purpose = bodyObj.purpose === "income" ? "income" : "expense";
-
-      let res = await origFetch.apply(this, args);
-      let data = null;
-      try {
-        data = await res.clone().json();
-      } catch {
-        return res;
-      }
-
-      if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
-        const proceed = await promptDuplicateContinue(data);
-        if (!proceed) {
-          return new Response(
-            JSON.stringify({
-              error: "Upload cancelled — possible duplicate detected.",
-            }),
-            { status: 409, headers: { "Content-Type": "application/json" } }
-          );
+    const runScanOrPassthrough = async () => {
+      if (url && /\/receipts\/scan(\?|$)/.test(url)) {
+        let bodyObj = {};
+        try {
+          if (options.body) bodyObj = JSON.parse(options.body);
+        } catch {
+          /* ignore */
         }
-        bodyObj.forceDuplicate = true;
-        res = await origFetch(url, {
-          ...options,
-          method: options.method || "POST",
-          credentials: options.credentials || "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
-          body: JSON.stringify(bodyObj),
-        });
+        const purpose = bodyObj.purpose === "income" ? "income" : "expense";
+
+        let res = await origFetch.apply(this, args);
+        let data = null;
         try {
           data = await res.clone().json();
         } catch {
-          data = null;
+          return res;
         }
+
+        if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
+          const proceed = await promptDuplicateContinue(data);
+          if (!proceed) {
+            return new Response(
+              JSON.stringify({
+                error: "Upload cancelled — possible duplicate detected.",
+              }),
+              { status: 409, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          bodyObj.forceDuplicate = true;
+          res = await origFetch(url, {
+            ...options,
+            method: options.method || "POST",
+            credentials: options.credentials || "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              ...(options.headers || {}),
+            },
+            body: JSON.stringify(bodyObj),
+          });
+          try {
+            data = await res.clone().json();
+          } catch {
+            data = null;
+          }
+        }
+
+        if (data && data.receipt) {
+          const mimeType = (data.receipt && data.receipt.mimeType) || "";
+          const ocr = data.ocrResult || {};
+          latest = {
+            breakdown: data.componentBreakdown || [],
+            compliance: data.compliance || null,
+            payPeriod: data.payPeriod || null,
+            vendorMatch: ocr.vendorMatch || null,
+            categorySource: ocr.categorySource || null,
+            suggestedCategory: ocr.suggestedCategory || null,
+            vendorAbn: ocr.vendorAbn || null,
+            vendor: ocr.vendor || ocr.entity || null,
+            purpose,
+            receiptId: data.receipt && data.receipt.id,
+            isPdf: /pdf/i.test(mimeType),
+            token: `${Date.now()}-${Math.random()}`,
+          };
+        }
+        return res;
       }
 
-      if (data && data.receipt) {
-        const mimeType = (data.receipt && data.receipt.mimeType) || "";
-        const ocr = data.ocrResult || {};
-        latest = {
-          breakdown: data.componentBreakdown || [],
-          compliance: data.compliance || null,
-          payPeriod: data.payPeriod || null,
-          vendorMatch: ocr.vendorMatch || null,
-          categorySource: ocr.categorySource || null,
-          suggestedCategory: ocr.suggestedCategory || null,
-          vendorAbn: ocr.vendorAbn || null,
-          vendor: ocr.vendor || ocr.entity || null,
-          purpose,
-          receiptId: data.receipt && data.receipt.id,
-          isPdf: /pdf/i.test(mimeType),
-          token: `${Date.now()}-${Math.random()}`,
-        };
-      }
-      return res;
+      return origFetch.apply(this, args);
+    };
+
+    if (isHaulageApiUrl(url)) {
+      return haulageFetchWithRetry(() => runScanOrPassthrough.call(this));
     }
-
-    return origFetch.apply(this, args);
+    return runScanOrPassthrough.call(this);
   };
 
   // --- Render the panel into a scan-review box ----------------------------
