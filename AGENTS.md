@@ -36,6 +36,12 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   `enhancements.js` + `lib/allowance-tally.js` shows grand total, roaming
   segment spend (breakfast/lunch/dinner/food/OT/accom/incidentals), and a
   day/week/month selector with per-day breakdown. Resets at midnight AEST.
+- **Living Away from Home (LAFHA) boxes.** Dashboard + Income panels
+  (`#dashboard-lafha-box`, `#income-lafha-box`) via `GET /lafha` /
+  `lib/lafha.js`: ATO truck-driver overnight meal rate **$128/day**, salary
+  band from profile annual salary (or estimated from payslips), and paid
+  Travel/LAFHA lines detected on income. Income menu includes
+  “Living Away from Home / Travel allowance”.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default

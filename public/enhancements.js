@@ -3316,6 +3316,129 @@
   }
 })();
 
+/* --- Living Away from Home allowance boxes (dashboard + income) ------------
+ * Shows ATO truck-driver overnight meal rate ($128/day) using the driver's
+ * salary band (profile annual salary or estimated from payslips), plus any
+ * Travel / LAFHA amounts recorded on income / scanned payslips.
+ */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  const BOX_IDS = ["dashboard-lafha-box", "income-lafha-box"];
+
+  const money = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function salarySourceLabel(source) {
+    if (source === "profile") return "from profile annual salary";
+    if (source === "payslips") return "estimated from scanned / saved payslips";
+    return "add annual salary on Profile, or scan a payslip";
+  }
+
+  function renderBox(el, data) {
+    if (!el || !data) return;
+    const b = data.reasonableBreakdown || {};
+    const paid = data.paid || {};
+    const salaryAmt = data.salary && data.salary.amount ? money(data.salary.amount) : "—";
+    const paidPerDay =
+      paid.avgPerDay != null
+        ? `${money(paid.avgPerDay)}/day avg`
+        : paid.entryCount
+          ? "per-day unknown"
+          : "none recorded yet";
+
+    const paidRows = (paid.rows || [])
+      .slice(0, 5)
+      .map(
+        (r) =>
+          `<li><span>${esc(r.date || "—")} · ${esc(r.label)}</span><span>${money(r.amount)}${
+            r.perDay != null ? ` <small class="muted">(${money(r.perDay)}/day)</small>` : ""
+          }</span></li>`
+      )
+      .join("");
+
+    el.innerHTML = `
+      <div class="lafha-card">
+        <div class="lafha-row lafha-hero">
+          <div>
+            <div class="lafha-label">ATO reasonable (per day)</div>
+            <div class="lafha-value">${money(data.reasonablePerDay)}</div>
+            <div class="muted lafha-sub">Truck driver meals · breakfast ${money(b.breakfast)} + lunch ${money(b.lunch)} + dinner ${money(b.dinner)}</div>
+          </div>
+          <div>
+            <div class="lafha-label">Your salary band</div>
+            <div class="lafha-value lafha-band">${esc((data.salaryBand || "band1").replace("band", "Band "))}</div>
+            <div class="muted lafha-sub">${esc(salaryAmt)} · ${esc(salarySourceLabel(data.salary && data.salary.source))}</div>
+          </div>
+        </div>
+        <div class="lafha-row">
+          <span>Paid on payslips / income <small class="muted">(Travel / LAFHA lines)</small></span>
+          <span><strong>${money(paid.totalPaid || 0)}</strong> · ${esc(paidPerDay)}</span>
+        </div>
+        ${
+          paidRows
+            ? `<ul class="lafha-paid-list">${paidRows}</ul>`
+            : `<p class="muted lafha-empty">No Living Away from Home / Travel allowance lines found yet. Scan a payslip that lists Travel Allowance, or add income type “Living Away from Home / Travel allowance”.</p>`
+        }
+        <p class="muted lafha-hint">${esc(data.note || "")}</p>
+      </div>
+    `;
+  }
+
+  async function refresh() {
+    let data = null;
+    try {
+      const res = await fetch(`${API}/lafha`, { credentials: "same-origin" });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not load LAFHA");
+    } catch (err) {
+      for (const id of BOX_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<p class="muted">${esc(err.message || "Could not load LAFHA rates.")}</p>`;
+      }
+      return;
+    }
+    for (const id of BOX_IDS) {
+      renderBox(document.getElementById(id), data);
+    }
+  }
+
+  function start() {
+    if (!BOX_IDS.some((id) => document.getElementById(id))) return;
+    void refresh();
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks += 1;
+      void refresh();
+      if (ticks >= 8) clearInterval(iv);
+    }, 1500);
+    document.addEventListener("haulage:new-week", () => void refresh());
+    // After income saves, app.js reloads lists — poll lightly while on income/dashboard.
+    setInterval(() => {
+      const dash = document.getElementById("view-dashboard");
+      const inc = document.getElementById("view-income");
+      if ((dash && dash.classList.contains("active")) || (inc && inc.classList.contains("active"))) {
+        void refresh();
+      }
+    }, 8000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
 /* --- Title-case a few dynamic headings rendered by app.js ------------------
  * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
  * section headings are corrected here after each render.

@@ -512,6 +512,59 @@ body:not(.auth-locked) .title-screen {
 .allowance-vs-spend .allowance-day summary::-webkit-details-marker { display: none; }
 .allowance-vs-spend .allowance-day-body { padding: 0 0 8px; }
 
+/* Living Away from Home allowance boxes */
+.lafha-box .lafha-card { display: grid; gap: 10px; }
+.lafha-box .lafha-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.lafha-box .lafha-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.lafha-box .lafha-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.lafha-box .lafha-band { font-size: 1.15rem; }
+.lafha-box .lafha-sub { font-size: 0.78rem; margin-top: 2px; }
+.lafha-box .lafha-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.lafha-box .lafha-paid-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.lafha-box .lafha-paid-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.88rem;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+.lafha-box .lafha-hint,
+.lafha-box .lafha-empty { font-size: 0.75rem; margin: 0; }
+@media (max-width: 720px) {
+  .lafha-box .lafha-hero { grid-template-columns: 1fr; }
+}
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
