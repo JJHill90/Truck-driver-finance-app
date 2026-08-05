@@ -453,14 +453,117 @@ body:not(.auth-locked) .title-screen {
 .enh-edit-error { color: var(--accent); margin: 8px 0 0; }
 .ledger-fy-empty { margin: 8px 2px 0; }
 
-/* Allowance caps: allowance-vs-spend readout. */
-.allowance-vs-spend .allowance-period-row select { padding: 4px 8px; font-size: 0.82rem; }
+/* Allowance caps: segmented tally + day/week/month. */
+.allowance-vs-spend .allowance-period-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  align-items: end;
+}
+.allowance-vs-spend .allowance-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.allowance-vs-spend .allowance-period-row select {
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  min-width: 9rem;
+}
 .allowance-vs-spend .allowance-total span:last-child { font-variant-numeric: tabular-nums; }
+.allowance-vs-spend .allowance-segment {
+  font-size: 0.9rem;
+  padding: 4px 0;
+}
+.allowance-vs-spend .allowance-segment.nested {
+  font-size: 0.84rem;
+  padding-left: 8px;
+}
+.allowance-vs-spend .allowance-subhead {
+  margin: 4px 0 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
 .allowance-vs-spend .amount-over { color: var(--red); font-weight: 700; }
 .allowance-vs-spend .amount-under { color: var(--green, #12b76a); font-weight: 700; }
 .allowance-vs-spend .allowance-divider { height: 1px; background: var(--border); margin: 8px 0; }
 .allowance-vs-spend .allowance-hint { font-size: 0.72rem; margin: 8px 0 0; }
+.allowance-vs-spend .allowance-warn { color: var(--accent); font-size: 0.78rem; margin: 6px 0 0; }
 .allowance-vs-spend .tag.amber { background: #7c2d12; color: #fed7aa; }
+.allowance-vs-spend .allowance-day-list { margin-top: 10px; display: grid; gap: 6px; }
+.allowance-vs-spend .allowance-day {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  padding: 0 10px;
+}
+.allowance-vs-spend .allowance-day summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  padding: 8px 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.allowance-vs-spend .allowance-day summary::-webkit-details-marker { display: none; }
+.allowance-vs-spend .allowance-day-body { padding: 0 0 8px; }
+
+/* Living Away from Home allowance boxes */
+.lafha-box .lafha-card { display: grid; gap: 10px; }
+.lafha-box .lafha-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.lafha-box .lafha-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.lafha-box .lafha-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.lafha-box .lafha-band { font-size: 1.15rem; }
+.lafha-box .lafha-sub { font-size: 0.78rem; margin-top: 2px; }
+.lafha-box .lafha-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.lafha-box .lafha-paid-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.lafha-box .lafha-paid-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.88rem;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+.lafha-box .lafha-hint,
+.lafha-box .lafha-empty { font-size: 0.75rem; margin: 0; }
+@media (max-width: 720px) {
+  .lafha-box .lafha-hero { grid-template-columns: 1fr; }
+}
 
 /* Views */
 .view { display: none; }

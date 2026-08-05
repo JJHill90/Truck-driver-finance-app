@@ -61,10 +61,14 @@ describe("expense menu", () => {
     expect(carIds).toContain("vehicle_car");
   });
 
-  it("exposes a single Food/Meals category with combined ATO cap", () => {
+  it("exposes Food/Meals plus breakfast, lunch and dinner", () => {
+    const ids = listMenuCategories().map((c) => c.id);
+    expect(ids).toContain("meals");
+    expect(ids).toContain("meals_breakfast");
+    expect(ids).toContain("meals_lunch");
+    expect(ids).toContain("meals_dinner");
     const meals = listMenuCategories().find((c) => c.id === "meals");
-    expect(meals).toBeTruthy();
-    expect(meals.label).toBe("Food/Meals");
+    expect(meals.label).toBe("Food/Meals (combined)");
     const expected =
       TRUCK_DRIVER_MEALS.breakfast.cap +
       TRUCK_DRIVER_MEALS.lunch.cap +
@@ -87,10 +91,11 @@ describe("expense menu", () => {
     expect(byId.office_admin).toBe(LABEL_OVERRIDES.office_admin);
   });
 
-  it("maps legacy meal ids onto meals", () => {
-    expect(normalizeExpenseCategoryId("meals_breakfast")).toBe("meals");
-    expect(normalizeExpenseCategoryId("meals_lunch")).toBe("meals");
-    expect(normalizeExpenseCategoryId("meals_dinner")).toBe("meals");
+  it("keeps breakfast/lunch/dinner ids when saving", () => {
+    expect(normalizeExpenseCategoryId("meals_breakfast")).toBe("meals_breakfast");
+    expect(normalizeExpenseCategoryId("meals_lunch")).toBe("meals_lunch");
+    expect(normalizeExpenseCategoryId("meals_dinner")).toBe("meals_dinner");
+    expect(normalizeExpenseCategoryId("meals")).toBe("meals");
     expect(normalizeExpenseCategoryId("fuel")).toBe("fuel");
   });
 

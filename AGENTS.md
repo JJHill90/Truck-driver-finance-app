@@ -30,6 +30,18 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is
   separate from ATO travel **salary bands** (band1/2/3), which the tax
   calculator still derives from salary for allowance caps.
+- **Allowance caps (dashboard).** Band-1 daily stack is **$328.90** =
+  meals $128 + overtime meal $38.65 + accommodation $138 + incidentals $24.25
+  (TD 2025/4; higher bands raise accommodation/meals/incidentals). UI in
+  `enhancements.js` + `lib/allowance-tally.js` shows grand total, roaming
+  segment spend (breakfast/lunch/dinner/food/OT/accom/incidentals), and a
+  day/week/month selector with per-day breakdown. Resets at midnight AEST.
+- **Living Away from Home (LAFHA) boxes.** Dashboard + Income panels
+  (`#dashboard-lafha-box`, `#income-lafha-box`) via `GET /lafha` /
+  `lib/lafha.js`: ATO truck-driver overnight meal rate **$128/day**, salary
+  band from profile annual salary (or estimated from payslips), and paid
+  Travel/LAFHA lines detected on income. Income menu includes
+  “Living Away from Home / Travel allowance”.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default

@@ -468,6 +468,13 @@ api.get("/alerts", (req, res) => {
   res.json({ alerts, user: user || req.user || null });
 });
 
+const { summariseLafha } = require("./lib/lafha");
+
+api.get("/lafha", (req, res) => {
+  const records = getRecords(req);
+  res.json(summariseLafha(records.profile || {}, records.income || []));
+});
+
 // --- Primary-mod admin ---------------------------------------------------
 function requireAdmin(req, res) {
   if (!req.user) {
