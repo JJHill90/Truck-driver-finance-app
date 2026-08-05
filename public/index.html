@@ -140,7 +140,7 @@
 
             <div class="panel">
               <div class="panel-header"><h2>Add expense manually</h2></div>
-              <p class="muted">Enter an expense without a photo, or edit fields filled from a scan. Tick cash transaction when you paid in cash and may not have a receipt.</p>
+              <p class="muted">Enter an expense without a photo, or edit fields filled from a scan. Use the ticks below for cash claims and when you have no receipt.</p>
               <div id="manual-approval-banner" class="banner hidden"></div>
               <form id="manual-receipt-form" class="form-grid">
                 <label>Date<input type="date" name="date" required /></label>
@@ -157,10 +157,16 @@
                 <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" /></label>
                 <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
                 <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
-                <label class="checkbox span-2">
-                  <input type="checkbox" name="cashTransaction" id="manual-cash-transaction" />
-                  Cash transaction (paid in cash — may not have a receipt)
-                </label>
+                <div class="span-2 checkbox-row">
+                  <label class="checkbox">
+                    <input type="checkbox" name="cashTransaction" id="manual-cash-transaction" />
+                    Cash transaction (Paid cash check for claim)
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" name="noReceipt" id="manual-no-receipt" />
+                    No receipt
+                  </label>
+                </div>
                 <div class="span-2 form-actions">
                   <button type="submit" class="btn primary">Save expense</button>
                 </div>
@@ -463,6 +469,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=lafha-box-1"></script>
+    <script src="./enhancements.js?v=lafha-box-2"></script>
   </body>
 </html>

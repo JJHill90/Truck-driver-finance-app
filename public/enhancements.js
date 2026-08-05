@@ -132,8 +132,8 @@
     let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
     let options = args[1] || {};
 
-    // Inject cash-transaction flag from the manual expense form (app.js
-    // builds its own payload and does not read this checkbox).
+    // Inject cash / no-receipt flags from the manual expense form (app.js
+    // builds its own payload and does not read these checkboxes).
     if (
       url &&
       /\/receipts\/manual(\?|$)/.test(url) &&
@@ -145,7 +145,11 @@
         const cashEl = document.querySelector(
           "#manual-receipt-form [name=cashTransaction], #manual-cash-transaction"
         );
+        const noReceiptEl = document.querySelector(
+          "#manual-receipt-form [name=noReceipt], #manual-no-receipt"
+        );
         if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
+        if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
         options = {
           ...options,
           body: JSON.stringify(bodyObj),
@@ -2391,7 +2395,7 @@
     });
   }
 
-  /** Show a Cash tag on expense ledger rows marked cashTransaction. */
+  /** Show Cash / No receipt tags on expense ledger rows. */
   function injectCashTags(cfg) {
     if (cfg.type !== "expense") return;
     const list = document.getElementById(cfg.listId);
@@ -2402,15 +2406,25 @@
       const id = tr.getAttribute("data-expense-id");
       if (!id || id === "__draft__") return;
       const entry = expenses.find((e) => e && e.id === id);
-      if (!entry || !entry.cashTransaction) return;
+      if (!entry) return;
       const detailCell = tr.querySelector("td:nth-child(3)");
-      if (!detailCell || detailCell.querySelector(".tag-cash")) return;
-      const tag = document.createElement("span");
-      tag.className = "tag tag-cash";
-      tag.textContent = "Cash";
-      tag.title = "Cash transaction — may not have a receipt";
-      detailCell.appendChild(document.createTextNode(" "));
-      detailCell.appendChild(tag);
+      if (!detailCell) return;
+      if (entry.cashTransaction && !detailCell.querySelector(".tag-cash")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-cash";
+        tag.textContent = "Cash";
+        tag.title = "Cash transaction (Paid cash check for claim)";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
+      if (entry.noReceipt && !detailCell.querySelector(".tag-no-receipt")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-no-receipt";
+        tag.textContent = "No receipt";
+        tag.title = "No receipt kept for this expense";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
     });
   }
 
@@ -2505,7 +2519,8 @@
         <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
         <label>Work-use %<input name="workUsePercent" type="number" min="0" max="100" step="1" value="${esc(entry.workUsePercent ?? 100)}"></label>
         <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
-        <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (may not have a receipt)</label>
+        <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (Paid cash check for claim)</label>
+        <label class="enh-edit-check"><input name="noReceipt" type="checkbox"${entry.noReceipt ? " checked" : ""}> No receipt</label>
         <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
       `
       : `
@@ -2554,6 +2569,7 @@
         payload.cashTransaction = Boolean(
           form.querySelector('[name="cashTransaction"]')?.checked
         );
+        payload.noReceipt = Boolean(form.querySelector('[name="noReceipt"]')?.checked);
         payload.workUsePercent = Number(payload.workUsePercent);
         payload.amount = Number(payload.amount);
       } else {

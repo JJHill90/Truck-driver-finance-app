@@ -1080,10 +1080,14 @@ api.post("/receipts/manual", (req, res) => {
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const { expense, receipt } = storage.addManualReceipt(records, body);
-  // Flag cash purchases without a paper/photo receipt (layered; storage is verbatim).
+  // Cash / no-receipt flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
     expense.cashTransaction = Boolean(body.cashTransaction);
     if (receipt && receipt.manual) receipt.manual.cashTransaction = expense.cashTransaction;
+  }
+  if (body.noReceipt != null) {
+    expense.noReceipt = Boolean(body.noReceipt);
+    if (receipt && receipt.manual) receipt.manual.noReceipt = expense.noReceipt;
   }
   rememberVendor(records, {
     name: body.vendor || expense.vendor,

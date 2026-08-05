@@ -592,6 +592,15 @@ body:not(.auth-locked) .title-screen {
 .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 0.82rem; color: var(--text-dim); }
 .form-grid .span-2 { grid-column: 1 / -1; }
 .form-grid .checkbox { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+.form-grid .checkbox-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  align-items: start;
+}
+.form-grid .checkbox-row .checkbox {
+  margin: 0;
+}
 .form-actions { display: flex; gap: 10px; }
 input, select { background: var(--bg-2); border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; color: var(--text); font-size: 0.92rem; }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -681,6 +690,16 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   color: #1e3a5f;
   background: #dbeafe;
   border-color: #93c5fd;
+}
+.tag.tag-no-receipt {
+  color: #5b3410;
+  background: #ffedd5;
+  border-color: #fdba74;
+}
+@media (max-width: 640px) {
+  .form-grid .checkbox-row {
+    grid-template-columns: 1fr;
+  }
 }
 .warning-list { margin: 8px 0 0; padding-left: 18px; color: var(--text-dim); font-size: 0.85rem; }
 
