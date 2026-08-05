@@ -33,7 +33,7 @@ describe("updateExpense", () => {
     expect(updated.receiptId).toBe("r1");
     expect(updated.createdAt).toBe("2026-01-10T00:00:00.000Z");
     expect(updated.date).toBe("2026-05-08");
-    expect(updated.category).toBe("meals");
+    expect(updated.category).toBe("meals_dinner");
     expect(updated.amount).toBe(45.5);
     expect(updated.vendor).toBe("Woolworths");
     expect(updated.vendorAbn).toBe("88000014675");

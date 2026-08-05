@@ -2721,43 +2721,186 @@
   }
 })();
 
-/* --- Allowance caps: one daily lump sum (AEST) -----------------------------
- * Replaces the static daily-cap list in #allowance-caps with a single combined
- * "daily allowance vs today's spend" readout. All ATO meal/travel category
- * daily caps are summed into one lump; spend is the sum of matching receipts
- * dated today in Australia/Sydney. Totals reset at 00:00 AEST each day.
- * Layered over app.js (kept verbatim) by taking over #allowance-caps.
+/* --- Allowance caps: segmented ATO tallies + day/week/month (AEST) ---------
+ * Replaces the static list in #allowance-caps. Band-1 daily stack is
+ * $328.90 = meals $128 + overtime meal $38.65 + accommodation $138 +
+ * incidentals $24.25 (TD 2025/4). Shows roaming spend per segment under the
+ * grand total, with day / week / month period views and per-day breakdowns.
+ * Logic: lib/allowance-tally.js (loaded via /api when unavailable in browser —
+ * duplicated thin client helpers below call the same shapes).
  */
 (function () {
   "use strict";
 
   const AEST_TZ = "Australia/Sydney";
+  const PERIOD_KEY = "haulage-allowance-period";
+  const DAY_KEY = "haulage-allowance-day";
+  const WEEK_KEY = "haulage-allowance-week";
+  const MONTH_KEY = "haulage-allowance-month";
 
-  // Allowance categories → how to read their daily cap from summary.allowances.
-  // Meals are one combined daily cap (breakfast+lunch+dinner); spend uses `meals`
-  // plus any legacy breakfast/lunch/dinner rows still on file.
-  const CATS = [
-    {
-      id: "meals",
-      spendIds: ["meals", "meals_breakfast", "meals_lunch", "meals_dinner"],
-      cap: (a) => {
-        const m = a && a.truckDriverMealsDaily;
-        if (!m) return 0;
-        return (
-          (Number(m.breakfast && m.breakfast.cap) || 0) +
-          (Number(m.lunch && m.lunch.cap) || 0) +
-          (Number(m.dinner && m.dinner.cap) || 0)
-        );
+  // In-browser copy of lib/allowance-tally.js (no bundler). Keep in sync.
+  function num(n) {
+    const x = Number(n);
+    return Number.isFinite(x) ? x : 0;
+  }
+  function round2(n) {
+    return Math.round(num(n) * 100) / 100;
+  }
+  function buildSegments(allowances) {
+    const meals = (allowances && allowances.truckDriverMealsDaily) || {};
+    const travel = (allowances && allowances.domesticTravelCaps) || {};
+    const breakfast = num(meals.breakfast && meals.breakfast.cap);
+    const lunch = num(meals.lunch && meals.lunch.cap);
+    const dinner = num(meals.dinner && meals.dinner.cap);
+    const mealsCombined = round2(breakfast + lunch + dinner);
+    return [
+      { id: "breakfast", label: "Breakfast", group: "meals", cap: breakfast, spendIds: ["meals_breakfast"] },
+      { id: "lunch", label: "Lunch", group: "meals", cap: lunch, spendIds: ["meals_lunch"] },
+      { id: "dinner", label: "Dinner", group: "meals", cap: dinner, spendIds: ["meals_dinner"] },
+      {
+        id: "meals_combined",
+        label: "Food/meals (combined)",
+        group: "meals",
+        cap: mealsCombined,
+        spendIds: ["meals"],
+        sharesMealPool: true,
       },
-    },
-    { id: "overtime_meals", spendIds: ["overtime_meals"], cap: (a) => a && a.overtimeMealCap },
-    { id: "accommodation", spendIds: ["accommodation"], cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.accommodation },
-    { id: "incidentals", spendIds: ["incidentals"], cap: (a) => a && a.domesticTravelCaps && a.domesticTravelCaps.incidentals },
-  ];
-  const SPEND_IDS = new Set(CATS.flatMap((c) => c.spendIds));
+      {
+        id: "overtime_meals",
+        label: "Overtime meal",
+        group: "other",
+        cap: num(allowances && allowances.overtimeMealCap),
+        spendIds: ["overtime_meals"],
+      },
+      {
+        id: "accommodation",
+        label: "Accommodation",
+        group: "other",
+        cap: num(travel.accommodation),
+        spendIds: ["accommodation"],
+      },
+      {
+        id: "incidentals",
+        label: "Incidentals",
+        group: "other",
+        cap: num(travel.incidentals),
+        spendIds: ["incidentals"],
+      },
+    ];
+  }
+  function dailyAllowanceTotal(allowances) {
+    const segments = buildSegments(allowances);
+    const mealsCap = (segments.find((s) => s.id === "meals_combined") || {}).cap || 0;
+    const other = segments
+      .filter((s) => s.group === "other")
+      .reduce((sum, s) => sum + num(s.cap), 0);
+    return round2(mealsCap + other);
+  }
+  function spendForIds(expenses, spendIds, dateIso) {
+    const ids = new Set(spendIds);
+    return round2(
+      (expenses || [])
+        .filter((e) => ids.has(e.category) && String(e.date || "").slice(0, 10) === dateIso)
+        .reduce((sum, e) => sum + num(e.amount), 0)
+    );
+  }
+  function tallyDay(expenses, allowances, dateIso) {
+    const segments = buildSegments(allowances);
+    const dailyAllow = dailyAllowanceTotal(allowances);
+    const mealPoolCap = (segments.find((s) => s.id === "meals_combined") || {}).cap || 0;
+    const rows = segments.map((seg) => {
+      const spend = spendForIds(expenses, seg.spendIds, dateIso);
+      return {
+        id: seg.id,
+        label: seg.label,
+        group: seg.group,
+        sharesMealPool: Boolean(seg.sharesMealPool),
+        cap: seg.cap,
+        spend,
+        remaining: round2(seg.cap - spend),
+        over: spend > seg.cap && seg.cap > 0,
+      };
+    });
+    const mealPoolSpend = round2(
+      rows.filter((r) => r.group === "meals").reduce((s, r) => s + r.spend, 0)
+    );
+    const spend = round2(rows.reduce((s, r) => s + r.spend, 0));
+    return {
+      date: dateIso,
+      dailyAllow,
+      spend,
+      remaining: round2(dailyAllow - spend),
+      over: spend > dailyAllow,
+      mealPoolCap,
+      mealPoolSpend,
+      mealPoolOver: mealPoolSpend > mealPoolCap && mealPoolCap > 0,
+      segments: rows,
+    };
+  }
+  function eachIsoDate(startIso, endIso) {
+    const out = [];
+    if (!startIso || !endIso) return out;
+    const [ys, ms, ds] = startIso.split("-").map(Number);
+    const [ye, me, de] = endIso.split("-").map(Number);
+    const cur = new Date(Date.UTC(ys, ms - 1, ds));
+    const end = new Date(Date.UTC(ye, me - 1, de));
+    while (cur <= end) {
+      out.push(cur.toISOString().slice(0, 10));
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return out;
+  }
+  function monthBounds(yearMonth) {
+    const [y, m] = String(yearMonth || "")
+      .split("-")
+      .map(Number);
+    if (!y || !m) return null;
+    const start = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`;
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const end = `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+    return { start, end };
+  }
+  function tallyPeriod(expenses, allowances, dates) {
+    const days = (dates || []).map((d) => tallyDay(expenses, allowances, d));
+    const dailyAllow = days[0] ? days[0].dailyAllow : dailyAllowanceTotal(allowances);
+    const periodAllow = round2(dailyAllow * days.length);
+    const spend = round2(days.reduce((s, d) => s + d.spend, 0));
+    const segmentMap = new Map();
+    for (const day of days) {
+      for (const seg of day.segments) {
+        const prev = segmentMap.get(seg.id) || {
+          id: seg.id,
+          label: seg.label,
+          group: seg.group,
+          sharesMealPool: seg.sharesMealPool,
+          dailyCap: seg.cap,
+          spend: 0,
+        };
+        prev.spend = round2(prev.spend + seg.spend);
+        segmentMap.set(seg.id, prev);
+      }
+    }
+    return {
+      dates,
+      dayCount: days.length,
+      dailyAllow,
+      periodAllow,
+      spend,
+      remaining: round2(periodAllow - spend),
+      over: spend > periodAllow,
+      segments: [...segmentMap.values()],
+      days,
+    };
+  }
 
   let midnightTimer = null;
-  let renderedAestDay = null;
+  let lastSignature = "";
+  let ui = {
+    period: localStorage.getItem(PERIOD_KEY) || "day",
+    day: localStorage.getItem(DAY_KEY) || "",
+    week: localStorage.getItem(WEEK_KEY) || "",
+    month: localStorage.getItem(MONTH_KEY) || "",
+  };
 
   const money = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
@@ -2785,11 +2928,10 @@
     return `${p.year}-${p.month}-${p.day}`;
   }
 
-  /** Milliseconds until the next calendar day starts in Australia/Sydney. */
   function msUntilNextAestMidnight() {
     const today = aestIsoOf();
     let lo = 0;
-    let hi = 26 * 60 * 60 * 1000; // cover DST 25h days
+    let hi = 26 * 60 * 60 * 1000;
     const now = Date.now();
     while (lo < hi) {
       const mid = Math.floor((lo + hi) / 2);
@@ -2799,21 +2941,220 @@
     return Math.max(lo, 1000);
   }
 
-  function computeDaily() {
-    let expenses = [];
-    let allowances = {};
-    try {
-      expenses = (state.records && state.records.expenses) || [];
-      allowances = (state.summary && state.summary.allowances) || {};
-    } catch {
-      expenses = [];
+  function fmtDayLabel(iso) {
+    if (!iso) return "—";
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return new Intl.DateTimeFormat("en-AU", {
+      timeZone: "UTC",
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+    }).format(dt);
+  }
+
+  function weekStartMonday(iso) {
+    if (globalThis.HaulageWeeks && typeof globalThis.HaulageWeeks.weekStartMonday === "function") {
+      return globalThis.HaulageWeeks.weekStartMonday(iso);
     }
+    const [y, m, d] = String(iso).split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    const day = dt.getUTCDay(); // 0 Sun
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setUTCDate(dt.getUTCDate() + diff);
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function addDaysIso(iso, n) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + n);
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function records() {
+    try {
+      return {
+        expenses: (state.records && state.records.expenses) || [],
+        allowances: (state.summary && state.summary.allowances) || {},
+      };
+    } catch {
+      return { expenses: [], allowances: {} };
+    }
+  }
+
+  function dataSignature() {
+    const { expenses, allowances } = records();
+    return JSON.stringify({
+      period: ui.period,
+      day: ui.day,
+      week: ui.week,
+      month: ui.month,
+      today: aestIsoOf(),
+      n: expenses.length,
+      last: expenses[0] && (expenses[0].id || expenses[0].amount || expenses[0].date),
+      allow: dailyAllowanceTotal(allowances),
+    });
+  }
+
+  function recentDays(n = 45) {
     const today = aestIsoOf();
-    const dailyAllow = CATS.reduce((s, c) => s + (Number(c.cap(allowances)) || 0), 0);
-    const spend = expenses
-      .filter((e) => SPEND_IDS.has(e.category) && String(e.date || "").slice(0, 10) === today)
-      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    return { today, dailyAllow, spend };
+    const out = [];
+    for (let i = 0; i < n; i += 1) out.push(addDaysIso(today, -i));
+    return out;
+  }
+
+  function recentWeeks(n = 16) {
+    const today = aestIsoOf();
+    let start = weekStartMonday(today);
+    const out = [];
+    for (let i = 0; i < n; i += 1) {
+      out.push(start);
+      start = addDaysIso(start, -7);
+    }
+    return out;
+  }
+
+  function recentMonths(n = 12) {
+    const today = aestIsoOf();
+    let [y, m] = today.split("-").map(Number);
+    const out = [];
+    for (let i = 0; i < n; i += 1) {
+      out.push(`${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}`);
+      m -= 1;
+      if (m < 1) {
+        m = 12;
+        y -= 1;
+      }
+    }
+    return out;
+  }
+
+  function selectedDates() {
+    const today = aestIsoOf();
+    if (ui.period === "week") {
+      const start = ui.week || weekStartMonday(today);
+      return eachIsoDate(start, addDaysIso(start, 6));
+    }
+    if (ui.period === "month") {
+      const ym = ui.month || today.slice(0, 7);
+      const bounds = monthBounds(ym);
+      return bounds ? eachIsoDate(bounds.start, bounds.end) : [today];
+    }
+    return [ui.day || today];
+  }
+
+  function statusTag(over, spend) {
+    if (over) return ' <span class="tag amber">over</span>';
+    if (spend > 0) return ' <span class="tag green">within</span>';
+    return "";
+  }
+
+  function segmentRowsHtml(segments) {
+    return segments
+      .map((seg) => {
+        const over = Boolean(seg.over);
+        return `<div class="cap-row allowance-segment${over ? " is-over" : ""}">
+          <span>${esc(seg.label)}</span>
+          <span class="${over ? "amount-over" : ""}">${money(seg.spend)} <small class="muted">/ ${money(seg.cap)}</small></span>
+        </div>`;
+      })
+      .join("");
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function dayBreakdownHtml(days) {
+    const withSpend = days.filter((d) => d.spend > 0);
+    const list = withSpend.length ? withSpend : days.slice(0, 1);
+    return list
+      .map((day) => {
+        const tag = statusTag(day.over, day.spend);
+        const segs = day.segments
+          .filter((s) => s.spend > 0)
+          .map(
+            (s) =>
+              `<div class="cap-row allowance-segment nested">
+                <span>${esc(s.label)}</span>
+                <span>${money(s.spend)} <small class="muted">/ ${money(s.cap)}</small></span>
+              </div>`
+          )
+          .join("");
+        return `<details class="allowance-day" ${day.spend > 0 ? "open" : ""}>
+          <summary>
+            <span>${esc(fmtDayLabel(day.date))} <small class="muted">${esc(day.date)}</small></span>
+            <span>${money(day.spend)} / ${money(day.dailyAllow)}${tag}</span>
+          </summary>
+          <div class="allowance-day-body">
+            ${segs || `<p class="muted">No allowance-category spend this day.</p>`}
+            <div class="cap-row">
+              <span>${day.over ? "Over" : "Remaining"}</span>
+              <span class="${day.over ? "amount-over" : "amount-under"}">${money(Math.abs(day.remaining))}</span>
+            </div>
+          </div>
+        </details>`;
+      })
+      .join("");
+  }
+
+  function controlsHtml(today) {
+    const period = ui.period || "day";
+    const dayOpts = recentDays()
+      .map((d) => {
+        const sel = (ui.day || today) === d ? " selected" : "";
+        const label = d === today ? `${fmtDayLabel(d)} (today)` : fmtDayLabel(d);
+        return `<option value="${esc(d)}"${sel}>${esc(label)}</option>`;
+      })
+      .join("");
+    const weekOpts = recentWeeks()
+      .map((w) => {
+        const end = addDaysIso(w, 6);
+        const sel = (ui.week || weekStartMonday(today)) === w ? " selected" : "";
+        return `<option value="${esc(w)}"${sel}>${esc(fmtDayLabel(w))} – ${esc(fmtDayLabel(end))}</option>`;
+      })
+      .join("");
+    const monthOpts = recentMonths()
+      .map((ym) => {
+        const sel = (ui.month || today.slice(0, 7)) === ym ? " selected" : "";
+        const [y, m] = ym.split("-");
+        const label = new Intl.DateTimeFormat("en-AU", {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date(Date.UTC(Number(y), Number(m) - 1, 1)));
+        return `<option value="${esc(ym)}"${sel}>${esc(label)}</option>`;
+      })
+      .join("");
+
+    const second =
+      period === "week"
+        ? `<label class="allowance-scope">Week
+            <select id="allowance-week-select" aria-label="Allowance week">${weekOpts}</select>
+          </label>`
+        : period === "month"
+          ? `<label class="allowance-scope">Month
+              <select id="allowance-month-select" aria-label="Allowance month">${monthOpts}</select>
+            </label>`
+          : `<label class="allowance-scope">Day
+              <select id="allowance-day-select" aria-label="Allowance day">${dayOpts}</select>
+            </label>`;
+
+    return `<div class="allowance-period-row">
+      <label class="allowance-scope">Show
+        <select id="allowance-period-select" aria-label="Allowance period">
+          <option value="day"${period === "day" ? " selected" : ""}>Day</option>
+          <option value="week"${period === "week" ? " selected" : ""}>Week</option>
+          <option value="month"${period === "month" ? " selected" : ""}>Month</option>
+        </select>
+      </label>
+      ${second}
+    </div>`;
   }
 
   function scheduleMidnightReset(container) {
@@ -2824,64 +3165,148 @@
     midnightTimer = setTimeout(() => {
       midnightTimer = null;
       if (container.isConnected) {
-        render(container);
+        lastSignature = "";
+        render(container, true);
         scheduleMidnightReset(container);
       }
     }, msUntilNextAestMidnight());
   }
 
-  function render(container) {
-    const { today, dailyAllow, spend } = computeDaily();
-    renderedAestDay = today;
-    const remaining = dailyAllow - spend;
-    const over = spend > dailyAllow;
-    const tag = over
-      ? ' <span class="tag amber">over</span>'
-      : spend > 0
-        ? ' <span class="tag green">within</span>'
+  function wireControls(container) {
+    const periodEl = container.querySelector("#allowance-period-select");
+    const dayEl = container.querySelector("#allowance-day-select");
+    const weekEl = container.querySelector("#allowance-week-select");
+    const monthEl = container.querySelector("#allowance-month-select");
+    periodEl?.addEventListener("change", () => {
+      ui.period = periodEl.value || "day";
+      localStorage.setItem(PERIOD_KEY, ui.period);
+      lastSignature = "";
+      render(container, true);
+    });
+    dayEl?.addEventListener("change", () => {
+      ui.day = dayEl.value || "";
+      localStorage.setItem(DAY_KEY, ui.day);
+      lastSignature = "";
+      render(container, true);
+    });
+    weekEl?.addEventListener("change", () => {
+      ui.week = weekEl.value || "";
+      localStorage.setItem(WEEK_KEY, ui.week);
+      lastSignature = "";
+      render(container, true);
+    });
+    monthEl?.addEventListener("change", () => {
+      ui.month = monthEl.value || "";
+      localStorage.setItem(MONTH_KEY, ui.month);
+      lastSignature = "";
+      render(container, true);
+    });
+  }
+
+  function render(container, force) {
+    const sig = dataSignature();
+    if (!force && sig === lastSignature && container.querySelector(".allowance-vs-spend")) return;
+    lastSignature = sig;
+
+    const today = aestIsoOf();
+    if (!ui.day) ui.day = today;
+    if (!ui.week) ui.week = weekStartMonday(today);
+    if (!ui.month) ui.month = today.slice(0, 7);
+
+    const { expenses, allowances } = records();
+    const dates = selectedDates();
+    const period = tallyPeriod(expenses, allowances, dates);
+    const isDay = ui.period === "day";
+    const day = isDay ? period.days[0] : null;
+
+    const allowLabel = isDay ? "Daily allowance" : ui.period === "week" ? "Week allowance" : "Month allowance";
+    const spendLabel = isDay ? "Spend" : "Total spend";
+    const allowAmt = isDay ? period.dailyAllow : period.periodAllow;
+    const remainLabel = period.over ? "Over allowance" : isDay ? "Remaining" : "Remaining in period";
+    const tag = statusTag(period.over, period.spend);
+
+    const segmentsHtml = isDay
+      ? segmentRowsHtml(day.segments)
+      : period.segments
+          .map((seg) => {
+            const periodCap = round2(num(seg.dailyCap) * period.dayCount);
+            const over = seg.spend > periodCap && periodCap > 0;
+            return `<div class="cap-row allowance-segment${over ? " is-over" : ""}">
+              <span>${esc(seg.label)}</span>
+              <span class="${over ? "amount-over" : ""}">${money(seg.spend)} <small class="muted">/ ${money(periodCap)}</small></span>
+            </div>`;
+          })
+          .join("");
+
+    const mealNote =
+      day && day.mealPoolOver
+        ? `<p class="muted allowance-warn">Meal claims (${money(day.mealPoolSpend)}) exceed the combined ATO meal cap (${money(day.mealPoolCap)}) for this day.</p>`
         : "";
+
+    const perDayHtml =
+      isDay
+        ? ""
+        : `<div class="allowance-day-list">
+            <h4 class="allowance-subhead">Per day</h4>
+            ${dayBreakdownHtml(period.days)}
+          </div>`;
 
     container.innerHTML = `
       <div class="allowance-vs-spend cap-list">
+        ${controlsHtml(today)}
         <div class="cap-row allowance-total">
-          <span><strong>Daily allowance</strong> <small class="muted">combined ATO caps · ${today} AEST</small></span>
-          <span><strong>${money(dailyAllow)}</strong></span>
+          <span><strong>${esc(allowLabel)}</strong> <small class="muted">ATO TD 2025/4 · AEST</small></span>
+          <span><strong>${money(allowAmt)}</strong></span>
         </div>
         <div class="cap-row allowance-total">
-          <span><strong>Today's spend</strong> <small class="muted">resets 00:00 AEST</small></span>
-          <span><strong>${money(spend)}</strong>${tag}</span>
+          <span><strong>${esc(spendLabel)}</strong>${isDay ? ' <small class="muted">resets 00:00 AEST</small>' : ` <small class="muted">${period.dayCount} days</small>`}</span>
+          <span><strong>${money(period.spend)}</strong>${tag}</span>
         </div>
         <div class="cap-row allowance-total">
-          <span>${over ? "Over allowance" : "Remaining today"}</span>
-          <span class="${over ? "amount-over" : "amount-under"}">${money(Math.abs(remaining))}</span>
+          <span>${esc(remainLabel)}</span>
+          <span class="${period.over ? "amount-over" : "amount-under"}">${money(Math.abs(period.remaining))}</span>
         </div>
-        <p class="muted allowance-hint">One daily lump sum: food/meals (combined), overtime meal, accommodation and incidentals caps. Spend counts receipts in those categories dated today (Australia/Sydney); the total resets at midnight AEST.</p>
+        <div class="allowance-divider"></div>
+        <h4 class="allowance-subhead">Segments</h4>
+        ${segmentsHtml}
+        ${mealNote}
+        ${perDayHtml}
+        <p class="muted allowance-hint">
+          Daily stack (salary band) = food/meals (breakfast + lunch + dinner) + overtime meal + accommodation + incidentals
+          — e.g. band 1 <strong>${money(328.9)}</strong>/day. Breakfast/lunch/dinner and combined food/meals share the one meal pot;
+          accommodation and other segments tally separately. Spend uses matching expense categories; daily figures reset at midnight AEST.
+        </p>
       </div>
     `;
+    wireControls(container);
     scheduleMidnightReset(container);
   }
 
-  function maybeRender() {
+  function maybeRender(force) {
     const container = document.getElementById("allowance-caps");
     if (!container) return;
-    const today = aestIsoOf();
-    // Take over once app.js has populated the panel; also re-render after AEST day rollover.
-    if (container.querySelector(".allowance-vs-spend") && renderedAestDay === today) return;
-    if (!container.children.length) return;
-    render(container);
+    if (!force && container.querySelector(".allowance-vs-spend") && dataSignature() === lastSignature) {
+      return;
+    }
+    // Wait until app.js has written something (or we already own the panel).
+    if (!container.children.length && !force) return;
+    render(container, Boolean(force));
   }
 
   function start() {
     const container = document.getElementById("allowance-caps");
     if (!container) return;
-    new MutationObserver(maybeRender).observe(container, { childList: true });
-    maybeRender();
+    new MutationObserver(() => maybeRender(false)).observe(container, { childList: true });
+    maybeRender(false);
     let ticks = 0;
     const iv = setInterval(() => {
       ticks += 1;
-      maybeRender();
-      if (ticks >= 10) clearInterval(iv);
+      maybeRender(true);
+      if (ticks >= 15) clearInterval(iv);
     }, 400);
+    // Refresh when ledgers/expenses change (refreshAll / saves).
+    document.addEventListener("haulage:new-week", () => maybeRender(true));
+    setInterval(() => maybeRender(false), 5000);
   }
 
   if (document.readyState === "loading") {
