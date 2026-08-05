@@ -88,6 +88,9 @@
           <button class="nav-btn" data-view="report">EOFY report</button>
           <button class="nav-btn" data-view="forecast">Forecast</button>
         </nav>
+        <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Support">
+          <button class="nav-btn" data-view="support">Support</button>
+        </nav>
       </aside>
 
       <div class="main">
@@ -447,6 +450,56 @@
             </form>
           </div>
         </section>
+
+        <!-- Support -->
+        <section id="view-support" class="view">
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-header"><h2>Contact support</h2></div>
+              <p class="muted">
+                Have a question or hit a snag? Send a message and we’ll get back to you.
+                You can also email
+                <a id="support-email-link" href="mailto:hilljj1990@gmail.com">hilljj1990@gmail.com</a>
+                directly.
+              </p>
+              <form id="support-contact-form" class="form-grid">
+                <label>Name
+                  <input type="text" name="name" id="support-name" autocomplete="name" required placeholder="Your name" />
+                </label>
+                <label>Email
+                  <input type="email" name="email" id="support-email" autocomplete="email" required placeholder="Reply-to address" />
+                </label>
+                <label class="span-2">Phone number
+                  <input type="tel" name="phone" id="support-phone" autocomplete="tel" placeholder="Optional — for a call back" />
+                </label>
+                <label class="span-2">Message
+                  <textarea name="message" id="support-message" rows="6" required placeholder="Describe your question or issue…"></textarea>
+                </label>
+                <div class="span-2 form-actions">
+                  <button type="submit" class="btn primary" id="support-send">Send message</button>
+                </div>
+              </form>
+              <p id="support-contact-status" class="muted" role="status"></p>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>How each tab works</h2></div>
+              <p class="muted">Tap a topic for a short guide. Use these when you’re getting started or need a refresher.</p>
+              <div id="support-help-topics" class="support-help-topics" role="tablist" aria-label="Help topics">
+                <button type="button" class="btn secondary support-help-btn active" data-help-topic="dashboard">Dashboard</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="expenses">Expenses</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="income">Income</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="report">EOFY report</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="forecast">Forecast</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="profile">Profile</button>
+              </div>
+              <article id="support-help-panel" class="support-help-panel" aria-live="polite">
+                <h3 id="support-help-title">Dashboard</h3>
+                <div id="support-help-body"></div>
+              </article>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -470,6 +523,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=lafha-under-ledger-1"></script>
+    <script src="./enhancements.js?v=support-tab-1"></script>
   </body>
 </html>

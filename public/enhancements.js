@@ -3465,6 +3465,8 @@
   const TITLE_MAP = {
     "Income & remittances": "Income & Remittances",
     "Driver profile": "Driver Profile",
+    support: "Support",
+    Support: "Support",
   };
   const REPORT_MAP = {
     "Income & remittances": "Income & Remittances",
@@ -3747,6 +3749,172 @@
       }
       if (ticks >= 20) clearInterval(iv);
     }, 300);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Support tab: contact form + how-to blurbs for each main tab --------- */
+(function () {
+  "use strict";
+
+  const HELP = {
+    dashboard: {
+      title: "Dashboard",
+      body: [
+        "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot and Recent activity show what’s changed lately so you can spot gaps without digging through every ledger line.",
+        "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
+        "Living Away from Home (LAFHA) shows the relevant food and accommodation rates for your situation. It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and the whole dashboard refreshes for that year.",
+      ],
+    },
+    expenses: {
+      title: "Expenses",
+      body: [
+        "Upload a photo or PDF of a work receipt with Upload file (or drag and drop). You must be signed in — scans save to your own profile. The scanner reads the page with on-device OCR (and cloud OCR when configured), then suggests date, vendor, amount and a category. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "If the file looks like one you’ve already saved (same date, vendor and amount), you’ll be asked whether to continue. Pick a category from the expense menu, or use Car Expenses/Claims for ATO car-related items. Manual entry covers cash claims and “no receipt” ticks when you don’t have a photo.",
+        "Special claims (cents-per-km, laundry) and the expense ledger sit below the upload area. The gallery lists labelled receipts for this year so you can open, download or delete them later.",
+      ],
+    },
+    income: {
+      title: "Income & remittances",
+      body: [
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance appears with your income view so you can cross-check living-away amounts against what you’ve been paid.",
+        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. Sign in before uploading so everything lands in your profile, not the shared guest store.",
+      ],
+    },
+    report: {
+      title: "EOFY report",
+      body: [
+        "The EOFY performance statement rolls up the selected financial year’s income, expense deductions (by ATO-style schedules) and a tax estimate from your saved profile and ledgers. It updates as you add or change records — use it as a live working paper for you or your accountant, not as a lodged return.",
+        "Download FY report builds a PDF of the current statement; Export JSON is for backups or importing elsewhere. Check that your Profile salary, driver type and TFN flag look right before you share the report, and switch financial year in the top bar if you’re reviewing a prior year.",
+      ],
+    },
+    forecast: {
+      title: "Forecast",
+      body: [
+        "Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
+        "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
+      ],
+    },
+    profile: {
+      title: "Profile",
+      body: [
+        "Profile is where you create or sign into a driver account, set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Salary suggests a licence class band; you can still adjust it if needed.",
+        "Account tools cover email on file, password changes, and optional presets (default category and similar) so new expenses start closer to how you work. After login or logout the app reloads so every tab shows your data only.",
+        "Primary mod accounts also see the admin panel to create or review driver profiles. Guests can browse read-only; uploads and ledger changes need a signed-in profile.",
+      ],
+    },
+  };
+
+  function renderHelp(topic) {
+    const entry = HELP[topic] || HELP.dashboard;
+    const titleEl = document.getElementById("support-help-title");
+    const bodyEl = document.getElementById("support-help-body");
+    if (titleEl) titleEl.textContent = entry.title;
+    if (bodyEl) {
+      bodyEl.innerHTML = entry.body.map((p) => `<p>${p}</p>`).join("");
+    }
+    document.querySelectorAll(".support-help-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.helpTopic === topic);
+    });
+  }
+
+  function setStatus(msg, { isError } = {}) {
+    const el = document.getElementById("support-contact-status");
+    if (!el) return;
+    el.textContent = "";
+    el.classList.toggle("banner", Boolean(isError));
+    if (!msg) return;
+    if (typeof msg === "string") {
+      el.textContent = msg;
+      return;
+    }
+    el.appendChild(msg);
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const name = form.name.value.trim();
+    const email = form.email.value.trim();
+    const phone = form.phone.value.trim();
+    const message = form.message.value.trim();
+    const btn = document.getElementById("support-send");
+    if (btn) btn.disabled = true;
+    setStatus("Sending…");
+
+    try {
+      // API is declared in app.js (same page) and listed for ESLint earlier in this file.
+      const base = API || `${window.location.origin}/api/haulage`;
+      const res = await fetch(`${base}/support/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ name, email, phone, message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus(data.error || "Could not send your message.", { isError: true });
+        return;
+      }
+
+      const wrap = document.createElement("span");
+      wrap.appendChild(document.createTextNode(data.message || "Thanks — message received."));
+      if (!data.emailed && data.mailto) {
+        wrap.appendChild(document.createTextNode(" "));
+        const a = document.createElement("a");
+        a.href = data.mailto;
+        a.textContent = "Open in your email app";
+        wrap.appendChild(a);
+        wrap.appendChild(document.createTextNode("."));
+      }
+      if (data.supportEmail) {
+        wrap.appendChild(document.createTextNode(` Support: ${data.supportEmail}`));
+      }
+      setStatus(wrap);
+      form.reset();
+    } catch {
+      setStatus("Network error — please try again or email hilljj1990@gmail.com.", {
+        isError: true,
+      });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function wrapSetView() {
+    if (typeof globalThis.setView !== "function") return;
+    if (globalThis.setView.__haulageSupportWrapped) return;
+    const prev = globalThis.setView;
+    function supportAwareSetView(name) {
+      const result = prev.apply(this, arguments);
+      if (name === "support") {
+        const title = document.getElementById("page-title");
+        if (title) title.textContent = "Support";
+      }
+      return result;
+    }
+    supportAwareSetView.__haulageSupportWrapped = true;
+    globalThis.setView = supportAwareSetView;
+  }
+
+  function start() {
+    const form = document.getElementById("support-contact-form");
+    if (form) form.addEventListener("submit", onSubmit);
+
+    document.querySelectorAll(".support-help-btn").forEach((btn) => {
+      btn.addEventListener("click", () => renderHelp(btn.dataset.helpTopic));
+    });
+    renderHelp("dashboard");
+
+    // Wrap after other enhancement patches (category menus) have run.
+    wrapSetView();
+    setTimeout(wrapSetView, 0);
   }
 
   if (document.readyState === "loading") {
