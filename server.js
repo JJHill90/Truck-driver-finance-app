@@ -53,6 +53,7 @@ const {
   buildIncomeDescription,
   stripChequeTokens,
 } = require("./lib/income-labels");
+const support = require("./lib/support");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -237,6 +238,7 @@ const OPEN_WRITE_PATHS = new Set([
   "/auth/recover/reset",
   "/auth/password-strength",
   "/expenses/preview",
+  "/support/contact",
 ]);
 api.use((req, res, next) => {
   const method = (req.method || "GET").toUpperCase();
@@ -1212,6 +1214,45 @@ api.get("/receipts/:id/file", (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   }
   res.sendFile(info.filePath);
+});
+
+// --- Support contact -----------------------------------------------------
+api.get("/support/info", (_req, res) => {
+  res.json({ email: support.supportInbox() });
+});
+
+api.post("/support/contact", async (req, res) => {
+  const checked = support.validateContact(req.body || {});
+  if (!checked.ok) {
+    res.status(400).json({ error: checked.error });
+    return;
+  }
+  const { name, email, phone, message } = checked.data;
+  const username = req.user && req.user.username ? req.user.username : null;
+  const saved = support.saveContactMessage({ name, email, phone, message, username });
+  let mailResult = { sent: false };
+  try {
+    mailResult = await mail.sendSupportEmail({
+      name,
+      email,
+      phone,
+      message,
+      username,
+      to: support.supportInbox(),
+    });
+  } catch (err) {
+    console.warn("Support email failed:", err && err.message ? err.message : err);
+  }
+  res.json({
+    ok: true,
+    id: saved.id,
+    emailed: Boolean(mailResult.sent),
+    supportEmail: support.supportInbox(),
+    mailto: support.mailtoHref({ name, email, phone, message }),
+    message: mailResult.sent
+      ? "Thanks — your message was sent. We’ll reply to the email you provided."
+      : "Thanks — your message was saved. If mail isn’t configured on this server, use the mailto link or email support directly.",
+  });
 });
 
 app.use("/api/haulage", api);

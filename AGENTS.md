@@ -188,8 +188,14 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   Open without login: `GET`s, `/auth/login`, `/auth/logout`, `/auth/register`,
   and `/expenses/preview`.
 - **Uploads require login.** `/receipts/scan`, `/receipts/manual`, and
-  `/receipts/:id/confirm` return 401 if there is no session — files save into
-  `data/users/<name>.json` + `data/receipts/`. Receipts store `purpose`
-  (`expense`|`income`); expense/income galleries filter by purpose. Duplicate
-  matching is also purpose-scoped so an expense receipt does not block a
-  payslip upload.
+ `/receipts/:id/confirm` return 401 if there is no session — files save into
+ `data/users/<name>.json` + `data/receipts/`. Receipts store `purpose`
+ (`expense`|`income`); expense/income galleries filter by purpose. Duplicate
+ matching is also purpose-scoped so an expense receipt does not block a
+ payslip upload.
+- **Support tab** (sidebar bottom-left): contact form posts to
+ `POST /api/haulage/support/contact` (open to guests). Messages persist in
+ `data/support-messages.json` and email `SUPPORT_EMAIL` or
+ `hilljj1990@gmail.com` when SMTP is set (`lib/mail.js`); otherwise the API
+ returns a `mailto:` fallback. Help blurbs for each main tab live in
+ `public/enhancements.js`.
