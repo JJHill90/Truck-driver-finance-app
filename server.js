@@ -469,10 +469,18 @@ api.get("/alerts", (req, res) => {
 });
 
 const { summariseLafha } = require("./lib/lafha");
+const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 
 api.get("/lafha", (req, res) => {
   const records = getRecords(req);
   res.json(summariseLafha(records.profile || {}, records.income || []));
+});
+
+api.get("/version", (_req, res) => {
+  res.json({
+    prNumber: HAULAGE_PR_NUMBER,
+    label: formatVersionLabel(HAULAGE_PR_NUMBER),
+  });
 });
 
 // --- Primary-mod admin ---------------------------------------------------

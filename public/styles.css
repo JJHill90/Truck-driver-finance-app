@@ -397,6 +397,24 @@ body:not(.auth-locked) .title-screen {
 .nav-btn.active { background: var(--accent); color: #1a1205; }
 
 .main { padding: 20px 26px 60px; max-width: 1200px; }
+
+/* PR-count version line at the bottom of the app / title screen */
+.app-version-footer {
+  margin: 0;
+  padding: 10px 26px 18px;
+  text-align: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  background: transparent;
+}
+.app-version-footer.title-version {
+  border-top: none;
+  margin-top: 18px;
+  padding: 8px 0 0;
+  color: rgba(255, 255, 255, 0.65);
+}
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .topbar h1 { margin: 0; font-size: 1.5rem; }
 .fy-picker { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-dim); }

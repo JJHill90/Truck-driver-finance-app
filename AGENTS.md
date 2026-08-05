@@ -42,6 +42,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   band from profile annual salary (or estimated from payslips), and paid
   Travel/LAFHA lines detected on income. Income menu includes
   “Living Away from Home / Travel allowance”.
+- **Version footer.** Bottom-of-page label from `lib/version.js` /
+  `GET /version`. Bump `HAULAGE_PR_NUMBER` with each new PR. Display rules:
+  PR *n* → `Version .(n mod 50)` (e.g. PR 47 → `Version .47`); every 50th
+  PR → `Version X.0` (PR 50 → `Version 1.0`, PR 100 → `Version 2.0`), then
+  the `.1`…`.49` cycle restarts.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default
