@@ -1243,7 +1243,8 @@ api.post("/support/contact", async (req, res) => {
     return;
   }
   const { name, email, phone, message } = checked.data;
-  const username = req.user && req.user.username ? req.user.username : null;
+  // req.user is the session username string from auth.getSessionUser(), not an object.
+  const username = support.sessionUsername(req.user);
   const saved = support.saveContactMessage({ name, email, phone, message, username });
   const inbox = support.supportInbox();
   let mailResult = { sent: false, confirmationSent: false, to: inbox };
@@ -1284,6 +1285,7 @@ api.post("/support/contact", async (req, res) => {
   res.json({
     ok: true,
     id: saved.id,
+    username,
     emailed,
     confirmationSent,
     channel: mailResult.channel || null,

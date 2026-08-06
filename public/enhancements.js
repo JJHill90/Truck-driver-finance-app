@@ -3888,6 +3888,7 @@
     email,
     phone,
     message,
+    username,
     supportEmail,
     confirmationText,
   }) {
@@ -3903,6 +3904,7 @@
         "Driver name": name,
         "Reply email": email,
         Phone: phone || "Not provided",
+        Username: username || "(guest / not signed in)",
         Message: message,
         _replyto: email,
         _subject: `Haulage Finance support — from ${name}`,
@@ -3968,6 +3970,7 @@
             email,
             phone,
             message,
+            username: data.username || null,
             supportEmail,
             confirmationText: data.confirmationText,
           });
