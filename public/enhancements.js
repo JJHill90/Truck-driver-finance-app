@@ -1613,7 +1613,7 @@
     return `FY ${fy}`;
   }
 
-  /** Options: "All", then FYs in the ±3 window that appear in this gallery. */
+  /** Options: "All", then FYs in the 6-past/3-future window in this gallery. */
   function optionsHtml(purpose, selected) {
     const set = new Set();
     let list = [];
@@ -1623,7 +1623,7 @@
       list = [];
     }
 
-    // Same ±3 window as the top-bar FY picker (lib/fy-window.js / override above).
+    // Same window as the top-bar FY picker (lib/fy-window.js / override below).
     let allowed = null;
     try {
       const top = document.getElementById("fy-select");
@@ -4100,12 +4100,12 @@
   }
 })();
 
-/* --- Narrow FY picker to ±3 years (app.js still builds ±15/20 by default) - */
+/* --- Narrow FY picker (app.js still builds ±15/20 by default) ------------ */
 (function () {
   "use strict";
 
   /** Keep in sync with lib/fy-window.js */
-  const FY_YEARS_BACK = 3;
+  const FY_YEARS_BACK = 6;
   const FY_YEARS_FORWARD = 3;
 
   function globalFn(name) {
@@ -4149,7 +4149,7 @@
 
   /**
    * Replacement for app.js populateFinancialYearSelect — same DOM contract,
-   * narrower ±3 window. Slides automatically each 1 July via currentFy().
+   * 6 past + 3 future. Slides automatically each 1 July via currentFy().
    */
   function populateFinancialYearSelectNarrow(selectedFy) {
     const sel = document.getElementById("fy-select");
@@ -4209,7 +4209,7 @@
     if (fyLabelEl) fyLabelEl.textContent = String(fy).replace("-", "–");
   }
 
-  // Override the verbatim app.js function so refreshAll / align / init re-use ±3.
+  // Override the verbatim app.js function so refreshAll / align / init re-use this window.
   globalThis.populateFinancialYearSelect = populateFinancialYearSelectNarrow;
 
   function clampNow() {

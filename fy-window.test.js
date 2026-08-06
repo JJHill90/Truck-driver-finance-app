@@ -9,8 +9,8 @@ const {
 } = require("./lib/fy-window");
 
 describe("fy-window", () => {
-  it("uses a ±3 window around the current Australian FY", () => {
-    expect(FY_YEARS_BACK).toBe(3);
+  it("uses 6 past + current + 3 future around the current Australian FY", () => {
+    expect(FY_YEARS_BACK).toBe(6);
     expect(FY_YEARS_FORWARD).toBe(3);
 
     // 6 Aug 2026 → FY 2026-27
@@ -24,6 +24,9 @@ describe("fy-window", () => {
       "2025-26",
       "2024-25",
       "2023-24",
+      "2022-23",
+      "2021-22",
+      "2020-21",
     ]);
   });
 
@@ -35,8 +38,8 @@ describe("fy-window", () => {
     const afterJuly = buildFinancialYearWindow({ now: new Date(2027, 6, 1) });
     expect(afterJuly[0]).toBe("2030-31");
     expect(afterJuly).toContain("2027-28");
-    expect(afterJuly).toContain("2024-25");
-    expect(afterJuly).not.toContain("2023-24");
+    expect(afterJuly).toContain("2021-22");
+    expect(afterJuly).not.toContain("2020-21");
   });
 
   it("formats and membership helpers", () => {
