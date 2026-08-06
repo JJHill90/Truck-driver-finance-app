@@ -54,6 +54,7 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -475,6 +476,13 @@ const { summariseLafha } = require("./lib/lafha");
 api.get("/lafha", (req, res) => {
   const records = getRecords(req);
   res.json(summariseLafha(records.profile || {}, records.income || []));
+});
+
+api.get("/version", (_req, res) => {
+  res.json({
+    prNumber: HAULAGE_PR_NUMBER,
+    label: formatVersionLabel(HAULAGE_PR_NUMBER),
+  });
 });
 
 // --- Primary-mod admin ---------------------------------------------------

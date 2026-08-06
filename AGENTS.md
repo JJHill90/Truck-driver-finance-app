@@ -203,3 +203,9 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
  via **FormSubmit** in the browser (first use may require the inbox owner to
  click FormSubmit’s activation email). Help blurbs live in
  `public/enhancements.js`.
+- **Version label** sits under the Support button (sidebar bottom-left) and on
+ the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
+ Bump `HAULAGE_PR_NUMBER` with each new PR. Display rules: PR *n* →
+ `Version .(n mod 50)` (e.g. PR 49 → `Version .49`); every 50th PR →
+ `Version X.0` (PR 50 → `Version 1.0`, PR 100 → `Version 2.0`), then the
+ `.1`…`.49` cycle restarts.

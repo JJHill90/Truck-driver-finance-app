@@ -4075,3 +4075,36 @@
     start();
   }
 })();
+
+/* --- App version label (PR-count based; shown under Support) ------------- */
+(function () {
+  "use strict";
+
+  async function refreshVersion() {
+    const nodes = document.querySelectorAll("[data-app-version]");
+    if (!nodes.length) return;
+    try {
+      const base =
+        typeof API !== "undefined" && API
+          ? API
+          : `${window.location.origin}/api/haulage`;
+      const res = await fetch(`${base}/version`, { credentials: "same-origin" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.label) return;
+      nodes.forEach((el) => {
+        el.textContent = data.label;
+        if (data.prNumber != null) el.title = `PR #${data.prNumber}`;
+      });
+    } catch {
+      /* keep static fallback in HTML */
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      void refreshVersion();
+    });
+  } else {
+    void refreshVersion();
+  }
+})();
