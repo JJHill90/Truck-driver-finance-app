@@ -3824,17 +3824,108 @@
     });
   }
 
-  function setStatus(msg, { isError } = {}) {
+  function setStatus(msg, { isError, isSuccess } = {}) {
     const el = document.getElementById("support-contact-status");
     if (!el) return;
     el.textContent = "";
-    el.classList.toggle("banner", Boolean(isError));
+    el.classList.remove("banner", "support-status-success", "support-status-error");
+    if (isError) el.classList.add("banner", "support-status-error");
+    if (isSuccess) el.classList.add("support-status-success");
     if (!msg) return;
     if (typeof msg === "string") {
       el.textContent = msg;
       return;
     }
     el.appendChild(msg);
+  }
+
+  function showDeliveryConfirmation({
+    supportEmail,
+    userEmail,
+    confirmationSent,
+    mailto,
+  }) {
+    const wrap = document.createElement("div");
+    wrap.className = "support-confirm-notice";
+
+    const title = document.createElement("p");
+    title.className = "support-confirm-title";
+    title.textContent = "Support request sent";
+    wrap.appendChild(title);
+
+    const line1 = document.createElement("p");
+    line1.textContent = `Your message has been sent to the developer (${supportEmail || "hilljj1990@gmail.com"}).`;
+    wrap.appendChild(line1);
+
+    const line2 = document.createElement("p");
+    if (confirmationSent) {
+      line2.textContent = `A confirmation notice was also sent to ${userEmail}. Check your inbox (and spam) for “we received your support request”.`;
+    } else {
+      line2.textContent = `We’ll reply to ${userEmail}. If you don’t hear back, follow up at ${supportEmail || "hilljj1990@gmail.com"}.`;
+    }
+    wrap.appendChild(line2);
+
+    if (mailto) {
+      const line3 = document.createElement("p");
+      line3.className = "muted";
+      const a = document.createElement("a");
+      a.href = mailto;
+      a.textContent = "Open a copy in your email app";
+      line3.appendChild(a);
+      wrap.appendChild(line3);
+    }
+
+    setStatus(wrap, { isSuccess: true });
+  }
+
+  /**
+   * Browser-side delivery when the server has no SMTP/Resend credentials.
+   * FormSubmit emails the developer and can autorespond to the user.
+   * First use for an inbox may require the owner to click an activation email.
+   */
+  async function deliverViaFormSubmit({
+    name,
+    email,
+    phone,
+    message,
+    supportEmail,
+    confirmationText,
+  }) {
+    const inbox = supportEmail || "hilljj1990@gmail.com";
+    const endpoint = `https://formsubmit.co/ajax/${encodeURIComponent(inbox)}`;
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        phone: phone || "Not provided",
+        message,
+        _replyto: email,
+        _subject: `Haulage Finance support — from ${name}`,
+        _template: "table",
+        _autoresponse:
+          confirmationText ||
+          `Hi ${name},\n\nThanks for contacting Haulage Finance support. Your request has been sent to the developer (${inbox}). We’ll reply to this email as soon as we can.\n\n— Haulage Finance`,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    // FormSubmit returns { success: "true"|"false", message } or similar.
+    const ok =
+      res.ok &&
+      data &&
+      data.success !== false &&
+      data.success !== "false" &&
+      !/activate|confirm your email/i.test(String(data.message || ""));
+    return {
+      sent: Boolean(ok),
+      confirmationSent: Boolean(ok),
+      activationRequired: /activate|confirm your email/i.test(String(data.message || "")),
+      raw: data,
+    };
   }
 
   async function onSubmit(e) {
@@ -3846,7 +3937,7 @@
     const message = form.message.value.trim();
     const btn = document.getElementById("support-send");
     if (btn) btn.disabled = true;
-    setStatus("Sending…");
+    setStatus("Sending your support request…");
 
     try {
       // API is declared in app.js (same page) and listed for ESLint earlier in this file.
@@ -3863,21 +3954,82 @@
         return;
       }
 
-      const wrap = document.createElement("span");
-      wrap.appendChild(document.createTextNode(data.message || "Thanks — message received."));
-      if (!data.emailed && data.mailto) {
-        wrap.appendChild(document.createTextNode(" "));
+      let emailed = Boolean(data.emailed);
+      let confirmationSent = Boolean(data.confirmationSent);
+      const supportEmail = data.supportEmail || "hilljj1990@gmail.com";
+
+      // If the server could not reach an SMTP/Resend channel, deliver from the
+      // browser so the developer inbox still receives the enquiry.
+      if (!emailed || data.needsClientDelivery) {
+        setStatus("Connecting to the support inbox…");
+        try {
+          const client = await deliverViaFormSubmit({
+            name,
+            email,
+            phone,
+            message,
+            supportEmail,
+            confirmationText: data.confirmationText,
+          });
+          if (client.sent) {
+            emailed = true;
+            confirmationSent = Boolean(client.confirmationSent);
+          } else if (client.activationRequired) {
+            const wrap = document.createElement("div");
+            const p1 = document.createElement("p");
+            const strong = document.createElement("strong");
+            strong.textContent = "Almost there. ";
+            p1.appendChild(strong);
+            p1.appendChild(
+              document.createTextNode("The support inbox needs a one-time activation.")
+            );
+            wrap.appendChild(p1);
+            const p2 = document.createElement("p");
+            p2.className = "muted";
+            p2.textContent = `The developer (${supportEmail}) should check their email for a FormSubmit confirmation link, then try again. You can also email them directly:`;
+            wrap.appendChild(p2);
+            if (data.mailto) {
+              const a = document.createElement("a");
+              a.href = data.mailto;
+              a.textContent = supportEmail;
+              wrap.appendChild(a);
+            }
+            setStatus(wrap, { isError: true });
+            return;
+          }
+        } catch (clientErr) {
+          console.warn("Client support delivery failed", clientErr);
+        }
+      }
+
+      if (emailed) {
+        showDeliveryConfirmation({
+          supportEmail,
+          userEmail: email,
+          confirmationSent,
+          mailto: data.mailto,
+        });
+        form.reset();
+        return;
+      }
+
+      const wrap = document.createElement("div");
+      const p = document.createElement("p");
+      p.textContent =
+        "We couldn’t reach the support inbox automatically. Your message was saved on the server — please email the developer directly:";
+      wrap.appendChild(p);
+      if (data.mailto) {
         const a = document.createElement("a");
         a.href = data.mailto;
-        a.textContent = "Open in your email app";
+        a.textContent = supportEmail;
         wrap.appendChild(a);
-        wrap.appendChild(document.createTextNode("."));
+      } else {
+        const a = document.createElement("a");
+        a.href = `mailto:${supportEmail}`;
+        a.textContent = supportEmail;
+        wrap.appendChild(a);
       }
-      if (data.supportEmail) {
-        wrap.appendChild(document.createTextNode(` Support: ${data.supportEmail}`));
-      }
-      setStatus(wrap);
-      form.reset();
+      setStatus(wrap, { isError: true });
     } catch {
       setStatus("Network error — please try again or email hilljj1990@gmail.com.", {
         isError: true,

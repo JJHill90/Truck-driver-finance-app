@@ -195,7 +195,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
  payslip upload.
 - **Support tab** (sidebar bottom-left): contact form posts to
  `POST /api/haulage/support/contact` (open to guests). Messages persist in
- `data/support-messages.json` and email `SUPPORT_EMAIL` or
- `hilljj1990@gmail.com` when SMTP is set (`lib/mail.js`); otherwise the API
- returns a `mailto:` fallback. Help blurbs for each main tab live in
+ `data/support-messages.json`. Delivery order in `lib/mail.js`: **SMTP**
+ (`SMTP_HOST` + `MAIL_FROM` + usually `SMTP_USER`/`SMTP_PASS`) → **Resend**
+ (`RESEND_API_KEY`). On success the developer inbox
+ (`SUPPORT_EMAIL` / `hilljj1990@gmail.com`) gets the enquiry and the user
+ gets a confirmation email. If neither channel is configured, the UI delivers
+ via **FormSubmit** in the browser (first use may require the inbox owner to
+ click FormSubmit’s activation email). Help blurbs live in
  `public/enhancements.js`.

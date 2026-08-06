@@ -25,10 +25,13 @@ services:
         value: Haulage_Admin
       - key: HAULAGE_ADMIN_PASSWORD
         sync: false
-      # Optional outbound email (recovery links + 90-day password reminders).
-      # Without these, recovery still works in-browser via a same-origin link.
+      # Outbound email — required for Support contact + recovery emails to leave
+      # the server. Prefer Gmail SMTP (app password) OR Resend API key.
+      # Without either, the Support tab falls back to browser FormSubmit delivery.
       - key: APP_BASE_URL
         sync: false
+      - key: SUPPORT_EMAIL
+        value: hilljj1990@gmail.com
       - key: MAIL_FROM
         sync: false
       - key: SMTP_HOST
@@ -38,6 +41,10 @@ services:
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
         sync: false
     # Persist accounts + receipts across deploys (required for multi-user admin).
     disk:
