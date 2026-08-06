@@ -6,25 +6,50 @@ describe("mail support delivery helpers", () => {
       name: "Dave",
       email: "dave@example.com",
       phone: "0400",
-      message: "Need help",
+      message: "Need help with scans",
       username: "dave",
     });
-    expect(notice).toContain("Dave");
-    expect(notice).toContain("dave@example.com");
-    expect(notice).toContain("Need help");
+    expect(notice).toContain("CONTACT DETAILS");
+    expect(notice).toContain("Name:     Dave");
+    expect(notice).toContain("Email:    dave@example.com");
+    expect(notice).toContain("Phone:    0400");
+    expect(notice).toContain("Username: dave");
+    expect(notice).toMatch(/MESSAGE\n-------\nNeed help with scans/);
+
+    const html = mail.buildSupportNotificationHtml({
+      name: "Dave",
+      email: "dave@example.com",
+      phone: "",
+      message: "Line one\nLine two <script>",
+      username: null,
+    });
+    expect(html).toContain("Contact details");
+    expect(html).toContain("mailto:dave@example.com");
+    expect(html).toContain("Line one<br />Line two");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("(not provided)");
+    expect(html).toContain("(guest / not signed in)");
 
     const confirm = mail.buildSupportConfirmationText({
       name: "Dave",
-      supportEmail: "hilljj1990@gmail.com",
+      supportEmail: mail.DEFAULT_SUPPORT_EMAIL,
     });
     expect(confirm).toMatch(/sent to the developer/i);
-    expect(confirm).toContain("hilljj1990@gmail.com");
+    expect(confirm).toContain(mail.DEFAULT_SUPPORT_EMAIL);
+
+    const confirmHtml = mail.buildSupportConfirmationHtml({
+      name: "Dave",
+      supportEmail: mail.DEFAULT_SUPPORT_EMAIL,
+    });
+    expect(confirmHtml).toContain("Support request received");
+    expect(confirmHtml).toContain("Hi Dave");
   });
 
   it("defaults support inbox to the business Gmail", () => {
     const prev = process.env.SUPPORT_EMAIL;
     delete process.env.SUPPORT_EMAIL;
-    expect(mail.supportInbox()).toBe("hilljj1990@gmail.com");
+    expect(mail.supportInbox()).toBe(mail.DEFAULT_SUPPORT_EMAIL);
     if (prev !== undefined) process.env.SUPPORT_EMAIL = prev;
   });
 });
@@ -65,7 +90,7 @@ describe("mail.sendSupportEmail channels", () => {
     });
     expect(result.sent).toBe(false);
     expect(result.confirmationSent).toBe(false);
-    expect(result.to).toBe("hilljj1990@gmail.com");
+    expect(result.to).toBe(mail.DEFAULT_SUPPORT_EMAIL);
   });
 
   it("sends developer + confirmation mail via Resend when configured", async () => {
@@ -96,8 +121,12 @@ describe("mail.sendSupportEmail channels", () => {
     expect(result.confirmationSent).toBe(true);
     expect(result.channel).toBe("resend");
     expect(calls).toHaveLength(2);
-    expect(calls[0].to).toEqual(["hilljj1990@gmail.com"]);
+    expect(calls[0].to).toEqual([mail.DEFAULT_SUPPORT_EMAIL]);
     expect(calls[0].reply_to).toBe("sam@example.com");
+    expect(calls[0].html).toContain("Contact details");
+    expect(calls[0].html).toContain("Scanner question");
+    expect(calls[0].text).toContain("CONTACT DETAILS");
     expect(calls[1].to).toEqual(["sam@example.com"]);
+    expect(calls[1].html).toContain("Support request received");
   });
 });
