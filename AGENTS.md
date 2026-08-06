@@ -182,8 +182,8 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   Document years are clamped to **today − 20 … today + 1**; two-digit years
   outside that window (e.g. OCR `70` → 2070) are rejected so far-future FYs
   are not created — the confirm date then falls back empty/today.
-- **FY picker window (±3).** Top-bar / Profile / ledger FY dropdowns show
-  **3 past + current + 3 future** Australian financial years
+- **FY picker window (6 past / 3 future).** Top-bar / Profile / ledger FY
+  dropdowns show **6 past + current + 3 future** Australian financial years
   (`lib/fy-window.js`; `enhancements.js` overrides verbatim `app.js` which
   still builds a wider ±15/20 list). The window is relative to today and
   slides automatically each 1 July — no manual year catalog. A selected FY
