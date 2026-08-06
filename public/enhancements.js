@@ -1613,7 +1613,7 @@
     return `FY ${fy}`;
   }
 
-  /** Options: "All", then every FY present in this gallery + current + top FY. */
+  /** Options: "All", then FYs in the ±3 window that appear in this gallery. */
   function optionsHtml(purpose, selected) {
     const set = new Set();
     let list = [];
@@ -1622,16 +1622,37 @@
     } catch {
       list = [];
     }
+
+    // Same ±3 window as the top-bar FY picker (lib/fy-window.js / override above).
+    let allowed = null;
+    try {
+      const top = document.getElementById("fy-select");
+      if (top && top.options && top.options.length) {
+        allowed = new Set(
+          [...top.options].map((o) => o.value).filter((v) => v && v !== "all")
+        );
+      }
+    } catch {
+      allowed = null;
+    }
+
     for (const r of list) {
       const fy = receiptFy(r);
-      if (fy) set.add(fy);
+      if (!fy) continue;
+      if (allowed && !allowed.has(fy)) continue;
+      set.add(fy);
     }
     try {
-      if (typeof getCurrentFinancialYear === "function") set.add(getCurrentFinancialYear());
+      if (typeof getCurrentFinancialYear === "function") {
+        const cur = getCurrentFinancialYear();
+        if (!allowed || allowed.has(cur)) set.add(cur);
+      }
     } catch {
       /* ignore */
     }
-    if (state && state.financialYear) set.add(state.financialYear);
+    if (state && state.financialYear) {
+      if (!allowed || allowed.has(state.financialYear)) set.add(state.financialYear);
+    }
     if (selected && selected !== "all") set.add(selected);
 
     const years = [...set].sort(
@@ -4076,6 +4097,138 @@
     document.addEventListener("DOMContentLoaded", start);
   } else {
     start();
+  }
+})();
+
+/* --- Narrow FY picker to ±3 years (app.js still builds ±15/20 by default) - */
+(function () {
+  "use strict";
+
+  /** Keep in sync with lib/fy-window.js */
+  const FY_YEARS_BACK = 3;
+  const FY_YEARS_FORWARD = 3;
+
+  function globalFn(name) {
+    try {
+      const fn = globalThis[name];
+      return typeof fn === "function" ? fn : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function formatFy(startYear) {
+    const fn = globalFn("formatFinancialYearValue");
+    if (fn) return fn(startYear);
+    const y = Math.floor(Number(startYear));
+    return `${y}-${String(y + 1).slice(-2)}`;
+  }
+
+  function formatFyLabel(fy) {
+    const fn = globalFn("formatFinancialYearLabel");
+    if (fn) return fn(fy);
+    return `FY ${String(fy).replace("-", "–")}`;
+  }
+
+  function currentFy() {
+    const fn = globalFn("getCurrentFinancialYear");
+    if (fn) return fn();
+    const now = new Date();
+    const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    return formatFy(startYear);
+  }
+
+  function buildWindow(yearsBack, yearsForward) {
+    const currentStart = Number(currentFy().split("-")[0]);
+    const years = [];
+    for (let y = currentStart + yearsForward; y >= currentStart - yearsBack; y -= 1) {
+      years.push(formatFy(y));
+    }
+    return years;
+  }
+
+  /**
+   * Replacement for app.js populateFinancialYearSelect — same DOM contract,
+   * narrower ±3 window. Slides automatically each 1 July via currentFy().
+   */
+  function populateFinancialYearSelectNarrow(selectedFy) {
+    const sel = document.getElementById("fy-select");
+    const profileSel = document.getElementById("profile-financial-year");
+    const targets = [sel, profileSel].filter(Boolean);
+    if (!targets.length) return;
+
+    const current = currentFy();
+    const currentStart = Number(current.split("-")[0]);
+    const years = buildWindow(FY_YEARS_BACK, FY_YEARS_FORWARD);
+    let fy = selectedFy;
+    try {
+      const appState = globalThis.state;
+      if (!fy && appState && appState.financialYear) fy = appState.financialYear;
+    } catch {
+      /* ignore */
+    }
+    fy = fy || current;
+
+    if (!years.includes(fy)) {
+      years.push(fy);
+      years.sort((a, b) => Number(b.split("-")[0]) - Number(a.split("-")[0]));
+    }
+
+    const future = years.filter((y) => Number(y.split("-")[0]) > currentStart);
+    const present = years.filter((y) => y === current || Number(y.split("-")[0]) === currentStart);
+    const past = years.filter((y) => Number(y.split("-")[0]) < currentStart);
+
+    const optionHtml = (list) =>
+      list.map((y) => `<option value="${y}">${formatFyLabel(y)}</option>`).join("");
+
+    const html = [
+      future.length
+        ? `<optgroup label="Future (up to +${FY_YEARS_FORWARD} years)">${optionHtml(future)}</optgroup>`
+        : "",
+      present.length ? `<optgroup label="Current">${optionHtml(present)}</optgroup>` : "",
+      past.length ? `<optgroup label="Past">${optionHtml(past)}</optgroup>` : "",
+    ].join("");
+
+    for (const target of targets) {
+      target.innerHTML = html;
+      target.value = fy;
+      if (target.value !== fy) {
+        requestAnimationFrame(() => {
+          target.value = fy;
+        });
+      }
+    }
+
+    try {
+      const appState = globalThis.state;
+      if (appState) appState.financialYear = fy;
+    } catch {
+      /* ignore */
+    }
+    const fyLabelEl = document.getElementById("fy-label");
+    if (fyLabelEl) fyLabelEl.textContent = String(fy).replace("-", "–");
+  }
+
+  // Override the verbatim app.js function so refreshAll / align / init re-use ±3.
+  globalThis.populateFinancialYearSelect = populateFinancialYearSelectNarrow;
+
+  function clampNow() {
+    let selected = null;
+    try {
+      const appState = globalThis.state;
+      if (appState && appState.financialYear) selected = appState.financialYear;
+    } catch {
+      /* ignore */
+    }
+    const top = document.getElementById("fy-select");
+    if (!selected && top && top.value) selected = top.value;
+    populateFinancialYearSelectNarrow(selected || currentFy());
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", clampNow);
+  } else {
+    clampNow();
   }
 })();
 
