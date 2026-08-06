@@ -40,6 +40,28 @@ describe("support.validateContact", () => {
   });
 });
 
+describe("support.sessionUsername", () => {
+  it("reads the session username string used by auth middleware", () => {
+    expect(support.sessionUsername("JJHill90")).toBe("JJHill90");
+    expect(support.sessionUsername("  dave  ")).toBe("dave");
+    expect(support.sessionUsername(null)).toBe(null);
+    expect(support.sessionUsername(undefined)).toBe(null);
+    expect(support.sessionUsername("")).toBe(null);
+  });
+
+  it("does not treat a bare string as missing .username (the Support bug)", () => {
+    const sessionUser = "JJHill90";
+    // Bug pattern: req.user.username on a string is always undefined.
+    expect(sessionUser.username).toBeUndefined();
+    expect(support.sessionUsername(sessionUser)).toBe("JJHill90");
+  });
+
+  it("also accepts a public user object shape", () => {
+    expect(support.sessionUsername({ username: "Sam" })).toBe("Sam");
+    expect(support.sessionUsername({ username: "  " })).toBe(null);
+  });
+});
+
 describe("support.saveContactMessage", () => {
   it("persists a message and builds a mailto link", () => {
     const saved = support.saveContactMessage({
