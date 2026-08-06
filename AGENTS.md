@@ -195,7 +195,17 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
  payslip upload.
 - **Support tab** (sidebar bottom-left): contact form posts to
  `POST /api/haulage/support/contact` (open to guests). Messages persist in
- `data/support-messages.json` and email `SUPPORT_EMAIL` or
- `hilljj1990@gmail.com` when SMTP is set (`lib/mail.js`); otherwise the API
- returns a `mailto:` fallback. Help blurbs for each main tab live in
+ `data/support-messages.json`. Delivery order in `lib/mail.js`: **SMTP**
+ (`SMTP_HOST` + `MAIL_FROM` + usually `SMTP_USER`/`SMTP_PASS`) → **Resend**
+ (`RESEND_API_KEY`). On success the developer inbox
+ (`SUPPORT_EMAIL` / `hilljj1990@gmail.com`) gets the enquiry and the user
+ gets a confirmation email. If neither channel is configured, the UI delivers
+ via **FormSubmit** in the browser (first use may require the inbox owner to
+ click FormSubmit’s activation email). Help blurbs live in
  `public/enhancements.js`.
+- **Version label** sits under the Support button (sidebar bottom-left) and on
+ the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
+ Bump `HAULAGE_PR_NUMBER` with each new PR. Display rules: PR *n* →
+ `Version .(n mod 50)` (e.g. PR 49 → `Version .49`); every 50th PR →
+ `Version X.0` (PR 50 → `Version 1.0`, PR 100 → `Version 2.0`), then the
+ `.1`…`.49` cycle restarts.

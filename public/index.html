@@ -71,6 +71,7 @@
           <div id="title-recover-dev" class="title-recover-fallback hidden"></div>
         </form>
         <p id="title-auth-message" class="title-auth-message" role="status"></p>
+        <p class="app-version-footer title-version" data-app-version>Version 1.0</p>
       </div>
     </div>
 
@@ -88,9 +89,14 @@
           <button class="nav-btn" data-view="report">EOFY report</button>
           <button class="nav-btn" data-view="forecast">Forecast</button>
         </nav>
-        <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Support">
-          <button class="nav-btn" data-view="support">Support</button>
-        </nav>
+        <div class="sidebar-bottom">
+          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Support">
+            <button class="nav-btn" data-view="support">Support</button>
+          </nav>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">
+            Version 1.0
+          </p>
+        </div>
       </aside>
 
       <div class="main">
@@ -458,9 +464,9 @@
               <div class="panel-header"><h2>Contact support</h2></div>
               <p class="muted">
                 Have a question or hit a snag? Send a message and we’ll get back to you.
-                You can also email
-                <a id="support-email-link" href="mailto:hilljj1990@gmail.com">hilljj1990@gmail.com</a>
-                directly.
+                Your request goes to
+                <a id="support-email-link" href="mailto:hilljj1990@gmail.com">hilljj1990@gmail.com</a>,
+                and you’ll get a confirmation notice on the email you enter below.
               </p>
               <form id="support-contact-form" class="form-grid">
                 <label>Name
@@ -479,7 +485,7 @@
                   <button type="submit" class="btn primary" id="support-send">Send message</button>
                 </div>
               </form>
-              <p id="support-contact-status" class="muted" role="status"></p>
+              <div id="support-contact-status" class="muted" role="status" aria-live="polite"></div>
             </div>
 
             <div class="panel">
@@ -523,6 +529,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=support-tab-1"></script>
+    <script src="./enhancements.js?v=support-version-1"></script>
   </body>
 </html>

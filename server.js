@@ -54,6 +54,7 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -475,6 +476,13 @@ const { summariseLafha } = require("./lib/lafha");
 api.get("/lafha", (req, res) => {
   const records = getRecords(req);
   res.json(summariseLafha(records.profile || {}, records.income || []));
+});
+
+api.get("/version", (_req, res) => {
+  res.json({
+    prNumber: HAULAGE_PR_NUMBER,
+    label: formatVersionLabel(HAULAGE_PR_NUMBER),
+  });
 });
 
 // --- Primary-mod admin ---------------------------------------------------
@@ -1218,7 +1226,14 @@ api.get("/receipts/:id/file", (req, res) => {
 
 // --- Support contact -----------------------------------------------------
 api.get("/support/info", (_req, res) => {
-  res.json({ email: support.supportInbox() });
+  res.json({
+    email: support.supportInbox(),
+    mailConfigured: mail.mailConfigured(),
+    channels: {
+      smtp: mail.smtpConfigured(),
+      resend: mail.resendConfigured(),
+    },
+  });
 });
 
 api.post("/support/contact", async (req, res) => {
@@ -1230,7 +1245,8 @@ api.post("/support/contact", async (req, res) => {
   const { name, email, phone, message } = checked.data;
   const username = req.user && req.user.username ? req.user.username : null;
   const saved = support.saveContactMessage({ name, email, phone, message, username });
-  let mailResult = { sent: false };
+  const inbox = support.supportInbox();
+  let mailResult = { sent: false, confirmationSent: false, to: inbox };
   try {
     mailResult = await mail.sendSupportEmail({
       name,
@@ -1238,20 +1254,45 @@ api.post("/support/contact", async (req, res) => {
       phone,
       message,
       username,
-      to: support.supportInbox(),
+      to: inbox,
     });
   } catch (err) {
     console.warn("Support email failed:", err && err.message ? err.message : err);
+    mailResult = {
+      sent: false,
+      confirmationSent: false,
+      to: inbox,
+      error: err && err.message ? err.message : String(err),
+    };
   }
+
+  const emailed = Boolean(mailResult.sent);
+  const confirmationSent = Boolean(mailResult.confirmationSent);
+  let statusMessage;
+  if (emailed && confirmationSent) {
+    statusMessage =
+      "Your support request has been sent to the developer. A confirmation notice was also emailed to you.";
+  } else if (emailed) {
+    statusMessage =
+      "Your support request has been sent to the developer. We’ll reply to the email you provided.";
+  } else {
+    // Client may still deliver via FormSubmit; keep copy neutral.
+    statusMessage =
+      "Your request was saved. Connecting to the support inbox…";
+  }
+
   res.json({
     ok: true,
     id: saved.id,
-    emailed: Boolean(mailResult.sent),
-    supportEmail: support.supportInbox(),
+    emailed,
+    confirmationSent,
+    channel: mailResult.channel || null,
+    needsClientDelivery: !emailed,
+    supportEmail: inbox,
     mailto: support.mailtoHref({ name, email, phone, message }),
-    message: mailResult.sent
-      ? "Thanks — your message was sent. We’ll reply to the email you provided."
-      : "Thanks — your message was saved. If mail isn’t configured on this server, use the mailto link or email support directly.",
+    confirmationText: mail.buildSupportConfirmationText({ name, supportEmail: inbox }),
+    message: statusMessage,
+    error: mailResult.error || null,
   });
 });
 
