@@ -4518,7 +4518,7 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Expenses has two sub-tabs: Expenses (general work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "Expenses has two sub-tabs: General Expenses (work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
         "On the Car Expenses and Claims tab, enter cents-per-km, logbook or actual running costs (fuel, tyres, servicing, rego/insurance, parking/tolls). That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],

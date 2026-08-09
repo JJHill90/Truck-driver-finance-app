@@ -147,10 +147,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   the API returns `possibleDuplicate` without saving. `enhancements.js` shows
   “possible duplicate detected, do you wish to continue with the upload?” —
   Cancel returns 409 to `app.js`; Continue re-posts with `forceDuplicate: true`.
-- **Expenses tab** has two sub-tabs: **Expenses** (scan/manual, totals, general
-  receipt gallery + ledger) and **Car Expenses and Claims** (ATO D1 cents/km or
-  logbook, plus fuel / repairs / tyres / rego–insurance / parking–tolls via
-  `listSpecialClaimCategories`, with its own car receipt gallery + car ledger).
+- **Expenses tab** has two sub-tabs: **General Expenses** (scan/manual, totals,
+  general receipt gallery + ledger) and **Car Expenses and Claims** (ATO D1
+  cents/km or logbook, plus fuel / repairs / tyres / rego–insurance /
+  parking–tolls via `listSpecialClaimCategories`, with its own car receipt
+  gallery + car ledger).
   Car rows stay in the same `expenses` store; the UI filters by car category
   ids. The general expense menus hide the whole **Vehicle & fuel** group (car
   claims only via the Car tab) and show a **Medical** group containing Medical
