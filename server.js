@@ -66,6 +66,7 @@ const {
 } = require("./lib/income-labels");
 const support = require("./lib/support");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
+const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -187,14 +188,16 @@ function parseCookies(req) {
   return out;
 }
 
-function setSessionCookie(res, token) {
+function setSessionCookie(res, token, req) {
+  const flags = sessionCookieFlags(req);
   res.setHeader(
     "Set-Cookie",
-    `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
+    `${SESSION_COOKIE}=${token}; ${flags}; Max-Age=${60 * 60 * 24 * 30}`
   );
 }
-function clearSessionCookie(res) {
-  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+function clearSessionCookie(res, req) {
+  const flags = sessionCookieFlags(req);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; ${flags}; Max-Age=0`);
 }
 
 // Merge the typed component breakdown with the provided detected totals,
@@ -247,6 +250,9 @@ function buildAlerts(records) {
 }
 
 const app = express();
+// Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
+// Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
+app.use(corsMiddleware);
 app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
@@ -305,7 +311,7 @@ api.post("/auth/register", (req, res) => {
     const user = auth.registerUser(username, password, presets, email);
     const token = auth.createSession(user.username);
     recordsForUser(user.username); // initialise their store
-    setSessionCookie(res, token);
+    setSessionCookie(res, token, req);
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -366,7 +372,7 @@ api.post("/auth/login", async (req, res) => {
   const user = result.user;
   const token = auth.createSession(user.username);
   recordsForUser(user.username);
-  setSessionCookie(res, token);
+  setSessionCookie(res, token, req);
 
   // Periodic email reminder when password is older than 90 days.
   try {
@@ -388,7 +394,7 @@ api.post("/auth/login", async (req, res) => {
 
 api.post("/auth/logout", (req, res) => {
   auth.destroySession(req.sessionToken);
-  clearSessionCookie(res);
+  clearSessionCookie(res, req);
   res.json({ ok: true });
 });
 
@@ -427,7 +433,7 @@ api.post("/auth/change-password", (req, res) => {
     const user = auth.changePassword(req.user, currentPassword, newPassword);
     // Password change clears sessions — issue a fresh cookie.
     const token = auth.createSession(user.username);
-    setSessionCookie(res, token);
+    setSessionCookie(res, token, req);
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -488,7 +494,7 @@ api.post("/auth/recover/reset", (req, res) => {
     const user = auth.resetPasswordWithToken(token, password);
     const session = auth.createSession(user.username);
     recordsForUser(user.username);
-    setSessionCookie(res, session);
+    setSessionCookie(res, session, req);
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });

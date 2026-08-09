@@ -121,6 +121,24 @@ on load — including prompts when email is missing or the password is older tha
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
   `APP_BASE_URL` — optional outbound email for recovery links and 90-day
   password reminders (`lib/mail.js`).
+- `CORS_ORIGINS` — comma-separated browser/WebView origins allowed to call the
+  API cross-origin with cookies (e.g.
+  `capacitor://localhost,https://app.example.com`). Leave empty for same-origin
+  web-only deploys (Render serving `/haulage` + `/api/haulage` together).
+- `CORS_ALLOW_CAPACITOR` — set `1` to also allow common Capacitor/Ionic
+  localhost origins used by Google Play / App Store WebView shells.
+- `COOKIE_SECURE` — force `Secure` on session cookies (on by default when
+  `NODE_ENV=production`). Cross-origin sessions use `SameSite=None; Secure`.
+
+### Google Play / iOS (cross-origin API)
+
+If the store app loads the UI from the same Render URL in a WebView, CORS is
+usually unnecessary (same origin). If a native shell calls the hosted API from
+another origin (`capacitor://localhost`, etc.):
+
+1. Set `CORS_ORIGINS` (and/or `CORS_ALLOW_CAPACITOR=1`) on Render.
+2. Call the API with `credentials: "include"` (not `"same-origin"`).
+3. Point the client at your HTTPS API base (e.g. `https://your-app.onrender.com/api/haulage`).
 
 ## Historical financial years (accurate prior-year reconciliation)
 
