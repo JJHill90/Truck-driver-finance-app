@@ -857,6 +857,55 @@
     });
   }
 
+  function adminLedgerRow(entry, kind) {
+    const deleted = Boolean(entry.deletedAt);
+    const reconciled = Boolean(entry.reconciled) && !deleted;
+    const status = deleted
+      ? `<span class="tag tag-deleted">Deleted</span>`
+      : reconciled
+        ? `<span class="tag tag-reconciled">Reconciled</span>`
+        : `<span class="muted">Open</span>`;
+    const label =
+      kind === "expense"
+        ? esc(entry.vendor || entry.description || "—")
+        : esc(entry.entity || entry.payer || "—");
+    const meta =
+      kind === "expense" ? esc(entry.category || "") : esc(entry.type || "");
+    const amount = kind === "expense" ? entry.amount : entry.grossTotal ?? entry.amount;
+    return `<tr data-admin-entry="${esc(entry.id)}" data-admin-kind="${esc(kind)}" class="${deleted ? "admin-deleted-row" : ""} ${reconciled ? "admin-reconciled-row" : ""}">
+      <td><input type="checkbox" class="admin-entry-check" data-admin-kind="${esc(kind)}" value="${esc(entry.id)}" aria-label="Select entry"></td>
+      <td>${esc(fmtDate(entry.date))}</td>
+      <td>${label}</td>
+      <td>${meta}</td>
+      <td class="amount">${fmt(amount)}</td>
+      <td>${status}</td>
+    </tr>`;
+  }
+
+  async function adminLedgerAction(username, kind, action, ids) {
+    if (!ids.length) {
+      if (window.toast) window.toast("Select one or more entries first");
+      return null;
+    }
+    const type = kind === "income" ? "income" : "expenses";
+    try {
+      return await apiPost(
+        `/admin/users/${encodeURIComponent(username)}/${type}/${action}`,
+        { ids }
+      );
+    } catch (err) {
+      if (window.toast) window.toast(err.message || "Admin action failed");
+      return null;
+    }
+  }
+
+  function selectedAdminIds(root, kind) {
+    if (!root) return [];
+    return [...root.querySelectorAll(`.admin-entry-check[data-admin-kind="${kind}"]:checked`)].map(
+      (el) => el.value
+    );
+  }
+
   function renderAdminDetail(data) {
     const detail = byId("admin-user-detail");
     if (!detail) return;
@@ -867,26 +916,23 @@
     }
     const s = data.summary || {};
     const profile = data.profile || {};
-    const expenses = (data.expenses || []).slice(0, 40);
-    const income = (data.income || []).slice(0, 40);
+    const activeExpenses = (data.expenses || []).filter((e) => !e.deletedAt);
+    const activeIncome = (data.income || []).filter((i) => !i.deletedAt);
+    const expenses = activeExpenses.slice(0, 60);
+    const income = activeIncome.slice(0, 60);
+    const deletedExpenses = (data.deletedExpenses || []).slice(0, 40);
+    const deletedIncome = (data.deletedIncome || []).slice(0, 40);
     const receipts = data.receipts || [];
+    const username = data.user.username;
 
-    const expenseRows = expenses
-      .map(
-        (e) =>
-          `<tr><td>${esc(fmtDate(e.date))}</td><td>${esc(e.vendor || e.description || "—")}</td><td>${esc(e.category || "")}</td><td class="amount">${fmt(e.amount)}</td></tr>`
-      )
-      .join("");
-    const incomeRows = income
-      .map(
-        (i) =>
-          `<tr><td>${esc(fmtDate(i.date))}</td><td>${esc(i.entity || i.payer || "—")}</td><td>${esc(i.type || "")}</td><td class="amount">${fmt(i.grossTotal ?? i.amount)}</td></tr>`
-      )
-      .join("");
+    const expenseRows = expenses.map((e) => adminLedgerRow(e, "expense")).join("");
+    const incomeRows = income.map((i) => adminLedgerRow(i, "income")).join("");
+    const deletedExpenseRows = deletedExpenses.map((e) => adminLedgerRow(e, "expense")).join("");
+    const deletedIncomeRows = deletedIncome.map((i) => adminLedgerRow(i, "income")).join("");
     const receiptRows = receipts
       .map((r) => {
         const link = r.hasImage
-          ? `<a href="${API}/admin/users/${encodeURIComponent(data.user.username)}/receipts/${r.id}/file?download=1" target="_blank" rel="noopener">Download</a>`
+          ? `<a href="${API}/admin/users/${encodeURIComponent(username)}/receipts/${r.id}/file?download=1" target="_blank" rel="noopener">Download</a>`
           : "—";
         return `<tr><td>${esc(r.filename || r.id)}</td><td>${esc(r.mimeType || "")}</td><td>${esc(fmtDate(r.createdAt))}</td><td>${link}</td></tr>`;
       })
@@ -896,32 +942,59 @@
     detail.classList.remove("hidden");
     detail.innerHTML = `
       <div class="admin-detail-head">
-        <h3>${esc(data.user.username)}${data.user.isAdmin ? ' <span class="admin-badge">primary mod</span>' : ""}</h3>
+        <h3>${esc(username)}${data.user.isAdmin ? ' <span class="admin-badge">primary mod</span>' : ""}</h3>
         ${canDelete ? `<button type="button" class="btn danger" id="admin-detail-delete">Delete profile</button>` : ""}
         <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
       <p class="muted">Account email: <strong>${esc((data.user && data.user.email) || "not set")}</strong></p>
+      <p class="muted admin-override-hint">Primary mod overrides: unlock reconciled rows, restore soft-deleted ledger entries, or force-remove mistakes.</p>
       <div class="admin-stat-row">
         <div class="admin-stat"><div class="label">Gross Income</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
         <div class="admin-stat"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses && s.expenses.deductibleTotal)}</div></div>
         <div class="admin-stat"><div class="label">Net Taxable Income</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.taxableIncome)}</div></div>
         <div class="admin-stat"><div class="label">Est. tax</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.totalTax)}</div></div>
       </div>
-      <div class="admin-section">
-        <h4>Income (${income.length}${data.income && data.income.length > income.length ? "+" : ""})</h4>
+      <div class="admin-section" data-admin-ledger="income">
+        <div class="admin-section-head">
+          <h4>Income (${income.length}${activeIncome.length > income.length ? "+" : ""})</h4>
+          <div class="admin-ledger-actions">
+            <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="income">Unlock selected</button>
+            <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="income">Force remove</button>
+          </div>
+        </div>
         <div class="admin-table-wrap">${
           incomeRows
-            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Entity</th><th>Type</th><th>Gross</th></tr></thead><tbody>${incomeRows}</tbody></table>`
+            ? `<table class="admin-table"><thead><tr><th></th><th>Date</th><th>Entity</th><th>Type</th><th>Gross</th><th>Status</th></tr></thead><tbody>${incomeRows}</tbody></table>`
             : `<p class="admin-empty">No income entries.</p>`
         }</div>
       </div>
-      <div class="admin-section">
-        <h4>Expenses (${expenses.length}${data.expenses && data.expenses.length > expenses.length ? "+" : ""})</h4>
+      <div class="admin-section" data-admin-ledger="expense">
+        <div class="admin-section-head">
+          <h4>Expenses (${expenses.length}${activeExpenses.length > expenses.length ? "+" : ""})</h4>
+          <div class="admin-ledger-actions">
+            <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="expense">Unlock selected</button>
+            <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="expense">Force remove</button>
+          </div>
+        </div>
         <div class="admin-table-wrap">${
           expenseRows
-            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th></tr></thead><tbody>${expenseRows}</tbody></table>`
+            ? `<table class="admin-table"><thead><tr><th></th><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Status</th></tr></thead><tbody>${expenseRows}</tbody></table>`
             : `<p class="admin-empty">No expense entries.</p>`
+        }</div>
+      </div>
+      <div class="admin-section" data-admin-ledger="deleted">
+        <div class="admin-section-head">
+          <h4>Soft-deleted (${deletedExpenses.length + deletedIncome.length})</h4>
+          <div class="admin-ledger-actions">
+            <button type="button" class="btn small" data-admin-action="restore" data-admin-kind="expense">Restore expenses</button>
+            <button type="button" class="btn small" data-admin-action="restore" data-admin-kind="income">Restore income</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          deletedExpenseRows || deletedIncomeRows
+            ? `<table class="admin-table"><thead><tr><th></th><th>Date</th><th>Detail</th><th>Type / category</th><th>Amount</th><th>Status</th></tr></thead><tbody>${deletedIncomeRows}${deletedExpenseRows}</tbody></table>`
+            : `<p class="admin-empty">No soft-deleted ledger entries.</p>`
         }</div>
       </div>
       <div class="admin-section">
@@ -940,7 +1013,33 @@
       list?.querySelectorAll(".admin-user-row.active").forEach((el) => el.classList.remove("active"));
     });
     byId("admin-detail-delete")?.addEventListener("click", () => {
-      void deleteAdminUser(data.user.username);
+      void deleteAdminUser(username);
+    });
+
+    detail.querySelectorAll("[data-admin-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-admin-action");
+        const kind = btn.getAttribute("data-admin-kind");
+        const ids = selectedAdminIds(detail, kind);
+        if (action === "soft-delete") {
+          const ok = window.confirm(
+            `Force-remove ${ids.length} ${kind} entr${ids.length === 1 ? "y" : "ies"} for ${username}? They can be restored from Soft-deleted.`
+          );
+          if (!ok) return;
+        }
+        const result = await adminLedgerAction(username, kind, action, ids);
+        if (!result) return;
+        if (window.toast) {
+          if (action === "unreconcile") {
+            window.toast(`Unlocked ${result.updated || 0} ${kind} entr${(result.updated || 0) === 1 ? "y" : "ies"}`);
+          } else if (action === "restore") {
+            window.toast(`Restored ${result.restored || 0} ${kind} entr${(result.restored || 0) === 1 ? "y" : "ies"}`);
+          } else if (action === "soft-delete") {
+            window.toast(`Removed ${result.deleted || 0} ${kind} entr${(result.deleted || 0) === 1 ? "y" : "ies"}`);
+          }
+        }
+        await openAdminUser(username);
+      });
     });
   }
 
@@ -967,7 +1066,9 @@
       detail.classList.remove("hidden");
       detail.innerHTML = `<p class="muted">Loading ${esc(username)}…</p>`;
     }
-    const data = await apiGet(`/admin/users/${encodeURIComponent(username)}`);
+    const data = await apiGet(
+      `/admin/users/${encodeURIComponent(username)}?includeDeleted=1`
+    );
     if (data.error) {
       detail.innerHTML = `<p class="admin-empty">${esc(data.error)}</p>`;
       return;
@@ -2304,6 +2405,7 @@
     select.addEventListener("change", () => {
       setMonthFilter(cfg, select.value);
       applyLedgerFilters(cfg);
+      updateReconcileButton(cfg);
     });
   }
 
@@ -2334,6 +2436,7 @@
         registerStartedWeek(e.target.value);
       }
       applyLedgerFilters(cfg);
+      updateReconcileButton(cfg);
     });
   }
 
@@ -2670,6 +2773,221 @@
     });
   }
 
+  function reconcileApiPath(cfg) {
+    return cfg.type === "income" ? "/income/reconcile" : "/expenses/reconcile";
+  }
+
+  function selectedLedgerIds(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return [];
+    const ids = [];
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      if (tr.style.display === "none") return;
+      const cb = tr.querySelector(".ledger-row-check");
+      if (!cb || !cb.checked || cb.disabled) return;
+      const id = tr.getAttribute(cfg.idAttr);
+      if (id && id !== "__draft__") ids.push(id);
+    });
+    return ids;
+  }
+
+  function syncSelectAllState(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const all = list.querySelector(".ledger-select-all");
+    if (!all) return;
+    const boxes = [];
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      if (tr.style.display === "none") return;
+      const cb = tr.querySelector(".ledger-row-check");
+      if (cb && !cb.disabled) boxes.push(cb);
+    });
+    if (!boxes.length) {
+      all.checked = false;
+      all.indeterminate = false;
+      all.disabled = true;
+      return;
+    }
+    all.disabled = false;
+    const checked = boxes.filter((b) => b.checked).length;
+    all.checked = checked === boxes.length;
+    all.indeterminate = checked > 0 && checked < boxes.length;
+  }
+
+  function updateReconcileButton(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    const btn = ledgerActions(header).querySelector(".ledger-reconcile-btn");
+    if (!btn) return;
+    const n = selectedLedgerIds(cfg).length;
+    btn.hidden = n === 0;
+    btn.textContent = n === 1 ? "Reconcile entries (1)" : `Reconcile entries (${n})`;
+    syncSelectAllState(cfg);
+  }
+
+  function ensureReconcileButton(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    const box = ledgerActions(header);
+    if (box.querySelector(".ledger-reconcile-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn ledger-reconcile-btn";
+    btn.hidden = true;
+    btn.textContent = "Reconcile entries";
+    btn.title = "Lock selected ledger rows so they cannot be edited or deleted";
+    btn.addEventListener("click", () => {
+      void runReconcile(cfg, btn);
+    });
+    box.insertBefore(btn, box.firstChild);
+  }
+
+  async function runReconcile(cfg, btn) {
+    const ids = selectedLedgerIds(cfg);
+    if (!ids.length) return;
+    const noun = cfg.type === "income" ? "income" : "expense";
+    const ok = window.confirm(
+      `Reconcile ${ids.length} ${noun} entr${ids.length === 1 ? "y" : "ies"}?\n\n` +
+        "Reconciled rows are locked — they cannot be edited or deleted. " +
+        "Ask Haulage_Admin if you need one unlocked later."
+    );
+    if (!ok) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Reconciling…";
+    try {
+      const res = await fetch(`${apiBase()}${reconcileApiPath(cfg)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not reconcile entries.");
+      const n = data.updated || 0;
+      if (typeof toast === "function") {
+        toast(n ? `Reconciled ${n} ${noun} entr${n === 1 ? "y" : "ies"}` : "No entries updated");
+      }
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message || "Reconcile failed");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+      updateReconcileButton(cfg);
+    }
+  }
+
+  /** First-column select-all / per-row checkboxes for reconciliation. */
+  function injectReconcileColumn(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const table = list.querySelector(cfg.tableSel);
+    if (!table) return;
+
+    const theadRow = table.querySelector("thead tr");
+    if (theadRow && !theadRow.querySelector(".ledger-check-col")) {
+      const th = document.createElement("th");
+      th.className = "ledger-check-col";
+      th.innerHTML =
+        `<input type="checkbox" class="ledger-select-all" aria-label="Select all entries" title="Select all">`;
+      theadRow.insertBefore(th, theadRow.firstChild);
+      table.querySelectorAll("tfoot td[colspan]").forEach((td) => {
+        const n = Number(td.getAttribute("colspan") || 1);
+        if (Number.isFinite(n)) td.setAttribute("colspan", String(n + 1));
+      });
+    }
+
+    table.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      if (tr.querySelector("td.ledger-check-col")) return;
+      const id = tr.getAttribute(cfg.idAttr);
+      const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
+      const entry = isDraft ? null : findEntry(cfg.type, id);
+      const locked = Boolean(entry && entry.reconciled);
+      const td = document.createElement("td");
+      td.className = "ledger-check-col";
+      if (isDraft || locked) {
+        td.innerHTML = `<input type="checkbox" class="ledger-row-check" disabled aria-label="Not selectable">`;
+      } else {
+        td.innerHTML = `<input type="checkbox" class="ledger-row-check" aria-label="Select entry for reconcile">`;
+      }
+      tr.insertBefore(td, tr.firstChild);
+    });
+  }
+
+  function bindReconcileEvents(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list || list.dataset.reconcileBound === "1") return;
+    list.dataset.reconcileBound = "1";
+    list.addEventListener("change", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      if (t.classList.contains("ledger-select-all")) {
+        const checked = t.checked;
+        list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+          if (tr.style.display === "none") return;
+          const cb = tr.querySelector(".ledger-row-check");
+          if (cb && !cb.disabled) cb.checked = checked;
+        });
+        updateReconcileButton(cfg);
+        return;
+      }
+      if (t.classList.contains("ledger-row-check")) {
+        updateReconcileButton(cfg);
+      }
+    });
+  }
+
+  /** Badge + lock Edit/Delete on reconciled rows. */
+  function decorateReconciledRows(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      const id = tr.getAttribute(cfg.idAttr);
+      if (!id || id === "__draft__") return;
+      const entry = findEntry(cfg.type, id);
+      const locked = Boolean(entry && entry.reconciled);
+      tr.classList.toggle("reconciled-row", locked);
+      if (!locked) return;
+
+      const detailCell =
+        tr.querySelector("td:nth-child(4)") ||
+        tr.querySelector("td:nth-child(3)") ||
+        tr.children[2];
+      if (detailCell && !detailCell.querySelector(".tag-reconciled")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-reconciled";
+        tag.textContent = "Reconciled";
+        tag.title = entry.reconciledAt
+          ? `Reconciled ${entry.reconciledAt}${entry.reconciledBy ? ` by ${entry.reconciledBy}` : ""}`
+          : "Reconciled — locked";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
+
+      const actions = tr.querySelector(".row-actions");
+      if (actions) {
+        actions.querySelectorAll(`[data-del-${cfg.type}], [data-edit-${cfg.type}]`).forEach((btn) => {
+          btn.disabled = true;
+          btn.setAttribute("aria-disabled", "true");
+          btn.classList.add("is-locked");
+          btn.title = "Reconciled — ask Haulage_Admin to unlock if this was a mistake";
+        });
+      }
+      const cb = tr.querySelector(".ledger-row-check");
+      if (cb) {
+        cb.checked = false;
+        cb.disabled = true;
+      }
+    });
+  }
+
   function categoryOptionsHtml(selected) {
     try {
       const isCar = selected && CAR_CLAIM_IDS.has(selected);
@@ -2729,6 +3047,12 @@
     const entry = findEntry(type, id);
     if (!entry) {
       if (typeof toast === "function") toast("Entry not found — refresh and try again.");
+      return;
+    }
+    if (entry.reconciled) {
+      if (typeof toast === "function") {
+        toast("This entry is reconciled and locked. Ask Haulage_Admin to unlock it first.");
+      }
       return;
     }
     closeEditModal();
@@ -2919,6 +3243,9 @@
 
   function enhance(cfg) {
     if (cfg.key === "car-expense") syncCarExpenseLedgerFromMain();
+    bindReconcileEvents(cfg);
+    injectReconcileColumn(cfg);
+    ensureReconcileButton(cfg);
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
     ensureMonthPicker(cfg);
@@ -2927,6 +3254,8 @@
     hideOutsidePeriodTags(cfg);
     injectCashTags(cfg);
     injectEditButtons(cfg);
+    decorateReconciledRows(cfg);
+    updateReconcileButton(cfg);
   }
 
   function start() {
@@ -2957,6 +3286,15 @@
     }
 
     document.addEventListener("click", (e) => {
+      const locked = e.target.closest(".is-locked[data-edit-expense], .is-locked[data-edit-income], .is-locked[data-del-expense], .is-locked[data-del-income]");
+      if (locked) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof toast === "function") {
+          toast("This entry is reconciled and locked. Ask Haulage_Admin to unlock it first.");
+        }
+        return;
+      }
       const exp = e.target.closest("[data-edit-expense]");
       if (exp) {
         e.preventDefault();
@@ -2969,6 +3307,27 @@
         openEditModal("income", inc.getAttribute("data-edit-income"));
       }
     });
+
+    // Soft-delete / reconcile errors from app.js delete handlers (no try/catch there).
+    document.addEventListener(
+      "click",
+      (e) => {
+        const del = e.target.closest("[data-del-expense], [data-del-income]");
+        if (!del || del.classList.contains("is-locked") || del.disabled) return;
+        const isExpense = del.hasAttribute("data-del-expense");
+        const id = isExpense ? del.getAttribute("data-del-expense") : del.getAttribute("data-del-income");
+        if (!id) return;
+        const entry = findEntry(isExpense ? "expense" : "income", id);
+        if (entry && entry.reconciled) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (typeof toast === "function") {
+            toast("This entry is reconciled and cannot be deleted. Ask Haulage_Admin to unlock it first.");
+          }
+        }
+      },
+      true
+    );
 
     // Monday rollover: switch expense ledger onto the new week entry.
     window.addEventListener("haulage:new-week", (ev) => {

@@ -88,13 +88,24 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   returns a same-origin `recoveryUrl` and the title-screen UI shows
   “Continue to reset password” (not an error).
 - **Primary mod admin:** bootstraps `Haulage_Admin` / `Haulage_Admin` on startup
- via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
- `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
- `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
- (wipe account + records + receipt files; cannot delete primary mod),
- `GET /admin/users/:username`, `GET /admin/users/:username/receipts/:id/file`.
- Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
- Opening another user is read-only and does not switch your signed-in session.
+  via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
+  `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
+  `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
+  (wipe account + records + receipt files; cannot delete primary mod),
+  `GET /admin/users/:username` (`?includeDeleted=1` for soft-deleted ledger
+  rows), `GET /admin/users/:username/receipts/:id/file`, plus ledger overrides
+  `POST /admin/users/:username/{expenses|income}/unreconcile|restore|soft-delete`.
+  Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
+  Opening another user is read-only and does not switch your signed-in session;
+  the detail view can unlock reconciliations and restore accidental deletes.
+- **Ledger reconcile.** Expense and income ledgers get a select-all column and
+  per-row checkboxes. When any open row is ticked, **Reconcile entries** appears
+  in the ledger header — `POST /expenses/reconcile` or `POST /income/reconcile`
+  (`lib/ledger-lifecycle.js`) locks those rows (`reconciled` / `reconciledAt` /
+  `reconciledBy`). Reconciled rows cannot be edited or deleted by the driver.
+  Deletes are soft (`deletedAt` / `deletedBy`) so tax/summary views use
+  `withActiveLedger`; Haulage_Admin can restore or force-remove via the admin
+  panel.
 - Scan enrichment is layered on without editing the provided files:
   `lib/document-breakdown.js` computes the typed component breakdown + ATO
   compliance and `server.js` folds it into the `/receipts/scan` response
@@ -165,14 +176,15 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   `enhancements.js` removes the “outside period” label so the ledger stays clean.
 - **Ledger edit + period filter.** Expense/income rows get an **Edit** button
   (beside Delete) that opens a modal and `PUT /expenses/:id` or `PUT /income/:id`
-  via `lib/ledger-edit.js` (receipt links preserved). Expense ledger + expense
-  receipt gallery filter by **week** (Mon–Sun labels like `27/07 – 02/08`) next
-  to the FY dropdown (`localStorage` `haulage-ledger-week-*` /
-  `haulage-gallery-week-*`); income ledger still uses a month dropdown
-  (`haulage-ledger-month-*`). “All weeks” keeps full-year search.
-  On each new **Monday** (local time), `enhancements.js` registers an empty week
-  slot (`haulage-started-weeks`), sets `haulage-active-week-start`, points expense
-  filters at that week, and toasts — no blank expense row is invented.
+  via `lib/ledger-edit.js` (receipt links preserved). Edit/Delete are disabled
+  once a row is reconciled. Expense ledger + expense receipt gallery filter by
+  **week** (Mon–Sun labels like `27/07 – 02/08`) next to the FY dropdown
+  (`localStorage` `haulage-ledger-week-*` / `haulage-gallery-week-*`); income
+  ledger still uses a month dropdown (`haulage-ledger-month-*`). “All weeks”
+  keeps full-year search. On each new **Monday** (local time), `enhancements.js`
+  registers an empty week slot (`haulage-started-weeks`), sets
+  `haulage-active-week-start`, points expense filters at that week, and toasts —
+  no blank expense row is invented.
 - **Expense scan totals.** Photo/PDF scans prefer amounts linked to **TOTAL** /
   **SALE TOTAL** (and grand/amount due) via `lib/expense-total.js`, so card
   tenders (VISA/EFT) and line items do not become the approved total.
