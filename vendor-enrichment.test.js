@@ -23,6 +23,21 @@ describe("ABN helpers", () => {
     const text = "BP Truck Stop\nABN: 53 004 085 616\nTOTAL $42.50";
     expect(extractAbnFromText(text)).toBe("53 004 085 616");
   });
+
+  it("ignores labeled ABNs that fail the checksum", () => {
+    const text = "BP Truck Stop\nABN: 12 345 678 901\nTOTAL $42.50";
+    expect(extractAbnFromText(text)).toBe("");
+  });
+
+  it("prefers supplier ABN over an earlier customer ABN", () => {
+    const text = [
+      "Customer ABN: 51 824 753 556",
+      "BP Truck Stop",
+      "ABN: 53 004 085 616",
+      "TOTAL $42.50",
+    ].join("\n");
+    expect(extractAbnFromText(text)).toBe("53 004 085 616");
+  });
 });
 
 describe("suggestCategoryFromText", () => {

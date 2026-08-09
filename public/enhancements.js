@@ -328,14 +328,82 @@
     return wrap;
   }
 
+  /** Inject ABN into income confirm (app.js has no income ABN field). */
+  function ensureIncomeAbnField(box) {
+    if (!box || latest?.purpose !== "income") return;
+    const form = box.querySelector(".scan-confirm-form");
+    const entityInput = box.querySelector("#income-confirm-entity");
+    if (!form || !entityInput) return;
+
+    let abnInput = box.querySelector("#income-confirm-abn");
+    if (!abnInput) {
+      const label = document.createElement("label");
+      label.className = "enh-income-abn-label";
+      label.innerHTML = `ABN (optional)<input type="text" id="income-confirm-abn" inputmode="numeric" placeholder="12 345 678 901" />`;
+      const entityLabel = entityInput.closest("label");
+      if (entityLabel && entityLabel.parentNode) {
+        entityLabel.insertAdjacentElement("afterend", label);
+      } else {
+        form.insertBefore(label, form.firstChild);
+      }
+      abnInput = label.querySelector("input");
+    }
+    if (abnInput && !abnInput.value && latest.vendorAbn) {
+      abnInput.value = latest.vendorAbn;
+    }
+    // Keep entity prefilled from ABN pairing when the confirm form is empty/junk.
+    if (entityInput && latest.vendor && (!entityInput.value || /tax\s*invoice|invoice|receipt/i.test(entityInput.value))) {
+      entityInput.value = latest.vendor;
+    }
+  }
+
+  /** Keep expense confirm vendor/ABN in sync with tighter ABN pairing. */
+  function syncExpenseAbnFields(box) {
+    if (!box || latest?.purpose !== "expense") return;
+    const abn = box.querySelector("#scan-confirm-abn");
+    const vendor = box.querySelector("#scan-confirm-vendor");
+    if (abn && latest.vendorAbn && !abn.value) abn.value = latest.vendorAbn;
+    if (vendor && latest.vendor) {
+      if (!vendor.value || /tax\s*invoice|invoice|receipt/i.test(vendor.value)) {
+        vendor.value = latest.vendor;
+      }
+    }
+    const manualAbn = document.querySelector("#manual-receipt-form [name=vendorAbn]");
+    const manualVendor = document.querySelector("#manual-receipt-form [name=vendor]");
+    if (manualAbn && latest.vendorAbn && !manualAbn.value) manualAbn.value = latest.vendorAbn;
+    if (manualVendor && latest.vendor && (!manualVendor.value || /tax\s*invoice|invoice|receipt/i.test(manualVendor.value))) {
+      manualVendor.value = latest.vendor;
+    }
+  }
+
   function enhanceBox(box) {
     if (!latest || !box) return;
     if (!box.querySelector(".scan-confirm")) return;
+    ensureIncomeAbnField(box);
+    syncExpenseAbnFields(box);
     if (box.__enhToken === latest.token) return;
     box.__enhToken = latest.token;
     const existing = box.querySelector("#enh-panel");
     if (existing) existing.remove();
     box.appendChild(buildPanel(latest));
+  }
+
+  // Fold income confirm ABN into the approve payload (app.js omits it).
+  function patchIncomeConfirmPayload() {
+    const orig = window.readIncomeScanConfirmPayload;
+    if (typeof orig !== "function" || orig.__enhAbnPatched) return;
+    function wrapped() {
+      const payload = orig.apply(this, arguments) || {};
+      const abnEl = document.getElementById("income-confirm-abn");
+      const abn = (abnEl && abnEl.value) || (latest && latest.purpose === "income" && latest.vendorAbn) || "";
+      if (abn) {
+        payload.vendorAbn = abn;
+        payload.abn = abn;
+      }
+      return payload;
+    }
+    wrapped.__enhAbnPatched = true;
+    window.readIncomeScanConfirmPayload = wrapped;
   }
 
   function observe(boxId, purpose) {
@@ -417,6 +485,7 @@
   previewMo.observe(document.body, { childList: true, subtree: true });
 
   function init() {
+    patchIncomeConfirmPayload();
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
