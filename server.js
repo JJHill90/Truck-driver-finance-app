@@ -18,6 +18,7 @@ const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-men
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const { refineExpenseDetectedTotals } = require("./lib/expense-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
+const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
 const {
   withActiveLedger,
@@ -1069,6 +1070,10 @@ api.post("/receipts/scan", async (req, res, next) => {
         }
       }
     }
+
+    // Prefer the supplier/employer ABN and the entity name attached to it
+    // (checksum + proximity) before vendor memory runs.
+    applyAbnEntityPairing(ocrResult, purpose === "income" ? "income" : "expense");
 
     // ABN + business name memory: fill vendor/ABN from prior saves and suggest
     // a category (meals, training, …) before compliance/breakdown runs.

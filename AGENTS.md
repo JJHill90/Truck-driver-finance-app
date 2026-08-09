@@ -161,11 +161,17 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.).
-- **ABN + vendor memory.** Scans use `lib/vendor-enrichment.js`: ABN is the key
-  reference to remembered business names. Once ABN/name establish a known
-  **business type** (e.g. Woolworths/Coles/ALDI → `groceries_travel`, Bunnings →
-  `tools_equipment`), that category always overrides weak OCR (`other_work`) and
-  conflicting remembered defaults. Otherwise vendor memory + text heuristics apply.
+- **ABN + vendor memory.** After OCR, `lib/abn-entity.js` picks the best
+  checksum-valid ABN with the entity/vendor name attached to it (prefers
+  supplier/employer ABNs near the business header; demotes customer/buyer ABNs)
+  for both expense receipts and income payslips/invoices, then
+  `lib/vendor-enrichment.js` uses that ABN as the key to remembered business
+  names. Once ABN/name establish a known **business type** (e.g.
+  Woolworths/Coles/ALDI → `groceries_travel`, Bunnings → `tools_equipment`),
+  that category always overrides weak OCR (`other_work`) and conflicting
+  remembered defaults. Otherwise vendor memory + text heuristics apply.
+  Confirm UI prefills vendor/entity, ABN, and the dollar total together.
+  Income confirm gets an ABN field via `enhancements.js`.
   **Canonical chain names:** after OCR, enrichment rewrites junk/boilerplate
   vendor strings (e.g. `TAX INVOICE`, `7 EIEVEN`, random letters) to clean names
   like `7-Eleven` when the brand appears in the vendor field or receipt header —
