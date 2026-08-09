@@ -1,0 +1,22 @@
+{
+  "appId": "com.haulagefinance.app",
+  "appName": "Haulage Finance",
+  "webDir": "www",
+  "server": {
+    "url": "https://haulage-finance.onrender.com/haulage/",
+    "cleartext": false,
+    "allowNavigation": [
+      "https://haulage-finance.onrender.com/*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0b1f33"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#0b1f33"
+    }
+  }
+}
