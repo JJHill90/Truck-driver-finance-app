@@ -9,6 +9,11 @@
   --accent: #f59e0b;
   --accent-strong: #d97706;
   --green: #34d399;
+  /* Soft mint used for ledger reconcile rows + Reconcile entries button */
+  --reconcile: #34d399;
+  --reconcile-strong: #10b981;
+  --reconcile-wash: rgba(52, 211, 153, 0.16);
+  --reconcile-ink: #052e1a;
   --red: #f87171;
   --blue: #60a5fa;
   --radius: 14px;
@@ -457,11 +462,23 @@ body:not(.auth-locked) .title-screen {
 }
 .ledger-check-col input { margin: 0; cursor: pointer; }
 .ledger-check-col input:disabled { cursor: not-allowed; opacity: 0.45; }
-tr.reconciled-row { background: rgba(52, 211, 153, 0.06); }
+tr.reconciled-row {
+  background: var(--reconcile-wash);
+  box-shadow: inset 3px 0 0 var(--reconcile);
+}
 .tag.tag-reconciled {
-  color: #052e1a;
-  background: #bbf7d0;
-  border-color: #86efac;
+  color: var(--reconcile-ink);
+  background: #6ee7b7;
+  border-color: var(--reconcile);
+}
+.btn.ledger-reconcile-btn {
+  background: var(--reconcile);
+  color: var(--reconcile-ink);
+  border: 1px solid transparent;
+}
+.btn.ledger-reconcile-btn:hover:not(:disabled) {
+  background: var(--reconcile-strong);
+  color: var(--reconcile-ink);
 }
 .tag.tag-deleted {
   color: #450a0a;
