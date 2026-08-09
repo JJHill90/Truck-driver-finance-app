@@ -468,8 +468,15 @@ tr.reconciled-row {
 }
 .tag.tag-reconciled {
   color: var(--reconcile-ink);
-  background: #6ee7b7;
-  border-color: var(--reconcile);
+  background: var(--reconcile);
+  border-color: var(--reconcile-strong);
+  font-weight: 700;
+}
+/* Expense vendor/details cell can sit on a muted row — keep the badge vivid. */
+table.expense-ledger .tag.tag-reconciled,
+table.income-ledger .tag.tag-reconciled {
+  background: var(--reconcile);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45);
 }
 .btn.ledger-reconcile-btn {
   background: var(--reconcile);
