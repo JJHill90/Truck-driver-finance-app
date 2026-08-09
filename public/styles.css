@@ -470,8 +470,16 @@ tr.reconciled-row { background: rgba(52, 211, 153, 0.06); }
 }
 .row-actions .is-locked,
 .row-actions button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
+  filter: grayscale(0.35);
+  pointer-events: none;
+}
+.row-actions .btn.danger.is-locked,
+.row-actions .btn.danger:disabled {
+  background: #5a3a3a;
+  border-color: #5a3a3a;
+  color: #d4c4c4;
 }
 .panel-header .gallery-week-picker { flex: 0 0 auto; }
 .gallery-week-picker select,
