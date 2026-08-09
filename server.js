@@ -20,6 +20,16 @@ const { refineExpenseDetectedTotals } = require("./lib/expense-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
 const {
+  withActiveLedger,
+  softDeleteEntry,
+  restoreEntry,
+  reconcileEntries,
+  unreconcileEntries,
+  assertEditable,
+  isDeleted,
+  findEntry,
+} = require("./lib/ledger-lifecycle");
+const {
   listLicenceClasses,
   getLicenceClassForSalary,
   normalizeLicenceClassId,
@@ -113,8 +123,28 @@ function getRecords(req) {
 function persist(req) {
   storage.saveRecords(getRecords(req), fileForUser(req.user));
 }
+/** Records view for tax/UI — soft-deleted ledger rows excluded. */
+function getActiveRecords(req) {
+  return withActiveLedger(getRecords(req));
+}
 function profileFor(records, financialYear) {
   return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
+}
+function sessionUsername(req) {
+  return req.user ? String(req.user) : null;
+}
+function loadTargetUserRecords(username) {
+  const user = auth.getUser(username);
+  if (!user) return null;
+  const file = auth.recordsFileFor(user.username);
+  let records;
+  if (recordsCache.has(user.username)) {
+    records = recordsCache.get(user.username);
+  } else {
+    records = storage.loadRecords(file);
+    recordsCache.set(user.username, records);
+  }
+  return { user, records, file };
 }
 
 /** Prefer labeled invoice/payment dates so FY placement follows the document day. */
@@ -465,7 +495,7 @@ api.post("/auth/recover/reset", (req, res) => {
 });
 
 api.get("/alerts", (req, res) => {
-  const alerts = buildAlerts(getRecords(req));
+  const alerts = buildAlerts(getActiveRecords(req));
   const user = req.user ? auth.getUser(req.user) : null;
   if (user) alerts.push(...auth.accountAlerts(user));
   res.json({ alerts, user: user || req.user || null });
@@ -565,15 +595,86 @@ api.get("/admin/users/:username", (req, res) => {
     hasImage: Boolean(r.imagePath),
   }));
 
+  const includeDeleted = String(req.query.includeDeleted || "") === "1";
+  const expenses = includeDeleted
+    ? records.expenses || []
+    : withActiveLedger(records).expenses || [];
+  const income = includeDeleted ? records.income || [] : withActiveLedger(records).income || [];
+  const deletedExpenses = (records.expenses || []).filter((e) => isDeleted(e));
+  const deletedIncome = (records.income || []).filter((i) => isDeleted(i));
+
   res.json({
     user: target,
     profile: records.profile || {},
-    expenses: records.expenses || [],
-    income: records.income || [],
+    expenses,
+    income,
+    deletedExpenses,
+    deletedIncome,
     receipts,
     vendors: storage.listVendors(records),
-    summary,
+    summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
   });
+});
+
+/** Admin: unlock reconciled ledger rows for a driver. */
+api.post("/admin/users/:username/:type(expenses|income)/unreconcile", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const type = req.params.type === "income" ? "income" : "expense";
+  const result = unreconcileEntries(loaded.records, type, (req.body && req.body.ids) || [], {
+    username: sessionUsername(req),
+  });
+  if (result.updated.length) storage.saveRecords(loaded.records, loaded.file);
+  res.json({ ok: true, updated: result.updated.length, notFound: result.notFound });
+});
+
+/** Admin: restore soft-deleted ledger rows for a driver. */
+api.post("/admin/users/:username/:type(expenses|income)/restore", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const type = req.params.type === "income" ? "income" : "expense";
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  const restored = [];
+  const errors = [];
+  for (const id of ids) {
+    const result = restoreEntry(loaded.records, type, id, { username: sessionUsername(req) });
+    if (result.ok) restored.push(result.entry);
+    else errors.push({ id, error: result.error, code: result.code });
+  }
+  if (restored.length) storage.saveRecords(loaded.records, loaded.file);
+  res.json({ ok: true, restored: restored.length, entries: restored, errors });
+});
+
+/** Admin: force soft-delete (including reconciled) for cleanup. */
+api.post("/admin/users/:username/:type(expenses|income)/soft-delete", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const type = req.params.type === "income" ? "income" : "expense";
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  const deleted = [];
+  const errors = [];
+  for (const id of ids) {
+    const result = softDeleteEntry(loaded.records, type, id, {
+      username: sessionUsername(req),
+      force: true,
+    });
+    if (result.ok) deleted.push(result.entry);
+    else errors.push({ id, error: result.error, code: result.code });
+  }
+  if (deleted.length) storage.saveRecords(loaded.records, loaded.file);
+  res.json({ ok: true, deleted: deleted.length, entries: deleted, errors });
 });
 
 api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
@@ -661,13 +762,14 @@ api.get("/standards", (_req, res) => {
 });
 
 api.get("/records", (req, res) => {
-  const records = getRecords(req);
+  const full = getRecords(req);
+  const records = withActiveLedger(full);
   const receipts = (records.receipts || []).map((r) => ({
     ...r,
     hasImage: Boolean(r.imagePath),
     dataUrl: undefined,
   }));
-  res.json({ ...records, receipts, vendors: storage.listVendors(records) });
+  res.json({ ...records, receipts, vendors: storage.listVendors(full) });
 });
 
 // --- Profile -------------------------------------------------------------
@@ -691,7 +793,7 @@ api.put("/profile", (req, res) => {
 
 // --- Summary / report / forecast ----------------------------------------
 api.get("/summary", (req, res) => {
-  const records = getRecords(req);
+  const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
   const summary = summariseYear(records, profileFor(records, fy));
   applyHistoricalRates(summary, records, fy); // year-correct brackets/levies/rates
@@ -699,7 +801,7 @@ api.get("/summary", (req, res) => {
 });
 
 api.get("/report", (req, res) => {
-  const records = getRecords(req);
+  const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
   const report = buildAccountantReport(records, profileFor(records, fy));
   applyHistoricalRates(report.summary, records, fy);
@@ -715,7 +817,7 @@ api.get("/report", (req, res) => {
 
 // Accountant-ready EOFY ledger as a downloadable PDF.
 api.get("/report.pdf", (req, res) => {
-  const records = getRecords(req);
+  const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
   const report = buildAccountantReport(records, profileFor(records, fy));
   applyHistoricalRates(report.summary, records, fy);
@@ -733,7 +835,7 @@ api.get("/report.pdf", (req, res) => {
 });
 
 api.get("/forecast", (req, res) => {
-  const records = getRecords(req);
+  const records = getActiveRecords(req);
   const manual = {
     mode: req.query.mode,
     projectedIncome: req.query.projectedIncome,
@@ -775,6 +877,12 @@ api.post("/expenses", (req, res) => {
 
 api.put("/expenses/:id", (req, res) => {
   const records = getRecords(req);
+  const existing = findEntry(records, "expense", req.params.id);
+  const gate = assertEditable(existing);
+  if (!gate.ok) {
+    res.status(gate.code === "not_found" ? 404 : 409).json({ error: gate.error, code: gate.code });
+    return;
+  }
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const entry = updateExpense(records, req.params.id, body);
@@ -791,11 +899,32 @@ api.put("/expenses/:id", (req, res) => {
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
 
+api.post("/expenses/reconcile", (req, res) => {
+  const records = getRecords(req);
+  const ids = (req.body && req.body.ids) || [];
+  const result = reconcileEntries(records, "expense", ids, { username: sessionUsername(req) });
+  if (result.updated.length) persist(req);
+  res.json({
+    ok: true,
+    updated: result.updated.length,
+    skipped: result.skipped,
+    notFound: result.notFound,
+    entries: result.updated,
+  });
+});
+
 api.delete("/expenses/:id", (req, res) => {
   const records = getRecords(req);
-  const removed = storage.deleteEntry(records, "expense", req.params.id);
+  const result = softDeleteEntry(records, "expense", req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    const status = result.code === "reconciled" ? 409 : result.code === "not_found" ? 404 : 400;
+    res.status(status).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
   persist(req);
-  res.json({ ok: removed });
+  res.json({ ok: true, softDeleted: true });
 });
 
 // --- Income --------------------------------------------------------------
@@ -810,6 +939,12 @@ api.post("/income", (req, res) => {
 
 api.put("/income/:id", (req, res) => {
   const records = getRecords(req);
+  const existing = findEntry(records, "income", req.params.id);
+  const gate = assertEditable(existing);
+  if (!gate.ok) {
+    res.status(gate.code === "not_found" ? 404 : 409).json({ error: gate.error, code: gate.code });
+    return;
+  }
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = updateIncome(records, req.params.id, body);
@@ -821,11 +956,32 @@ api.put("/income/:id", (req, res) => {
   res.json({ entry });
 });
 
+api.post("/income/reconcile", (req, res) => {
+  const records = getRecords(req);
+  const ids = (req.body && req.body.ids) || [];
+  const result = reconcileEntries(records, "income", ids, { username: sessionUsername(req) });
+  if (result.updated.length) persist(req);
+  res.json({
+    ok: true,
+    updated: result.updated.length,
+    skipped: result.skipped,
+    notFound: result.notFound,
+    entries: result.updated,
+  });
+});
+
 api.delete("/income/:id", (req, res) => {
   const records = getRecords(req);
-  const removed = storage.deleteEntry(records, "income", req.params.id);
+  const result = softDeleteEntry(records, "income", req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    const status = result.code === "reconciled" ? 409 : result.code === "not_found" ? 404 : 400;
+    res.status(status).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
   persist(req);
-  res.json({ ok: removed });
+  res.json({ ok: true, softDeleted: true });
 });
 
 // --- Receipts ------------------------------------------------------------
