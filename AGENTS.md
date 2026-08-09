@@ -20,6 +20,11 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   Listens on port `3000` bound to `0.0.0.0`; open the UI at
   **`http://localhost:3000/haulage/`** (root `/` 302-redirects there). `PORT`
   overrides the port.
+- **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
+  shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
+  (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session
+  cookies use `SameSite=None; Secure` on those cross-origin requests. Do not
+  use `*` with cookies.
 - **Title screen gate.** `#title-screen` covers the app until `/auth/me` has a
   user; `body.auth-locked` hides `.app-shell`. Login/register on the title form
   (same `/auth/*` APIs) then reload into the main menu. Logout returns to the

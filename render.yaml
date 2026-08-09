@@ -30,6 +30,13 @@ services:
       # Without either, the Support tab falls back to browser FormSubmit delivery.
       - key: APP_BASE_URL
         sync: false
+      # Cross-origin allowlist for Play / iOS WebViews (comma-separated origins).
+      # Leave unset for same-origin web. Example:
+      # capacitor://localhost,https://your-custom-domain.com
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_CAPACITOR
+        sync: false
       - key: SUPPORT_EMAIL
         value: hilljj1990@gmail.com
       - key: MAIL_FROM
