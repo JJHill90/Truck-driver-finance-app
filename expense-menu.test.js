@@ -68,7 +68,7 @@ describe("expense menu", () => {
     expect(ids).toContain("meals_lunch");
     expect(ids).toContain("meals_dinner");
     const meals = listMenuCategories().find((c) => c.id === "meals");
-    expect(meals.label).toBe("Food/Meals (combined)");
+    expect(meals.label).toBe("Food/Meals (Daily)");
     const expected =
       TRUCK_DRIVER_MEALS.breakfast.cap +
       TRUCK_DRIVER_MEALS.lunch.cap +

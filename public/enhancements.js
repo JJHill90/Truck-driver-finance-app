@@ -3450,7 +3450,7 @@
       { id: "dinner", label: "Dinner", group: "meals", cap: dinner, spendIds: ["meals_dinner"] },
       {
         id: "meals_combined",
-        label: "Food/meals (combined)",
+        label: "Food/meals (Daily)",
         group: "meals",
         cap: mealsCombined,
         spendIds: ["meals"],
@@ -3964,7 +3964,7 @@
         ${perDayHtml}
         <p class="muted allowance-hint">
           Daily stack (salary band) = food/meals (breakfast + lunch + dinner) + overtime meal + accommodation + incidentals
-          — e.g. band 1 <strong>${money(328.9)}</strong>/day. Breakfast/lunch/dinner and combined food/meals share the one meal pot;
+          — e.g. band 1 <strong>${money(328.9)}</strong>/day. Breakfast/lunch/dinner and daily food/meals share the one meal pot;
           accommodation and other segments tally separately. Spend uses matching expense categories; daily figures reset at midnight AEST.
         </p>
       </div>
