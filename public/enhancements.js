@@ -1519,14 +1519,37 @@
   "use strict";
   /* global getReceiptsWithImages, receiptSummary, formatFinancialYearLabel, getCurrentFinancialYear, HaulageWeeks */
 
+  // Keep in sync with lib/expense-menu.js CAR_CLAIM_CATEGORY_IDS.
+  const CAR_CLAIM_IDS = new Set([
+    "vehicle_car",
+    "fuel",
+    "repairs_maintenance",
+    "tyres",
+    "registration_insurance",
+    "parking_tolls",
+  ]);
+
   const GALLERIES = [
-    { containerId: "receipt-gallery", purpose: "expense", key: "expense", weekFilter: true },
+    {
+      containerId: "receipt-gallery",
+      purpose: "expense",
+      key: "expense",
+      weekFilter: true,
+      categoryScope: "general",
+    },
+    {
+      containerId: "car-receipt-gallery",
+      purpose: "expense",
+      key: "car-expense",
+      weekFilter: true,
+      categoryScope: "car",
+    },
     { containerId: "income-gallery", purpose: "income", key: "income", weekFilter: false },
   ];
 
   // Remembers each gallery's chosen FY ("all" or e.g. "2025-26"); null = not set.
-  const chosenFy = { expense: null, income: null };
-  const chosenWeek = { expense: null, income: null };
+  const chosenFy = { expense: null, "car-expense": null, income: null };
+  const chosenWeek = { expense: null, "car-expense": null, income: null };
 
   const {
     toIsoLocal,
@@ -1613,8 +1636,31 @@
     return `FY ${fy}`;
   }
 
+  function linkedExpenseCategory(receipt) {
+    if (!receipt) return null;
+    try {
+      const expenses = (state.records && state.records.expenses) || [];
+      const hit =
+        expenses.find((e) => e.id && e.id === receipt.linkedExpenseId) ||
+        expenses.find((e) => e.receiptId && e.receiptId === receipt.id);
+      return hit && hit.category ? hit.category : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function receiptMatchesCategoryScope(receipt, scope) {
+    if (!scope || scope === "all") return true;
+    const cat = linkedExpenseCategory(receipt);
+    const isCar = Boolean(cat && CAR_CLAIM_IDS.has(cat));
+    // Receipts with no linked expense stay on the general gallery.
+    if (scope === "car") return isCar;
+    if (scope === "general") return !isCar;
+    return true;
+  }
+
   /** Options: "All", then FYs in the 6-past/3-future window in this gallery. */
-  function optionsHtml(purpose, selected) {
+  function optionsHtml(purpose, selected, categoryScope) {
     const set = new Set();
     let list = [];
     try {
@@ -1637,6 +1683,7 @@
     }
 
     for (const r of list) {
+      if (!receiptMatchesCategoryScope(r, categoryScope)) continue;
       const fy = receiptFy(r);
       if (!fy) continue;
       if (allowed && !allowed.has(fy)) continue;
@@ -1730,7 +1777,7 @@
     };
   }
 
-  function collectExpenseWeeks(fy) {
+  function collectExpenseWeeks(fy, categoryScope) {
     const map = new Map();
     let list = [];
     try {
@@ -1739,6 +1786,7 @@
       list = [];
     }
     for (const r of list) {
+      if (!receiptMatchesCategoryScope(r, categoryScope)) continue;
       const date = receiptDate(r);
       if (!date || (fy && fy !== "all" && fyForDate(date) !== fy)) continue;
       const start = weekStartMonday(date);
@@ -1764,7 +1812,7 @@
 
   function syncGalleryWeekOptions(cfg, weekSelect, fy) {
     if (!weekSelect) return "all";
-    const weeks = collectExpenseWeeks(fy);
+    const weeks = collectExpenseWeeks(fy, cfg.categoryScope);
     const stored = chosenWeek[cfg.key] != null ? chosenWeek[cfg.key] : getStoredWeek(cfg.key);
     const todayStart = weekStartMonday(toIsoLocal(new Date()));
     let chosen = stored;
@@ -1805,7 +1853,7 @@
 
     // Only rebuild options when they actually change, so an open dropdown is
     // not clobbered by the initial settle poll.
-    const nextOptions = optionsHtml(cfg.purpose, chosen);
+    const nextOptions = optionsHtml(cfg.purpose, chosen, cfg.categoryScope);
     if (select.innerHTML !== nextOptions) select.innerHTML = nextOptions;
     if (select.value !== chosen) select.value = chosen;
     if (select.value !== chosen) {
@@ -1824,9 +1872,13 @@
     let total = 0;
     let shown = 0;
     cards.forEach((card) => {
-      total += 1;
       const id = card.dataset.receiptCard || card.dataset.receiptId;
       const receipt = findReceipt(id);
+      if (!receiptMatchesCategoryScope(receipt, cfg.categoryScope)) {
+        card.style.display = "none";
+        return;
+      }
+      total += 1;
       const fy = receiptFy(receipt);
       let match = active === "all" || fy === active;
       if (match && week !== "all") {
@@ -1841,7 +1893,12 @@
     const note = panel && panel.querySelector(".gallery-fy-empty");
     if (note) {
       if (total > 0 && shown === 0) {
-        const kind = cfg.purpose === "income" ? "income documents" : "expense receipts";
+        const kind =
+          cfg.purpose === "income"
+            ? "income documents"
+            : cfg.categoryScope === "car"
+              ? "car receipt photos"
+              : "expense receipts";
         let where = active === "all" ? "any financial year" : `FY ${active.replace("-", "–")}`;
         if (week !== "all") {
           const end = weekEndSunday(week);
@@ -1855,14 +1912,78 @@
     }
   }
 
+  /** Mirror car-linked receipt cards into the Car Expenses gallery. */
+  function syncCarReceiptGallery() {
+    const source = document.getElementById("receipt-gallery");
+    const host = document.getElementById("car-receipt-gallery");
+    if (!source || !host) return;
+    const cards = [
+      ...source.querySelectorAll(".receipt-card[data-receipt-card], .receipt-card[data-receipt-id]"),
+    ].filter((card) => {
+      const id = card.dataset.receiptCard || card.dataset.receiptId;
+      return receiptMatchesCategoryScope(findReceipt(id), "car");
+    });
+    if (!cards.length) {
+      if (!host.querySelector(".muted") || host.querySelector(".receipt-card")) {
+        host.innerHTML = `<p class="muted">No car receipt photos yet — save a car claim with a linked receipt, or upload a receipt and categorise it as a car expense.</p>`;
+      }
+      return;
+    }
+    const html = cards.map((c) => c.outerHTML).join("");
+    if (host.dataset.syncHtml === html) return;
+    host.dataset.syncHtml = html;
+    host.innerHTML = html;
+    // Re-bind open/delete using the shared gallery binder when available.
+    const binder = globalThis.bindReceiptViewer || globalThis.bindReceiptGallery;
+    if (typeof binder === "function") {
+      try {
+        binder(host);
+        return;
+      } catch {
+        /* fall through to manual bind */
+      }
+    }
+    host.querySelectorAll("[data-del-receipt]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          const base =
+            typeof API !== "undefined" && API ? API : `${window.location.origin}/api/haulage`;
+          await fetch(`${base}/receipts/${btn.dataset.delReceipt}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          });
+          if (typeof refreshAll === "function") await refreshAll();
+        } catch (err) {
+          if (typeof toast === "function") toast(err.message || "Delete failed");
+        }
+      });
+    });
+    host.querySelectorAll("[data-receipt-card], [data-receipt-id]").forEach((card) => {
+      const id = card.dataset.receiptCard || card.dataset.receiptId;
+      card.addEventListener("click", (e) => {
+        if (e.target.closest("[data-del-receipt]")) return;
+        const open = globalThis.openReceiptViewer;
+        if (typeof open === "function") open(id);
+      });
+    });
+  }
+
   function start() {
     let bound = false;
     for (const cfg of GALLERIES) {
       const container = document.getElementById(cfg.containerId);
       if (!container) continue;
       bound = true;
-      const mo = new MutationObserver(() => applyFilter(cfg));
+      const mo = new MutationObserver(() => {
+        if (cfg.key === "expense") syncCarReceiptGallery();
+        applyFilter(cfg);
+        if (cfg.key === "expense") {
+          const carCfg = GALLERIES.find((g) => g.key === "car-expense");
+          if (carCfg) applyFilter(carCfg);
+        }
+      });
       mo.observe(container, { childList: true });
+      if (cfg.key === "expense") syncCarReceiptGallery();
       applyFilter(cfg);
     }
     // The top FY picker re-renders the galleries, but a light poll lets the
@@ -1902,9 +2023,40 @@
   "use strict";
   /* global API, toast, refreshAll, applyFinancialYear, buildCategorySelectOptions */
 
+  // Keep in sync with lib/expense-menu.js CAR_CLAIM_CATEGORY_IDS.
+  const CAR_CLAIM_IDS = new Set([
+    "vehicle_car",
+    "fuel",
+    "repairs_maintenance",
+    "tyres",
+    "registration_insurance",
+    "parking_tolls",
+  ]);
+
   const LEDGERS = [
-    { listId: "income-list", tableSel: "table.income-ledger", idAttr: "data-income-id", type: "income" },
-    { listId: "expense-list", tableSel: "table.expense-ledger", idAttr: "data-expense-id", type: "expense" },
+    {
+      listId: "income-list",
+      tableSel: "table.income-ledger",
+      idAttr: "data-income-id",
+      type: "income",
+      key: "income",
+    },
+    {
+      listId: "expense-list",
+      tableSel: "table.expense-ledger",
+      idAttr: "data-expense-id",
+      type: "expense",
+      key: "expense",
+      categoryScope: "general",
+    },
+    {
+      listId: "car-expense-list",
+      tableSel: "table.expense-ledger",
+      idAttr: "data-expense-id",
+      type: "expense",
+      key: "car-expense",
+      categoryScope: "car",
+    },
   ];
 
   const MONTH_NAMES = [
@@ -1975,45 +2127,61 @@
     }
   }
 
-  function periodStorageKey(type) {
-    return `haulage-ledger-month-${type}`;
+  function ledgerKey(cfgOrKey) {
+    if (cfgOrKey && typeof cfgOrKey === "object") {
+      return cfgOrKey.key || cfgOrKey.type || "expense";
+    }
+    return cfgOrKey || "expense";
   }
 
-  function weekLedgerStorageKey(type) {
-    return `haulage-ledger-week-${type}`;
+  function periodStorageKey(cfgOrKey) {
+    return `haulage-ledger-month-${ledgerKey(cfgOrKey)}`;
   }
 
-  function getMonthFilter(type) {
+  function weekLedgerStorageKey(cfgOrKey) {
+    return `haulage-ledger-week-${ledgerKey(cfgOrKey)}`;
+  }
+
+  function getMonthFilter(cfgOrKey) {
     try {
-      return localStorage.getItem(periodStorageKey(type)) || "all";
+      return localStorage.getItem(periodStorageKey(cfgOrKey)) || "all";
     } catch {
       return "all";
     }
   }
 
-  function setMonthFilter(type, value) {
+  function setMonthFilter(cfgOrKey, value) {
     try {
-      localStorage.setItem(periodStorageKey(type), value || "all");
+      localStorage.setItem(periodStorageKey(cfgOrKey), value || "all");
     } catch {
       /* ignore */
     }
   }
 
-  function getWeekFilter(type) {
+  function getWeekFilter(cfgOrKey) {
     try {
-      return localStorage.getItem(weekLedgerStorageKey(type)) || null;
+      return localStorage.getItem(weekLedgerStorageKey(cfgOrKey)) || null;
     } catch {
       return null;
     }
   }
 
-  function setWeekFilter(type, value) {
+  function setWeekFilter(cfgOrKey, value) {
     try {
-      if (!value || value === "all") localStorage.removeItem(weekLedgerStorageKey(type));
-      else localStorage.setItem(weekLedgerStorageKey(type), value);
+      if (!value || value === "all") localStorage.removeItem(weekLedgerStorageKey(cfgOrKey));
+      else localStorage.setItem(weekLedgerStorageKey(cfgOrKey), value);
     } catch {
       /* ignore */
     }
+  }
+
+  function entryMatchesCategoryScope(entry, scope) {
+    if (!scope || scope === "all") return true;
+    const cat = entry && entry.category;
+    const isCar = Boolean(cat && CAR_CLAIM_IDS.has(cat));
+    if (scope === "car") return isCar;
+    if (scope === "general") return !isCar;
+    return true;
   }
 
   const {
@@ -2093,9 +2261,10 @@
 
     const picker = document.createElement("div");
     picker.className = "fy-picker gallery-fy-picker ledger-fy-picker";
+    const key = ledgerKey(cfg);
     picker.innerHTML =
-      `<label for="ledger-fy-${cfg.type}">Financial year</label>` +
-      `<select id="ledger-fy-${cfg.type}" class="ledger-fy-select" aria-label="Show ledger for financial year"></select>`;
+      `<label for="ledger-fy-${key}">Financial year</label>` +
+      `<select id="ledger-fy-${key}" class="ledger-fy-select" aria-label="Show ledger for financial year"></select>`;
     box.appendChild(picker);
     const select = picker.querySelector("select");
     select.addEventListener("change", () => {
@@ -2124,15 +2293,16 @@
     const box = ledgerActions(header);
     if (box.querySelector(".ledger-month-picker")) return;
 
+    const key = ledgerKey(cfg);
     const picker = document.createElement("div");
     picker.className = "fy-picker gallery-fy-picker ledger-month-picker";
     picker.innerHTML =
-      `<label for="ledger-month-${cfg.type}">Show</label>` +
-      `<select id="ledger-month-${cfg.type}" class="ledger-month-select" aria-label="Filter ledger by month"></select>`;
+      `<label for="ledger-month-${key}">Show</label>` +
+      `<select id="ledger-month-${key}" class="ledger-month-select" aria-label="Filter ledger by month"></select>`;
     box.appendChild(picker);
     const select = picker.querySelector("select");
     select.addEventListener("change", () => {
-      setMonthFilter(cfg.type, select.value);
+      setMonthFilter(cfg, select.value);
       applyLedgerFilters(cfg);
     });
   }
@@ -2151,14 +2321,15 @@
     if (oldMonth) oldMonth.remove();
     if (box.querySelector(".ledger-week-picker")) return;
 
+    const key = ledgerKey(cfg);
     const picker = document.createElement("div");
     picker.className = "fy-picker gallery-fy-picker ledger-week-picker";
     picker.innerHTML =
-      `<label for="ledger-week-${cfg.type}">Week</label>` +
-      `<select id="ledger-week-${cfg.type}" class="ledger-week-select" aria-label="Filter expense ledger by week"></select>`;
+      `<label for="ledger-week-${key}">Week</label>` +
+      `<select id="ledger-week-${key}" class="ledger-week-select" aria-label="Filter expense ledger by week"></select>`;
     box.appendChild(picker);
     picker.querySelector("select").addEventListener("change", (e) => {
-      setWeekFilter(cfg.type, e.target.value);
+      setWeekFilter(cfg, e.target.value);
       if (e.target.value && e.target.value !== "all") {
         registerStartedWeek(e.target.value);
       }
@@ -2166,7 +2337,7 @@
     });
   }
 
-  function collectLedgerWeeks(fy) {
+  function collectLedgerWeeks(fy, categoryScope) {
     const map = new Map();
     let expenses = [];
     try {
@@ -2175,6 +2346,7 @@
       expenses = [];
     }
     for (const e of expenses) {
+      if (!entryMatchesCategoryScope(e, categoryScope)) continue;
       const date = String(e.date || "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
       if (fy && fyForDate(date) !== fy) continue;
@@ -2202,16 +2374,16 @@
   function syncWeekOptions(cfg, select) {
     if (!select) return "all";
     const fy = currentFy();
-    const weeks = collectLedgerWeeks(fy);
+    const weeks = collectLedgerWeeks(fy, cfg.categoryScope);
     const todayStart = weekStartMonday(toIsoLocal(new Date()));
-    let chosen = getWeekFilter(cfg.type);
+    let chosen = getWeekFilter(cfg);
     if (chosen == null) {
       chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
-      setWeekFilter(cfg.type, chosen);
+      setWeekFilter(cfg, chosen);
     }
     if (chosen !== "all" && !weeks.some((w) => w.start === chosen)) {
       chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
-      setWeekFilter(cfg.type, chosen);
+      setWeekFilter(cfg, chosen);
     }
 
     const opts = [`<option value="all">All weeks</option>`].concat(
@@ -2231,10 +2403,10 @@
     if (!select) return;
     const fy = currentFy();
     const months = monthsForFy(fy);
-    const prev = getMonthFilter(cfg.type);
+    const prev = getMonthFilter(cfg);
     const valid = prev === "all" || months.some((m) => m.value === prev);
     const chosen = valid ? prev : "all";
-    if (!valid) setMonthFilter(cfg.type, "all");
+    if (!valid) setMonthFilter(cfg, "all");
 
     const opts = [`<option value="all">All year</option>`].concat(
       months.map((m) => `<option value="${esc(m.value)}">${esc(m.label)}</option>`)
@@ -2283,7 +2455,7 @@
       periodKind = "week";
     } else if (monthSelect) {
       syncMonthOptions(cfg, monthSelect);
-      period = getMonthFilter(cfg.type);
+      period = getMonthFilter(cfg);
       periodKind = "month";
     }
 
@@ -2291,10 +2463,32 @@
     let shown = 0;
     let total = 0;
     table.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
-      total += 1;
       const id = tr.getAttribute(cfg.idAttr);
       const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
       const entry = findEntry(cfg.type, id);
+      let categoryOk = true;
+      if (cfg.categoryScope) {
+        if (isDraft) {
+          // Draft rows inherit the active form category when present.
+          let draftCat = null;
+          try {
+            draftCat =
+              (document.getElementById("expense-category") || {}).value ||
+              (document.querySelector("#manual-receipt-form [name=category]") || {}).value ||
+              null;
+          } catch {
+            draftCat = null;
+          }
+          categoryOk = entryMatchesCategoryScope({ category: draftCat }, cfg.categoryScope);
+        } else {
+          categoryOk = entryMatchesCategoryScope(entry, cfg.categoryScope);
+        }
+      }
+      if (!categoryOk) {
+        tr.style.display = "none";
+        return;
+      }
+      total += 1;
       let match = isDraft || (entry && fyForDate(entry.date) === fy);
       if (match && !isDraft && period !== "all" && entry) {
         if (periodKind === "week") {
@@ -2360,7 +2554,12 @@
         const list = panel.querySelector(`#${cfg.listId}`);
         (list || panel).insertAdjacentElement("afterend", note);
       }
-      const kind = cfg.type === "income" ? "income" : "expenses";
+      const kind =
+        cfg.type === "income"
+          ? "income"
+          : cfg.categoryScope === "car"
+            ? "car expenses"
+            : "expenses";
       if (period && period !== "all" && periodKind === "week") {
         note.textContent = `No ${kind} for week ${weekLabel(period, weekEndSunday(period))}. Choose “All weeks” or another week.`;
       } else if (period && period !== "all") {
@@ -2473,16 +2672,26 @@
 
   function categoryOptionsHtml(selected) {
     try {
-      // Ledger edit uses the full expense menu — not the car-only claims list.
-      const cats = (state.standards && state.standards.categories) || [];
-      const groups = (state.standards && state.standards.categoryGroups) || [];
+      const isCar = selected && CAR_CLAIM_IDS.has(selected);
+      let cats;
+      let groups;
+      if (isCar) {
+        // Car claim edit: ATO car allowlist (same as Car Expenses form).
+        cats = (state.standards && state.standards.specialClaimCategories) || [];
+        groups = [];
+        if (!cats.length) {
+          cats = CAR_CLAIM_IDS
+            ? [...CAR_CLAIM_IDS].map((id) => ({ id, label: id.replace(/_/g, " "), group: "Car" }))
+            : [];
+        }
+      } else {
+        cats = (state.standards && state.standards.categories) || [];
+        groups = (state.standards && state.standards.categoryGroups) || [];
+      }
       if (typeof buildCategorySelectOptions === "function" && cats.length) {
         let html = buildCategorySelectOptions(cats, groups);
         if (selected) {
-          html = html.replace(
-            `value="${selected}"`,
-            `value="${selected}" selected`
-          );
+          html = html.replace(`value="${selected}"`, `value="${selected}" selected`);
         }
         return html;
       }
@@ -2631,7 +2840,85 @@
     });
   }
 
+  function syncCarExpenseLedgerFromMain() {
+    const source = document.getElementById("expense-list");
+    const host = document.getElementById("car-expense-list");
+    const summary = document.getElementById("car-expense-list-summary");
+    if (!source || !host) return;
+
+    const table = source.querySelector("table.expense-ledger");
+    if (!table) {
+      const empty = `<p class="muted">No car expenses yet — save a car claim above.</p>`;
+      if (host.innerHTML !== empty) host.innerHTML = empty;
+      if (summary) summary.textContent = "0 car claims";
+      return;
+    }
+
+    const clone = table.cloneNode(true);
+    let carCount = 0;
+    let carSum = 0;
+    clone.querySelectorAll("tbody tr[data-expense-id]").forEach((tr) => {
+      const id = tr.getAttribute("data-expense-id");
+      const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
+      if (isDraft) {
+        const draftCat = (document.getElementById("expense-category") || {}).value || "";
+        if (!CAR_CLAIM_IDS.has(draftCat)) tr.remove();
+        return;
+      }
+      const entry = findEntry("expense", id);
+      if (!entryMatchesCategoryScope(entry, "car")) {
+        tr.remove();
+        return;
+      }
+      carCount += 1;
+      carSum += Number(entry.amount) || 0;
+    });
+
+    // Drop the period-total row; FY/week filter updates the running-total row.
+    const periodRow = clone.querySelector("tfoot tr:not(.running-total-row)");
+    if (periodRow) periodRow.remove();
+
+    if (!clone.querySelector("tbody tr[data-expense-id]")) {
+      const empty = `<p class="muted">No car expenses yet — save a car claim above.</p>`;
+      if (host.innerHTML !== empty) host.innerHTML = empty;
+      if (summary) summary.textContent = "0 car claims";
+      return;
+    }
+
+    const html = clone.outerHTML;
+    if (host.dataset.syncHtml !== html) {
+      host.dataset.syncHtml = html;
+      host.innerHTML = html;
+      host.querySelectorAll("[data-del-expense]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            const res = await fetch(`${apiBase()}/expenses/${btn.dataset.delExpense}`, {
+              method: "DELETE",
+              credentials: "same-origin",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Could not delete expense.");
+            if (typeof toast === "function") toast("Expense deleted");
+            if (typeof refreshAll === "function") await refreshAll();
+          } catch (err) {
+            if (typeof toast === "function") toast(err.message || "Delete failed");
+          }
+        });
+      });
+      host.querySelectorAll("[data-view-receipt]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const open = globalThis.openReceiptViewer;
+          if (typeof open === "function") open(btn.dataset.viewReceipt);
+        });
+      });
+    }
+    if (summary) {
+      summary.textContent = `${carCount} car claim${carCount === 1 ? "" : "s"} · ${fmtCurrency(carSum)}`;
+    }
+  }
+
   function enhance(cfg) {
+    if (cfg.key === "car-expense") syncCarExpenseLedgerFromMain();
     ensureRefreshButton(cfg);
     ensureFyPicker(cfg);
     ensureMonthPicker(cfg);
@@ -2648,7 +2935,14 @@
       const list = document.getElementById(cfg.listId);
       if (!list) continue;
       bound = true;
-      const mo = new MutationObserver(() => enhance(cfg));
+      const mo = new MutationObserver(() => {
+        if (cfg.key === "expense") {
+          syncCarExpenseLedgerFromMain();
+          const car = LEDGERS.find((c) => c.key === "car-expense");
+          if (car) enhance(car);
+        }
+        enhance(cfg);
+      });
       mo.observe(list, { childList: true });
       enhance(cfg);
     }
@@ -2656,6 +2950,7 @@
       let ticks = 0;
       const iv = setInterval(() => {
         ticks += 1;
+        syncCarExpenseLedgerFromMain();
         for (const cfg of LEDGERS) enhance(cfg);
         if (ticks >= 10) clearInterval(iv);
       }, 400);
@@ -3795,9 +4090,9 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Upload a photo or PDF of a work receipt with Upload file (or drag and drop). You must be signed in — scans save to your own profile. The scanner reads the page with on-device OCR (and cloud OCR when configured), then suggests date, vendor, amount and a category. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "If the file looks like one you’ve already saved (same date, vendor and amount), you’ll be asked whether to continue. Pick a category from the expense menu, or use Car Expenses/Claims for ATO car-related items. Manual entry covers cash claims and “no receipt” ticks when you don’t have a photo.",
-        "Special claims (cents-per-km, laundry) and the expense ledger sit below the upload area. The gallery lists labelled receipts for this year so you can open, download or delete them later.",
+        "Expenses has two sub-tabs: Expenses (general work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "On the Car Expenses and Claims tab, enter cents-per-km, logbook or actual running costs (fuel, tyres, servicing, rego/insurance, parking/tolls). That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
+        "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
     },
     income: {
@@ -4091,6 +4386,73 @@
     // Wrap after other enhancement patches (category menus) have run.
     wrapSetView();
     setTimeout(wrapSetView, 0);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Expenses sub-tabs: General vs Car Expenses and Claims --------------- */
+(function () {
+  "use strict";
+
+  const STORAGE_KEY = "haulage-expenses-pane";
+
+  function currentPane() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "car" ? "car" : "general";
+    } catch {
+      return "general";
+    }
+  }
+
+  function setPane(pane) {
+    const name = pane === "car" ? "car" : "general";
+    try {
+      localStorage.setItem(STORAGE_KEY, name);
+    } catch {
+      /* ignore */
+    }
+    const general = document.getElementById("expenses-pane-general");
+    const car = document.getElementById("expenses-pane-car");
+    const tabs = document.querySelectorAll(".expenses-subtab[data-expenses-pane]");
+    if (general) {
+      general.hidden = name !== "general";
+      general.classList.toggle("hidden", name !== "general");
+    }
+    if (car) {
+      car.hidden = name !== "car";
+      car.classList.toggle("hidden", name !== "car");
+    }
+    tabs.forEach((btn) => {
+      const active = btn.getAttribute("data-expenses-pane") === name;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function start() {
+    const nav = document.querySelector(".expenses-subnav");
+    if (!nav) return;
+    nav.querySelectorAll(".expenses-subtab[data-expenses-pane]").forEach((btn) => {
+      btn.addEventListener("click", () => setPane(btn.getAttribute("data-expenses-pane")));
+    });
+    setPane(currentPane());
+
+    // When navigating to Expenses, restore the last pane.
+    const prevSetView = globalThis.setView;
+    if (typeof prevSetView === "function" && !prevSetView.__haulageExpensesPaneWrapped) {
+      function expensesPaneSetView(name) {
+        const result = prevSetView.apply(this, arguments);
+        if (name === "expenses" || name === "receipts") setPane(currentPane());
+        return result;
+      }
+      expensesPaneSetView.__haulageExpensesPaneWrapped = true;
+      globalThis.setView = expensesPaneSetView;
+    }
   }
 
   if (document.readyState === "loading") {

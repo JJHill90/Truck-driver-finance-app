@@ -136,14 +136,15 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   the API returns `possibleDuplicate` without saving. `enhancements.js` shows
   “possible duplicate detected, do you wish to continue with the upload?” —
   Cancel returns 409 to `app.js`; Continue re-posts with `forceDuplicate: true`.
-- **Expenses tab** includes the former Scan receipt flow (upload, approve
-  totals, manual entry with ABN, receipt gallery) plus expense totals,
-  **Car Expenses/Claims** (ATO D1 cents/km or logbook, plus fuel / repairs /
-  tyres / rego–insurance / parking–tolls via `listSpecialClaimCategories`), and
-  the expense ledger. The general expense menus hide the whole **Vehicle & fuel**
-  group (car claims only via Car Expenses/Claims) and show a **Medical** group
-  containing Medical equipment (`compulsory_assessment`). Nav no longer has a
-  separate Scan receipt item; `setView("receipts")` redirects to `expenses`.
+- **Expenses tab** has two sub-tabs: **Expenses** (scan/manual, totals, general
+  receipt gallery + ledger) and **Car Expenses and Claims** (ATO D1 cents/km or
+  logbook, plus fuel / repairs / tyres / rego–insurance / parking–tolls via
+  `listSpecialClaimCategories`, with its own car receipt gallery + car ledger).
+  Car rows stay in the same `expenses` store; the UI filters by car category
+  ids. The general expense menus hide the whole **Vehicle & fuel** group (car
+  claims only via the Car tab) and show a **Medical** group containing Medical
+  equipment (`compulsory_assessment`). Nav no longer has a separate Scan
+  receipt item; `setView("receipts")` redirects to `expenses`.
 - **Expense scan approval:** when OCR finds multiple line amounts, only the
   overall/grand total (or largest amount if unlabeled) is primary. The confirm
   UI asks to approve that single total — other line amounts are informational

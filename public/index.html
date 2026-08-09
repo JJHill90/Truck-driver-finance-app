@@ -71,7 +71,7 @@
           <div id="title-recover-dev" class="title-recover-fallback hidden"></div>
         </form>
         <p id="title-auth-message" class="title-auth-message" role="status"></p>
-        <p class="app-version-footer title-version" data-app-version>Version .4</p>
+        <p class="app-version-footer title-version" data-app-version>Version .5</p>
       </div>
     </div>
 
@@ -94,7 +94,7 @@
             <button class="nav-btn" data-view="support">Support</button>
           </nav>
           <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">
-            Version .4
+            Version .5
           </p>
         </div>
       </aside>
@@ -132,60 +132,90 @@
           </div>
         </section>
 
-        <!-- Expenses (includes receipt scan + manual entry) -->
+        <!-- Expenses (includes receipt scan + manual entry) + Car Expenses sub-tab -->
         <section id="view-expenses" class="view">
-          <div class="grid-2">
-            <div class="panel">
-              <div class="panel-header"><h2>Upload expense receipt</h2></div>
-              <p class="muted">Scan a photo or PDF — approve the totals before they are saved to expenses.</p>
-              <div id="upload-zone" class="upload-zone">
-                <p>Drag &amp; drop an expense receipt (image or PDF)</p>
-                <button type="button" class="btn primary" id="pick-receipt">Upload file</button>
-                <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
-              </div>
-              <div id="receipt-preview" class="preview hidden"></div>
-              <div id="scan-result" class="scan-box hidden"></div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-header"><h2>Add expense manually</h2></div>
-              <p class="muted">Enter an expense without a photo, or edit fields filled from a scan. Use the ticks below for cash claims and when you have no receipt.</p>
-              <div id="manual-approval-banner" class="banner hidden"></div>
-              <form id="manual-receipt-form" class="form-grid">
-                <label>Date<input type="date" name="date" required /></label>
-                <label>Category
-                  <select id="manual-receipt-category" name="category" class="category-select"></select>
-                </label>
-                <label>Vendor
-                  <input type="text" id="manual-vendor-input" name="vendor" list="vendor-list" placeholder="BP Truck Stop" />
-                </label>
-                <label>ABN (optional)
-                  <input type="text" id="manual-vendor-abn" name="vendorAbn" placeholder="12 345 678 901" />
-                </label>
-                <label class="span-2">Description<input type="text" name="description" placeholder="Diesel / meal / accommodation" /></label>
-                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" /></label>
-                <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
-                <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
-                <div class="span-2 checkbox-row">
-                  <label class="checkbox">
-                    <input type="checkbox" name="cashTransaction" id="manual-cash-transaction" />
-                    Cash transaction (Paid cash check for claim)
-                  </label>
-                  <label class="checkbox">
-                    <input type="checkbox" name="noReceipt" id="manual-no-receipt" />
-                    No receipt
-                  </label>
-                </div>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save expense</button>
-                </div>
-              </form>
-              <div id="manual-receipt-preview" class="preview-note hidden"></div>
-              <datalist id="vendor-list"></datalist>
-            </div>
+          <div class="expenses-subnav" role="tablist" aria-label="Expenses sections">
+            <button
+              type="button"
+              class="expenses-subtab active"
+              role="tab"
+              id="expenses-tab-general"
+              aria-selected="true"
+              aria-controls="expenses-pane-general"
+              data-expenses-pane="general"
+            >
+              Expenses
+            </button>
+            <button
+              type="button"
+              class="expenses-subtab"
+              role="tab"
+              id="expenses-tab-car"
+              aria-selected="false"
+              aria-controls="expenses-pane-car"
+              data-expenses-pane="car"
+            >
+              Car Expenses and Claims
+            </button>
           </div>
 
-          <div class="grid-2">
+          <div
+            id="expenses-pane-general"
+            class="expenses-pane"
+            role="tabpanel"
+            aria-labelledby="expenses-tab-general"
+          >
+            <div class="grid-2">
+              <div class="panel">
+                <div class="panel-header"><h2>Upload expense receipt</h2></div>
+                <p class="muted">Scan a photo or PDF — approve the totals before they are saved to expenses.</p>
+                <div id="upload-zone" class="upload-zone">
+                  <p>Drag &amp; drop an expense receipt (image or PDF)</p>
+                  <button type="button" class="btn primary" id="pick-receipt">Upload file</button>
+                  <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
+                </div>
+                <div id="receipt-preview" class="preview hidden"></div>
+                <div id="scan-result" class="scan-box hidden"></div>
+              </div>
+
+              <div class="panel">
+                <div class="panel-header"><h2>Add expense manually</h2></div>
+                <p class="muted">Enter an expense without a photo, or edit fields filled from a scan. Use the ticks below for cash claims and when you have no receipt.</p>
+                <div id="manual-approval-banner" class="banner hidden"></div>
+                <form id="manual-receipt-form" class="form-grid">
+                  <label>Date<input type="date" name="date" required /></label>
+                  <label>Category
+                    <select id="manual-receipt-category" name="category" class="category-select"></select>
+                  </label>
+                  <label>Vendor
+                    <input type="text" id="manual-vendor-input" name="vendor" list="vendor-list" placeholder="BP Truck Stop" />
+                  </label>
+                  <label>ABN (optional)
+                    <input type="text" id="manual-vendor-abn" name="vendorAbn" placeholder="12 345 678 901" />
+                  </label>
+                  <label class="span-2">Description<input type="text" name="description" placeholder="Diesel / meal / accommodation" /></label>
+                  <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" /></label>
+                  <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
+                  <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
+                  <div class="span-2 checkbox-row">
+                    <label class="checkbox">
+                      <input type="checkbox" name="cashTransaction" id="manual-cash-transaction" />
+                      Cash transaction (Paid cash check for claim)
+                    </label>
+                    <label class="checkbox">
+                      <input type="checkbox" name="noReceipt" id="manual-no-receipt" />
+                      No receipt
+                    </label>
+                  </div>
+                  <div class="span-2 form-actions">
+                    <button type="submit" class="btn primary">Save expense</button>
+                  </div>
+                </form>
+                <div id="manual-receipt-preview" class="preview-note hidden"></div>
+                <datalist id="vendor-list"></datalist>
+              </div>
+            </div>
+
             <div class="panel">
               <div class="panel-header">
                 <h2>Total expenses</h2>
@@ -203,7 +233,28 @@
             </div>
 
             <div class="panel">
-              <div class="panel-header"><h2>Car Expenses/Claims</h2></div>
+              <div class="panel-header"><h2>Expense receipt photos</h2></div>
+              <div id="receipt-gallery" class="receipt-gallery"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Expense Ledger</h2>
+                <span class="muted" id="expense-list-summary"></span>
+              </div>
+              <div id="expense-list"></div>
+            </div>
+          </div>
+
+          <div
+            id="expenses-pane-car"
+            class="expenses-pane hidden"
+            role="tabpanel"
+            aria-labelledby="expenses-tab-car"
+            hidden
+          >
+            <div class="panel">
+              <div class="panel-header"><h2>Car Expenses and Claims</h2></div>
               <p class="muted">
                 Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
                 Enter date, vendor, amount and notes as usual; choose a car category below.
@@ -225,19 +276,20 @@
               </form>
               <div id="expense-preview" class="preview-note hidden"></div>
             </div>
-          </div>
 
-          <div class="panel">
-            <div class="panel-header"><h2>Expense receipt photos</h2></div>
-            <div id="receipt-gallery" class="receipt-gallery"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header">
-              <h2>Expense Ledger</h2>
-              <span class="muted" id="expense-list-summary"></span>
+            <div class="panel">
+              <div class="panel-header"><h2>Car receipt photos</h2></div>
+              <p class="muted">Receipt images linked to car expense claims (fuel, servicing, tyres, and similar).</p>
+              <div id="car-receipt-gallery" class="receipt-gallery"></div>
             </div>
-            <div id="expense-list"></div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2>Car Expenses Ledger</h2>
+                <span class="muted" id="car-expense-list-summary"></span>
+              </div>
+              <div id="car-expense-list"></div>
+            </div>
           </div>
         </section>
 
@@ -529,6 +581,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fy-window-6past"></script>
+    <script src="./enhancements.js?v=car-expenses-tab-1"></script>
   </body>
 </html>
