@@ -489,7 +489,21 @@
             <form id="profile-form" class="form-grid">
               <label>Name<input type="text" name="name" placeholder="Full name" /></label>
               <label>Driver type<select id="driver-type" name="driverType"></select></label>
-              <label>Employer<input type="text" name="employer" placeholder="Company" /></label>
+              <label class="profile-employer-field">Employer
+                <span class="profile-employer-input-wrap">
+                  <input
+                    type="text"
+                    name="employer"
+                    id="profile-employer"
+                    placeholder="Start typing, e.g. Lindsay"
+                    autocomplete="organization"
+                    aria-autocomplete="list"
+                    aria-controls="profile-employer-suggestions"
+                  />
+                  <ul id="profile-employer-suggestions" class="profile-employer-suggestions" role="listbox" hidden></ul>
+                </span>
+                <span class="muted small">Suggestions from known transport fleets — you can still type any employer.</span>
+              </label>
               <label>Annual salary ($)<input type="number" name="annualSalary" step="0.01" min="0" id="profile-annual-salary" /></label>
               <label>Licence class
                 <select name="licenceClass" id="profile-licence-class" aria-label="Licence class from salary">

@@ -899,6 +899,68 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-lightbox iframe { width: 92vw; height: 90vh; border: none; background: #fff; border-radius: 8px; }
 .enh-lightbox-close { position: fixed; top: 16px; right: 22px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 50%; width: 42px; height: 42px; font-size: 1.5rem; line-height: 1; cursor: pointer; }
 
+/* --- Profile employer predictive text ----------------------------------- */
+.profile-employer-field { display: flex; flex-direction: column; gap: 4px; }
+.profile-employer-input-wrap { position: relative; display: block; }
+.profile-employer-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  max-height: 240px;
+  overflow: auto;
+}
+.profile-employer-suggestions[hidden] { display: none !important; }
+.profile-employer-suggestions li {
+  margin: 0;
+  padding: 0;
+}
+.profile-employer-suggestions button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.profile-employer-suggestions button:hover,
+.profile-employer-suggestions button[aria-selected="true"] {
+  background: var(--bg-2);
+  color: var(--accent);
+}
+.enh-driver-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.enh-driver-type-options button {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.enh-driver-type-options button:hover {
+  border-color: var(--accent);
+}
+.enh-driver-type-options strong { display: block; margin-bottom: 2px; }
+.enh-driver-type-options span { display: block; font-size: 0.82rem; color: var(--text-dim); }
+
 /* --- Duplicate receipt prompt ------------------------------------------- */
 .enh-dup-modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .enh-dup-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.65); }

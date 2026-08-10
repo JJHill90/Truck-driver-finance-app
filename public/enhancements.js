@@ -4548,7 +4548,7 @@
     profile: {
       title: "Profile",
       body: [
-        "Profile is where you create or sign into a driver account, set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Salary suggests a licence class band; you can still adjust it if needed.",
+        "Profile is where you create or sign into a driver account, set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets (default category and similar) so new expenses start closer to how you work. After login or logout the app reloads so every tab shows your data only.",
         "Primary mod accounts also see the admin panel to create or review driver profiles. Guests can browse read-only; uploads and ledger changes need a signed-in profile.",
       ],
@@ -5052,5 +5052,281 @@
     });
   } else {
     void refreshVersion();
+  }
+})();
+
+/* --- Profile employer predictive text + driver-type salary defaults ------
+ * Typeahead against GET /employers. Picking a known fleet asks for driver
+ * type, then fills annual salary + licence class from market defaults.
+ */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let debounceTimer = null;
+  let activeIndex = -1;
+  let latestQuery = "";
+  let defaultsCache = null;
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function employerInput() {
+    return (
+      document.getElementById("profile-employer") ||
+      document.querySelector('#profile-form input[name="employer"]')
+    );
+  }
+
+  function suggestionsEl() {
+    return document.getElementById("profile-employer-suggestions");
+  }
+
+  function hideSuggestions() {
+    const list = suggestionsEl();
+    if (!list) return;
+    list.hidden = true;
+    list.innerHTML = "";
+    activeIndex = -1;
+  }
+
+  function setActive(list, index) {
+    const buttons = [...list.querySelectorAll("button[data-employer]")];
+    activeIndex = index;
+    buttons.forEach((btn, i) => {
+      btn.setAttribute("aria-selected", i === index ? "true" : "false");
+    });
+    buttons[index]?.scrollIntoView({ block: "nearest" });
+  }
+
+  async function loadDefaults() {
+    if (defaultsCache) return defaultsCache;
+    try {
+      const res = await fetch(`${API}/driver-role-defaults`, {
+        credentials: "same-origin",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.defaults)) {
+        defaultsCache = data.defaults;
+        return defaultsCache;
+      }
+    } catch {
+      /* fall through */
+    }
+    defaultsCache = [];
+    return defaultsCache;
+  }
+
+  function applyRoleDefaults(role) {
+    if (!role) return;
+    const form = document.getElementById("profile-form");
+    const typeSelect =
+      document.getElementById("driver-type") ||
+      form?.elements?.driverType;
+    const salaryInput =
+      document.getElementById("profile-annual-salary") ||
+      form?.elements?.annualSalary;
+    const licenceSelect = document.getElementById("profile-licence-class");
+
+    if (typeSelect && role.driverType) {
+      typeSelect.value = role.driverType;
+      typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (salaryInput && role.annualSalary != null) {
+      salaryInput.value = String(role.annualSalary);
+      salaryInput.dispatchEvent(new Event("input", { bubbles: true }));
+      salaryInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (licenceSelect && role.licenceClass) {
+      licenceSelect.value = role.licenceClass;
+      licenceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    const label = role.label || role.driverType;
+    const money = Number(role.annualSalary).toLocaleString("en-AU");
+    if (typeof window.toast === "function") {
+      window.toast(
+        `${label}: salary set to $${money} (${role.licenceClass || "licence"}). Review and Save profile.`
+      );
+    }
+  }
+
+  async function askDriverType(employerName) {
+    const defaults = await loadDefaults();
+    if (!defaults.length) return;
+
+    document.getElementById("enh-driver-type-modal")?.remove();
+
+    return new Promise((resolve) => {
+      const modal = document.createElement("div");
+      modal.id = "enh-driver-type-modal";
+      modal.className = "enh-dup-modal";
+      const options = defaults
+        .map(
+          (d) => `
+          <button type="button" data-role="${esc(d.id)}">
+            <strong>${esc(d.label)}</strong>
+            <span>${esc(d.description || "")}</span>
+            <span>Guide salary $${Number(d.annualSalary).toLocaleString("en-AU")} · ${esc(
+              d.licenceLabel || d.licenceClass || ""
+            )}</span>
+          </button>`
+        )
+        .join("");
+      modal.innerHTML = `
+        <div class="enh-dup-backdrop" data-role-close></div>
+        <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-driver-type-title">
+          <h3 id="enh-driver-type-title">Driver type at ${esc(employerName)}</h3>
+          <p>Pick the role that best matches your work so we can set a standard annual salary and licence class. You can still edit either before saving.</p>
+          <div class="enh-driver-type-options">${options}</div>
+          <div class="enh-dup-actions">
+            <button type="button" class="btn" data-role-close>Skip</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      const finish = (roleId) => {
+        modal.remove();
+        resolve(roleId || null);
+      };
+      modal.querySelectorAll("[data-role-close]").forEach((el) => {
+        el.addEventListener("click", () => finish(null));
+      });
+      modal.querySelectorAll("button[data-role]").forEach((btn) => {
+        btn.addEventListener("click", () => finish(btn.getAttribute("data-role")));
+      });
+    });
+  }
+
+  async function onEmployerPicked(name) {
+    const input = employerInput();
+    if (!input || !name) return;
+    input.value = name;
+    hideSuggestions();
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    const roleId = await askDriverType(name);
+    if (!roleId) return;
+    try {
+      const res = await fetch(
+        `${API}/driver-role-defaults?driverType=${encodeURIComponent(roleId)}`,
+        { credentials: "same-origin" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.default) applyRoleDefaults(data.default);
+    } catch {
+      const defaults = await loadDefaults();
+      const row = defaults.find((d) => d.id === roleId);
+      if (row) {
+        applyRoleDefaults({
+          driverType: row.id,
+          label: row.label,
+          annualSalary: row.annualSalary,
+          licenceClass: row.licenceClass,
+        });
+      }
+    }
+  }
+
+  async function fetchSuggestions(q) {
+    latestQuery = q;
+    if (q.trim().length < 2) {
+      hideSuggestions();
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API}/employers?q=${encodeURIComponent(q.trim())}&limit=10`,
+        { credentials: "same-origin" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (q !== latestQuery) return;
+      const list = suggestionsEl();
+      const input = employerInput();
+      if (!list || !input) return;
+      const rows = Array.isArray(data.employers) ? data.employers : [];
+      if (!rows.length) {
+        hideSuggestions();
+        return;
+      }
+      list.innerHTML = rows
+        .map(
+          (e) =>
+            `<li role="option"><button type="button" data-employer="${esc(e.name)}">${esc(
+              e.name
+            )}</button></li>`
+        )
+        .join("");
+      list.hidden = false;
+      activeIndex = -1;
+      list.querySelectorAll("button[data-employer]").forEach((btn) => {
+        btn.addEventListener("mousedown", (ev) => {
+          ev.preventDefault();
+          void onEmployerPicked(btn.getAttribute("data-employer"));
+        });
+      });
+    } catch {
+      hideSuggestions();
+    }
+  }
+
+  function start() {
+    const input = employerInput();
+    const list = suggestionsEl();
+    if (!input || !list) return;
+
+    // Keep the suggestions list under an input wrap for absolute positioning.
+    if (!input.parentElement?.classList?.contains("profile-employer-input-wrap")) {
+      const wrap = document.createElement("span");
+      wrap.className = "profile-employer-input-wrap";
+      input.replaceWith(wrap);
+      wrap.appendChild(input);
+      wrap.appendChild(list);
+    } else if (list.parentElement !== input.parentElement) {
+      input.parentElement.appendChild(list);
+    }
+
+    input.setAttribute("autocomplete", "organization");
+    input.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      const q = input.value;
+      debounceTimer = setTimeout(() => {
+        void fetchSuggestions(q);
+      }, 180);
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (list.hidden) return;
+      const buttons = [...list.querySelectorAll("button[data-employer]")];
+      if (!buttons.length) return;
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        setActive(list, Math.min(buttons.length - 1, activeIndex + 1));
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        setActive(list, Math.max(0, activeIndex - 1));
+      } else if (ev.key === "Enter" && activeIndex >= 0) {
+        ev.preventDefault();
+        void onEmployerPicked(buttons[activeIndex].getAttribute("data-employer"));
+      } else if (ev.key === "Escape") {
+        hideSuggestions();
+      }
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(hideSuggestions, 150);
+    });
+
+    void loadDefaults();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
   }
 })();
