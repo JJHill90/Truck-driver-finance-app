@@ -22,3 +22,13 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Capacitor mobile shell (deps + local Android SDK path / builds)
+mobile/node_modules
+mobile/android/local.properties
+mobile/android/.gradle
+mobile/android/app/build
+mobile/android/build
+mobile/ios/App/Pods
+*.jks
+*.keystore

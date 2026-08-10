@@ -11,7 +11,9 @@
     "dev": "node --watch server.js",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mobile:sync": "npm --prefix mobile run sync",
+    "mobile:android": "npm --prefix mobile run open:android"
   },
   "dependencies": {
     "express": "^4.21.1",

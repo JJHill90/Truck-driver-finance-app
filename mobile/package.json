@@ -1,0 +1,21 @@
+{
+  "name": "haulage-finance-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor shell for Haulage Finance (loads hosted Render app).",
+  "scripts": {
+    "sync": "npx cap sync",
+    "sync:android": "npx cap sync android",
+    "open:android": "npx cap open android",
+    "add:android": "npx cap add android",
+    "add:ios": "npx cap add ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/camera": "^7.0.5",
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
+    "@capacitor/filesystem": "^7.1.8"
+  }
+}
