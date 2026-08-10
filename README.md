@@ -130,11 +130,19 @@ on load — including prompts when email is missing or the password is older tha
 - `COOKIE_SECURE` — force `Secure` on session cookies (on by default when
   `NODE_ENV=production`). Cross-origin sessions use `SameSite=None; Secure`.
 
-### Google Play / iOS (cross-origin API)
+### Google Play / iOS (Capacitor shell)
 
-If the store app loads the UI from the same Render URL in a WebView, CORS is
-usually unnecessary (same origin). If a native shell calls the hosted API from
-another origin (`capacitor://localhost`, etc.):
+Native packaging lives under [`mobile/`](mobile/README.md): a Capacitor 7
+Android project that loads the hosted app at
+`https://haulage-finance.onrender.com/haulage/` (same-origin API — no CORS
+needed for the default config).
+
+```bash
+cd mobile && npm install && npx cap sync android && npx cap open android
+```
+
+If a native shell instead calls the hosted API from another origin
+(`capacitor://localhost`, etc.):
 
 1. Set `CORS_ORIGINS` (and/or `CORS_ALLOW_CAPACITOR=1`) on Render.
 2. Call the API with `credentials: "include"` (not `"same-origin"`).
