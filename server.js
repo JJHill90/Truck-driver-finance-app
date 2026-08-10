@@ -40,6 +40,8 @@ const {
   listDriverRoleDefaults,
   getDriverRoleDefaults,
 } = require("./lib/driver-role-defaults");
+const recordsHistory = require("./lib/records-history");
+const adminAssist = require("./lib/admin-assist");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -115,7 +117,12 @@ function maybeBackfillInvoiceDates(records, user) {
   records.meta.invoiceDateRefreshV1 = true; // set first to avoid re-entry
   refreshInvoiceDatesFromScans(records, { openai })
     .then((result) => {
-      if (result.updated || records.meta) storage.saveRecords(records, fileForUser(user));
+      if (result.updated || records.meta) {
+        persistUserRecords(user, records, fileForUser(user), {
+          reason: "invoice-date-backfill",
+          actor: user || "system",
+        });
+      }
       if (result.updated) {
         console.log(
           `Invoice-date backfill for ${user || "guest"}: updated ${result.updated} of ${result.scanned} rescanned.`
@@ -127,18 +134,38 @@ function maybeBackfillInvoiceDates(records, user) {
 function getRecords(req) {
   return recordsForUser(req.user);
 }
-function persist(req) {
-  storage.saveRecords(getRecords(req), fileForUser(req.user));
+function sessionUsername(req) {
+  return req.user ? String(req.user) : null;
 }
+
+/** Snapshot (when username known) then persist records to disk. */
+function persistUserRecords(username, records, file, meta = {}) {
+  if (username) {
+    try {
+      recordsHistory.snapshotRecords(username, records, {
+        reason: meta.reason || "auto",
+        actor: meta.actor || username,
+      });
+    } catch (err) {
+      console.warn("records history snapshot failed:", err.message);
+    }
+  }
+  storage.saveRecords(records, file);
+}
+
+function persist(req, meta = {}) {
+  persistUserRecords(req.user, getRecords(req), fileForUser(req.user), {
+    reason: meta.reason || "auto",
+    actor: sessionUsername(req) || req.user || null,
+  });
+}
+
 /** Records view for tax/UI — soft-deleted ledger rows excluded. */
 function getActiveRecords(req) {
   return withActiveLedger(getRecords(req));
 }
 function profileFor(records, financialYear) {
   return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
-}
-function sessionUsername(req) {
-  return req.user ? String(req.user) : null;
 }
 function loadTargetUserRecords(username) {
   const user = auth.getUser(username);
@@ -152,6 +179,13 @@ function loadTargetUserRecords(username) {
     recordsCache.set(user.username, records);
   }
   return { user, records, file };
+}
+
+function persistTarget(loaded, meta = {}) {
+  persistUserRecords(loaded.user.username, loaded.records, loaded.file, {
+    reason: meta.reason || "admin-override",
+    actor: meta.actor || null,
+  });
 }
 
 /** Prefer labeled invoice/payment dates so FY placement follows the document day. */
@@ -617,6 +651,7 @@ api.get("/admin/users/:username", (req, res) => {
 
   res.json({
     user: target,
+    account: adminAssist.adminAccountStatus(target.username),
     profile: records.profile || {},
     expenses,
     income,
@@ -624,6 +659,7 @@ api.get("/admin/users/:username", (req, res) => {
     deletedIncome,
     receipts,
     vendors: storage.listVendors(records),
+    history: recordsHistory.listSnapshots(target.username, { limit: 20 }),
     summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
   });
 });
@@ -640,7 +676,9 @@ api.post("/admin/users/:username/:type(expenses|income)/unreconcile", (req, res)
   const result = unreconcileEntries(loaded.records, type, (req.body && req.body.ids) || [], {
     username: sessionUsername(req),
   });
-  if (result.updated.length) storage.saveRecords(loaded.records, loaded.file);
+  if (result.updated.length) {
+    persistTarget(loaded, { reason: "admin-unreconcile", actor: sessionUsername(req) });
+  }
   res.json({ ok: true, updated: result.updated.length, notFound: result.notFound });
 });
 
@@ -661,7 +699,9 @@ api.post("/admin/users/:username/:type(expenses|income)/restore", (req, res) => 
     if (result.ok) restored.push(result.entry);
     else errors.push({ id, error: result.error, code: result.code });
   }
-  if (restored.length) storage.saveRecords(loaded.records, loaded.file);
+  if (restored.length) {
+    persistTarget(loaded, { reason: "admin-restore-entry", actor: sessionUsername(req) });
+  }
   res.json({ ok: true, restored: restored.length, entries: restored, errors });
 });
 
@@ -685,8 +725,219 @@ api.post("/admin/users/:username/:type(expenses|income)/soft-delete", (req, res)
     if (result.ok) deleted.push(result.entry);
     else errors.push({ id, error: result.error, code: result.code });
   }
-  if (deleted.length) storage.saveRecords(loaded.records, loaded.file);
+  if (deleted.length) {
+    persistTarget(loaded, { reason: "admin-soft-delete", actor: sessionUsername(req) });
+  }
   res.json({ ok: true, deleted: deleted.length, entries: deleted, errors });
+});
+
+/** Admin: reconcile ledger rows on a driver's behalf. */
+api.post("/admin/users/:username/:type(expenses|income)/reconcile", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const type = req.params.type === "income" ? "income" : "expense";
+  const result = reconcileEntries(loaded.records, type, (req.body && req.body.ids) || [], {
+    username: sessionUsername(req),
+  });
+  if (result.updated.length) {
+    persistTarget(loaded, { reason: "admin-reconcile", actor: sessionUsername(req) });
+  }
+  res.json({ ok: true, updated: result.updated.length, notFound: result.notFound });
+});
+
+/** Admin: edit a driver's expense/income row (overrides locks). */
+api.put("/admin/users/:username/:type(expenses|income)/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const isIncome = req.params.type === "income";
+  const type = isIncome ? "income" : "expense";
+  const entry = findEntry(loaded.records, type, req.params.id);
+  if (!entry) {
+    res.status(404).json({ error: "Entry not found." });
+    return;
+  }
+  // Unlock first so a mistaken reconcile does not block the correction.
+  if (entry.reconciled) {
+    unreconcileEntries(loaded.records, type, [req.params.id], {
+      username: sessionUsername(req),
+    });
+  }
+  if (isDeleted(entry)) {
+    restoreEntry(loaded.records, type, req.params.id, { username: sessionUsername(req) });
+  }
+  const updated = isIncome
+    ? updateIncome(loaded.records, req.params.id, req.body || {})
+    : updateExpense(loaded.records, req.params.id, req.body || {});
+  if (!updated) {
+    res.status(404).json({ error: "Entry not found." });
+    return;
+  }
+  updated.adminEditedAt = new Date().toISOString();
+  updated.adminEditedBy = sessionUsername(req);
+  persistTarget(loaded, { reason: "admin-edit-entry", actor: sessionUsername(req) });
+  res.json({ ok: true, entry: updated });
+});
+
+/** Admin: override driver profile fields. */
+api.put("/admin/users/:username/profile", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const body = { ...(req.body || {}) };
+  if (body.annualSalary != null && body.annualSalary !== "") {
+    body.annualSalary = Number(body.annualSalary);
+  }
+  const fromSalary = getLicenceClassForSalary(
+    body.annualSalary ?? loaded.records.profile?.annualSalary
+  );
+  const normalised = normalizeLicenceClassId(body.licenceClass);
+  if (body.licenceClass !== undefined) {
+    body.licenceClass = normalised || fromSalary;
+  } else if (body.annualSalary != null) {
+    body.licenceClass = fromSalary;
+  }
+  delete body.salaryBand;
+  const profile = storage.updateProfile(loaded.records, body);
+  persistTarget(loaded, { reason: "admin-edit-profile", actor: sessionUsername(req) });
+  res.json({ ok: true, profile });
+});
+
+/** Admin: set a temporary password (clears failed logins / sessions). */
+api.post("/admin/users/:username/password", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const password = String((req.body && req.body.password) || "");
+    const user = adminAssist.adminSetPassword(req.params.username, password);
+    res.json({
+      ok: true,
+      user,
+      message: "Password updated. The driver should sign in with the new password.",
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Admin: set / update account email. */
+api.post("/admin/users/:username/email", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const user = adminAssist.adminSetEmail(req.params.username, (req.body && req.body.email) || "");
+    res.json({ ok: true, user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Admin: clear failed-login lockout. */
+api.post("/admin/users/:username/clear-failed-logins", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const user = adminAssist.adminClearFailedLogins(req.params.username);
+    res.json({ ok: true, user });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Admin: create a password-recovery link (and email it when SMTP is set). */
+api.post("/admin/users/:username/recover-link", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const recovery = adminAssist.adminCreateRecovery(req.params.username);
+    const base = mail.appBaseUrl(req);
+    const recoveryPath = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+    let emailed = false;
+    if (mail.mailConfigured()) {
+      const sent = await mail.sendRecoveryEmail({
+        to: recovery.email,
+        username: recovery.username,
+        resetUrl: recoveryPath,
+      });
+      emailed = Boolean(sent && sent.sent);
+    }
+    res.json({
+      ok: true,
+      username: recovery.username,
+      email: recovery.email,
+      expiresAt: recovery.expiresAt,
+      emailed,
+      recoveryUrl: recoveryPath,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Admin: list automatic / assist snapshots for a driver. */
+api.get("/admin/users/:username/history", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const target = auth.getUser(req.params.username);
+  if (!target) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const snapshots = recordsHistory.listSnapshots(target.username, {
+    limit: Number(req.query.limit) || 30,
+  });
+  res.json({ username: target.username, snapshots });
+});
+
+/** Admin: restore a driver's full records file from a snapshot. */
+api.post("/admin/users/:username/history/:snapshotId/restore", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const snap = recordsHistory.loadSnapshotRecords(loaded.user.username, req.params.snapshotId);
+  if (!snap) {
+    res.status(404).json({ error: "Snapshot not found." });
+    return;
+  }
+  // Keep a safety snapshot of the live file before overwriting.
+  try {
+    recordsHistory.snapshotRecords(loaded.user.username, loaded.records, {
+      reason: "pre-history-restore",
+      actor: sessionUsername(req),
+    });
+  } catch (err) {
+    console.warn("pre-restore snapshot failed:", err.message);
+  }
+
+  const restored = snap.records;
+  // Replace in-place so the cache reference stays valid for this process.
+  for (const key of Object.keys(loaded.records)) {
+    delete loaded.records[key];
+  }
+  Object.assign(loaded.records, restored);
+  storage.saveRecords(loaded.records, loaded.file);
+  try {
+    recordsHistory.snapshotRecords(loaded.user.username, loaded.records, {
+      reason: "admin-history-restore",
+      actor: sessionUsername(req),
+    });
+  } catch (err) {
+    console.warn("post-restore snapshot failed:", err.message);
+  }
+  res.json({
+    ok: true,
+    username: loaded.user.username,
+    restoredFrom: snap.meta,
+    counts: recordsHistory.summariseCounts(loaded.records),
+  });
 });
 
 api.get("/admin/users/:username/receipts/:id/file", (req, res) => {

@@ -547,6 +547,18 @@
     return data;
   }
 
+  async function apiPut(path, body) {
+    const res = await fetch(`${API}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify(body || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -881,7 +893,7 @@
 
     if (note) {
       note.textContent = others.length
-        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · open a row to review (read-only), or delete a profile you no longer need.`
+        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · open a row to assist (login recovery, overrides, history restore).`
         : "No other driver profiles yet. Create one above when someone requests access.";
     }
 
@@ -975,6 +987,139 @@
     );
   }
 
+  function fmtDateTime(d) {
+    if (!d) return "—";
+    try {
+      return new Date(d).toLocaleString("en-AU");
+    } catch {
+      return String(d);
+    }
+  }
+
+  async function adminAssistPost(username, action, body) {
+    try {
+      return await apiPost(
+        `/admin/users/${encodeURIComponent(username)}/${action}`,
+        body || {}
+      );
+    } catch (err) {
+      if (window.toast) window.toast(err.message || "Admin assist failed");
+      return null;
+    }
+  }
+
+  function wireAdminAssistForms(detail, username, data) {
+    const profile = data.profile || {};
+
+    byId("admin-save-email")?.addEventListener("click", async () => {
+      const email = byId("admin-assist-email")?.value || "";
+      const result = await adminAssistPost(username, "email", { email });
+      if (!result) return;
+      if (window.toast) window.toast(`Email updated for ${username}`);
+      await openAdminUser(username);
+    });
+
+    byId("admin-reset-password")?.addEventListener("click", async () => {
+      const password = byId("admin-assist-password")?.value || "";
+      if (!password) {
+        if (window.toast) window.toast("Enter a temporary password first");
+        return;
+      }
+      const ok = window.confirm(
+        `Reset password for ${username}?\n\nThey will be signed out everywhere and must use the new password.`
+      );
+      if (!ok) return;
+      const result = await adminAssistPost(username, "password", { password });
+      if (!result) return;
+      if (byId("admin-assist-password")) byId("admin-assist-password").value = "";
+      if (window.toast) window.toast(`Password reset for ${username}`);
+      await openAdminUser(username);
+    });
+
+    byId("admin-clear-failed")?.addEventListener("click", async () => {
+      const result = await adminAssistPost(username, "clear-failed-logins", {});
+      if (!result) return;
+      if (window.toast) window.toast(`Cleared failed logins for ${username}`);
+      await openAdminUser(username);
+    });
+
+    byId("admin-recover-link")?.addEventListener("click", async () => {
+      const result = await adminAssistPost(username, "recover-link", {});
+      if (!result) return;
+      const box = byId("admin-recover-result");
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `
+          <p><strong>Username:</strong> ${esc(result.username)}</p>
+          <p><strong>Email:</strong> ${esc(result.email || "—")} ${
+            result.emailed ? "(recovery email sent)" : "(link below — SMTP not configured)"
+          }</p>
+          <p class="admin-recover-url"><a href="${esc(result.recoveryUrl)}" target="_blank" rel="noopener">${esc(
+            result.recoveryUrl
+          )}</a></p>
+          <button type="button" class="btn secondary small" id="admin-copy-recover">Copy link</button>
+        `;
+        byId("admin-copy-recover")?.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(result.recoveryUrl);
+            if (window.toast) window.toast("Recovery link copied");
+          } catch {
+            if (window.toast) window.toast("Copy failed — select the link manually");
+          }
+        });
+      }
+      if (window.toast) {
+        window.toast(result.emailed ? "Recovery email sent" : "Recovery link ready to copy");
+      }
+    });
+
+    byId("admin-save-profile")?.addEventListener("click", async () => {
+      const body = {
+        name: byId("admin-profile-name")?.value || "",
+        employer: byId("admin-profile-employer")?.value || "",
+        driverType: byId("admin-profile-driver-type")?.value || profile.driverType,
+        annualSalary: byId("admin-profile-salary")?.value || "",
+        licenceClass: byId("admin-profile-licence")?.value || "",
+        financialYear: byId("admin-profile-fy")?.value || profile.financialYear,
+        tfnSupplied: Boolean(byId("admin-profile-tfn")?.checked),
+      };
+      try {
+        await apiPut(`/admin/users/${encodeURIComponent(username)}/profile`, body);
+        if (window.toast) window.toast(`Profile updated for ${username}`);
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Profile update failed");
+      }
+    });
+
+    detail.querySelectorAll("[data-history-restore]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-history-restore");
+        const when = btn.getAttribute("data-history-when") || id;
+        const ok = window.confirm(
+          `Restore ${username}'s full records to the snapshot from ${when}?\n\nA safety snapshot of the current data is kept first.`
+        );
+        if (!ok) return;
+        try {
+          const result = await apiPost(
+            `/admin/users/${encodeURIComponent(username)}/history/${encodeURIComponent(id)}/restore`,
+            {}
+          );
+          if (window.toast) {
+            window.toast(
+              `Restored ${username} · ${result.counts?.expenses || 0} expenses · ${
+                result.counts?.income || 0
+              } income`
+            );
+          }
+          await openAdminUser(username);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "History restore failed");
+        }
+      });
+    });
+  }
+
   function renderAdminDetail(data) {
     const detail = byId("admin-user-detail");
     if (!detail) return;
@@ -985,6 +1130,7 @@
     }
     const s = data.summary || {};
     const profile = data.profile || {};
+    const account = data.account || data.user || {};
     const activeExpenses = (data.expenses || []).filter((e) => !e.deletedAt);
     const activeIncome = (data.income || []).filter((i) => !i.deletedAt);
     const expenses = activeExpenses.slice(0, 60);
@@ -992,6 +1138,7 @@
     const deletedExpenses = (data.deletedExpenses || []).slice(0, 40);
     const deletedIncome = (data.deletedIncome || []).slice(0, 40);
     const receipts = data.receipts || [];
+    const history = data.history || [];
     const username = data.user.username;
 
     const expenseRows = expenses.map((e) => adminLedgerRow(e, "expense")).join("");
@@ -1007,6 +1154,27 @@
       })
       .join("");
 
+    const historyRows = history
+      .map((h) => {
+        const counts = h.counts || {};
+        return `<tr>
+          <td>${esc(fmtDateTime(h.savedAt))}</td>
+          <td>${esc(h.reason || "auto")}</td>
+          <td>${esc(h.actor || "—")}</td>
+          <td>${counts.expenses || 0} exp · ${counts.income || 0} inc · ${counts.receipts || 0} rx</td>
+          <td><button type="button" class="btn secondary small" data-history-restore="${esc(
+            h.id
+          )}" data-history-when="${esc(fmtDateTime(h.savedAt))}">Restore</button></td>
+        </tr>`;
+      })
+      .join("");
+
+    const lockBadge = account.needsRecovery
+      ? `<span class="tag tag-deleted">Login locked (${account.failedLoginCount || 0} fails)</span>`
+      : account.failedLoginCount
+        ? `<span class="muted">${account.failedLoginCount} failed login(s)</span>`
+        : `<span class="muted">Login OK</span>`;
+
     const canDelete = data.user && !data.user.isAdmin;
     detail.classList.remove("hidden");
     detail.innerHTML = `
@@ -1016,18 +1184,90 @@
         <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
-      <p class="muted">Account email: <strong>${esc((data.user && data.user.email) || "not set")}</strong></p>
-      <p class="muted admin-override-hint">Primary mod overrides: unlock reconciled rows, restore soft-deleted ledger entries, or force-remove mistakes.</p>
+      <p class="muted">Username (tell the driver if forgotten): <strong>${esc(username)}</strong> · ${lockBadge}</p>
+      <p class="muted admin-override-hint">Primary mod assist: reset login, edit profile/ledger mistakes, unlock/reconcile rows, and restore earlier full-page snapshots.</p>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Login &amp; account recovery</h4>
+        <div class="form-grid admin-assist-form">
+          <label>Account email
+            <input type="email" id="admin-assist-email" value="${esc(account.email || "")}" placeholder="driver@example.com" autocomplete="off" />
+          </label>
+          <div class="form-actions">
+            <button type="button" class="btn secondary" id="admin-save-email">Save email</button>
+            <button type="button" class="btn secondary" id="admin-clear-failed">Clear failed logins</button>
+            <button type="button" class="btn" id="admin-recover-link">Create recovery link</button>
+          </div>
+          <label class="span-2">Temporary password
+            <input type="text" id="admin-assist-password" autocomplete="new-password" placeholder="Strong temp password (8+ chars)" />
+          </label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-reset-password">Reset password</button>
+          </div>
+        </div>
+        <div id="admin-recover-result" class="admin-recover-result hidden"></div>
+      </div>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Override driver profile</h4>
+        <div class="form-grid admin-assist-form">
+          <label>Name<input type="text" id="admin-profile-name" value="${esc(profile.name || "")}" /></label>
+          <label>Employer<input type="text" id="admin-profile-employer" value="${esc(profile.employer || "")}" /></label>
+          <label>Driver type
+            <select id="admin-profile-driver-type">
+              <option value="local" ${profile.driverType === "local" ? "selected" : ""}>Local driver</option>
+              <option value="short_haul" ${profile.driverType === "short_haul" ? "selected" : ""}>Short-haul driver</option>
+              <option value="long_haul" ${profile.driverType === "long_haul" || !profile.driverType ? "selected" : ""}>Long-haul driver</option>
+              <option value="owner_driver" ${profile.driverType === "owner_driver" ? "selected" : ""}>Owner-driver / contractor</option>
+            </select>
+          </label>
+          <label>Annual salary ($)<input type="number" id="admin-profile-salary" min="0" step="0.01" value="${esc(
+            profile.annualSalary ?? ""
+          )}" /></label>
+          <label>Licence class
+            <select id="admin-profile-licence">
+              <option value="lr_mr" ${profile.licenceClass === "lr_mr" ? "selected" : ""}>LR/MR</option>
+              <option value="hr" ${profile.licenceClass === "hr" ? "selected" : ""}>HR</option>
+              <option value="hc" ${profile.licenceClass === "hc" || !profile.licenceClass ? "selected" : ""}>HC</option>
+              <option value="mc" ${profile.licenceClass === "mc" ? "selected" : ""}>MC</option>
+            </select>
+          </label>
+          <label>Financial year<input type="text" id="admin-profile-fy" value="${esc(
+            profile.financialYear || ""
+          )}" placeholder="2025-26" /></label>
+          <label class="checkbox span-2"><input type="checkbox" id="admin-profile-tfn" ${
+            profile.tfnSupplied ? "checked" : ""
+          } /> TFN supplied to employer</label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-save-profile">Save profile override</button>
+          </div>
+        </div>
+      </div>
+
       <div class="admin-stat-row">
         <div class="admin-stat"><div class="label">Gross Income</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
         <div class="admin-stat"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses && s.expenses.deductibleTotal)}</div></div>
         <div class="admin-stat"><div class="label">Net Taxable Income</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.taxableIncome)}</div></div>
         <div class="admin-stat"><div class="label">Est. tax</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.totalTax)}</div></div>
       </div>
+
+      <div class="admin-section">
+        <div class="admin-section-head">
+          <h4>Data history / restore points (${history.length})</h4>
+        </div>
+        <p class="muted small">Automatic snapshots are kept when data changes (last ${history.length || 0} shown). Restoring replaces the driver’s current expenses, income, receipts metadata and profile with that earlier version.</p>
+        <div class="admin-table-wrap">${
+          historyRows
+            ? `<table class="admin-table"><thead><tr><th>When</th><th>Reason</th><th>By</th><th>Counts</th><th></th></tr></thead><tbody>${historyRows}</tbody></table>`
+            : `<p class="admin-empty">No snapshots yet — they appear after this driver (or you) saves changes.</p>`
+        }</div>
+      </div>
+
       <div class="admin-section" data-admin-ledger="income">
         <div class="admin-section-head">
           <h4>Income (${income.length}${activeIncome.length > income.length ? "+" : ""})</h4>
           <div class="admin-ledger-actions">
+            <button type="button" class="btn secondary small" data-admin-action="reconcile" data-admin-kind="income">Reconcile selected</button>
             <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="income">Unlock selected</button>
             <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="income">Force remove</button>
           </div>
@@ -1042,6 +1282,7 @@
         <div class="admin-section-head">
           <h4>Expenses (${expenses.length}${activeExpenses.length > expenses.length ? "+" : ""})</h4>
           <div class="admin-ledger-actions">
+            <button type="button" class="btn secondary small" data-admin-action="reconcile" data-admin-kind="expense">Reconcile selected</button>
             <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="expense">Unlock selected</button>
             <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="expense">Force remove</button>
           </div>
@@ -1085,6 +1326,8 @@
       void deleteAdminUser(username);
     });
 
+    wireAdminAssistForms(detail, username, data);
+
     detail.querySelectorAll("[data-admin-action]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const action = btn.getAttribute("data-admin-action");
@@ -1101,6 +1344,8 @@
         if (window.toast) {
           if (action === "unreconcile") {
             window.toast(`Unlocked ${result.updated || 0} ${kind} entr${(result.updated || 0) === 1 ? "y" : "ies"}`);
+          } else if (action === "reconcile") {
+            window.toast(`Reconciled ${result.updated || 0} ${kind} entr${(result.updated || 0) === 1 ? "y" : "ies"}`);
           } else if (action === "restore") {
             window.toast(`Restored ${result.restored || 0} ${kind} entr${(result.restored || 0) === 1 ? "y" : "ies"}`);
           } else if (action === "soft-delete") {
@@ -4550,7 +4795,7 @@
       body: [
         "Profile is where you create or sign into a driver account, set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets (default category and similar) so new expenses start closer to how you work. After login or logout the app reloads so every tab shows your data only.",
-        "Primary mod accounts also see the admin panel to create or review driver profiles. Guests can browse read-only; uploads and ledger changes need a signed-in profile.",
+        "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in profile.",
       ],
     },
   };
