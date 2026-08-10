@@ -35,6 +35,11 @@ const {
   getLicenceClassForSalary,
   normalizeLicenceClassId,
 } = require("./lib/licence-class");
+const { searchTransportEmployers } = require("./lib/transport-employers");
+const {
+  listDriverRoleDefaults,
+  getDriverRoleDefaults,
+} = require("./lib/driver-role-defaults");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -764,8 +769,29 @@ api.get("/standards", (_req, res) => {
     incomeTypes: listMenuIncomeTypes(),
     driverTypes: DRIVER_TYPES,
     licenceClasses: listLicenceClasses(),
+    driverRoleDefaults: listDriverRoleDefaults(),
     financialYear: getCurrentFinancialYear(),
   });
+});
+
+// Predictive employer names for the Profile "Employer" field (open to guests).
+api.get("/employers", (req, res) => {
+  const q = String(req.query.q || req.query.query || "");
+  const limit = Number(req.query.limit) || 12;
+  res.json({
+    query: q,
+    employers: searchTransportEmployers(q, { limit }),
+  });
+});
+
+api.get("/driver-role-defaults", (req, res) => {
+  const type = String(req.query.driverType || req.query.type || "");
+  if (type) {
+    const one = getDriverRoleDefaults(type);
+    if (!one) return res.status(404).json({ error: "Unknown driver type" });
+    return res.json({ default: one });
+  }
+  res.json({ defaults: listDriverRoleDefaults() });
 });
 
 api.get("/records", (req, res) => {
