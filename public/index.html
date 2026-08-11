@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -20,7 +20,7 @@
       <div class="title-screen-road" aria-hidden="true"></div>
       <img class="title-screen-truck" src="./truck.svg" alt="" aria-hidden="true" />
       <div class="title-screen-content">
-        <p id="title-brand" class="title-screen-brand">Driver Hub</p>
+        <p id="title-brand" class="title-screen-brand">Driver<span class="brand-hub">Hub</span></p>
         <div id="title-auth-panel">
           <h1 class="title-screen-headline">
             One login for every driver app.
@@ -80,12 +80,12 @@
           </p>
           <div class="title-hub-apps">
             <button type="button" class="title-hub-app" id="hub-open-financehub" data-hub-app="financehub">
-              <span class="title-hub-app-name">Finance Hub</span>
+              <span class="title-hub-app-name">Finance<span class="brand-hub">Hub</span></span>
               <span class="title-hub-app-desc">Expenses, remittances, receipt scans and EOFY estimates for Australian truck drivers.</span>
               <span class="title-hub-app-cta">Open Finance Hub</span>
             </button>
             <div class="title-hub-app title-hub-app-wip" id="hub-diaryhub-wip" aria-disabled="true">
-              <span class="title-hub-app-name">Diary Hub</span>
+              <span class="title-hub-app-name">Diary<span class="brand-hub">Hub</span></span>
               <span class="title-hub-app-desc">Work diary for Australian drivers — mandatory logbook-style record keeping. Work in progress and not available with the Finance Hub release; it will use this same Driver Hub login when we ship it later.</span>
               <span class="title-hub-app-badge">Work in progress</span>
             </div>
@@ -103,7 +103,7 @@
       <aside class="sidebar">
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
-          <span>Finance Hub</span>
+          <span>Finance<span class="brand-hub">Hub</span></span>
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn" data-view="profile">Profile</button>

@@ -23,7 +23,8 @@
         --brass: #c4a574;
         --soft-amber: #e0b35a;
         --copper: #c47a4a;
-        --sky: #7eb6d9;
+        /* Bolder sky so Hub doesn’t sink into the navy panel */
+        --sky: #3eb0ff;
         --cream: #f0e6d8;
         --pale-gold: #dcc48a;
         --font-ui: "Figtree", system-ui, sans-serif;
@@ -77,6 +78,10 @@
         background: rgba(22, 34, 58, 0.72);
         padding: 18px 18px 16px;
         box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+      }
+      .card.chosen {
+        border-color: var(--sky);
+        box-shadow: 0 0 0 1px rgba(62, 176, 255, 0.35), 0 12px 32px rgba(0, 0, 0, 0.25);
       }
       .card-head {
         display: flex;
@@ -499,10 +504,10 @@
           <p class="meta">Same colour-split idea as #10, but Oswald + muted amber = less “club poster”.</p>
         </article>
 
-        <article class="card refined opt-saira-sky">
+        <article class="card refined opt-saira-sky chosen">
           <div class="card-head">
-            <strong>13. Saira + sky Hub</strong>
-            <span>Road / daylight accent</span>
+            <strong>13. Saira + sky Hub ★ chosen</strong>
+            <span>Road / daylight accent (bolder blue)</span>
           </div>
           <div class="names">
             <p class="brand brand-lg">Driver<span class="hub-sky">Hub</span></p>
@@ -511,7 +516,7 @@
               <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-sky">Hub</span></p><p>App card title</p></div>
             </div>
           </div>
-          <p class="meta">Keeps the split, swaps gold for a clean sky blue — more AU road / sky than nightlife.</p>
+          <p class="meta">Chosen look — applied on live title, app cards, sidebar and recover headers. Sky Hub accent bumped to <code>#3eb0ff</code> so it reads clearly on navy.</p>
         </article>
 
         <article class="card refined opt-teko-copper">
