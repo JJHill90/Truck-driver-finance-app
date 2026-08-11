@@ -581,7 +581,13 @@
 
   function getSelectedHubApp() {
     try {
-      return localStorage.getItem(HUB_APP_KEY) || "";
+      let app = localStorage.getItem(HUB_APP_KEY) || "";
+      // Migrate pre-rename Finance Hub selection
+      if (app === "financehub") {
+        app = "taxationhub";
+        localStorage.setItem(HUB_APP_KEY, app);
+      }
+      return app;
     } catch {
       return "";
     }
@@ -616,7 +622,7 @@
     setSelectedHubApp("");
   }
 
-  /** Show app picker after Driver Hub login (Finance Hub still gated). */
+  /** Show app picker after Driver Hub login (Taxation Hub still gated). */
   function showDriverHubPicker(username) {
     lockApp();
     byId("title-auth-panel")?.classList.add("hidden");
@@ -628,8 +634,8 @@
     if (hubMsg) hubMsg.textContent = "";
   }
 
-  function openFinanceHub(user) {
-    setSelectedHubApp("financehub");
+  function openTaxationHub(user) {
+    setSelectedHubApp("taxationhub");
     unlockApp();
     showAuthState(user || null);
   }
@@ -783,7 +789,7 @@
       }
     }
 
-    byId("hub-open-financehub")?.addEventListener("click", async () => {
+    byId("hub-open-taxationhub")?.addEventListener("click", async () => {
       try {
         const me = await apiGet("/auth/me");
         if (!(me.user && me.user.username)) {
@@ -791,7 +797,7 @@
           setTitleMessage("Sign in to Driver Hub first.", true);
           return;
         }
-        openFinanceHub(me.user);
+        openTaxationHub(me.user);
         if (me.user.isAdmin) await loadAdminUsers();
         if (!reviewAlreadyShown()) {
           const alertData = await apiGet("/alerts");
@@ -801,7 +807,7 @@
       } catch (err) {
         const hubMsg = byId("title-hub-message");
         if (hubMsg) {
-          hubMsg.textContent = err.message || "Could not open Finance Hub.";
+          hubMsg.textContent = err.message || "Could not open Taxation Hub.";
           hubMsg.classList.add("is-error");
         }
       }
@@ -1733,12 +1739,12 @@
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) {
         showAuthState(me.user);
-        // Driver Hub: signed-in users pick an app unless Finance Hub is already open.
-        if (getSelectedHubApp() === "financehub") {
-          openFinanceHub(me.user);
+        // Driver Hub: signed-in users pick an app unless Taxation Hub is already open.
+        if (getSelectedHubApp() === "taxationhub") {
+          openTaxationHub(me.user);
           if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
-          // opening Finance Hub — so it does not keep reappearing as uploads change.
+          // opening Taxation Hub — so it does not keep reappearing as uploads change.
           if (!reviewAlreadyShown()) {
             const alertData = await apiGet("/alerts");
             renderAlerts(alertData.alerts, alertData.user);
@@ -4898,7 +4904,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Finance Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
@@ -5001,7 +5007,7 @@
         Username: username || "(guest / not signed in)",
         Message: message,
         _replyto: email,
-        _subject: `Driver Hub / Finance Hub support — from ${name}`,
+        _subject: `Driver Hub / Taxation Hub support — from ${name}`,
         _template: "table",
         _autoresponse:
           confirmationText ||

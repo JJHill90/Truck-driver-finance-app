@@ -2,7 +2,7 @@
   "name": "haulage-finance-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Finance tracker for Australian truck drivers — expenses, income/remittances, receipt OCR, EOFY report and forecast.",
+  "description": "Tax services tracker for Australian truck drivers — expenses, income/remittances, receipt OCR, EOFY report and forecast.",
   "engines": {
     "node": ">=20"
   },
