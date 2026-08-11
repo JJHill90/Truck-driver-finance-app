@@ -1323,7 +1323,7 @@
             <select id="admin-profile-driver-type">
               <option value="local" ${profile.driverType === "local" ? "selected" : ""}>Local driver</option>
               <option value="short_haul" ${profile.driverType === "short_haul" ? "selected" : ""}>Short-haul driver</option>
-              <option value="long_haul" ${profile.driverType === "long_haul" || !profile.driverType ? "selected" : ""}>Long-haul driver</option>
+              <option value="long_haul" ${profile.driverType === "long_haul" || !profile.driverType ? "selected" : ""}>Linehaul driver</option>
               <option value="owner_driver" ${profile.driverType === "owner_driver" ? "selected" : ""}>Owner-driver / contractor</option>
             </select>
           </label>

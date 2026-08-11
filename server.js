@@ -3,7 +3,6 @@ const path = require("path");
 const express = require("express");
 
 const {
-  DRIVER_TYPES,
   getCurrentFinancialYear,
   getCategoryMeta,
 } = require("./lib/ato-standards");
@@ -39,6 +38,7 @@ const { searchTransportEmployers } = require("./lib/transport-employers");
 const {
   listDriverRoleDefaults,
   getDriverRoleDefaults,
+  presentDriverTypes,
 } = require("./lib/driver-role-defaults");
 const recordsHistory = require("./lib/records-history");
 const adminAssist = require("./lib/admin-assist");
@@ -1018,7 +1018,7 @@ api.get("/standards", (_req, res) => {
     specialClaimCategories: listSpecialClaimCategories(),
     categoryGroups: listMenuCategoryGroups(),
     incomeTypes: listMenuIncomeTypes(),
-    driverTypes: DRIVER_TYPES,
+    driverTypes: presentDriverTypes(),
     licenceClasses: listLicenceClasses(),
     driverRoleDefaults: listDriverRoleDefaults(),
     financialYear: getCurrentFinancialYear(),
