@@ -2,10 +2,11 @@
 
 ## Project overview
 
-**Haulage Finance** (repo `Truck-driver-finance-app`) is a finance tool for
-Australian truck drivers: work expenses, income/remittances, receipt/payslip
-OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
-`dev`, `lint`, `test`) are in `README.md`.
+**DriverHub** (repo `Truck-driver-finance-app`) is the login hub for driver apps.
+The finance product inside it is **FinanceHub** (formerly branded Haulage
+Finance): work expenses, income/remittances, receipt/payslip OCR, a live EOFY
+report, tax estimate and forecast. Standard commands (`start`, `dev`, `lint`,
+`test`) are in `README.md`.
 
 - Frontend: framework-free SPA in `public/app.js` (provided verbatim). The
   backend + `public/index.html` exist to satisfy the exact DOM ids and API
@@ -25,11 +26,13 @@ OCR, a live EOFY report, tax estimate and forecast. Standard commands (`start`,
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session
   cookies use `SameSite=None; Secure` on those cross-origin requests. Do not
   use `*` with cookies.
-- **Title screen gate.** `#title-screen` covers the app until `/auth/me` has a
-  user; `body.auth-locked` hides `.app-shell`. Login/register on the title form
-  (same `/auth/*` APIs) then reload into the main menu. Logout returns to the
-  title screen. Branding is **Haulage Finance** (Figtree + Barlow Condensed,
-  same navy/amber palette).
+- **DriverHub gate.** `#title-screen` is the DriverHub login. After `/auth/me`
+  has a user, show the app picker (`#title-hub-picker`) unless
+  `localStorage.driverhub-selected-app === "financehub"`. Choosing FinanceHub
+  unlocks `.app-shell` (sidebar brand **FinanceHub**). WIP apps stay on the
+  picker as “Coming soon”. `body.auth-locked` hides the shell. Logout clears
+  the selected app and returns to DriverHub login. Branding uses Figtree +
+  Barlow Condensed (navy/amber palette).
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is

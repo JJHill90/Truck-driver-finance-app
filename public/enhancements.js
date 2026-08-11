@@ -565,6 +565,25 @@
     el.classList.toggle("is-error", Boolean(isError));
   }
 
+  const HUB_APP_KEY = "driverhub-selected-app";
+
+  function getSelectedHubApp() {
+    try {
+      return localStorage.getItem(HUB_APP_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function setSelectedHubApp(appId) {
+    try {
+      if (appId) localStorage.setItem(HUB_APP_KEY, appId);
+      else localStorage.removeItem(HUB_APP_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
   function unlockApp() {
     document.body.classList.remove("auth-locked");
     const screen = byId("title-screen");
@@ -575,6 +594,40 @@
     document.body.classList.add("auth-locked");
     const screen = byId("title-screen");
     if (screen) screen.setAttribute("aria-hidden", "false");
+  }
+
+  /** Show DriverHub login forms (signed out). */
+  function showDriverHubLogin() {
+    lockApp();
+    byId("title-auth-panel")?.classList.remove("hidden");
+    byId("title-hub-picker")?.classList.add("hidden");
+    setSelectedHubApp("");
+  }
+
+  /** Show app picker after DriverHub login (FinanceHub still gated). */
+  function showDriverHubPicker(username) {
+    lockApp();
+    byId("title-auth-panel")?.classList.add("hidden");
+    const picker = byId("title-hub-picker");
+    if (picker) picker.classList.remove("hidden");
+    const nameEl = byId("title-hub-username");
+    if (nameEl) nameEl.textContent = username || "—";
+    const hubMsg = byId("title-hub-message");
+    if (hubMsg) hubMsg.textContent = "";
+  }
+
+  function openFinanceHub(user) {
+    setSelectedHubApp("financehub");
+    unlockApp();
+    showAuthState(user || null);
+  }
+
+  function returnToDriverHub(user) {
+    setSelectedHubApp("");
+    showDriverHubPicker(user && user.username ? user.username : byId("title-hub-username")?.textContent);
+    if (typeof window.toast === "function") {
+      window.toast("Back at DriverHub — pick an app to open");
+    }
   }
 
   function readTitleCreds() {
@@ -668,10 +721,11 @@
     let registerMode = false;
 
     async function doLogin() {
-      setTitleMessage("Logging in…");
+      setTitleMessage("Logging in to DriverHub…");
       try {
         await apiPost("/auth/login", readTitleCreds());
         resetReviewShown();
+        setSelectedHubApp(""); // land on app picker after reload
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
@@ -695,13 +749,13 @@
         registerMode = true;
         showTitleRegisterMode(true);
         setTitleMessage(
-          "Choose a strong password and add your email so you can recover this profile later.",
+          "Choose a strong password and add your email so you can recover this DriverHub profile later.",
           false
         );
         byId("title-auth-email")?.focus();
         return;
       }
-      setTitleMessage("Creating profile…");
+      setTitleMessage("Creating DriverHub profile…");
       try {
         const creds = readTitleCreds();
         if (!creds.email) {
@@ -710,11 +764,57 @@
         }
         await apiPost("/auth/register", creds);
         resetReviewShown();
+        setSelectedHubApp("");
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
       }
     }
+
+    byId("hub-open-financehub")?.addEventListener("click", async () => {
+      try {
+        const me = await apiGet("/auth/me");
+        if (!(me.user && me.user.username)) {
+          showDriverHubLogin();
+          setTitleMessage("Sign in to DriverHub first.", true);
+          return;
+        }
+        openFinanceHub(me.user);
+        if (me.user.isAdmin) await loadAdminUsers();
+        if (!reviewAlreadyShown()) {
+          const alertData = await apiGet("/alerts");
+          renderAlerts(alertData.alerts, alertData.user);
+          markReviewShown();
+        }
+      } catch (err) {
+        const hubMsg = byId("title-hub-message");
+        if (hubMsg) {
+          hubMsg.textContent = err.message || "Could not open FinanceHub.";
+          hubMsg.classList.add("is-error");
+        }
+      }
+    });
+
+    byId("title-hub-logout")?.addEventListener("click", async () => {
+      try {
+        await apiPost("/auth/logout", {});
+      } catch {
+        /* ignore */
+      }
+      resetReviewShown();
+      setSelectedHubApp("");
+      window.location.reload();
+    });
+
+    byId("nav-driverhub")?.addEventListener("click", async () => {
+      try {
+        const me = await apiGet("/auth/me");
+        if (me.user && me.user.username) returnToDriverHub(me.user);
+        else showDriverHubLogin();
+      } catch {
+        showDriverHubLogin();
+      }
+    });
 
     byId("title-auth-password")?.addEventListener("input", () => {
       if (registerMode) {
@@ -1254,6 +1354,7 @@
           /* ignore */
         }
         resetReviewShown();
+        setSelectedHubApp("");
         window.location.reload();
       });
     }
@@ -1386,24 +1487,28 @@
     try {
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) {
-        unlockApp();
         showAuthState(me.user);
-        if (me.user.isAdmin) await loadAdminUsers();
-        // Only fetch/show the review banner the first time this session — once on
-        // login — so it does not keep reappearing as uploads are added/updated.
-        if (!reviewAlreadyShown()) {
-          const alertData = await apiGet("/alerts");
-          renderAlerts(alertData.alerts, alertData.user);
-          markReviewShown();
+        // DriverHub: signed-in users pick an app unless FinanceHub is already open.
+        if (getSelectedHubApp() === "financehub") {
+          openFinanceHub(me.user);
+          if (me.user.isAdmin) await loadAdminUsers();
+          // Only fetch/show the review banner the first time this session — once on
+          // opening FinanceHub — so it does not keep reappearing as uploads change.
+          if (!reviewAlreadyShown()) {
+            const alertData = await apiGet("/alerts");
+            renderAlerts(alertData.alerts, alertData.user);
+            markReviewShown();
+          }
+        } else {
+          showDriverHubPicker(me.user.username);
         }
       } else {
-        lockApp();
+        showDriverHubLogin();
         showAuthState(null);
-        // Focus the title login field for keyboard users.
         byId("title-auth-username")?.focus();
       }
     } catch {
-      lockApp();
+      showDriverHubLogin();
     }
   }
 
@@ -4548,9 +4653,9 @@
     profile: {
       title: "Profile",
       body: [
-        "Profile is where you create or sign into a driver account, set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets (default category and similar) so new expenses start closer to how you work. After login or logout the app reloads so every tab shows your data only.",
-        "Primary mod accounts also see the admin panel to create or review driver profiles. Guests can browse read-only; uploads and ledger changes need a signed-in profile.",
+        "You sign in once on DriverHub, then open FinanceHub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Use DriverHub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Primary mod accounts also see the admin panel to create or review driver profiles. Guests can browse read-only; uploads and ledger changes need a signed-in DriverHub profile.",
       ],
     },
   };
@@ -4651,11 +4756,11 @@
         Username: username || "(guest / not signed in)",
         Message: message,
         _replyto: email,
-        _subject: `Haulage Finance support — from ${name}`,
+        _subject: `DriverHub / FinanceHub support — from ${name}`,
         _template: "table",
         _autoresponse:
           confirmationText ||
-          `Hi ${name},\n\nThanks for contacting Haulage Finance support. Your request has been sent to the developer (${inbox}). We’ll reply to this email as soon as we can.\n\n— Haulage Finance`,
+          `Hi ${name},\n\nThanks for contacting DriverHub support. Your request has been sent to the developer (${inbox}). We’ll reply to this email as soon as we can.\n\n— DriverHub`,
       }),
     });
     const data = await res.json().catch(() => ({}));
