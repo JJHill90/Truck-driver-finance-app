@@ -5,6 +5,7 @@ const {
 const {
   getDriverRoleDefaults,
   listDriverRoleDefaults,
+  presentDriverTypes,
 } = require("./lib/driver-role-defaults");
 
 describe("searchTransportEmployers", () => {
@@ -41,10 +42,11 @@ describe("driver role defaults", () => {
     }
   });
 
-  it("sets long-haul to MC band salary", () => {
+  it("sets linehaul (long_haul id) to MC band salary", () => {
     const d = getDriverRoleDefaults("long_haul");
     expect(d.annualSalary).toBe(120000);
     expect(d.licenceClass).toBe("mc");
+    expect(d.label).toBe("Linehaul driver");
   });
 
   it("sets local to HR band salary", () => {
@@ -55,5 +57,11 @@ describe("driver role defaults", () => {
 
   it("returns null for unknown types", () => {
     expect(getDriverRoleDefaults("pilot")).toBeNull();
+  });
+
+  it("presents long_haul as Linehaul driver for the Profile select", () => {
+    const types = presentDriverTypes();
+    expect(types.long_haul.label).toBe("Linehaul driver");
+    expect(types.local.label).toBe("Local driver");
   });
 });

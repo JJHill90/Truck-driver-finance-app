@@ -34,7 +34,7 @@ For income documents the **pay period and payment date** are extracted (e.g.
 weekly cycle window it falls into is derived (e.g. Wed→Tue), and all of it is
 shown in the review panel and saved with the entry so it appears in filing.
 
-For long-haul drivers the breakdown also adds a separate **Overnight/Driver
+For linehaul drivers the breakdown also adds a separate **Overnight/Driver
 Daily Allowance** line — the exact ATO reasonable daily meal amount for employee
 truck drivers (TD 2025/4: $31.15 + $35.55 + $61.30 = **$128.00/day**, sourced
 from `ato-standards.js`) × days in the pay period. It is shown whether or not the
