@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DriverHub — font samples (preview only)</title>
+    <link rel="icon" type="image/svg+xml" href="./truck.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@700;800&family=Bebas+Neue&family=Exo+2:wght@700;800&family=Figtree:wght@400;500;600;700&family=Oswald:wght@600;700&family=Rajdhani:wght@700&family=Russo+One&family=Saira+Condensed:wght@700;800&family=Teko:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0e1626;
+        --panel: #16223a;
+        --border: #2a3a5a;
+        --text: #e6edf7;
+        --text-dim: #93a2bd;
+        --accent: #f59e0b;
+        --accent-strong: #d97706;
+        --font-ui: "Figtree", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        font-family: var(--font-ui);
+        color: var(--text);
+        background:
+          radial-gradient(120% 80% at 70% 10%, rgba(245, 158, 11, 0.18), transparent 55%),
+          linear-gradient(165deg, #08101c 0%, #0e1626 40%, #152036 100%);
+        line-height: 1.45;
+      }
+      .wrap {
+        width: min(980px, 100%);
+        margin: 0 auto;
+        padding: 28px 18px 64px;
+      }
+      .intro {
+        margin-bottom: 28px;
+        max-width: 54ch;
+      }
+      .intro h1 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+      }
+      .intro p {
+        margin: 0 0 10px;
+        color: var(--text-dim);
+      }
+      .intro a { color: var(--accent); }
+      .note {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(22, 34, 58, 0.8);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(22, 34, 58, 0.72);
+        padding: 18px 18px 16px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .card-head strong {
+        font-size: 0.95rem;
+      }
+      .card-head span {
+        color: var(--text-dim);
+        font-size: 0.82rem;
+      }
+      .names {
+        display: grid;
+        gap: 10px;
+      }
+      .brand {
+        margin: 0;
+        line-height: 0.95;
+        letter-spacing: 0.02em;
+        color: var(--text);
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+      }
+      .brand .hub {
+        color: var(--accent);
+      }
+      .brand-sm {
+        font-size: clamp(1.6rem, 4vw, 2.1rem);
+      }
+      .brand-lg {
+        font-size: clamp(2.6rem, 8vw, 4.2rem);
+      }
+      .meta {
+        margin-top: 12px;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+      }
+      /* 1 — current */
+      .opt-current .brand {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      /* 2 — Bebas Neue */
+      .opt-bebas .brand {
+        font-family: "Bebas Neue", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+      }
+      /* 3 — Oswald */
+      .opt-oswald .brand {
+        font-family: "Oswald", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.01em;
+      }
+      /* 4 — Archivo Black */
+      .opt-archivo .brand {
+        font-family: "Archivo Black", sans-serif;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+      /* 5 — Teko */
+      .opt-teko .brand {
+        font-family: "Teko", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      /* 6 — Russo One */
+      .opt-russo .brand {
+        font-family: "Russo One", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+      }
+      /* 7 — Saira Condensed */
+      .opt-saira .brand {
+        font-family: "Saira Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      /* 8 — Exo 2 */
+      .opt-exo .brand {
+        font-family: "Exo 2", sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      /* 9 — Rajdhani */
+      .opt-rajdhani .brand {
+        font-family: "Rajdhani", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      /* 10 — accent Hub split on Bebas */
+      .opt-split .brand {
+        font-family: "Bebas Neue", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.05em;
+      }
+      .picker-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .mini-app {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(10, 18, 32, 0.55);
+      }
+      .mini-app .brand {
+        font-size: 1.45rem;
+        margin-bottom: 4px;
+      }
+      .mini-app p {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 0.78rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="intro">
+        <p class="note">Preview only — not wired into the live title screen yet</p>
+        <h1>Hub brand font samples</h1>
+        <p>
+          Compound names as you’d prefer them: <strong>DriverHub</strong>,
+          <strong>FinanceHub</strong>, <strong>DiaryHub</strong>. Compare against
+          the current Barlow Condensed look, then tell us which option (or mix)
+          to apply before release.
+        </p>
+        <p><a href="./">← Back to Driver Hub</a></p>
+      </div>
+
+      <div class="grid">
+        <article class="card opt-current">
+          <div class="card-head">
+            <strong>1. Current — Barlow Condensed</strong>
+            <span>What ships today on the title screen</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Tight, uppercase, utilitarian. Can feel flat at large size.</p>
+        </article>
+
+        <article class="card opt-bebas">
+          <div class="card-head">
+            <strong>2. Bebas Neue</strong>
+            <span>Poster / highway sign energy</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Very bold display face. Reads as one word; strong at hero size.</p>
+        </article>
+
+        <article class="card opt-oswald">
+          <div class="card-head">
+            <strong>3. Oswald</strong>
+            <span>Industrial condensed</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Similar family to Barlow but sharper and more “fleet / freight”.</p>
+        </article>
+
+        <article class="card opt-archivo">
+          <div class="card-head">
+            <strong>4. Archivo Black</strong>
+            <span>Heavy impact</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Chunky and confident. Best if you want maximum presence.</p>
+        </article>
+
+        <article class="card opt-teko">
+          <div class="card-head">
+            <strong>5. Teko</strong>
+            <span>Sport / dashboard condensed</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Tall condensed letters — modern telematics / dashboard feel.</p>
+        </article>
+
+        <article class="card opt-russo">
+          <div class="card-head">
+            <strong>6. Russo One</strong>
+            <span>Tech-industrial</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Distinctive shapes; less “generic condensed sans”.</p>
+        </article>
+
+        <article class="card opt-saira">
+          <div class="card-head">
+            <strong>7. Saira Condensed</strong>
+            <span>Cleaner condensed upgrade</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Closer to current layout, but a bit more polished and current.</p>
+        </article>
+
+        <article class="card opt-exo">
+          <div class="card-head">
+            <strong>8. Exo 2</strong>
+            <span>Modern geometric (not condensed)</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Wider, more product-like. Reads clearly as one compound word.</p>
+        </article>
+
+        <article class="card opt-rajdhani">
+          <div class="card-head">
+            <strong>9. Rajdhani</strong>
+            <span>Wide tracking, tech title</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Open letterforms with spaced uppercase — more “system brand”.</p>
+        </article>
+
+        <article class="card opt-split">
+          <div class="card-head">
+            <strong>10. Bebas + amber “Hub”</strong>
+            <span>Compound name with colour split</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Keeps DriverHub as one word while making Hub the brand accent.</p>
+        </article>
+      </div>
+    </div>
+  </body>
+</html>
