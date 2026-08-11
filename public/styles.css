@@ -213,6 +213,18 @@ button.title-hub-app:hover {
   gap: 10px;
   margin-bottom: 8px;
 }
+#title-hub-logout,
+button.title-hub-logout {
+  background: #c0392b;
+  border: 1px solid #c0392b;
+  color: #ffffff;
+}
+#title-hub-logout:hover,
+button.title-hub-logout:hover {
+  background: #a93226;
+  border-color: #a93226;
+  color: #ffffff;
+}
 .title-auth-form {
   display: flex;
   flex-direction: column;

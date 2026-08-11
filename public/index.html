@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>DriverHub — FinanceHub</title>
+    <title>Driver Hub — Finance Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,23 +14,23 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="auth-locked">
-    <!-- DriverHub gate: login, then choose FinanceHub or a coming-soon app -->
+    <!-- Driver Hub gate: login, then choose Finance Hub or a coming-soon app -->
     <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky" aria-hidden="true"></div>
       <div class="title-screen-road" aria-hidden="true"></div>
       <img class="title-screen-truck" src="./truck.svg" alt="" aria-hidden="true" />
       <div class="title-screen-content">
-        <p id="title-brand" class="title-screen-brand">DriverHub</p>
+        <p id="title-brand" class="title-screen-brand">Driver Hub</p>
         <div id="title-auth-panel">
           <h1 class="title-screen-headline">
             One login for every driver app.
           </h1>
           <p class="title-screen-sub">
-            Sign in with your DriverHub account, then open FinanceHub or another app from your hub.
+            Sign in with your Driver Hub account, then open Finance Hub or another app from your hub.
           </p>
           <form id="title-auth-form" class="title-auth-form" autocomplete="on">
             <label>
-              DriverHub username
+              Driver Hub username
               <input id="title-auth-username" name="username" autocomplete="username" placeholder="e.g. dave.hill" />
             </label>
             <label id="title-auth-email-wrap" class="hidden">
@@ -52,15 +52,15 @@
               Create a strong password: 12+ characters with upper &amp; lower case, a number and a symbol. Avoid common words.
             </p>
             <div class="title-auth-actions">
-              <button type="submit" class="btn primary" id="title-auth-login">Log in to DriverHub</button>
-              <button type="button" class="btn secondary" id="title-auth-register">Create DriverHub profile</button>
+              <button type="submit" class="btn primary" id="title-auth-login">Log in to Driver Hub</button>
+              <button type="button" class="btn secondary" id="title-auth-register">Create Driver Hub profile</button>
             </div>
             <button type="button" class="btn link title-forgot-btn" id="title-auth-forgot">
               Forgot username / password?
             </button>
           </form>
           <form id="title-recover-form" class="title-auth-form hidden" autocomplete="on">
-            <p class="muted">Enter the email on your DriverHub profile. We’ll email a recovery link when mail is configured; otherwise you can continue on this page to reset your password.</p>
+            <p class="muted">Enter the email on your Driver Hub profile. We’ll email a recovery link when mail is configured; otherwise you can continue on this page to reset your password.</p>
             <label>
               Email
               <input id="title-recover-email" name="recover-email" type="email" autocomplete="email" placeholder="you@example.com" />
@@ -76,22 +76,22 @@
         <div id="title-hub-picker" class="title-hub-picker hidden" aria-label="Choose an app">
           <h1 class="title-screen-headline">Welcome back</h1>
           <p class="title-screen-sub">
-            Signed in as <strong id="title-hub-username">—</strong>. Open FinanceHub now — your DriverHub login will also unlock DiaryHub when that app is ready.
+            Signed in as <strong id="title-hub-username">—</strong>. Open Finance Hub now — your Driver Hub login will also unlock Diary Hub when that app is ready.
           </p>
           <div class="title-hub-apps">
             <button type="button" class="title-hub-app" id="hub-open-financehub" data-hub-app="financehub">
-              <span class="title-hub-app-name">FinanceHub</span>
+              <span class="title-hub-app-name">Finance Hub</span>
               <span class="title-hub-app-desc">Expenses, remittances, receipt scans and EOFY estimates for Australian truck drivers.</span>
-              <span class="title-hub-app-cta">Open FinanceHub</span>
+              <span class="title-hub-app-cta">Open Finance Hub</span>
             </button>
             <div class="title-hub-app title-hub-app-wip" id="hub-diaryhub-wip" aria-disabled="true">
-              <span class="title-hub-app-name">DiaryHub</span>
-              <span class="title-hub-app-desc">Work diary for Australian drivers — mandatory logbook-style record keeping. Work in progress and not available with the FinanceHub release; it will use this same DriverHub login when we ship it later.</span>
+              <span class="title-hub-app-name">Diary Hub</span>
+              <span class="title-hub-app-desc">Work diary for Australian drivers — mandatory logbook-style record keeping. Work in progress and not available with the Finance Hub release; it will use this same Driver Hub login when we ship it later.</span>
               <span class="title-hub-app-badge">Work in progress</span>
             </div>
           </div>
           <div class="title-hub-actions">
-            <button type="button" class="btn secondary" id="title-hub-logout">Log out of DriverHub</button>
+            <button type="button" class="btn title-hub-logout" id="title-hub-logout">Log out of DriverHub</button>
           </div>
           <p id="title-hub-message" class="title-auth-message" role="status"></p>
         </div>
@@ -103,7 +103,7 @@
       <aside class="sidebar">
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
-          <span>FinanceHub</span>
+          <span>Finance Hub</span>
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn" data-view="profile">Profile</button>
@@ -114,8 +114,8 @@
           <button class="nav-btn" data-view="forecast">Forecast</button>
         </nav>
         <div class="sidebar-bottom">
-          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="DriverHub and support">
-            <button type="button" class="nav-btn" id="nav-driverhub">DriverHub apps</button>
+          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub and support">
+            <button type="button" class="nav-btn" id="nav-driverhub">Driver Hub apps</button>
             <button class="nav-btn" data-view="support">Support</button>
           </nav>
           <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">

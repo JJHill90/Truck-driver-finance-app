@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">DriverHub</string>
-    <string name="title_activity_main">DriverHub</string>
+    <string name="app_name">Driver Hub</string>
+    <string name="title_activity_main">Driver Hub</string>
     <string name="package_name">com.haulagefinance.app</string>
     <string name="custom_url_scheme">com.haulagefinance.app</string>
 </resources>

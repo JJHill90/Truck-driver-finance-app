@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>Recover account — DriverHub</title>
+    <title>Recover account — Driver Hub</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="recover-page">
     <main class="recover-card">
-      <p class="recover-brand">DriverHub</p>
+      <p class="recover-brand">Driver Hub</p>
       <h1>Recover your account</h1>
       <p class="muted" id="recover-status">Checking your recovery link…</p>
       <div id="recover-ready" class="hidden">
@@ -33,7 +33,7 @@
         </form>
       </div>
       <p id="recover-message" class="muted" role="status"></p>
-      <p class="muted small"><a href="./">Back to DriverHub</a></p>
+      <p class="muted small"><a href="./">Back to Driver Hub</a></p>
     </main>
     <script>
       (function () {
@@ -104,7 +104,7 @@
             setMsg(data.error || "Could not reset password.", true);
             return;
           }
-          setMsg("Password updated — taking you to DriverHub…");
+          setMsg("Password updated — taking you to Driver Hub…");
           window.location.href = "./";
         });
 

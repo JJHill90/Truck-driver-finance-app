@@ -95,7 +95,7 @@ describe("mail.sendSupportEmail channels", () => {
 
   it("sends developer + confirmation mail via Resend when configured", async () => {
     process.env.RESEND_API_KEY = "re_test_key";
-    process.env.MAIL_FROM = "DriverHub <onboarding@resend.dev>";
+    process.env.MAIL_FROM = "Driver Hub <onboarding@resend.dev>";
 
     const calls = [];
     vi.stubGlobal(
