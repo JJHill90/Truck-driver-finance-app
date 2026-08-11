@@ -144,6 +144,75 @@ body:not(.auth-locked) .title-screen {
   font-size: 1rem;
   max-width: 36ch;
 }
+.title-hub-picker.hidden,
+#title-auth-panel.hidden {
+  display: none !important;
+}
+.title-hub-apps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.title-hub-app {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 18, 32, 0.72);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+button.title-hub-app:hover {
+  border-color: var(--accent);
+  background: rgba(15, 26, 44, 0.9);
+  transform: translateY(-1px);
+}
+.title-hub-app-wip {
+  cursor: default;
+  opacity: 0.88;
+  border-style: dashed;
+}
+.title-hub-app-name {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.title-hub-app-desc {
+  font-size: 0.92rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.title-hub-app-cta {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.title-hub-app-badge {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.title-hub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
 .title-auth-form {
   display: flex;
   flex-direction: column;

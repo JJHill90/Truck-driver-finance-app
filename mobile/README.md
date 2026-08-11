@@ -1,4 +1,4 @@
-# Haulage Finance — mobile shell (Capacitor)
+# DriverHub — mobile shell (Capacitor)
 
 Native Android (and later iOS) wrapper around the **hosted** web app at
 `https://haulage-finance.onrender.com/haulage/`.

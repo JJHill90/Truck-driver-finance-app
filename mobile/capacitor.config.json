@@ -1,6 +1,6 @@
 {
   "appId": "com.haulagefinance.app",
-  "appName": "Haulage Finance",
+  "appName": "DriverHub",
   "webDir": "www",
   "server": {
     "url": "https://haulage-finance.onrender.com/haulage/",

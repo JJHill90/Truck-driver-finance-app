@@ -1,8 +1,11 @@
 # Truck-driver-finance-app
 
-**Haulage Finance** — a finance tool for Australian truck drivers to track work expenses
-and income/remittances, capture receipts, and produce a live EOFY performance
-statement, tax estimate and financial forecast.
+**DriverHub** is the login hub for driver apps. **FinanceHub** (inside DriverHub)
+is the finance tool for Australian truck drivers — track work expenses and
+income/remittances, capture receipts, and produce a live EOFY performance
+statement, tax estimate and financial forecast. **DiaryHub** (work diary /
+mandatory AU logbook) is listed on the hub as work in progress — not available
+at FinanceHub release — and will use the same DriverHub login when shipped.
 
 The frontend is a framework-free single-page app (`public/app.js`) served by a
 small **Node.js + Express** backend that stores data in a local JSON file

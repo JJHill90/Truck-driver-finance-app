@@ -1511,7 +1511,7 @@ app.use((err, _req, res, _next) => {
 if (process.env.NODE_ENV !== "test") {
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Haulage Finance app running at http://localhost:${PORT}/haulage/`);
+    console.log(`DriverHub / FinanceHub running at http://localhost:${PORT}/haulage/`);
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
   });

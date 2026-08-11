@@ -2,7 +2,7 @@
   "name": "haulage-finance-mobile",
   "version": "1.0.0",
   "private": true,
-  "description": "Capacitor shell for Haulage Finance (loads hosted Render app).",
+  "description": "Capacitor shell for DriverHub (loads hosted Render app).",
   "scripts": {
     "sync": "npx cap sync",
     "sync:android": "npx cap sync android",
