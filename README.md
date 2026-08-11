@@ -1,11 +1,11 @@
 # Truck-driver-finance-app
 
-**Driver Hub** is the login hub for driver apps. **Finance Hub** (inside Driver Hub)
-is the finance tool for Australian truck drivers — track work expenses and
+**Driver Hub** is the login hub for driver apps. **Taxation Hub** (inside Driver Hub)
+consolidates tax services for Australian truck drivers — track work expenses and
 income/remittances, capture receipts, and produce a live EOFY performance
-statement, tax estimate and financial forecast. **Diary Hub** (work diary /
+statement, tax estimate and forecast. **Diary Hub** (work diary /
 mandatory AU logbook) is listed on the hub as work in progress — not available
-at Finance Hub release — and will use the same Driver Hub login when shipped.
+at Taxation Hub release — and will use the same Driver Hub login when shipped.
 
 The frontend is a framework-free single-page app (`public/app.js`) served by a
 small **Node.js + Express** backend that stores data in a local JSON file

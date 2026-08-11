@@ -3,10 +3,10 @@
 ## Project overview
 
 **Driver Hub** (repo `Truck-driver-finance-app`) is the login hub for driver apps.
-The finance product inside it is **Finance Hub** (formerly branded Haulage
-Finance): work expenses, income/remittances, receipt/payslip OCR, a live EOFY
-report, tax estimate and forecast. Standard commands (`start`, `dev`, `lint`,
-`test`) are in `README.md`.
+The tax product inside it is **Taxation Hub** (formerly Finance Hub / Haulage
+Finance): consolidates tax services for drivers — work expenses,
+income/remittances, receipt/payslip OCR, a live EOFY report, tax estimate and
+forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
 
 - Frontend: framework-free SPA in `public/app.js` (provided verbatim). The
   backend + `public/index.html` exist to satisfy the exact DOM ids and API
@@ -28,12 +28,13 @@ report, tax estimate and forecast. Standard commands (`start`, `dev`, `lint`,
   use `*` with cookies.
 - **Driver Hub gate.** `#title-screen` is the Driver Hub login. After `/auth/me`
   has a user, show the app picker (`#title-hub-picker`) unless
-  `localStorage.driverhub-selected-app === "financehub"`. Choosing Finance Hub
-  unlocks `.app-shell` (sidebar brand **Finance Hub**). WIP apps stay on the
-  picker lists **Diary Hub** as work in progress (work diary / mandatory AU
-  logbook — not available at Finance Hub release). `body.auth-locked` hides the
-  shell. Logout clears the selected app and returns to Driver Hub login.
-  Branding uses Figtree + Barlow Condensed (navy/amber palette).
+  `localStorage.driverhub-selected-app === "taxationhub"` (legacy `financehub`
+  is migrated). Choosing Taxation Hub unlocks `.app-shell` (sidebar brand
+  **TaxationHub**). WIP apps stay on the picker lists **Diary Hub** as work in
+  progress (work diary / mandatory AU logbook — not available at Taxation Hub
+  release). `body.auth-locked` hides the shell. Logout clears the selected app
+  and returns to Driver Hub login. Brand wordmarks use Saira Condensed with a
+  sky Hub accent (navy/amber UI palette).
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is
