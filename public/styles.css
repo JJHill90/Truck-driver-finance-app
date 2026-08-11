@@ -16,9 +16,11 @@
   --reconcile-ink: #052e1a;
   --red: #f87171;
   --blue: #60a5fa;
+  /* Hub wordmark accent — bold sky so it reads on navy (sample #13) */
+  --hub-accent: #3eb0ff;
   --radius: 14px;
   --font-ui: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-brand: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-brand: "Saira Condensed", "Barlow Condensed", "Arial Narrow", sans-serif;
   font-family: var(--font-ui);
   color-scheme: dark;
 }
@@ -119,6 +121,10 @@ body:not(.auth-locked) .title-screen {
   color: var(--text);
   text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45);
 }
+.brand-hub {
+  color: var(--hub-accent);
+  text-shadow: 0 0 18px rgba(62, 176, 255, 0.35);
+}
 .title-screen-brand::after {
   content: "";
   display: block;
@@ -126,7 +132,7 @@ body:not(.auth-locked) .title-screen {
   height: 4px;
   margin-top: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  background: linear-gradient(90deg, var(--hub-accent), #1d8fd9);
   animation: title-accent-pulse 2.4s ease-in-out infinite;
 }
 .title-screen-headline {
@@ -186,7 +192,7 @@ button.title-hub-app:hover {
   font-size: 1.35rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--text);
 }
 .title-hub-app-desc {
   font-size: 0.92rem;
@@ -386,12 +392,13 @@ button.title-hub-logout:hover {
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
 }
 .recover-brand {
-  font-family: "Barlow Condensed", sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--accent, #f59e0b);
+  color: var(--text);
   margin: 0 0 8px;
+  font-size: 1.65rem;
 }
 .recover-card h1 {
   margin: 0 0 12px;
@@ -497,6 +504,7 @@ button.title-hub-logout:hover {
   font-size: 1.35rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  color: var(--text);
   padding: 0 8px 18px;
 }
 .sidebar-brand img { width: 30px; height: 30px; }

@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DriverHub — font samples (preview only)</title>
+    <link rel="icon" type="image/svg+xml" href="./truck.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@600;700;800&family=Bebas+Neue&family=Exo+2:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Sans:wght@600;700&family=Oswald:wght@600;700&family=Rajdhani:wght@700&family=Russo+One&family=Saira+Condensed:wght@600;700;800&family=Teko:wght@600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0e1626;
+        --panel: #16223a;
+        --border: #2a3a5a;
+        --text: #e6edf7;
+        --text-dim: #93a2bd;
+        --accent: #f59e0b;
+        --accent-strong: #d97706;
+        --brass: #c4a574;
+        --soft-amber: #e0b35a;
+        --copper: #c47a4a;
+        /* Bolder sky so Hub doesn’t sink into the navy panel */
+        --sky: #3eb0ff;
+        --cream: #f0e6d8;
+        --pale-gold: #dcc48a;
+        --font-ui: "Figtree", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        font-family: var(--font-ui);
+        color: var(--text);
+        background:
+          radial-gradient(120% 80% at 70% 10%, rgba(245, 158, 11, 0.18), transparent 55%),
+          linear-gradient(165deg, #08101c 0%, #0e1626 40%, #152036 100%);
+        line-height: 1.45;
+      }
+      .wrap {
+        width: min(980px, 100%);
+        margin: 0 auto;
+        padding: 28px 18px 64px;
+      }
+      .intro {
+        margin-bottom: 28px;
+        max-width: 54ch;
+      }
+      .intro h1 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+      }
+      .intro p {
+        margin: 0 0 10px;
+        color: var(--text-dim);
+      }
+      .intro a { color: var(--accent); }
+      .note {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(22, 34, 58, 0.8);
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(22, 34, 58, 0.72);
+        padding: 18px 18px 16px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+      }
+      .card.chosen {
+        border-color: var(--sky);
+        box-shadow: 0 0 0 1px rgba(62, 176, 255, 0.35), 0 12px 32px rgba(0, 0, 0, 0.25);
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .card-head strong {
+        font-size: 0.95rem;
+      }
+      .card-head span {
+        color: var(--text-dim);
+        font-size: 0.82rem;
+      }
+      .names {
+        display: grid;
+        gap: 10px;
+      }
+      .brand {
+        margin: 0;
+        line-height: 0.95;
+        letter-spacing: 0.02em;
+        color: var(--text);
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+      }
+      .brand .hub {
+        color: var(--accent);
+      }
+      .brand-sm {
+        font-size: clamp(1.6rem, 4vw, 2.1rem);
+      }
+      .brand-lg {
+        font-size: clamp(2.6rem, 8vw, 4.2rem);
+      }
+      .meta {
+        margin-top: 12px;
+        color: var(--text-dim);
+        font-size: 0.85rem;
+      }
+      /* 1 — current */
+      .opt-current .brand {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      /* 2 — Bebas Neue */
+      .opt-bebas .brand {
+        font-family: "Bebas Neue", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+      }
+      /* 3 — Oswald */
+      .opt-oswald .brand {
+        font-family: "Oswald", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.01em;
+      }
+      /* 4 — Archivo Black */
+      .opt-archivo .brand {
+        font-family: "Archivo Black", sans-serif;
+        font-weight: 400;
+        letter-spacing: -0.01em;
+      }
+      /* 5 — Teko */
+      .opt-teko .brand {
+        font-family: "Teko", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      /* 6 — Russo One */
+      .opt-russo .brand {
+        font-family: "Russo One", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+      }
+      /* 7 — Saira Condensed */
+      .opt-saira .brand {
+        font-family: "Saira Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      /* 8 — Exo 2 */
+      .opt-exo .brand {
+        font-family: "Exo 2", sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      /* 9 — Rajdhani */
+      .opt-rajdhani .brand {
+        font-family: "Rajdhani", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      /* 10 — accent Hub split on Bebas */
+      .opt-split .brand {
+        font-family: "Bebas Neue", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.05em;
+      }
+      .section-break {
+        margin: 36px 0 16px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        max-width: 58ch;
+      }
+      .section-break h2 {
+        margin: 0 0 8px;
+        font-size: 1.15rem;
+      }
+      .section-break p {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 0.92rem;
+      }
+      .hub-brass { color: var(--brass); }
+      .hub-soft { color: var(--soft-amber); }
+      .hub-copper { color: var(--copper); }
+      .hub-sky { color: var(--sky); }
+      .hub-cream { color: var(--cream); }
+      .hub-pale { color: var(--pale-gold); }
+      .hub-underline {
+        color: inherit;
+        border-bottom: 3px solid var(--soft-amber);
+        padding-bottom: 0.02em;
+      }
+      .hub-outline {
+        color: transparent;
+        -webkit-text-stroke: 1.5px var(--soft-amber);
+        paint-order: stroke fill;
+      }
+      .hub-lighter {
+        color: var(--cream);
+        font-weight: 600;
+        opacity: 0.92;
+      }
+      .opt-exo-brass .brand {
+        font-family: "Exo 2", sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .opt-oswald-soft .brand {
+        font-family: "Oswald", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .opt-saira-sky .brand {
+        font-family: "Saira Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .opt-teko-copper .brand {
+        font-family: "Teko", sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .opt-exo-underline .brand {
+        font-family: "Exo 2", sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .opt-barlow-cream .brand {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      .opt-russo-pale .brand {
+        font-family: "Russo One", sans-serif;
+        font-weight: 400;
+      }
+      .opt-ibm-outline .brand {
+        font-family: "IBM Plex Sans", sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .opt-saira-lighter .brand {
+        font-family: "Saira Condensed", sans-serif;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      .opt-saira-lighter .hub-lighter {
+        font-weight: 600;
+      }
+      .card.refined {
+        background: rgba(20, 30, 48, 0.88);
+      }
+      .picker-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .mini-app {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(10, 18, 32, 0.55);
+      }
+      .mini-app .brand {
+        font-size: 1.45rem;
+        margin-bottom: 4px;
+      }
+      .mini-app p {
+        margin: 0;
+        color: var(--text-dim);
+        font-size: 0.78rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="intro">
+        <p class="note">Preview only — not wired into the live title screen yet</p>
+        <h1>Hub brand font samples</h1>
+        <p>
+          Compound names as you’d prefer them: <strong>DriverHub</strong>,
+          <strong>FinanceHub</strong>, <strong>DiaryHub</strong>. Compare against
+          the current Barlow Condensed look, then tell us which option (or mix)
+          to apply before release.
+        </p>
+        <p><a href="./">← Back to Driver Hub</a></p>
+      </div>
+
+      <div class="grid">
+        <article class="card opt-current">
+          <div class="card-head">
+            <strong>1. Current — Barlow Condensed</strong>
+            <span>What ships today on the title screen</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Tight, uppercase, utilitarian. Can feel flat at large size.</p>
+        </article>
+
+        <article class="card opt-bebas">
+          <div class="card-head">
+            <strong>2. Bebas Neue</strong>
+            <span>Poster / highway sign energy</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Very bold display face. Reads as one word; strong at hero size.</p>
+        </article>
+
+        <article class="card opt-oswald">
+          <div class="card-head">
+            <strong>3. Oswald</strong>
+            <span>Industrial condensed</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Similar family to Barlow but sharper and more “fleet / freight”.</p>
+        </article>
+
+        <article class="card opt-archivo">
+          <div class="card-head">
+            <strong>4. Archivo Black</strong>
+            <span>Heavy impact</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Chunky and confident. Best if you want maximum presence.</p>
+        </article>
+
+        <article class="card opt-teko">
+          <div class="card-head">
+            <strong>5. Teko</strong>
+            <span>Sport / dashboard condensed</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Tall condensed letters — modern telematics / dashboard feel.</p>
+        </article>
+
+        <article class="card opt-russo">
+          <div class="card-head">
+            <strong>6. Russo One</strong>
+            <span>Tech-industrial</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Distinctive shapes; less “generic condensed sans”.</p>
+        </article>
+
+        <article class="card opt-saira">
+          <div class="card-head">
+            <strong>7. Saira Condensed</strong>
+            <span>Cleaner condensed upgrade</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Closer to current layout, but a bit more polished and current.</p>
+        </article>
+
+        <article class="card opt-exo">
+          <div class="card-head">
+            <strong>8. Exo 2</strong>
+            <span>Modern geometric (not condensed)</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Wider, more product-like. Reads clearly as one compound word.</p>
+        </article>
+
+        <article class="card opt-rajdhani">
+          <div class="card-head">
+            <strong>9. Rajdhani</strong>
+            <span>Wide tracking, tech title</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">DriverHub</p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">FinanceHub</p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">DiaryHub</p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Open letterforms with spaced uppercase — more “system brand”.</p>
+        </article>
+
+        <article class="card opt-split">
+          <div class="card-head">
+            <strong>10. Bebas + hot amber “Hub”</strong>
+            <span>You liked this idea — but the vibe can feel off</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Same structure you liked; Bebas + bright amber on dark often reads “nightlife / adult branding”. See refined alternatives below.</p>
+        </article>
+      </div>
+
+      <div class="section-break" id="refined">
+        <h2>Refined Hub accents (same idea, less flashy)</h2>
+        <p>
+          Still compound names with a coloured or emphasised <strong>Hub</strong>,
+          but using calmer fonts and warmer/muted accents so it feels more
+          freight / road-product than nightclub gold.
+        </p>
+      </div>
+
+      <div class="grid">
+        <article class="card refined opt-exo-brass">
+          <div class="card-head">
+            <strong>11. Exo 2 + muted brass Hub</strong>
+            <span>Modern product + soft metal accent</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-brass">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-brass">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-brass">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Wider geometric wordmark; brass instead of neon amber.</p>
+        </article>
+
+        <article class="card refined opt-oswald-soft">
+          <div class="card-head">
+            <strong>12. Oswald + soft amber Hub</strong>
+            <span>Industrial, quieter gold</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-soft">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-soft">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-soft">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Same colour-split idea as #10, but Oswald + muted amber = less “club poster”.</p>
+        </article>
+
+        <article class="card refined opt-saira-sky chosen">
+          <div class="card-head">
+            <strong>13. Saira + sky Hub ★ chosen</strong>
+            <span>Road / daylight accent (bolder blue)</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-sky">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-sky">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-sky">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Chosen look — applied on live title, app cards, sidebar and recover headers. Sky Hub accent bumped to <code>#3eb0ff</code> so it reads clearly on navy.</p>
+        </article>
+
+        <article class="card refined opt-teko-copper">
+          <div class="card-head">
+            <strong>14. Teko + copper Hub</strong>
+            <span>Dashboard + earthy metal</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-copper">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-copper">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-copper">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Tall condensed letters with copper — warm, but grounded.</p>
+        </article>
+
+        <article class="card refined opt-exo-underline">
+          <div class="card-head">
+            <strong>15. Exo 2 + amber underline on Hub</strong>
+            <span>Accent without recolouring letters</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-underline">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-underline">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-underline">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Whole word stays white; Hub is marked with a soft amber underline only.</p>
+        </article>
+
+        <article class="card refined opt-barlow-cream">
+          <div class="card-head">
+            <strong>16. Barlow Condensed + cream Hub</strong>
+            <span>Current font, calmer accent</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-cream">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-cream">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-cream">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Smallest change from today: keep Barlow, lift Hub in warm cream instead of hot amber.</p>
+        </article>
+
+        <article class="card refined opt-russo-pale">
+          <div class="card-head">
+            <strong>17. Russo One + pale gold Hub</strong>
+            <span>Characterful, soft metal</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-pale">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-pale">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-pale">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Distinctive letter shapes with a washed gold — less neon flash.</p>
+        </article>
+
+        <article class="card refined opt-ibm-outline">
+          <div class="card-head">
+            <strong>18. IBM Plex + outlined Hub</strong>
+            <span>Professional SaaS wordmark</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-outline">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-outline">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-outline">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Solid “Driver” + stroked “Hub” — accent without a filled gold block.</p>
+        </article>
+
+        <article class="card refined opt-saira-lighter">
+          <div class="card-head">
+            <strong>19. Saira + lighter-weight Hub</strong>
+            <span>Emphasis by weight, not colour flash</span>
+          </div>
+          <div class="names">
+            <p class="brand brand-lg">Driver<span class="hub-lighter">Hub</span></p>
+            <div class="picker-row">
+              <div class="mini-app"><p class="brand brand-sm">Finance<span class="hub-lighter">Hub</span></p><p>App card title</p></div>
+              <div class="mini-app"><p class="brand brand-sm">Diary<span class="hub-lighter">Hub</span></p><p>App card title</p></div>
+            </div>
+          </div>
+          <p class="meta">Almost monochrome: Hub is cream and slightly lighter weight — subtle, not shouty.</p>
+        </article>
+      </div>
+    </div>
+  </body>
+</html>

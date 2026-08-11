@@ -1,8 +1,8 @@
 const { formatVersionLabel, HAULAGE_PR_NUMBER } = require("./lib/version");
 
 describe("formatVersionLabel", () => {
-  it("maps the current PR constant (this PR is #68 → Version .18)", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(68);
+  it("maps the current PR constant (this PR is #69 → Version .19)", () => {
+    expect(HAULAGE_PR_NUMBER).toBe(69);
     expect(formatVersionLabel(47)).toBe("Version .47");
     expect(formatVersionLabel(48)).toBe("Version .48");
     expect(formatVersionLabel(49)).toBe("Version .49");
@@ -25,6 +25,7 @@ describe("formatVersionLabel", () => {
     expect(formatVersionLabel(66)).toBe("Version .16");
     expect(formatVersionLabel(67)).toBe("Version .17");
     expect(formatVersionLabel(68)).toBe("Version .18");
+    expect(formatVersionLabel(69)).toBe("Version .19");
   });
 
   it("uses Version X.0 on every 50th PR, then restarts .1", () => {
