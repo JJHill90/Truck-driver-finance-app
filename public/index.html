@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>Driver Hub — Finance Hub</title>
+    <title>Driver Hub — Taxation Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body class="auth-locked">
-    <!-- Driver Hub gate: login, then choose Finance Hub or a coming-soon app -->
+    <!-- Driver Hub gate: login, then choose Taxation Hub or a coming-soon app -->
     <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky" aria-hidden="true"></div>
       <div class="title-screen-road" aria-hidden="true"></div>
@@ -26,7 +26,7 @@
             One login for every driver app.
           </h1>
           <p class="title-screen-sub">
-            Sign in with your Driver Hub account, then open Finance Hub or another app from your hub.
+            Sign in with your Driver Hub account, then open Taxation Hub or another app from your hub.
           </p>
           <form id="title-auth-form" class="title-auth-form" autocomplete="on">
             <label>
@@ -76,17 +76,17 @@
         <div id="title-hub-picker" class="title-hub-picker hidden" aria-label="Choose an app">
           <h1 class="title-screen-headline">Welcome back</h1>
           <p class="title-screen-sub">
-            Signed in as <strong id="title-hub-username">—</strong>. Open Finance Hub now — your Driver Hub login will also unlock Diary Hub when that app is ready.
+            Signed in as <strong id="title-hub-username">—</strong>. Open Taxation Hub now — your Driver Hub login will also unlock Diary Hub when that app is ready.
           </p>
           <div class="title-hub-apps">
-            <button type="button" class="title-hub-app" id="hub-open-financehub" data-hub-app="financehub">
-              <span class="title-hub-app-name">Finance<span class="brand-hub">Hub</span></span>
-              <span class="title-hub-app-desc">Expenses, remittances, receipt scans and EOFY estimates for Australian truck drivers.</span>
-              <span class="title-hub-app-cta">Open Finance Hub</span>
+            <button type="button" class="title-hub-app" id="hub-open-taxationhub" data-hub-app="taxationhub">
+              <span class="title-hub-app-name">Taxation<span class="brand-hub">Hub</span></span>
+              <span class="title-hub-app-desc">Tax services for drivers — consolidate expenses, remittances, receipt scans and EOFY estimates in one place.</span>
+              <span class="title-hub-app-cta">Open Taxation Hub</span>
             </button>
             <div class="title-hub-app title-hub-app-wip" id="hub-diaryhub-wip" aria-disabled="true">
               <span class="title-hub-app-name">Diary<span class="brand-hub">Hub</span></span>
-              <span class="title-hub-app-desc">Work diary for Australian drivers — mandatory logbook-style record keeping. Work in progress and not available with the Finance Hub release; it will use this same Driver Hub login when we ship it later.</span>
+              <span class="title-hub-app-desc">Work diary for Australian drivers — mandatory logbook-style record keeping. Work in progress and not available with the Taxation Hub release; it will use this same Driver Hub login when we ship it later.</span>
               <span class="title-hub-app-badge">Work in progress</span>
             </div>
           </div>
@@ -103,7 +103,7 @@
       <aside class="sidebar">
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
-          <span>Finance<span class="brand-hub">Hub</span></span>
+          <span>Taxation<span class="brand-hub">Hub</span></span>
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn" data-view="profile">Profile</button>
