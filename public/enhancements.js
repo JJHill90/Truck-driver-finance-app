@@ -4419,8 +4419,10 @@
 
 /* --- Allowance caps: segmented ATO tallies + day/week/month (AEST) ---------
  * Replaces the static list in #allowance-caps. Band-1 daily stack is
- * $328.90 = meals $128 + overtime meal $38.65 + accommodation $138 +
- * incidentals $24.25 (TD 2025/4). Shows roaming spend per segment under the
+ * Band-1 example (TD 2025/4): meals $128 + overtime meal $38.65 +
+ * accommodation $138 + incidentals $24.25 = $328.90. Caps follow the selected
+ * FY via summary.allowances (TD 2025/4 / TD 2026/4…). Shows roaming spend per
+ * segment under the
  * grand total, with day / week / month period views and per-day breakdowns.
  * Logic: lib/allowance-tally.js (loaded via /api when unavailable in browser —
  * duplicated thin client helpers below call the same shapes).
@@ -4951,7 +4953,7 @@
       <div class="allowance-vs-spend cap-list">
         ${controlsHtml(today)}
         <div class="cap-row allowance-total">
-          <span><strong>${esc(allowLabel)}</strong> <small class="muted">ATO TD 2025/4 · AEST</small></span>
+          <span><strong>${esc(allowLabel)}</strong> <small class="muted">ATO ${(state.summary && state.summary.allowances && state.summary.allowances.determination) || "TD"} · AEST</small></span>
           <span><strong>${money(allowAmt)}</strong></span>
         </div>
         <div class="cap-row allowance-total">
@@ -4969,8 +4971,9 @@
         ${perDayHtml}
         <p class="muted allowance-hint">
           Daily stack (salary band) = food/meals (breakfast + lunch + dinner) + overtime meal + accommodation + incidentals
-          — e.g. band 1 <strong>${money(328.9)}</strong>/day. Breakfast/lunch/dinner and daily food/meals share the one meal pot;
+          — currently <strong>${money(allowAmt)}</strong>/day for this band and FY. Breakfast/lunch/dinner and daily food/meals share the one meal pot;
           accommodation and other segments tally separately. Spend uses matching expense categories; daily figures reset at midnight AEST.
+          ATO reasonable amounts update each income year (Taxation Determination), not every January/July.
         </p>
       </div>
     `;
@@ -5013,8 +5016,8 @@
 })();
 
 /* --- Living Away from Home allowance boxes (dashboard + income) ------------
- * Shows ATO truck-driver overnight meal rate ($128/day) using the driver's
- * salary band (profile annual salary or estimated from payslips), plus any
+ * Shows ATO truck-driver overnight meal rates for the selected financial year
+ * (TD 2025/4 → $128/day; TD 2026/4 → ~$132.50/day), salary band, plus any
  * Travel / LAFHA amounts recorded on income / scanned payslips.
  */
 (function () {
@@ -5040,6 +5043,17 @@
     return "add annual salary on Profile, or scan a payslip";
   }
 
+  function selectedFy() {
+    try {
+      const sel = document.getElementById("fy-select");
+      if (sel && sel.value) return sel.value;
+      if (typeof state !== "undefined" && state.financialYear) return state.financialYear;
+    } catch {
+      /* ignore */
+    }
+    return "";
+  }
+
   function renderBox(el, data) {
     if (!el || !data) return;
     const b = data.reasonableBreakdown || {};
@@ -5051,6 +5065,8 @@
         : paid.entryCount
           ? "per-day unknown"
           : "none recorded yet";
+    const det = data.determination || "ATO TD";
+    const fy = data.financialYear || "—";
 
     const paidRows = (paid.rows || [])
       .slice(0, 5)
@@ -5069,6 +5085,7 @@
             <div class="lafha-label">ATO reasonable (per day)</div>
             <div class="lafha-value">${money(data.reasonablePerDay)}</div>
             <div class="muted lafha-sub">Truck driver meals · breakfast ${money(b.breakfast)} + lunch ${money(b.lunch)} + dinner ${money(b.dinner)}</div>
+            <div class="muted lafha-sub">${esc(det)} · FY ${esc(fy)}</div>
           </div>
           <div>
             <div class="lafha-label">Your salary band</div>
@@ -5093,7 +5110,9 @@
   async function refresh() {
     let data = null;
     try {
-      const res = await fetch(`${API}/lafha`, { credentials: "same-origin" });
+      const fy = selectedFy();
+      const q = fy ? `?financialYear=${encodeURIComponent(fy)}` : "";
+      const res = await fetch(`${API}/lafha${q}`, { credentials: "same-origin" });
       data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not load LAFHA");
     } catch (err) {
@@ -5118,6 +5137,7 @@
       if (ticks >= 8) clearInterval(iv);
     }, 1500);
     document.addEventListener("haulage:new-week", () => void refresh());
+    document.getElementById("fy-select")?.addEventListener("change", () => void refresh());
     // After income saves, app.js reloads lists — poll lightly while on income/dashboard.
     setInterval(() => {
       const dash = document.getElementById("view-dashboard");
@@ -5448,7 +5468,7 @@
       body: [
         "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot and Recent activity show what’s changed lately so you can spot gaps without digging through every ledger line.",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
-        "Living Away from Home (LAFHA) shows the relevant food and accommodation rates for your situation. It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and the whole dashboard refreshes for that year.",
+        "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
     expenses: {

@@ -179,8 +179,9 @@ per-year figures and overlays them onto the summary/report:
 
 Income/expense/deduction totals are per-year sums; the tax estimate and
 rate-dependent deductions (cents-per-km) use the selected year's rates.
-Note: truck-driver meal *reasonable amounts* currently use the latest ATO figure
-for all years (historical per-year meal amounts not yet encoded).
+Truck-driver meal *reasonable amounts*, overtime meal caps and travel salary
+bands are FY-aware via `lib/historical-rates.js` (TD 2025/4 for 2025–26 and
+earlier; TD 2026/4 for 2026–27 onwards until the next determination).
 
 ## Deploy to an always-on host
 
