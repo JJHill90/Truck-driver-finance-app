@@ -93,6 +93,22 @@ describe("failed logins and recovery", () => {
     }
     expect(last.needsRecovery).toBe(true);
     expect(last.failedLoginCount).toBe(auth.MAX_FAILED_LOGINS);
+    expect(last.locked).toBe(true);
+  });
+
+  it("hard-locks so the correct password is refused until cleared", () => {
+    const username = uniq();
+    auth.registerUser(username, strongPass, {}, emailFor(username));
+    for (let i = 0; i < auth.MAX_FAILED_LOGINS; i += 1) {
+      auth.attemptLogin(username, "WrongPass!1");
+    }
+    const locked = auth.attemptLogin(username, strongPass);
+    expect(locked.user).toBeNull();
+    expect(locked.locked).toBe(true);
+    auth.clearFailedLogins(username);
+    const ok = auth.attemptLogin(username, strongPass);
+    expect(ok.user).not.toBeNull();
+    expect(ok.user.username).toBe(username);
   });
 
   it("issues a recovery token and resets the password", () => {
