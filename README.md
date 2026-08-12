@@ -206,15 +206,25 @@ can also trigger, download or restore from **Profile → Primary mod → Data
 backups**. Keep that tab open around 5pm and today’s archive downloads to your
 computer automatically.
 
-For release, configure at least one off-site copy so a lost Render disk is not
-catastrophic (browser download only works if you’re online):
+**Off-site via GitHub Actions (recommended):** workflow
+`.github/workflows/daily-backup.yml` runs around 5pm Sydney, signs in as
+primary mod, creates a backup, and stores the `.tar.gz` as a workflow artifact
+(90-day retention). Add these **repository secrets** (Settings → Secrets and
+variables → Actions):
 
-- `BACKUP_S3_BUCKET` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`, or
-- `BACKUP_OFFSITE_DIR` pointing at a second mounted volume
+| Secret | Example |
+|--------|---------|
+| `HAULAGE_BASE_URL` | `https://haulage-finance.onrender.com` |
+| `HAULAGE_ADMIN_USERNAME` | `Haulage_Admin` |
+| `HAULAGE_ADMIN_PASSWORD` | *(your primary mod password)* |
 
-Optional: `BACKUP_NOTIFY_EMAIL` (falls back to `SUPPORT_EMAIL`) emails when a
-backup finishes if SMTP/Resend is configured. Set `BACKUP_ENABLED=0` to disable
-the scheduler.
+Then: Actions → **Daily data backup** → **Run workflow** once to verify.
+Scheduled runs need no further clicks. Download any day’s file from that
+workflow’s Artifacts list.
+
+Optional extras: `BACKUP_S3_BUCKET` + AWS credentials, or `BACKUP_OFFSITE_DIR`.
+`BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL` can email when a server-side backup
+finishes. Set `BACKUP_ENABLED=0` to disable the in-app scheduler.
 
 > For production multi-user use, prefer off-site backups (S3) in addition to the
 > persistent disk, and serve over HTTPS with `Secure` cookies.

@@ -156,8 +156,10 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   requires `confirm: "RESTORE"` and takes a safety backup first. Optional
   off-site: `BACKUP_OFFSITE_DIR` and/or `BACKUP_S3_BUCKET` + AWS credentials;
   optional notify via `BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL` when mail is
-  configured. Local + browser download still need you online at 5pm — add S3
-  for true hands-off off-site copies.
+  configured. Hands-off off-site copy: GitHub Action
+  `.github/workflows/daily-backup.yml` (+ secrets `HAULAGE_BASE_URL`,
+  `HAULAGE_ADMIN_USERNAME`, `HAULAGE_ADMIN_PASSWORD`) archives to Actions
+  artifacts at 5pm Sydney; optional S3 still available.
 - **Render deploy branch must be `main`.** Service `haulage-finance`
   (`srv-d9ga1gernols73c55bm0`) auto-deploys on commit. There is one shared app
   build for admin and every driver profile (per-user data only differs under

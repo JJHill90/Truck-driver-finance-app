@@ -1,0 +1,72 @@
+# Off-site daily backup: sign in as primary mod, create a full-store archive,
+# download it, and keep it as a GitHub Actions artifact (90 days).
+#
+# Runs around 5:00 pm Australia/Sydney (GitHub cron is UTC, so we fire at both
+# 06:00 and 07:00 UTC and only proceed when Sydney local hour is 17).
+#
+# Required repository secrets:
+#   HAULAGE_BASE_URL          https://haulage-finance.onrender.com
+#   HAULAGE_ADMIN_USERNAME    Haulage_Admin (or your primary mod)
+#   HAULAGE_ADMIN_PASSWORD    primary mod password
+#
+# Manual test: Actions → Daily data backup → Run workflow
+
+name: Daily data backup
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 17:00 AEDT (UTC+11)
+    - cron: "0 7 * * *" # 17:00 AEST (UTC+10)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-haulage-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Sydney local hour
+        id: gate
+        run: |
+          HOUR="$(TZ=Australia/Sydney date +%H)"
+          echo "Sydney hour=${HOUR} event=${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$HOUR" = "17" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping — not 5pm in Australia/Sydney."
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Create and download backup
+        if: steps.gate.outputs.run == 'true'
+        id: fetch
+        env:
+          HAULAGE_BASE_URL: ${{ secrets.HAULAGE_BASE_URL }}
+          HAULAGE_ADMIN_USERNAME: ${{ secrets.HAULAGE_ADMIN_USERNAME }}
+          HAULAGE_ADMIN_PASSWORD: ${{ secrets.HAULAGE_ADMIN_PASSWORD }}
+          OUT_DIR: backups
+        run: |
+          if [ -z "$HAULAGE_BASE_URL" ] || [ -z "$HAULAGE_ADMIN_USERNAME" ] || [ -z "$HAULAGE_ADMIN_PASSWORD" ]; then
+            echo "Set repository secrets HAULAGE_BASE_URL, HAULAGE_ADMIN_USERNAME, HAULAGE_ADMIN_PASSWORD."
+            exit 1
+          fi
+          chmod +x scripts/fetch-daily-backup.sh
+          bash scripts/fetch-daily-backup.sh
+
+      - name: Upload backup artifact
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: haulage-backup-${{ steps.fetch.outputs.BACKUP_ID || github.run_id }}
+          path: backups/*.tar.gz
+          if-no-files-found: error
+          retention-days: 90
