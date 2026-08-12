@@ -727,29 +727,31 @@
       pwd.autocomplete = isRegister ? "new-password" : "current-password";
       pwd.placeholder = isRegister ? "Strong password (8+ chars)" : "Your password";
     }
-    void refreshFoundingHints({ highlightRegister: isRegister });
+    void refreshTrialHints({ highlightRegister: isRegister });
   }
 
-  function foundingHintText(founding, { highlightRegister } = {}) {
-    if (!founding) return "";
-    const months = founding.trialMonths || 6;
-    if (founding.open && founding.remaining > 0) {
-      const n = founding.remaining;
-      const spots = n === 1 ? "1 founding Pro trial left" : `${n} of ${founding.limit} founding Pro trials left`;
-      return `${spots} — first ${founding.limit} drivers get ${months} months Pro free${
-        highlightRegister ? ". Create your profile to claim a spot." : "."
-      }`;
+  function trialHintText(offer, { highlightRegister } = {}) {
+    if (!offer) return "";
+    const months = offer.trialMonths || 3;
+    const label = offer.trialLabel || "Pro+";
+    const price = offer.priceLabel || "$5/month";
+    const base = `Every new profile includes ${months} months of ${label} (full Pro access).`;
+    if (highlightRegister) {
+      return `${base} Create your profile to start — or subscribe to Pro (${price}) from day one.`;
     }
-    return `Founding Pro trials are full. New profiles start on Free (15 uploads/month) — upgrade anytime for ${
-      founding.priceLabel || "$5/month"
-    }.`;
+    return `${base} Subscribe to Pro (${price}) anytime, including from day one.`;
   }
 
-  async function refreshFoundingHints(opts = {}) {
+  async function refreshTrialHints(opts = {}) {
     try {
-      const founding = await apiGet("/billing/founding");
-      const text = foundingHintText(founding, opts);
-      for (const id of ["title-founding-hint", "auth-founding-hint"]) {
+      let offer;
+      try {
+        offer = await apiGet("/billing/trial");
+      } catch {
+        offer = await apiGet("/billing/founding");
+      }
+      const text = trialHintText(offer, opts);
+      for (const id of ["title-trial-hint", "auth-trial-hint", "title-founding-hint", "auth-founding-hint"]) {
         const el = byId(id);
         if (!el) continue;
         if (!text) {
@@ -759,8 +761,8 @@
         }
         el.hidden = false;
         el.textContent = text;
-        el.classList.toggle("founding-open", Boolean(founding.open));
-        el.classList.toggle("founding-closed", !founding.open);
+        el.classList.add("trial-open");
+        el.classList.remove("trial-closed", "founding-closed");
       }
     } catch {
       /* non-fatal */
@@ -1061,19 +1063,18 @@
     }
 
     const price = ent.priceLabel || "$5/month";
+    const trialLabel = ent.trialLabel || "Pro+";
     let statusText = "Free plan";
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
     else if (ent.status === "trialing") {
-      const slot =
-        ent.foundingCohort && ent.foundingSlot
-          ? ` · founding #${ent.foundingSlot}`
-          : "";
-      statusText = `Pro trial${slot} · ends ${formatTrialEnd(ent.trialEndsAt)}`;
+      statusText = `${trialLabel} trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
     } else if (ent.isPro) {
       statusText = `Pro (${price})`;
       if (ent.currentPeriodEnd) {
         statusText += ` · renews ${formatTrialEnd(ent.currentPeriodEnd)}`;
       }
+    } else if (ent.trialExpired) {
+      statusText = `Free plan · ${trialLabel} trial ended — update to Pro (${price}) for unlimited uploads, PDF & forecast`;
     } else {
       statusText = `Free plan · ${price} unlocks unlimited uploads, PDF & forecast`;
     }
@@ -1098,9 +1099,10 @@
         upgradeBtn.classList.add("hidden");
       } else {
         upgradeBtn.classList.remove("hidden");
+        // Day-1 subscribe is always available during the Pro+ trial.
         upgradeBtn.textContent =
           ent.status === "trialing"
-            ? `Keep Pro after trial — ${price}`
+            ? `Start Pro now — ${price}`
             : `Upgrade to Pro — ${price}`;
       }
     }
@@ -2033,7 +2035,10 @@
       .map((a) => {
         const code = a.code || "";
         const goProfile =
-          code === "missing_email" || code === "password_age"
+          code === "missing_email" ||
+          code === "password_age" ||
+          code === "trial_ended" ||
+          code === "trial_ending"
             ? ` <button type="button" class="btn link enh-alert-go-profile" data-alert-code="${esc(code)}">Open Profile</button>`
             : "";
         return `<li class="enh-alert enh-alert-${esc(a.level || "info")}">${esc(a.message)}${goProfile}</li>`;
@@ -2295,7 +2300,7 @@
     wireBilling();
     wirePdfDownload();
     handleBillingReturnQuery();
-    void refreshFoundingHints();
+    void refreshTrialHints();
     try {
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) {
@@ -5485,7 +5490,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — the first 50 driver profiles get six months Pro trial at signup. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access) and you can start paying from day one. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },

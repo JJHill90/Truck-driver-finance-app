@@ -1399,13 +1399,18 @@ api.get("/billing/entitlements", (req, res) => {
   res.json({
     entitlements: resolveReqEntitlements(req),
     stripeConfigured: billingStripe.stripeConfigured(),
-    founding: auth.getFoundingStatus(),
+    trialOffer: auth.getTrialOfferStatus(),
   });
 });
 
-/** Public: founding Pro trial spots left (for signup scarcity copy). */
+/** Public: universal Pro+ trial offer for signup copy. */
+api.get("/billing/trial", (_req, res) => {
+  res.json(auth.getTrialOfferStatus());
+});
+
+/** @deprecated Alias of /billing/trial (older clients). */
 api.get("/billing/founding", (_req, res) => {
-  res.json(auth.getFoundingStatus());
+  res.json(auth.getTrialOfferStatus());
 });
 
 api.post("/billing/checkout", async (req, res) => {
