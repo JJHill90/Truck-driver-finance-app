@@ -61,11 +61,18 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
 - This project is **CommonJS** (no `"type": "module"` in `package.json`); the
   provided `lib/` modules use `require`/`module.exports`. Keep new server code
   CommonJS.
-- Persistence is a local JSON file at `data/driver-records.json` with receipt
-  uploads under `data/receipts/` (both git-ignored). `server.js` loads records
-  once into memory at boot and calls `storage.saveRecords` after each mutation —
-  so editing the JSON while the server runs has no effect until restart, and to
-  fully reset app data you stop the server, delete `data/`, and restart.
+- Persistence is per-user JSON under `data/users/<name>.json` (plus
+  `data/users.json` accounts) with receipt uploads under `data/receipts/` (all
+  git-ignored). Writes go through `lib/atomic-write.js` (temp + rename). Guests
+  get an empty in-memory shell by default (`ALLOW_GUEST_STORE=1` restores the
+  legacy shared `data/driver-records.json`). `server.js` caches records in
+  memory and persists after each mutation — editing JSON on disk while the
+  server runs has no effect until restart; to fully reset, stop the server,
+  delete `data/`, and restart.
+- **Auth abuse controls.** `lib/rate-limit.js` rate-limits login/register/
+  recover/support POSTs. After 10 failed logins the account is **hard-locked**
+  (correct password refused) until `AUTH_LOCKOUT_MS` (default 30 min) expires,
+  recovery reset, or primary mod clears failed logins.
 - Receipt/payslip OCR: local **Tesseract.js** runs for images by default (its
   worker lazily downloads the `eng` model on first real scan; if that fails or
   the image is trivial, it gracefully falls back to a demo/manual result). Set

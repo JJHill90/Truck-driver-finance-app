@@ -4,6 +4,7 @@ const express = require("express");
 
 const {
   getCurrentFinancialYear,
+  getFinancialYearForDate,
   getCategoryMeta,
 } = require("./lib/ato-standards");
 const {
@@ -57,7 +58,8 @@ const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
 const { ocrPdfViaRaster, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
 const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
-const { getFinancialYearForDate } = require("./lib/ato-standards");
+const { writeJsonAtomic } = require("./lib/atomic-write");
+const { createAuthSupportRateLimiters } = require("./lib/rate-limit");
 const { buildReportPdf } = require("./lib/report-pdf");
 const {
   buildDocumentFilename,
@@ -81,6 +83,11 @@ const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SESSION_COOKIE = "haulage_sid";
 
+// Crash-safer JSON writes without editing verbatim lib/storage.js.
+storage.saveRecords = (data, filePath) => {
+  writeJsonAtomic(filePath || storage.DEFAULT_FILE, data);
+};
+
 // Optional cloud OCR — only used when an API key is configured.
 let openai = null;
 if (process.env.OPENAI_API_KEY) {
@@ -93,13 +100,45 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 // --- Per-user record stores ---------------------------------------------
-// Each signed-in user gets their own data/users/<name>.json; anonymous visitors
-// share a guest store so the app still works before creating a profile.
+// Signed-in users get data/users/<name>.json. Guests get an empty in-memory
+// shell by default (no shared disk store) unless ALLOW_GUEST_STORE=1.
 const recordsCache = new Map();
+
+function guestStoreEnabled() {
+  return ["1", "true", "yes", "on"].includes(
+    String(process.env.ALLOW_GUEST_STORE || "").toLowerCase()
+  );
+}
+
+function emptyGuestRecords() {
+  return {
+    profile: {
+      name: "",
+      employer: "",
+      abn: "",
+      driverType: "long_haul",
+      annualSalary: 85000,
+      financialYear: getCurrentFinancialYear(),
+      vehicleType: "truck",
+      tfnSupplied: false,
+    },
+    vendors: [],
+    expenses: [],
+    income: [],
+    receipts: [],
+  };
+}
+
 function fileForUser(user) {
   return user ? auth.recordsFileFor(user) : storage.DEFAULT_FILE;
 }
 function recordsForUser(user) {
+  if (!user) {
+    if (!guestStoreEnabled()) {
+      // Ephemeral empty shell — never load/persist the shared guest file.
+      return emptyGuestRecords();
+    }
+  }
   const key = user || "__guest__";
   if (!recordsCache.has(key)) {
     const rec = storage.loadRecords(fileForUser(user));
@@ -166,6 +205,7 @@ function persist(req, meta = {}) {
 function flushAllCachedRecordsToDisk() {
   for (const [key, records] of recordsCache.entries()) {
     try {
+      if (key === "__guest__" && !guestStoreEnabled()) continue;
       const file =
         key === "__guest__" ? storage.DEFAULT_FILE : auth.recordsFileFor(key);
       storage.saveRecords(records, file);
@@ -395,6 +435,9 @@ api.use((req, res, next) => {
   });
 });
 
+// Rate-limit auth + support contact POSTs (in-memory; per process).
+api.use(createAuthSupportRateLimiters());
+
 // --- Auth ----------------------------------------------------------------
 api.post("/auth/password-strength", (req, res) => {
   const { password, username } = req.body || {};
@@ -423,12 +466,22 @@ api.post("/auth/login", async (req, res) => {
       error: err,
       needsRecovery: result.needsRecovery,
       failedLoginCount: result.failedLoginCount,
+      locked: Boolean(result.locked),
+      lockedUntil: result.lockedUntil || null,
     };
+    if (result.locked) {
+      err =
+        "This account is temporarily locked after too many failed sign-ins. Use “Forgot username / password?”, wait for the lockout to expire, or ask the primary mod to unlock it.";
+      payload.error = err;
+      payload.needsRecovery = true;
+    }
     // On the 10th failed attempt, email a recovery link (once) when the
     // account has an email on file.
     if (result.needsRecovery && result.failedLoginCount === auth.MAX_FAILED_LOGINS) {
-      err = `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). Check your email for a recovery link, or use “Forgot username / password?”.`;
-      payload.error = err;
+      if (!result.locked) {
+        err = `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). Check your email for a recovery link, or use “Forgot username / password?”.`;
+        payload.error = err;
+      }
       try {
         const existing = auth.getUser(username);
         if (existing && existing.email) {
@@ -450,7 +503,7 @@ api.post("/auth/login", async (req, res) => {
               payload.devUsername = recovery.username;
             }
           }
-        } else {
+        } else if (!result.locked) {
           err =
             `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). This profile has no email — ask the primary mod for a password reset, or recover once an email is on file.`;
           payload.error = err;
@@ -458,7 +511,7 @@ api.post("/auth/login", async (req, res) => {
       } catch (mailErr) {
         console.warn("[auth] auto-recovery email failed:", mailErr.message);
       }
-    } else if (result.needsRecovery) {
+    } else if (result.needsRecovery && !result.locked) {
       err = `Too many failed sign-ins (${auth.MAX_FAILED_LOGINS}). Use “Forgot username / password?” to recover via email.`;
       payload.error = err;
     }
@@ -1758,6 +1811,10 @@ api.delete("/receipts/:id", (req, res) => {
 });
 
 api.get("/receipts/:id/image", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view receipt files." });
+    return;
+  }
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
@@ -1769,6 +1826,10 @@ api.get("/receipts/:id/image", (req, res) => {
 });
 
 api.get("/receipts/:id/file", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view receipt files." });
+    return;
+  }
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
   const info = receipt?.imagePath ? storage.getReceiptFileInfo(receipt.imagePath) : null;
