@@ -5468,7 +5468,7 @@
       body: [
         "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot and Recent activity show what’s changed lately so you can spot gaps without digging through every ledger line.",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
-        "Living Away from Home (LAFHA) shows the relevant food and accommodation rates for your situation. It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and the whole dashboard refreshes for that year.",
+        "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
     expenses: {
