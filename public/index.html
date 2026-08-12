@@ -508,6 +508,22 @@
             <p class="muted" id="admin-empty-note"></p>
             <div id="admin-user-list" class="admin-user-list"></div>
             <div id="admin-user-detail" class="admin-user-detail hidden"></div>
+
+            <div class="admin-backups" id="admin-backups">
+              <div class="panel-header" style="margin-top: 22px;">
+                <h3>Data backups</h3>
+                <button type="button" class="btn primary" id="admin-backup-now">Back up now</button>
+              </div>
+              <p class="muted small">
+                Full copies of accounts, ledgers, receipt files and history. The server archives daily at
+                <strong>5:00&nbsp;pm Australia/Sydney</strong>. Keep this Profile tab open around then and
+                today’s backup downloads to this device automatically (you can also Download any time).
+                Restore overwrites live data (a safety backup is taken first).
+              </p>
+              <p class="muted small" id="admin-backup-status"></p>
+              <div id="admin-backup-list" class="admin-backup-list"></div>
+              <p class="muted" id="admin-backup-message"></p>
+            </div>
           </div>
           <div class="panel">
             <div class="panel-header"><h2>Driver Profile</h2></div>

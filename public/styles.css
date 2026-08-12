@@ -1132,6 +1132,25 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   color: var(--blue);
 }
 .admin-user-detail { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; }
+.admin-backups {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.admin-backup-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.admin-backup-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+.admin-backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#admin-backup-message:empty { display: none; }
 .admin-detail-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
 .admin-detail-head h3 { margin: 0; flex: 1 1 auto; }
 .admin-stat-row {

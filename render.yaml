@@ -53,6 +53,30 @@ services:
         sync: false
       - key: RESEND_FROM
         sync: false
+      # Full-store backups at 5pm Sydney (data/backups/). Optional off-site:
+      # BACKUP_OFFSITE_DIR and/or BACKUP_S3_BUCKET + AWS credentials.
+      - key: BACKUP_ENABLED
+        value: "1"
+      - key: BACKUP_AT
+        value: "17:00"
+      - key: BACKUP_TIMEZONE
+        value: Australia/Sydney
+      - key: BACKUP_KEEP
+        value: "14"
+      - key: BACKUP_NOTIFY_EMAIL
+        sync: false
+      - key: BACKUP_OFFSITE_DIR
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_PREFIX
+        value: haulage-backups
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: ap-southeast-2
     # Persist accounts + receipts across deploys (required for multi-user admin).
     disk:
       name: haulage-data
