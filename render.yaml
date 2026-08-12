@@ -55,6 +55,17 @@ services:
         sync: false
       # Full-store backups at 5pm Sydney (data/backups/). Optional off-site:
       # BACKUP_OFFSITE_DIR and/or BACKUP_S3_BUCKET + AWS credentials.
+      # Security: guest shared store off by default; set ALLOW_GUEST_STORE=1 only for local demos.
+      - key: ALLOW_GUEST_STORE
+        value: "0"
+      - key: AUTH_LOCKOUT_MS
+        value: "1800000"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX
+        value: "30"
+      - key: RATE_LIMIT_LOGIN_MAX
+        value: "20"
       - key: BACKUP_ENABLED
         value: "1"
       - key: BACKUP_AT
