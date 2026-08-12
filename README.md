@@ -197,8 +197,26 @@ docker run -p 3000:3000 -v haulage-data:/app/data haulage-finance
 The `-v haulage-data:/app/data` volume persists the JSON store, receipts and user
 accounts across restarts.
 
-> For production multi-user use, replace the local JSON store with a managed
-> database and serve over HTTPS with `Secure` cookies.
+### Backups
+
+The server creates **full-store backups** (accounts, ledgers, receipt files,
+history) under `data/backups/` on a schedule (default daily, keep 14). Primary
+mod can also trigger, download or restore from **Profile → Primary mod → Data
+backups**.
+
+For release, configure at least one off-site copy so a lost Render disk is not
+catastrophic:
+
+- `BACKUP_S3_BUCKET` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`, or
+- `BACKUP_OFFSITE_DIR` pointing at a second mounted volume, and/or
+- regularly download archives from the admin panel to your computer
+
+Optional: `BACKUP_NOTIFY_EMAIL` (falls back to `SUPPORT_EMAIL`) emails when a
+backup finishes if SMTP/Resend is configured. Set `BACKUP_ENABLED=0` to disable
+the scheduler.
+
+> For production multi-user use, prefer off-site backups (S3) in addition to the
+> persistent disk, and serve over HTTPS with `Secure` cookies.
 
 ## API (base `/api/haulage`)
 
