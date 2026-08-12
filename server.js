@@ -76,6 +76,8 @@ const {
 const support = require("./lib/support");
 const backup = require("./lib/backup");
 const mail = require("./lib/mail");
+const entitlements = require("./lib/entitlements");
+const billingStripe = require("./lib/billing-stripe");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 
@@ -263,6 +265,30 @@ async function notifyBackupComplete(result) {
 function getActiveRecords(req) {
   return withActiveLedger(getRecords(req));
 }
+
+/** Resolve freemium entitlements for the signed-in user (guests = free, no uploads). */
+function resolveReqEntitlements(req) {
+  if (!req.user) return entitlements.resolveEntitlements(null, null);
+  const user = auth.getUserRecord(req.user);
+  return entitlements.resolveEntitlements(user, getRecords(req));
+}
+
+/** Soft gate: free plan monthly upload quota (402 + UPLOAD_LIMIT). */
+function assertCanUpload(req, res) {
+  const ent = resolveReqEntitlements(req);
+  if (ent.canUpload) return ent;
+  res.status(402).json(entitlements.uploadBlockedPayload(ent));
+  return null;
+}
+
+/** Soft gate: Pro-only features (402 + PRO_REQUIRED). */
+function assertProFeature(req, res, feature) {
+  const ent = resolveReqEntitlements(req);
+  if (ent.isPro) return ent;
+  res.status(402).json(entitlements.proFeatureBlockedPayload(feature, ent));
+  return null;
+}
+
 function profileFor(records, financialYear) {
   return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
 }
@@ -391,6 +417,44 @@ const app = express();
 // Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
 // Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
 app.use(corsMiddleware);
+
+// Stripe webhooks need the raw body for signature verification — mount before
+// express.json() so the payload is not pre-parsed.
+app.post(
+  "/api/haulage/billing/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      const signature = req.headers["stripe-signature"];
+      const result = await billingStripe.handleWebhook({
+        rawBody: req.body,
+        signature,
+        findUserByUsername: (username) => auth.getUserRecord(username),
+        findUserByCustomerId: (customerId) => {
+          const name = auth.findUsernameByStripeCustomerId(customerId);
+          return name ? auth.getUserRecord(name) : null;
+        },
+        saveUser: (user) => {
+          if (!user || !user.username) return;
+          auth.updateBilling(user.username, {
+            plan: user.plan,
+            stripeCustomerId: user.stripeCustomerId,
+            stripeSubscriptionId: user.stripeSubscriptionId,
+            subscriptionStatus: user.subscriptionStatus,
+            currentPeriodEnd: user.currentPeriodEnd,
+            planUpdatedAt: new Date().toISOString(),
+          });
+        },
+      });
+      res.json(result);
+    } catch (err) {
+      const status = err && err.type === "StripeSignatureVerificationError" ? 400 : 400;
+      console.warn("[billing] webhook error:", err && err.message);
+      res.status(status).json({ error: (err && err.message) || "Webhook failed" });
+    }
+  }
+);
+
 app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
@@ -548,7 +612,9 @@ api.post("/auth/logout", (req, res) => {
 });
 
 api.get("/auth/me", (req, res) => {
-  res.json({ user: req.user ? auth.getUser(req.user) : null });
+  const user = req.user ? auth.getUser(req.user) : null;
+  const ent = user ? resolveReqEntitlements(req) : null;
+  res.json({ user, entitlements: ent });
 });
 
 api.post("/auth/presets", (req, res) => {
@@ -1268,8 +1334,9 @@ api.get("/report", (req, res) => {
   res.json(report);
 });
 
-// Accountant-ready EOFY ledger as a downloadable PDF.
+// Accountant-ready EOFY ledger as a downloadable PDF (Pro).
 api.get("/report.pdf", (req, res) => {
+  if (!assertProFeature(req, res, "pdf")) return;
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
   const report = buildAccountantReport(records, profileFor(records, fy));
@@ -1288,6 +1355,7 @@ api.get("/report.pdf", (req, res) => {
 });
 
 api.get("/forecast", (req, res) => {
+  if (!assertProFeature(req, res, "forecast")) return;
   const records = getActiveRecords(req);
   const manual = {
     mode: req.query.mode,
@@ -1295,6 +1363,61 @@ api.get("/forecast", (req, res) => {
     projectedDeductions: req.query.projectedDeductions,
   };
   res.json(buildForecast(records, records.profile, manual));
+});
+
+// --- Billing / freemium -------------------------------------------------
+api.get("/billing/entitlements", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view your plan." });
+    return;
+  }
+  res.json({
+    entitlements: resolveReqEntitlements(req),
+    stripeConfigured: billingStripe.stripeConfigured(),
+  });
+});
+
+api.post("/billing/checkout", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to upgrade." });
+    return;
+  }
+  try {
+    const user = auth.getUserRecord(req.user);
+    const result = await billingStripe.createCheckoutSession({
+      user,
+      req,
+      saveCustomerId: (customerId) => {
+        auth.updateBilling(req.user, {
+          stripeCustomerId: customerId,
+          planUpdatedAt: new Date().toISOString(),
+        });
+      },
+    });
+    res.json(result);
+  } catch (err) {
+    const code = err && err.code;
+    const status =
+      code === "STRIPE_NOT_CONFIGURED" ? 503 : code === "EMAIL_REQUIRED" ? 400 : 400;
+    res.status(status).json({ error: err.message, code: code || "CHECKOUT_FAILED" });
+  }
+});
+
+api.post("/billing/portal", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to manage billing." });
+    return;
+  }
+  try {
+    const user = auth.getUserRecord(req.user);
+    const result = await billingStripe.createPortalSession({ user, req });
+    res.json(result);
+  } catch (err) {
+    const code = err && err.code;
+    const status =
+      code === "STRIPE_NOT_CONFIGURED" || code === "NO_CUSTOMER" ? 400 : 400;
+    res.status(status).json({ error: err.message, code: code || "PORTAL_FAILED" });
+  }
 });
 
 // --- Expenses ------------------------------------------------------------
@@ -1447,6 +1570,8 @@ api.post("/receipts/scan", async (req, res, next) => {
       });
       return;
     }
+    // Check quota before OCR so free users are not charged wait time on a blocked upload.
+    if (!assertCanUpload(req, res)) return;
     const records = getRecords(req);
     const { imageBase64, mimeType, filename, purpose } = req.body || {};
     if (!imageBase64) {
@@ -1699,6 +1824,7 @@ api.post("/receipts/manual", (req, res) => {
     });
     return;
   }
+  if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);

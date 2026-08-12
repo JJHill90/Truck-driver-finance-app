@@ -228,10 +228,42 @@
             token: `${Date.now()}-${Math.random()}`,
           };
         }
+
+        // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
+        if (res.status === 402 && data && data.code === "UPLOAD_LIMIT") {
+          const rem =
+            data.entitlements && data.entitlements.uploadsRemaining != null
+              ? data.entitlements.uploadsRemaining
+              : 0;
+          const msg =
+            data.error ||
+            `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month) for unlimited scans.`;
+          if (typeof window.toast === "function") window.toast(msg);
+          if (typeof window.haulagePromptUpgrade === "function") {
+            window.haulagePromptUpgrade(data);
+          }
+        }
         return res;
       }
 
-      return origFetch.apply(this, args);
+      // Soft gate for manual uploads and other haulage POSTs that return 402.
+      const res = await origFetch.apply(this, args);
+      try {
+        if (res.status === 402 && isHaulageApiUrl(url)) {
+          const data = await res.clone().json();
+          if (data && (data.code === "UPLOAD_LIMIT" || data.code === "PRO_REQUIRED")) {
+            if (typeof window.toast === "function") {
+              window.toast(data.error || "Upgrade to Pro to continue.");
+            }
+            if (typeof window.haulagePromptUpgrade === "function") {
+              window.haulagePromptUpgrade(data);
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      return res;
     };
 
     if (isHaulageApiUrl(url)) {
@@ -930,14 +962,297 @@
       const presets = user.presets || {};
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
+      void refreshBillingPanel();
     } else {
       outEl.classList.remove("hidden");
       inEl.classList.add("hidden");
+      clearBillingPanel();
     }
     const adminPanel = byId("admin-panel");
     if (adminPanel) {
       if (user && user.isAdmin) adminPanel.classList.remove("hidden");
       else adminPanel.classList.add("hidden");
+    }
+  }
+
+  let cachedEntitlements = null;
+
+  function clearBillingPanel() {
+    cachedEntitlements = null;
+    const status = byId("billing-status");
+    const uploads = byId("billing-uploads");
+    const msg = byId("billing-message");
+    if (status) status.textContent = "Sign in to see your plan.";
+    if (uploads) uploads.textContent = "";
+    if (msg) msg.textContent = "";
+    byId("billing-upgrade")?.classList.add("hidden");
+    byId("billing-manage")?.classList.add("hidden");
+  }
+
+  function setBillingMessage(text, isError) {
+    const el = byId("billing-message");
+    if (!el) return;
+    el.textContent = text || "";
+    el.style.color = isError ? "var(--red)" : "";
+  }
+
+  function formatTrialEnd(iso) {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleDateString("en-AU", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(iso);
+    }
+  }
+
+  function renderBillingPanel(ent, stripeConfigured) {
+    cachedEntitlements = ent || null;
+    const statusEl = byId("billing-status");
+    const uploadsEl = byId("billing-uploads");
+    const upgradeBtn = byId("billing-upgrade");
+    const manageBtn = byId("billing-manage");
+    if (!statusEl) return;
+
+    if (!ent) {
+      statusEl.textContent = "Could not load plan details.";
+      return;
+    }
+
+    const price = ent.priceLabel || "$5/month";
+    let statusText = "Free plan";
+    if (ent.isAdmin) statusText = "Primary mod — Pro access";
+    else if (ent.status === "trialing") {
+      statusText = `Pro trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
+    } else if (ent.isPro) {
+      statusText = `Pro (${price})`;
+      if (ent.currentPeriodEnd) {
+        statusText += ` · renews ${formatTrialEnd(ent.currentPeriodEnd)}`;
+      }
+    } else {
+      statusText = `Free plan · ${price} unlocks unlimited uploads, PDF & forecast`;
+    }
+    statusEl.textContent = statusText;
+
+    if (uploadsEl) {
+      if (ent.isPro) {
+        uploadsEl.textContent = "Uploads this month: unlimited";
+      } else {
+        const used = ent.uploadsUsed ?? 0;
+        const limit = ent.uploadsLimit ?? 15;
+        const left = ent.uploadsRemaining ?? Math.max(0, limit - used);
+        uploadsEl.textContent = `Uploads this month: ${used} of ${limit} used · ${left} left`;
+        if (ent.softWarning) {
+          uploadsEl.textContent += " — nearly at the free limit";
+        }
+      }
+    }
+
+    if (upgradeBtn) {
+      if (ent.isAdmin || (ent.isPro && ent.status !== "trialing")) {
+        upgradeBtn.classList.add("hidden");
+      } else {
+        upgradeBtn.classList.remove("hidden");
+        upgradeBtn.textContent =
+          ent.status === "trialing"
+            ? `Keep Pro after trial — ${price}`
+            : `Upgrade to Pro — ${price}`;
+      }
+    }
+    if (manageBtn) {
+      if (stripeConfigured === false && !ent.isPro) {
+        setBillingMessage(
+          "Card payments are not configured on this server yet — trials and free quotas still apply.",
+          false
+        );
+      }
+      const likelyCustomer = ["active", "past_due", "canceled"].includes(
+        String(ent.subscriptionStatus || "")
+      );
+      if (likelyCustomer && !ent.isAdmin) manageBtn.classList.remove("hidden");
+      else manageBtn.classList.add("hidden");
+    }
+
+    applyProExportGates(ent);
+    maybeSoftWarnUploads(ent);
+  }
+
+  function applyProExportGates(ent) {
+    const pdfBtn = byId("download-report-pdf");
+    const jsonBtn = byId("export-report");
+    const pro = ent && ent.isPro;
+    if (pdfBtn) {
+      pdfBtn.disabled = !pro;
+      pdfBtn.title = pro
+        ? "Download accountant-ready PDF"
+        : "Pro feature — upgrade for $5/month";
+      pdfBtn.classList.toggle("billing-locked", !pro);
+    }
+    if (jsonBtn) {
+      jsonBtn.disabled = !pro;
+      jsonBtn.title = pro
+        ? "Export JSON for your accountant"
+        : "Pro feature — upgrade for $5/month";
+      jsonBtn.classList.toggle("billing-locked", !pro);
+    }
+    document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
+      btn.classList.toggle("billing-locked", !pro);
+      btn.title = pro ? "" : "Forecast is included with Pro ($5/month)";
+    });
+  }
+
+  let softWarnShown = false;
+  function maybeSoftWarnUploads(ent) {
+    if (!ent || ent.isPro || softWarnShown) return;
+    if (ent.softWarning && typeof window.toast === "function") {
+      softWarnShown = true;
+      window.toast(
+        `${ent.uploadsRemaining} free upload${ent.uploadsRemaining === 1 ? "" : "s"} left this month — upgrade to Pro ($5/month) for unlimited.`
+      );
+    }
+  }
+
+  async function refreshBillingPanel() {
+    try {
+      const data = await apiGet("/billing/entitlements");
+      renderBillingPanel(data.entitlements, data.stripeConfigured);
+      // Attach hasStripeCustomer from /auth/me if needed for manage button
+      const me = await apiGet("/auth/me");
+      const manageBtn = byId("billing-manage");
+      if (manageBtn && me.user && me.user.hasStripeCustomer && !me.user.isAdmin) {
+        manageBtn.classList.remove("hidden");
+      }
+      if (me.entitlements) cachedEntitlements = me.entitlements;
+    } catch {
+      clearBillingPanel();
+      const status = byId("billing-status");
+      if (status) status.textContent = "Sign in to see your plan.";
+    }
+  }
+
+  function promptUpgrade(data) {
+    const existing = document.getElementById("enh-billing-modal");
+    if (existing) existing.remove();
+    const ent = (data && data.entitlements) || cachedEntitlements || {};
+    const price = ent.priceLabel || "$5/month";
+    const modal = document.createElement("div");
+    modal.id = "enh-billing-modal";
+    modal.className = "enh-dup-modal";
+    modal.innerHTML = `
+      <div class="enh-dup-backdrop" data-billing-dismiss></div>
+      <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-billing-title">
+        <h3 id="enh-billing-title">Upgrade to Pro</h3>
+        <p>${esc((data && data.error) || `Pro is ${price} — unlimited uploads, PDF export and forecast.`)}</p>
+        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month. On-screen EOFY summary stays free.</p>
+        <div class="enh-dup-actions">
+          <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
+          <button type="button" class="btn primary" data-billing-upgrade>Upgrade — ${esc(price)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelectorAll("[data-billing-dismiss]").forEach((el) => {
+      el.addEventListener("click", close);
+    });
+    modal.querySelector("[data-billing-upgrade]")?.addEventListener("click", () => {
+      close();
+      void startCheckout();
+    });
+  }
+  window.haulagePromptUpgrade = promptUpgrade;
+
+  async function startCheckout() {
+    setBillingMessage("Opening secure checkout…");
+    try {
+      const data = await apiPost("/billing/checkout", {});
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setBillingMessage("Checkout did not return a URL.", true);
+    } catch (err) {
+      setBillingMessage(err.message || "Checkout failed.", true);
+      if (window.toast) window.toast(err.message || "Checkout failed");
+    }
+  }
+
+  async function openBillingPortal() {
+    setBillingMessage("Opening billing portal…");
+    try {
+      const data = await apiPost("/billing/portal", {});
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setBillingMessage("Portal did not return a URL.", true);
+    } catch (err) {
+      setBillingMessage(err.message || "Could not open billing portal.", true);
+    }
+  }
+
+  function wireBilling() {
+    byId("billing-upgrade")?.addEventListener("click", () => void startCheckout());
+    byId("billing-manage")?.addEventListener("click", () => void openBillingPortal());
+
+    // Soft-gate Forecast nav: intercept before app.js switches view when free.
+    document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
+      if (btn.dataset.billingWired) return;
+      btn.dataset.billingWired = "1";
+      btn.addEventListener(
+        "click",
+        (e) => {
+          if (cachedEntitlements && cachedEntitlements.isPro) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          promptUpgrade({
+            error: "Forecast is included with Pro ($5/month). You’re on the free plan — upgrade to unlock.",
+            code: "PRO_REQUIRED",
+            entitlements: cachedEntitlements,
+          });
+        },
+        true
+      );
+    });
+
+    // Soft-gate JSON export (client-side blob from free /report).
+    const jsonBtn = byId("export-report");
+    if (jsonBtn && !jsonBtn.dataset.billingWired) {
+      jsonBtn.dataset.billingWired = "1";
+      jsonBtn.addEventListener(
+        "click",
+        (e) => {
+          if (cachedEntitlements && cachedEntitlements.isPro) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          promptUpgrade({
+            error: "JSON accountant export is included with Pro ($5/month).",
+            code: "PRO_REQUIRED",
+            entitlements: cachedEntitlements,
+          });
+        },
+        true
+      );
+    }
+  }
+
+  function handleBillingReturnQuery() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const billing = params.get("billing");
+      if (!billing) return;
+      if (billing === "success" && window.toast) {
+        window.toast("Welcome to Pro — unlimited uploads, PDF and forecast are unlocked.");
+      } else if (billing === "cancel" && window.toast) {
+        window.toast("Checkout cancelled — you can upgrade any time from Profile.");
+      }
+      params.delete("billing");
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}${window.location.hash || ""}`;
+      window.history.replaceState({}, "", next);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -1866,17 +2181,43 @@
     const btn = byId("download-report-pdf");
     if (!btn || btn.dataset.wired) return;
     btn.dataset.wired = "1";
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async (e) => {
+      if (cachedEntitlements && !cachedEntitlements.isPro) {
+        e.preventDefault();
+        promptUpgrade({
+          error: "PDF export is included with Pro ($5/month).",
+          code: "PRO_REQUIRED",
+          entitlements: cachedEntitlements,
+        });
+        return;
+      }
       const fySel = byId("fy-select");
       const fy = fySel && fySel.value ? fySel.value : "";
       const url = `${API}/report.pdf${fy ? `?financialYear=${encodeURIComponent(fy)}` : ""}`;
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `haulage-eofy-${fy || "report"}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
       if (window.toast) window.toast("Preparing EOFY PDF…");
+      try {
+        const res = await fetch(url, { credentials: "same-origin" });
+        if (res.status === 402) {
+          const data = await res.json().catch(() => ({}));
+          promptUpgrade(data);
+          return;
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (window.toast) window.toast(data.error || "PDF download failed");
+          return;
+        }
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `haulage-eofy-${fy || "report"}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "PDF download failed");
+      }
     });
   }
 
@@ -1909,11 +2250,17 @@
   async function start() {
     wire();
     wireTitleScreen();
+    wireBilling();
     wirePdfDownload();
+    handleBillingReturnQuery();
     try {
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) {
         showAuthState(me.user);
+        if (me.entitlements) {
+          cachedEntitlements = me.entitlements;
+          applyProExportGates(me.entitlements);
+        }
         // Driver Hub: signed-in users pick an app unless Taxation Hub is already open.
         if (getSelectedHubApp() === "taxationhub") {
           openTaxationHub(me.user);
@@ -5080,7 +5427,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — new profiles get six months Pro trial. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },

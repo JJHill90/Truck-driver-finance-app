@@ -88,6 +88,15 @@ services:
         sync: false
       - key: AWS_REGION
         value: ap-southeast-2
+      # Stripe — Taxation Hub Pro ($5/mo AUD). Create a Price in Stripe Dashboard
+      # and set STRIPE_PRICE_ID. Webhook endpoint: /api/haulage/billing/webhook
+      # (events: checkout.session.completed, customer.subscription.*).
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
     # Persist accounts + receipts across deploys (required for multi-user admin).
     disk:
       name: haulage-data
