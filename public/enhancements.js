@@ -1074,9 +1074,9 @@
         statusText += ` · renews ${formatTrialEnd(ent.currentPeriodEnd)}`;
       }
     } else if (ent.trialExpired) {
-      statusText = `Free plan · ${trialLabel} trial ended — update to Pro (${price}) for unlimited uploads, PDF & forecast`;
+      statusText = `Free plan · ${trialLabel} trial ended — ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report; update to Pro (${price}) for unlimited + PDF`;
     } else {
-      statusText = `Free plan · ${price} unlocks unlimited uploads, PDF & forecast`;
+      statusText = `Free plan · ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report · Pro (${price}) unlocks unlimited + PDF & forecast`;
     }
     statusEl.textContent = statusText;
 
@@ -1190,7 +1190,7 @@
       <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-billing-title">
         <h3 id="enh-billing-title">Upgrade to Pro</h3>
         <p>${esc((data && data.error) || `Pro is ${price} — unlimited uploads, PDF export and forecast.`)}</p>
-        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month. On-screen EOFY summary stays free.</p>
+        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. PDF export stays with Pro.</p>
         <div class="enh-dup-actions">
           <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
           <button type="button" class="btn primary" data-billing-upgrade>Upgrade — ${esc(price)}</button>
@@ -5490,7 +5490,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access) and you can start paying from day one. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },

@@ -1,5 +1,6 @@
 const {
   FREE_UPLOADS_PER_MONTH,
+  FREE_ONSCREEN_REPORTS,
   PRO_PRICE_AUD,
   TRIAL_MONTHS,
   TRIAL_PRODUCT_LABEL,
@@ -20,6 +21,7 @@ describe("entitlements", () => {
   it("locks Pro at $5 AUD and a universal 3-month Pro+ trial", () => {
     expect(PRO_PRICE_AUD).toBe(5);
     expect(FREE_UPLOADS_PER_MONTH).toBe(15);
+    expect(FREE_ONSCREEN_REPORTS).toBe(1);
     expect(TRIAL_MONTHS).toBe(3);
     expect(TRIAL_PRODUCT_LABEL).toBe("Pro+");
     const offer = trialOfferStatus();
@@ -27,6 +29,26 @@ describe("entitlements", () => {
     expect(offer.universal).toBe(true);
     expect(offer.trialMonths).toBe(3);
     expect(offer.trialLabel).toBe("Pro+");
+  });
+
+  it("falls back to Free 15 uploads + 1 on-screen report after Pro+ ends", () => {
+    const now = new Date("2026-12-01T00:00:00Z");
+    const afterTrial = resolveEntitlements(
+      {
+        plan: "free",
+        proTrialEndsAt: "2026-11-01T00:00:00Z",
+      },
+      { receipts: [] },
+      now
+    );
+    expect(afterTrial.isPro).toBe(false);
+    expect(afterTrial.trialExpired).toBe(true);
+    expect(afterTrial.uploadsLimit).toBe(15);
+    expect(afterTrial.canUpload).toBe(true);
+    expect(afterTrial.canViewOnScreenReport).toBe(true);
+    expect(afterTrial.freeOnscreenReports).toBe(1);
+    expect(afterTrial.canExportPdf).toBe(false);
+    expect(afterTrial.canUseForecast).toBe(false);
   });
 
   it("counts uploads in the current calendar month only", () => {

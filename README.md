@@ -116,11 +116,13 @@ on load — including prompts when email is missing or the password is older tha
 
 ## Plans (Free / Pro / Pro+ trial)
 
-- **Free:** 15 document uploads per calendar month; on-screen EOFY summary.
+- **Free:** 15 document uploads per calendar month + 1 on-screen EOFY report
+  (live summary/report in the app). PDF/JSON export and forecast stay Pro.
 - **Pro ($5/month AUD):** unlimited uploads, PDF + JSON accountant export, forecast.
 - **Pro+ trial:** every new driver profile gets **3 months Pro+** (full Pro
   access) at signup (primary mod excluded). Subscribe from day one, or wait —
-  after the trial ends a soft alert asks you to update to a paid plan.
+  after the trial ends you keep the Free limits (15 uploads + 1 on-screen
+  report) and a soft alert asks you to update to a paid plan.
   Signup copy via `GET /api/haulage/billing/trial`.
 - Profile → **Plan** shows remaining uploads and Upgrade / Manage billing.
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
