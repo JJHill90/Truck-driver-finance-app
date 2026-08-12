@@ -58,7 +58,10 @@ const {
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
 const { ocrPdfViaRaster, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
-const { applyHistoricalRates, centsPerKmForYear } = require("./lib/historical-rates");
+const {
+  applyHistoricalRates,
+  centsPerKmForYear,
+} = require("./lib/historical-rates");
 const { writeJsonAtomic } = require("./lib/atomic-write");
 const { createAuthSupportRateLimiters } = require("./lib/rate-limit");
 const { buildReportPdf } = require("./lib/report-pdf");
@@ -745,7 +748,11 @@ const { summariseLafha } = require("./lib/lafha");
 
 api.get("/lafha", (req, res) => {
   const records = getRecords(req);
-  res.json(summariseLafha(records.profile || {}, records.income || []));
+  const fy =
+    req.query.financialYear ||
+    (records.profile && records.profile.financialYear) ||
+    getCurrentFinancialYear();
+  res.json(summariseLafha(records.profile || {}, records.income || [], fy));
 });
 
 api.get("/version", (_req, res) => {
