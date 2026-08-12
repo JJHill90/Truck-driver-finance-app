@@ -183,12 +183,15 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   (scan/manual, totals, general receipt gallery + ledger) and **Car Expenses
   and Claims** (ATO D1 cents/km or logbook, plus fuel / repairs / tyres /
   rego–insurance / parking–tolls via `listSpecialClaimCategories`, with its own
-  car receipt gallery + car ledger).
-  Car rows stay in the same `expenses` store; the UI filters by car category
-  ids. The general expense menus hide the whole **Vehicle & fuel** group (car
-  claims only via the Car tab) and show a **Medical** group containing Medical
-  equipment (`compulsory_assessment`). Nav no longer has a separate Scan
-  receipt item; `setView("receipts")` redirects to `expenses`.
+  car receipt gallery + car ledger). Car Expenses also stores **work vehicle
+  presets** on `profile.cars` (make, model, registration, engine size;
+  activate/deactivate; green Active indicator + compiled text box) via
+  `lib/profile-cars.js`. Car rows stay in the same `expenses` store; the UI
+  filters by car category ids. The general expense menus hide the whole
+  **Vehicle & fuel** group (car claims only via the Car tab) and show a
+  **Medical** group containing Medical equipment (`compulsory_assessment`). Nav
+  no longer has a separate Scan receipt item; `setView("receipts")` redirects
+  to `expenses`.
 - **Expense scan approval:** when OCR finds multiple line amounts, only the
   overall/grand total (or largest amount if unlabeled) is primary. The confirm
   UI asks to approve that single total — other line amounts are informational

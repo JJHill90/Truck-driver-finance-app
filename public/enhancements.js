@@ -5440,7 +5440,7 @@
       title: "Expenses",
       body: [
         "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "On the Car Expenses and Claims tab, enter cents-per-km, logbook or actual running costs (fuel, tyres, servicing, rego/insurance, parking/tolls). That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
+        "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size) and mark them Active for ATO acknowledgment — the compiled box lists active cars. Then enter cents-per-km, logbook or actual running costs (fuel, tyres, servicing, rego/insurance, parking/tolls). That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
     },
@@ -5735,6 +5735,322 @@
     // Wrap after other enhancement patches (category menus) have run.
     wrapSetView();
     setTimeout(wrapSetView, 0);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Car Expenses: work-vehicle presets on profile ----------------------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let cars = [];
+  let editingId = null;
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function formatCarLine(car) {
+    if (!car) return "";
+    const bits = [];
+    if (car.make || car.model) bits.push([car.make, car.model].filter(Boolean).join(" "));
+    if (car.registration) bits.push(`Rego ${car.registration}`);
+    if (car.engineSize) bits.push(`Engine ${car.engineSize}`);
+    return bits.join(" · ");
+  }
+
+  function compileActiveText(list) {
+    const active = (list || []).filter((c) => c.active);
+    if (!active.length) {
+      return "No active work cars on file. Add a vehicle below and mark it Active for ATO work-use claims.";
+    }
+    return [
+      "Active work vehicle(s) for ATO car expense claims:",
+      ...active.map((c, i) => `${i + 1}. ${formatCarLine(c)}`),
+    ].join("\n");
+  }
+
+  function setMessage(msg, isError) {
+    const el = byId("car-vehicles-message");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.dataset.error = isError ? "1" : "";
+  }
+
+  function readCarsFromState() {
+    try {
+      if (typeof state !== "undefined" && state.records && state.records.profile) {
+        return Array.isArray(state.records.profile.cars)
+          ? state.records.profile.cars.map((c) => ({ ...c }))
+          : [];
+      }
+    } catch {
+      /* ignore */
+    }
+    return cars.slice();
+  }
+
+  function writeCarsToState(next) {
+    cars = next.map((c) => ({ ...c }));
+    try {
+      if (typeof state !== "undefined" && state.records) {
+        state.records.profile = state.records.profile || {};
+        state.records.profile.cars = cars.map((c) => ({ ...c }));
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function render() {
+    const listEl = byId("car-vehicles-list");
+    const compiled = byId("car-vehicles-compiled");
+    const status = byId("car-vehicles-status");
+    if (!listEl) return;
+
+    const list = cars;
+    const activeCount = list.filter((c) => c.active).length;
+    if (compiled) compiled.value = compileActiveText(list);
+    if (status) {
+      if (!list.length) {
+        status.textContent = "No vehicles saved";
+        status.classList.remove("has-active");
+      } else if (activeCount) {
+        status.textContent = `${activeCount} active · ${list.length} on file`;
+        status.classList.add("has-active");
+      } else {
+        status.textContent = `${list.length} on file · none active`;
+        status.classList.remove("has-active");
+      }
+    }
+
+    if (!list.length) {
+      listEl.innerHTML = `<p class="muted small">No work vehicles yet — add one below (make, model, rego, engine size).</p>`;
+      return;
+    }
+
+    listEl.innerHTML = list
+      .map((car) => {
+        const title = [car.make, car.model].filter(Boolean).join(" ") || "Work vehicle";
+        const detail = [
+          car.registration ? `Rego ${esc(car.registration)}` : "",
+          car.engineSize ? `Engine ${esc(car.engineSize)}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const activeClass = car.active ? " is-active" : "";
+        const badge = car.active ? `<span class="car-vehicle-badge">Active</span>` : "";
+        return `<article class="car-vehicle-card${activeClass}" data-car-id="${esc(car.id)}">
+          <span class="car-vehicle-light" aria-hidden="true" title="${car.active ? "Active" : "Inactive"}"></span>
+          <div class="car-vehicle-meta">
+            <strong>${esc(title)}</strong>
+            <p class="muted">${detail || "—"}</p>
+            ${badge}
+          </div>
+          <div class="car-vehicle-actions">
+            <button type="button" class="btn secondary small" data-car-toggle="${esc(car.id)}">${
+              car.active ? "Deactivate" : "Activate"
+            }</button>
+            <button type="button" class="btn secondary small" data-car-edit="${esc(car.id)}">Edit</button>
+            <button type="button" class="btn danger small" data-car-remove="${esc(car.id)}">Remove</button>
+          </div>
+        </article>`;
+      })
+      .join("");
+  }
+
+  function resetForm() {
+    editingId = null;
+    const form = byId("car-vehicle-form");
+    if (form) form.reset();
+    if (byId("car-vehicle-id")) byId("car-vehicle-id").value = "";
+    if (byId("car-vehicle-active")) byId("car-vehicle-active").checked = true;
+    const cancel = byId("car-vehicle-cancel");
+    if (cancel) cancel.hidden = true;
+    const save = byId("car-vehicle-save");
+    if (save) save.textContent = "Save vehicle to profile";
+  }
+
+  function fillForm(car) {
+    editingId = car.id;
+    byId("car-vehicle-id").value = car.id || "";
+    byId("car-vehicle-make").value = car.make || "";
+    byId("car-vehicle-model").value = car.model || "";
+    byId("car-vehicle-rego").value = car.registration || "";
+    byId("car-vehicle-engine").value = car.engineSize || "";
+    byId("car-vehicle-active").checked = Boolean(car.active);
+    const cancel = byId("car-vehicle-cancel");
+    if (cancel) cancel.hidden = false;
+    const save = byId("car-vehicle-save");
+    if (save) save.textContent = "Update vehicle";
+    byId("car-vehicle-make")?.focus();
+  }
+
+  async function persistCars(next, okMsg) {
+    const res = await fetch(`${API}/profile`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cars: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || "Could not save vehicles.");
+    }
+    writeCarsToState(Array.isArray(data.profile && data.profile.cars) ? data.profile.cars : next);
+    render();
+    setMessage(okMsg || "Vehicles saved to your profile.");
+    if (typeof window.toast === "function") window.toast(okMsg || "Work vehicles saved");
+  }
+
+  function syncFromRecords() {
+    writeCarsToState(readCarsFromState());
+    render();
+  }
+
+  function wire() {
+    const box = byId("car-vehicles-box");
+    if (!box || box.dataset.wired) return;
+    box.dataset.wired = "1";
+
+    const form = byId("car-vehicle-form");
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const make = (byId("car-vehicle-make")?.value || "").trim();
+      const model = (byId("car-vehicle-model")?.value || "").trim();
+      const registration = (byId("car-vehicle-rego")?.value || "").trim();
+      const engineSize = (byId("car-vehicle-engine")?.value || "").trim();
+      const active = Boolean(byId("car-vehicle-active")?.checked);
+      if (!make && !model && !registration) {
+        setMessage("Enter at least a make, model or registration.", true);
+        return;
+      }
+      const now = new Date().toISOString();
+      const id = editingId || (byId("car-vehicle-id")?.value || "") || null;
+      let next = cars.map((c) => ({ ...c }));
+      if (id && next.some((c) => c.id === id)) {
+        next = next.map((c) =>
+          c.id === id
+            ? { ...c, make, model, registration, engineSize, active, updatedAt: now }
+            : c
+        );
+      } else {
+        if (next.length >= 10) {
+          setMessage("You can save up to 10 work vehicles.", true);
+          return;
+        }
+        next.push({
+          id:
+            (typeof crypto !== "undefined" && crypto.randomUUID && crypto.randomUUID()) ||
+            `car-${Date.now()}`,
+          make,
+          model,
+          registration,
+          engineSize,
+          active,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      setMessage("Saving…");
+      try {
+        await persistCars(next, active ? "Vehicle saved and marked Active" : "Vehicle saved");
+        resetForm();
+      } catch (err) {
+        setMessage(err.message || "Save failed — sign in on Profile first.", true);
+      }
+    });
+
+    byId("car-vehicle-cancel")?.addEventListener("click", () => {
+      resetForm();
+      setMessage("");
+    });
+
+    byId("car-vehicles-list")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-car-toggle], [data-car-edit], [data-car-remove]");
+      if (!btn) return;
+      const toggleId = btn.getAttribute("data-car-toggle");
+      const editId = btn.getAttribute("data-car-edit");
+      const removeId = btn.getAttribute("data-car-remove");
+      if (editId) {
+        const car = cars.find((c) => c.id === editId);
+        if (car) fillForm(car);
+        return;
+      }
+      if (toggleId) {
+        const next = cars.map((c) =>
+          c.id === toggleId
+            ? { ...c, active: !c.active, updatedAt: new Date().toISOString() }
+            : c
+        );
+        try {
+          await persistCars(
+            next,
+            next.find((c) => c.id === toggleId)?.active
+              ? "Vehicle activated"
+              : "Vehicle deactivated"
+          );
+        } catch (err) {
+          setMessage(err.message || "Could not update vehicle.", true);
+        }
+        return;
+      }
+      if (removeId) {
+        const car = cars.find((c) => c.id === removeId);
+        const label = car ? formatCarLine(car) || "this vehicle" : "this vehicle";
+        if (!window.confirm(`Remove ${label} from your profile?`)) return;
+        const next = cars.filter((c) => c.id !== removeId);
+        try {
+          await persistCars(next, "Vehicle removed");
+          if (editingId === removeId) resetForm();
+        } catch (err) {
+          setMessage(err.message || "Could not remove vehicle.", true);
+        }
+      }
+    });
+  }
+
+  // Refresh when app.js reloads /records.
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const res = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      if (url && /\/records(\?|$)/.test(String(url))) {
+        res
+          .clone()
+          .json()
+          .then((data) => {
+            if (data && data.profile) {
+              writeCarsToState(Array.isArray(data.profile.cars) ? data.profile.cars : []);
+              render();
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+    return res;
+  };
+
+  function start() {
+    wire();
+    syncFromRecords();
   }
 
   if (document.readyState === "loading") {
