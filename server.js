@@ -72,6 +72,8 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const backup = require("./lib/backup");
+const mail = require("./lib/mail");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 
@@ -158,6 +160,63 @@ function persist(req, meta = {}) {
     reason: meta.reason || "auto",
     actor: sessionUsername(req) || req.user || null,
   });
+}
+
+/** Write every in-memory records cache entry to disk before a full-store backup. */
+function flushAllCachedRecordsToDisk() {
+  for (const [key, records] of recordsCache.entries()) {
+    try {
+      const file =
+        key === "__guest__" ? storage.DEFAULT_FILE : auth.recordsFileFor(key);
+      storage.saveRecords(records, file);
+    } catch (err) {
+      console.warn(`Backup flush failed for ${key}:`, err.message);
+    }
+  }
+}
+
+function clearRecordsCache() {
+  recordsCache.clear();
+}
+
+async function notifyBackupComplete(result) {
+  const to = String(
+    process.env.BACKUP_NOTIFY_EMAIL || process.env.SUPPORT_EMAIL || ""
+  ).trim();
+  if (!to || !mail.mailConfigured()) return;
+  const s3Line =
+    result.s3 && result.s3.uploaded
+      ? `S3: s3://${result.s3.bucket}/${result.s3.key}`
+      : result.s3 && result.s3.error
+        ? `S3 upload failed: ${result.s3.error}`
+        : "S3: not configured";
+  const offsiteLine =
+    result.offsite && result.offsite.copied
+      ? `Off-site copy: ${result.offsite.path}`
+      : result.offsite && result.offsite.error
+        ? `Off-site copy failed: ${result.offsite.error}`
+        : "Off-site dir: not configured";
+  const text = [
+    "Driver Hub — data backup completed",
+    "",
+    `Backup id: ${result.id}`,
+    `Reason: ${result.reason || "—"}`,
+    `Size: ${result.bytes} bytes`,
+    `SHA-256: ${result.sha256}`,
+    s3Line,
+    offsiteLine,
+    "",
+    "Download from Profile → Primary mod → Data backups, or restore from there if needed.",
+  ].join("\n");
+  try {
+    await mail.sendMail({
+      to,
+      subject: `Driver Hub backup ${result.id}`,
+      text,
+    });
+  } catch (err) {
+    console.warn("Backup notify email failed:", err.message);
+  }
 }
 
 /** Records view for tax/UI — soft-deleted ledger rows excluded. */
@@ -337,8 +396,6 @@ api.use((req, res, next) => {
 });
 
 // --- Auth ----------------------------------------------------------------
-const mail = require("./lib/mail");
-
 api.post("/auth/password-strength", (req, res) => {
   const { password, username } = req.body || {};
   res.json(auth.scorePassword(password, username));
@@ -1008,6 +1065,65 @@ api.delete("/admin/users/:username", (req, res) => {
     res.json({ ok: true, username: target.username });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// --- Full-store backups (primary mod) ------------------------------------
+api.get("/admin/backups", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({
+    status: backup.getStatus(),
+    backups: backup.listBackups(),
+  });
+});
+
+api.post("/admin/backups", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const result = await backup.createBackup({
+      reason: "manual",
+      actor: req.user,
+      flushFn: flushAllCachedRecordsToDisk,
+    });
+    notifyBackupComplete(result).catch(() => {});
+    res.status(201).json({ backup: result });
+  } catch (err) {
+    const status = err.code === "BACKUP_BUSY" ? 409 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+api.get("/admin/backups/:id/download", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const file = backup.getBackupFile(req.params.id);
+    res.setHeader("Content-Type", "application/gzip");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${file.filename}"`
+    );
+    res.sendFile(file.path);
+  } catch (err) {
+    const status = err.code === "NOT_FOUND" || /Invalid backup id/i.test(err.message) ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+api.post("/admin/backups/:id/restore", async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const result = await backup.restoreBackup(req.params.id, {
+      confirm: req.body && req.body.confirm,
+      flushFn: flushAllCachedRecordsToDisk,
+    });
+    clearRecordsCache();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    let status = 500;
+    if (err.code === "CONFIRM_REQUIRED") status = 400;
+    else if (err.code === "BACKUP_BUSY") status = 409;
+    else if (err.code === "NOT_FOUND" || /Invalid backup id/i.test(err.message)) status = 404;
+    res.status(status).json({ error: err.message });
   }
 });
 
@@ -1765,6 +1881,10 @@ if (process.env.NODE_ENV !== "test") {
     console.log(`Driver Hub / Taxation Hub running at http://localhost:${PORT}/haulage/`);
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
+    backup.startBackupScheduler({
+      flushFn: flushAllCachedRecordsToDisk,
+      onComplete: notifyBackupComplete,
+    });
   });
 }
 

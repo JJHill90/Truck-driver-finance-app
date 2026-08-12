@@ -1463,6 +1463,121 @@
     });
   }
 
+  function fmtBytes(n) {
+    const v = Number(n) || 0;
+    if (v < 1024) return `${v} B`;
+    if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+    return `${(v / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function setAdminBackupMessage(msg, isError) {
+    const el = byId("admin-backup-message");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.style.color = isError ? "var(--red)" : "";
+  }
+
+  function renderAdminBackups(payload) {
+    const statusEl = byId("admin-backup-status");
+    const listEl = byId("admin-backup-list");
+    if (!listEl) return;
+    const status = (payload && payload.status) || {};
+    if (statusEl) {
+      const bits = [
+        status.enabled === false ? "Scheduler off" : `Scheduler every ${status.intervalHours || 24}h`,
+        `keep ${status.keep || 14}`,
+        status.s3Bucket ? `S3: ${status.s3Bucket}` : "S3 not set",
+        status.offsiteDir ? "off-site dir set" : null,
+      ].filter(Boolean);
+      statusEl.textContent = bits.join(" · ");
+    }
+    const rows = (payload && payload.backups) || [];
+    if (!rows.length) {
+      listEl.innerHTML = `<p class="muted small">No backups yet — click “Back up now” or wait for the daily run.</p>`;
+      return;
+    }
+    listEl.innerHTML = rows
+      .map((b) => {
+        const when = fmtDate(b.createdAt);
+        const href = `${API}/admin/backups/${encodeURIComponent(b.id)}/download`;
+        return `<div class="admin-backup-row" data-backup-id="${esc(b.id)}">
+          <div>
+            <strong>${esc(when)}</strong>
+            <span class="muted small"> · ${esc(fmtBytes(b.bytes))}</span>
+            <div class="muted small">${esc(b.id)}</div>
+          </div>
+          <div class="admin-backup-actions">
+            <a class="btn secondary" href="${href}">Download</a>
+            <button type="button" class="btn danger admin-backup-restore" data-backup-id="${esc(b.id)}">Restore</button>
+          </div>
+        </div>`;
+      })
+      .join("");
+    listEl.querySelectorAll(".admin-backup-restore").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        void restoreAdminBackup(btn.getAttribute("data-backup-id"));
+      });
+    });
+  }
+
+  async function loadAdminBackups() {
+    const panel = byId("admin-panel");
+    if (!panel || panel.classList.contains("hidden")) return;
+    if (!byId("admin-backup-list")) return;
+    try {
+      const data = await apiGet("/admin/backups");
+      if (data.error) {
+        setAdminBackupMessage(data.error, true);
+        return;
+      }
+      renderAdminBackups(data);
+    } catch (err) {
+      setAdminBackupMessage(err.message || "Could not load backups", true);
+    }
+  }
+
+  async function runAdminBackupNow() {
+    setAdminBackupMessage("Creating backup…");
+    try {
+      const data = await apiPost("/admin/backups", {});
+      if (data.error) throw new Error(data.error);
+      setAdminBackupMessage(`Backup saved: ${data.backup && data.backup.id}`);
+      if (window.toast) window.toast("Backup created");
+      await loadAdminBackups();
+    } catch (err) {
+      setAdminBackupMessage(err.message || "Backup failed", true);
+      if (window.toast) window.toast(err.message);
+    }
+  }
+
+  async function restoreAdminBackup(id) {
+    if (!id) return;
+    const ok = window.confirm(
+      `Restore backup "${id}"?\n\nThis overwrites all live accounts, ledgers and receipt files with that snapshot. A safety backup is taken first. Everyone may need to sign in again.`
+    );
+    if (!ok) return;
+    const typed = window.prompt('Type RESTORE to confirm full data restore:');
+    if (typed !== "RESTORE") {
+      if (window.toast) window.toast("Restore cancelled");
+      return;
+    }
+    setAdminBackupMessage("Restoring backup…");
+    try {
+      const data = await apiPost(`/admin/backups/${encodeURIComponent(id)}/restore`, {
+        confirm: "RESTORE",
+      });
+      if (data.error) throw new Error(data.error);
+      setAdminBackupMessage(
+        `Restored ${data.restored}. Safety backup: ${data.safetyBackupId || "—"}. Reloading…`
+      );
+      if (window.toast) window.toast("Backup restored — reloading");
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      setAdminBackupMessage(err.message || "Restore failed", true);
+      if (window.toast) window.toast(err.message);
+    }
+  }
+
   async function loadAdminUsers() {
     const panel = byId("admin-panel");
     if (!panel || panel.classList.contains("hidden")) return;
@@ -1472,6 +1587,7 @@
       return;
     }
     renderAdminList(data.users || []);
+    await loadAdminBackups();
   }
 
   async function openAdminUser(username) {
@@ -1661,6 +1777,14 @@
     if (adminRefresh) {
       adminRefresh.addEventListener("click", () => {
         void loadAdminUsers();
+      });
+    }
+
+    const backupNow = byId("admin-backup-now");
+    if (backupNow && !backupNow.dataset.wired) {
+      backupNow.dataset.wired = "1";
+      backupNow.addEventListener("click", () => {
+        void runAdminBackupNow();
       });
     }
 
