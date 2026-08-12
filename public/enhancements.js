@@ -4171,6 +4171,7 @@
     const clone = table.cloneNode(true);
     let carCount = 0;
     let carSum = 0;
+    let carDeductible = 0;
     clone.querySelectorAll("tbody tr[data-expense-id]").forEach((tr) => {
       const id = tr.getAttribute("data-expense-id");
       const isDraft = id === "__draft__" || tr.classList.contains("draft-row");
@@ -4185,7 +4186,17 @@
         return;
       }
       carCount += 1;
-      carSum += Number(entry.amount) || 0;
+      const amount = Number(entry.amount) || 0;
+      carSum += amount;
+      if (entry.category === "vehicle_car" && entry.method === "cents_per_km") {
+        carDeductible += amount;
+      } else {
+        const pct =
+          entry.workUsePercent != null
+            ? Math.min(100, Math.max(0, Number(entry.workUsePercent)))
+            : 100;
+        carDeductible += amount * (pct / 100);
+      }
     });
 
     // Drop the period-total row; FY/week filter updates the running-total row.
@@ -4227,7 +4238,11 @@
       });
     }
     if (summary) {
-      summary.textContent = `${carCount} car claim${carCount === 1 ? "" : "s"} · ${fmtCurrency(carSum)}`;
+      const dedLabel = fmtCurrency(Math.round(carDeductible * 100) / 100);
+      summary.textContent =
+        carCount === 0
+          ? "0 car claims"
+          : `${carCount} car claim${carCount === 1 ? "" : "s"} · ${fmtCurrency(carSum)} gross · ~${dedLabel} deductible (work use)`;
     }
   }
 
@@ -5440,7 +5455,7 @@
       title: "Expenses",
       body: [
         "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size) and mark them Active for ATO acknowledgment — the compiled box lists active cars. Then enter cents-per-km, logbook or actual running costs (fuel, tyres, servicing, rego/insurance, parking/tolls). That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
+        "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active for ATO acknowledgment — the compiled box lists active cars. The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. Then enter cents-per-km, logbook or actual running costs. That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
     },
@@ -5764,12 +5779,24 @@
     return document.getElementById(id);
   }
 
+  const ATO_EXAMPLE_WORK_USE = 63;
+  const CAR_CLAIM_CATEGORIES = new Set([
+    "vehicle_car",
+    "fuel",
+    "repairs_maintenance",
+    "tyres",
+    "registration_insurance",
+    "parking_tolls",
+  ]);
+
   function formatCarLine(car) {
     if (!car) return "";
     const bits = [];
     if (car.make || car.model) bits.push([car.make, car.model].filter(Boolean).join(" "));
     if (car.registration) bits.push(`Rego ${car.registration}`);
     if (car.engineSize) bits.push(`Engine ${car.engineSize}`);
+    if (car.odometerReading) bits.push(`Odometer ${car.odometerReading}`);
+    if (car.estimatedWorkUsePercent != null) bits.push(`Work use ${car.estimatedWorkUsePercent}%`);
     return bits.join(" · ");
   }
 
@@ -5783,6 +5810,38 @@
       ...active.map((c, i) => `${i + 1}. ${formatCarLine(c)}`),
     ].join("\n");
   }
+
+  function primaryActiveCar() {
+    return cars.find((c) => c.active) || null;
+  }
+
+  function syncWorkUseSliderDisplay() {
+    const slider = byId("car-vehicle-workuse");
+    const display = byId("car-vehicle-workuse-display");
+    if (!slider || !display) return;
+    display.textContent = String(slider.value);
+    slider.setAttribute("aria-valuenow", slider.value);
+  }
+
+  /** Prefill Car Expenses claim form work-use % from the active vehicle. */
+  function applyActiveCarWorkUseToClaimForm() {
+    const form = byId("expense-form");
+    const field = form && form.elements && form.elements.workUsePercent;
+    if (!field) return;
+    const car = primaryActiveCar();
+    if (!car || car.estimatedWorkUsePercent == null) return;
+    const pct = Math.min(100, Math.max(0, Number(car.estimatedWorkUsePercent) || 0));
+    field.value = String(pct);
+    field.dataset.fromCarProfile = "1";
+    field.title = `From active work vehicle (${formatCarLine(car)})`;
+    // Nudge the live deduction preview used by app.js.
+    try {
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    } catch {
+      /* ignore */
+    }
+  }
+  window.haulageApplyCarWorkUse = applyActiveCarWorkUseToClaimForm;
 
   function setMessage(msg, isError) {
     const el = byId("car-vehicles-message");
@@ -5839,7 +5898,7 @@
     }
 
     if (!list.length) {
-      listEl.innerHTML = `<p class="muted small">No work vehicles yet — add one below (make, model, rego, engine size).</p>`;
+      listEl.innerHTML = `<p class="muted small">No work vehicles yet — add one below (make, model, rego, engine size, odometer and work use).</p>`;
       return;
     }
 
@@ -5849,6 +5908,8 @@
         const detail = [
           car.registration ? `Rego ${esc(car.registration)}` : "",
           car.engineSize ? `Engine ${esc(car.engineSize)}` : "",
+          car.odometerReading ? `Odo ${esc(car.odometerReading)}` : "",
+          car.estimatedWorkUsePercent != null ? `${esc(car.estimatedWorkUsePercent)}% work use` : "",
         ]
           .filter(Boolean)
           .join(" · ");
@@ -5871,6 +5932,8 @@
         </article>`;
       })
       .join("");
+
+    applyActiveCarWorkUseToClaimForm();
   }
 
   function resetForm() {
@@ -5879,6 +5942,9 @@
     if (form) form.reset();
     if (byId("car-vehicle-id")) byId("car-vehicle-id").value = "";
     if (byId("car-vehicle-active")) byId("car-vehicle-active").checked = true;
+    if (byId("car-vehicle-workuse")) byId("car-vehicle-workuse").value = String(ATO_EXAMPLE_WORK_USE);
+    if (byId("car-vehicle-odometer")) byId("car-vehicle-odometer").value = "";
+    syncWorkUseSliderDisplay();
     const cancel = byId("car-vehicle-cancel");
     if (cancel) cancel.hidden = true;
     const save = byId("car-vehicle-save");
@@ -5892,6 +5958,15 @@
     byId("car-vehicle-model").value = car.model || "";
     byId("car-vehicle-rego").value = car.registration || "";
     byId("car-vehicle-engine").value = car.engineSize || "";
+    if (byId("car-vehicle-odometer")) {
+      byId("car-vehicle-odometer").value = car.odometerReading || "";
+    }
+    if (byId("car-vehicle-workuse")) {
+      byId("car-vehicle-workuse").value = String(
+        car.estimatedWorkUsePercent != null ? car.estimatedWorkUsePercent : ATO_EXAMPLE_WORK_USE
+      );
+      syncWorkUseSliderDisplay();
+    }
     byId("car-vehicle-active").checked = Boolean(car.active);
     const cancel = byId("car-vehicle-cancel");
     if (cancel) cancel.hidden = false;
@@ -5928,12 +6003,16 @@
     box.dataset.wired = "1";
 
     const form = byId("car-vehicle-form");
+    byId("car-vehicle-workuse")?.addEventListener("input", syncWorkUseSliderDisplay);
+
     form?.addEventListener("submit", async (e) => {
       e.preventDefault();
       const make = (byId("car-vehicle-make")?.value || "").trim();
       const model = (byId("car-vehicle-model")?.value || "").trim();
       const registration = (byId("car-vehicle-rego")?.value || "").trim();
       const engineSize = (byId("car-vehicle-engine")?.value || "").trim();
+      const odometerReading = (byId("car-vehicle-odometer")?.value || "").trim();
+      const estimatedWorkUsePercent = Number(byId("car-vehicle-workuse")?.value ?? ATO_EXAMPLE_WORK_USE);
       const active = Boolean(byId("car-vehicle-active")?.checked);
       if (!make && !model && !registration) {
         setMessage("Enter at least a make, model or registration.", true);
@@ -5941,13 +6020,19 @@
       }
       const now = new Date().toISOString();
       const id = editingId || (byId("car-vehicle-id")?.value || "") || null;
+      const patch = {
+        make,
+        model,
+        registration,
+        engineSize,
+        odometerReading,
+        estimatedWorkUsePercent,
+        active,
+        updatedAt: now,
+      };
       let next = cars.map((c) => ({ ...c }));
       if (id && next.some((c) => c.id === id)) {
-        next = next.map((c) =>
-          c.id === id
-            ? { ...c, make, model, registration, engineSize, active, updatedAt: now }
-            : c
-        );
+        next = next.map((c) => (c.id === id ? { ...c, ...patch } : c));
       } else {
         if (next.length >= 10) {
           setMessage("You can save up to 10 work vehicles.", true);
@@ -5957,13 +6042,8 @@
           id:
             (typeof crypto !== "undefined" && crypto.randomUUID && crypto.randomUUID()) ||
             `car-${Date.now()}`,
-          make,
-          model,
-          registration,
-          engineSize,
-          active,
+          ...patch,
           createdAt: now,
-          updatedAt: now,
         });
       }
       setMessage("Saving…");
@@ -6024,12 +6104,36 @@
     });
   }
 
-  // Refresh when app.js reloads /records.
+  function enrichCarPreviewNote(body) {
+    const box = byId("expense-preview");
+    if (!box || box.classList.contains("hidden")) return;
+    const pct = Number(body.workUsePercent);
+    if (!Number.isFinite(pct)) return;
+    let note = box.querySelector(".car-workuse-preview-note");
+    if (!note) {
+      note = document.createElement("p");
+      note.className = "muted small car-workuse-preview-note";
+      box.appendChild(note);
+    }
+    const active = primaryActiveCar();
+    const fromProfile =
+      body.workUseFromCarProfile ||
+      (active && pct === Number(active.estimatedWorkUsePercent));
+    note.textContent =
+      body.category === "vehicle_car" && body.method === "cents_per_km"
+        ? `Work kilometres should already be work-only (cents/km). Active vehicle estimate on file: ${pct}%.`
+        : `Deductible uses ${pct}% work use${
+            fromProfile ? " from your active vehicle profile" : ""
+          }.`;
+  }
+
+  // Refresh when app.js reloads /records; enrich car deduction previews.
   const origFetch = window.fetch;
   window.fetch = async function (...args) {
     const res = await origFetch.apply(this, args);
     try {
       const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      const options = args[1] || {};
       if (url && /\/records(\?|$)/.test(String(url))) {
         res
           .clone()
@@ -6042,15 +6146,47 @@
           })
           .catch(() => {});
       }
+      if (
+        url &&
+        /\/expenses\/preview(\?|$)/.test(String(url)) &&
+        String(options.method || "GET").toUpperCase() === "POST"
+      ) {
+        let body = {};
+        try {
+          body = options.body ? JSON.parse(options.body) : {};
+        } catch {
+          body = {};
+        }
+        if (CAR_CLAIM_CATEGORIES.has(body.category)) {
+          // Wait a tick so app.js can paint #expense-preview first.
+          setTimeout(() => enrichCarPreviewNote(body), 0);
+        }
+      }
     } catch {
       /* ignore */
     }
     return res;
   };
 
+  // After app.js resets work-use to 100 on save, restore the active car %.
+  const expenseForm = byId("expense-form");
+  if (expenseForm && !expenseForm.dataset.carWorkUseWired) {
+    expenseForm.dataset.carWorkUseWired = "1";
+    expenseForm.addEventListener("submit", () => {
+      setTimeout(() => applyActiveCarWorkUseToClaimForm(), 0);
+    });
+    expenseForm.addEventListener("change", (e) => {
+      if (e.target && e.target.name === "category" && CAR_CLAIM_CATEGORIES.has(e.target.value)) {
+        applyActiveCarWorkUseToClaimForm();
+      }
+    });
+  }
+
   function start() {
     wire();
     syncFromRecords();
+    syncWorkUseSliderDisplay();
+    applyActiveCarWorkUseToClaimForm();
   }
 
   if (document.readyState === "loading") {
@@ -6097,6 +6233,9 @@
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
+    if (name === "car" && typeof window.haulageApplyCarWorkUse === "function") {
+      window.haulageApplyCarWorkUse();
+    }
   }
 
   function start() {
