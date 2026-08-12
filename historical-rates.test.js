@@ -4,6 +4,8 @@ const {
   budgetRepairLevy,
   sgRateForYear,
   applyHistoricalRates,
+  travelRatesForYear,
+  getSalaryBandForYear,
 } = require("./lib/historical-rates");
 
 describe("incomeTaxForYear (verified ATO brackets)", () => {
@@ -56,6 +58,28 @@ describe("sgRateForYear", () => {
   });
 });
 
+describe("travelRatesForYear", () => {
+  it("returns TD 2025/4 truck meals for 2025-26", () => {
+    const r = travelRatesForYear("2025-26");
+    expect(r.determination).toBe("TD 2025/4");
+    expect(r.truckDriverMealsDailyTotal).toBe(128);
+    expect(r.overtimeMealCap).toBe(38.65);
+    expect(getSalaryBandForYear(148250, "2025-26")).toBe("band1");
+    expect(getSalaryBandForYear(148251, "2025-26")).toBe("band2");
+  });
+
+  it("returns TD 2026/4 truck meals for 2026-27 onwards", () => {
+    const r = travelRatesForYear("2026-27");
+    expect(r.determination).toBe("TD 2026/4");
+    expect(r.truckDriverMealsDailyTotal).toBe(132.5);
+    expect(r.overtimeMealCap).toBe(40);
+    expect(r.truckDriverMeals.breakfast.cap).toBe(32.25);
+    expect(getSalaryBandForYear(153210, "2026-27")).toBe("band1");
+    expect(getSalaryBandForYear(153211, "2026-27")).toBe("band2");
+    expect(travelRatesForYear("2027-28").determination).toBe("TD 2026/4");
+  });
+});
+
 describe("applyHistoricalRates", () => {
   it("recomputes the tax estimate with the selected year's rates", () => {
     // Base summary as the provided engine would produce (current-rate tax).
@@ -86,5 +110,21 @@ describe("applyHistoricalRates", () => {
     applyHistoricalRates(summary, records, "2016-17");
     // 1000 km * $0.66 (2016-17 rate) = $660
     expect(summary.expenses.deductibleTotal).toBe(660);
+  });
+
+  it("overlays FY travel / LAFHA allowances onto the summary", () => {
+    const summary = {
+      financialYear: "2026-27",
+      profile: { annualSalary: 85000 },
+      income: { assessableTotal: 85000, grossTotal: 85000, breakdown: [] },
+      expenses: { deductibleTotal: 0, grossTotal: 0, breakdown: [] },
+      allowances: {},
+      taxEstimate: {},
+    };
+    applyHistoricalRates(summary, { expenses: [] }, "2026-27");
+    expect(summary.allowances.determination).toBe("TD 2026/4");
+    expect(summary.allowances.maxDailyMealsPotential).toBe(132.5);
+    expect(summary.allowances.overtimeMealCap).toBe(40);
+    expect(summary.profile.salaryBand).toBe("band1");
   });
 });
