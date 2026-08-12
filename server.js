@@ -13,6 +13,7 @@ const {
   listMenuCategoryGroups,
   listSpecialClaimCategories,
   normalizeExpenseCategoryId,
+  CAR_CLAIM_CATEGORY_IDS,
 } = require("./lib/expense-menu");
 const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
@@ -80,7 +81,23 @@ const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
-const { normalizeCars } = require("./lib/profile-cars");
+const {
+  normalizeCars,
+  primaryActiveWorkUsePercent,
+} = require("./lib/profile-cars");
+
+const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
+
+/** Prefill car-claim work-use % from the active vehicle when the client omits it. */
+function applyActiveCarWorkUse(records, body) {
+  if (!body || !CAR_CLAIM_ID_SET.has(body.category)) return body;
+  if (body.workUsePercent != null && body.workUsePercent !== "") return body;
+  const pct = primaryActiveWorkUsePercent((records && records.profile && records.profile.cars) || []);
+  if (pct == null) return body;
+  body.workUsePercent = pct;
+  body.workUseFromCarProfile = true;
+  return body;
+}
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -1436,9 +1453,15 @@ api.post("/billing/portal", async (req, res) => {
 
 // --- Expenses ------------------------------------------------------------
 api.post("/expenses/preview", (req, res) => {
+  const records = getRecords(req);
   const payload = normalizePayloadDate({ ...(req.body || {}) });
   if (payload.category) payload.category = normalizeExpenseCategoryId(payload.category);
+  applyActiveCarWorkUse(records, payload);
   const analysis = calcExpenseDeduction(payload);
+  if (payload.workUseFromCarProfile) {
+    analysis.workUsePercent = Number(payload.workUsePercent);
+    analysis.workUseFromCarProfile = true;
+  }
   // Use the year's cents-per-km rate (from the entry's date) so the preview
   // matches how a prior-year car claim will be reconciled.
   if (payload.category === "vehicle_car" && payload.method === "cents_per_km" && payload.date) {
@@ -1455,6 +1478,8 @@ api.post("/expenses", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  applyActiveCarWorkUse(records, body);
+  delete body.workUseFromCarProfile;
   const entry = storage.addExpense(records, body);
   rememberVendor(records, {
     name: body.vendor || entry.vendor,

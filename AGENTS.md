@@ -184,10 +184,13 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   and Claims** (ATO D1 cents/km or logbook, plus fuel / repairs / tyres /
   rego–insurance / parking–tolls via `listSpecialClaimCategories`, with its own
   car receipt gallery + car ledger). Car Expenses also stores **work vehicle
-  presets** on `profile.cars` (make, model, registration, engine size;
-  activate/deactivate; green Active indicator + compiled text box) via
-  `lib/profile-cars.js`. Car rows stay in the same `expenses` store; the UI
-  filters by car category ids. The general expense menus hide the whole
+  presets** on `profile.cars` (make, model, registration, engine size,
+  speedometer/odometer reading, estimated work-use % slider; activate/deactivate;
+  green Active indicator + compiled text box) via `lib/profile-cars.js`. The
+  work-use slider defaults to the ATO D1 public logbook worked example (~63%).
+  Active-car work-use % prefills Car Expenses claim forms and deductible
+  previews (actual running costs). Car rows stay in the same `expenses` store;
+  the UI filters by car category ids. The general expense menus hide the whole
   **Vehicle & fuel** group (car claims only via the Car tab) and show a
   **Medical** group containing Medical equipment (`compulsory_assessment`). Nav
   no longer has a separate Scan receipt item; `setView("receipts")` redirects

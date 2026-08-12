@@ -310,6 +310,31 @@
                   <label>Car model<input type="text" name="model" id="car-vehicle-model" placeholder="e.g. Hilux" maxlength="80" /></label>
                   <label>Registration<input type="text" name="registration" id="car-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
                   <label>Engine size<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="e.g. 2.8 L" maxlength="40" /></label>
+                  <label class="span-2">Speedometer / odometer reading
+                    <input type="text" name="odometerReading" id="car-vehicle-odometer" placeholder="e.g. 142,350 km" maxlength="40" />
+                  </label>
+                  <div class="span-2 car-workuse-field">
+                    <label class="car-workuse-label" for="car-vehicle-workuse">
+                      Estimated work use
+                      <span class="car-workuse-value"><span id="car-vehicle-workuse-display">63</span>%</span>
+                    </label>
+                    <input
+                      type="range"
+                      name="estimatedWorkUsePercent"
+                      id="car-vehicle-workuse"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="63"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow="63"
+                    />
+                    <p id="car-vehicle-workuse-hint" class="muted small car-workuse-hint">
+                      ATO public D1 guidance uses a worked example of about 63% work use (4,100 work km ÷ 6,500 total km).
+                      Set your own estimate from a logbook — home to your usual depot is generally private.
+                    </p>
+                  </div>
                   <label class="checkbox span-2">
                     <input type="checkbox" name="active" id="car-vehicle-active" checked />
                     Active for work claims

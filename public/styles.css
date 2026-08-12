@@ -1390,6 +1390,34 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   padding-top: 10px;
   border-top: 1px dashed var(--border);
 }
+.car-workuse-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.car-workuse-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+}
+.car-workuse-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.car-workuse-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--green, #1f8a4c);
+}
+.car-workuse-hint {
+  margin: 0;
+  line-height: 1.35;
+}
+.car-workuse-preview-note {
+  margin: 6px 0 0;
+}
 #car-vehicles-message[data-error="1"] {
   color: var(--red);
 }
