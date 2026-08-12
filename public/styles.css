@@ -298,6 +298,41 @@ button.title-hub-logout:hover {
   margin: 1rem 0 0.25rem;
   font-size: 1.05rem;
 }
+.profile-billing {
+  margin: 0 0 16px;
+  max-width: 36rem;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-billing .profile-section-title {
+  margin-top: 0;
+}
+.profile-billing #billing-status {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-weight: 600;
+}
+.profile-billing #billing-uploads {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+}
+.profile-billing #billing-message {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+}
+.btn.billing-locked,
+.nav-btn.billing-locked {
+  opacity: 0.72;
+}
+.nav-btn.billing-locked::after {
+  content: " Pro";
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-left: 4px;
+}
 /* Slightly denser Email / Password block on Profile */
 .profile-security {
   gap: 8px;

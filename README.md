@@ -114,6 +114,16 @@ on load — including prompts when email is missing or the password is older tha
   profiles** and can open any user’s income, expenses and receipt downloads
   (read-only).
 
+## Plans (Free / Pro)
+
+- **Free:** 15 document uploads per calendar month; on-screen EOFY summary.
+- **Pro ($5/month AUD):** unlimited uploads, PDF + JSON accountant export, forecast.
+- New profiles get **6 months Pro trial**; primary mod is always Pro.
+- Profile → **Plan** shows remaining uploads and Upgrade / Manage billing.
+- Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
+  `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, plus `APP_BASE_URL` for return URLs.
+  Webhook path: `POST /api/haulage/billing/webhook`.
+
 ## Environment variables
 
 - `PORT` — server port (default `3000`).
@@ -121,6 +131,8 @@ on load — including prompts when email is missing or the password is older tha
 - `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
 - `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
   username is `Haulage_Admin`).
+- `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` — optional
+  Stripe billing for Pro ($5/mo). Without them, free quotas and trials still work.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
   `APP_BASE_URL` — optional outbound email for recovery links and 90-day
   password reminders (`lib/mail.js`).

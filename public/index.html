@@ -454,6 +454,16 @@
                 <button type="button" class="btn danger" id="auth-logout">Log out</button>
               </div>
               <p class="muted">Your data below is private to this profile. Presets pre-fill new entries.</p>
+              <div id="billing-panel" class="profile-billing">
+                <h3 class="span-2 profile-section-title">Plan</h3>
+                <p id="billing-status" class="muted span-2">Loading plan…</p>
+                <p id="billing-uploads" class="muted span-2"></p>
+                <div class="span-2 form-actions" id="billing-actions">
+                  <button type="button" class="btn primary" id="billing-upgrade">Upgrade to Pro — $5/month</button>
+                  <button type="button" class="btn secondary small hidden" id="billing-manage">Manage billing</button>
+                </div>
+                <p id="billing-message" class="muted span-2" role="status"></p>
+              </div>
               <div class="profile-security form-grid">
                 <h3 class="span-2 profile-section-title">Email</h3>
                 <p class="muted span-2 profile-security-hint">For recovery and security reminders.</p>

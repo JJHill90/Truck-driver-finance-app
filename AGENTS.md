@@ -261,6 +261,16 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
  via **FormSubmit** in the browser (first use may require the inbox owner to
  click FormSubmit’s activation email). Help blurbs live in
  `public/enhancements.js`.
+- **Freemium / Pro ($5/mo AUD).** Free plan: **15 uploads/month** (scans +
+  manual receipts), on-screen EOFY summary. Pro: unlimited uploads, PDF +
+  JSON accountant export, forecast. New accounts (and legacy backfills) get
+  **6 months Pro trial**. Primary mod is always Pro. Soft gates return `402`
+  with `UPLOAD_LIMIT` / `PRO_REQUIRED` (checked before OCR on scan/manual).
+  Stripe Checkout + Customer Portal via `lib/billing-stripe.js`
+  (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`,
+  `APP_BASE_URL`); webhook at `POST /api/haulage/billing/webhook` (raw body).
+  Profile → Plan shows remaining uploads and Upgrade ($5/month). Without
+  Stripe keys, trials/quotas still apply; checkout returns a clear error.
 - **Version label** sits under the Support button (sidebar bottom-left) and on
  the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
  Bump `HAULAGE_PR_NUMBER` with each new PR. Display rules: PR *n* →
