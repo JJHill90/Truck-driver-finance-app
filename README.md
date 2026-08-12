@@ -118,7 +118,9 @@ on load — including prompts when email is missing or the password is older tha
 
 - **Free:** 15 document uploads per calendar month; on-screen EOFY summary.
 - **Pro ($5/month AUD):** unlimited uploads, PDF + JSON accountant export, forecast.
-- New profiles get **6 months Pro trial**; primary mod is always Pro.
+- **Founding cohort:** first **50** driver profiles get **6 months Pro trial**
+  at signup (primary mod excluded). After that, new profiles start on Free.
+  Signup UI shows spots remaining via `GET /api/haulage/billing/founding`.
 - Profile → **Plan** shows remaining uploads and Upgrade / Manage billing.
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
   `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, plus `APP_BASE_URL` for return URLs.
