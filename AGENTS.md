@@ -147,15 +147,17 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   laptop accounts do not appear on Render.
 - **Full-store backups.** `lib/backup.js` writes daily `.tar.gz` archives of
   accounts, per-user JSON, receipts, history and support messages to
-  `data/backups/` (keeps `BACKUP_KEEP`, default 14). Scheduler starts on boot
-  (`BACKUP_ENABLED`, `BACKUP_INTERVAL_HOURS`). Flushes the in-memory records
-  cache before each run. Primary mod can list / download / run now / restore
-  from Profile → admin panel (`GET|POST /admin/backups`, download + restore
-  routes). Restore requires `confirm: "RESTORE"` and takes a safety backup
-  first. Optional off-site: `BACKUP_OFFSITE_DIR` and/or `BACKUP_S3_BUCKET` +
-  AWS credentials; optional notify via `BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL`
-  when mail is configured. Local backups alone are not enough if the Render
-  disk is lost — configure S3 or download copies off-box for release.
+  `data/backups/` (keeps `BACKUP_KEEP`, default 14). Clock-aligned scheduler
+  defaults to **17:00 Australia/Sydney** (`BACKUP_AT`, `BACKUP_TIMEZONE`); if
+  the process was down at 5pm it catch-ups once later that day. Flushes the
+  in-memory records cache before each run. Primary mod can list / download /
+  run now / restore from Profile → admin panel; with the admin panel open
+  around 5pm, today’s archive auto-downloads once to that browser. Restore
+  requires `confirm: "RESTORE"` and takes a safety backup first. Optional
+  off-site: `BACKUP_OFFSITE_DIR` and/or `BACKUP_S3_BUCKET` + AWS credentials;
+  optional notify via `BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL` when mail is
+  configured. Local + browser download still need you online at 5pm — add S3
+  for true hands-off off-site copies.
 - **Render deploy branch must be `main`.** Service `haulage-finance`
   (`srv-d9ga1gernols73c55bm0`) auto-deploys on commit. There is one shared app
   build for admin and every driver profile (per-user data only differs under

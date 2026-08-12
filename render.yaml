@@ -53,12 +53,14 @@ services:
         sync: false
       - key: RESEND_FROM
         sync: false
-      # Full-store backups (daily under data/backups/). Optional off-site:
+      # Full-store backups at 5pm Sydney (data/backups/). Optional off-site:
       # BACKUP_OFFSITE_DIR and/or BACKUP_S3_BUCKET + AWS credentials.
       - key: BACKUP_ENABLED
         value: "1"
-      - key: BACKUP_INTERVAL_HOURS
-        value: "24"
+      - key: BACKUP_AT
+        value: "17:00"
+      - key: BACKUP_TIMEZONE
+        value: Australia/Sydney
       - key: BACKUP_KEEP
         value: "14"
       - key: BACKUP_NOTIFY_EMAIL

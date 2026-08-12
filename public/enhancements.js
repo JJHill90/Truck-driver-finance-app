@@ -1477,6 +1477,43 @@
     el.style.color = isError ? "var(--red)" : "";
   }
 
+  const BACKUP_AUTO_DL_KEY = "haulage-backup-autodownload-id";
+  let adminBackupPollTimer = null;
+
+  function maybeAutoDownloadDailyBackup(rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    const latest = rows[0];
+    if (!latest || !latest.id) return;
+    let seen = "";
+    try {
+      seen = localStorage.getItem(BACKUP_AUTO_DL_KEY) || "";
+    } catch {
+      seen = "";
+    }
+    if (seen === latest.id) return;
+    const created = new Date(latest.createdAt);
+    if (Number.isNaN(created.getTime())) return;
+    // Only auto-pull today's archive (so opening the panel after 5pm syncs it).
+    if (created.toDateString() !== new Date().toDateString()) return;
+    const ageMs = Date.now() - created.getTime();
+    if (ageMs < 0 || ageMs > 36 * 60 * 60 * 1000) return;
+    try {
+      localStorage.setItem(BACKUP_AUTO_DL_KEY, latest.id);
+    } catch {
+      /* ignore */
+    }
+    const href = `${API}/admin/backups/${encodeURIComponent(latest.id)}/download`;
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = latest.filename || `${latest.id}.tar.gz`;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setAdminBackupMessage(`Daily backup downloaded: ${latest.id}`);
+    if (window.toast) window.toast("Daily backup downloaded to this device");
+  }
+
   function renderAdminBackups(payload) {
     const statusEl = byId("admin-backup-status");
     const listEl = byId("admin-backup-list");
@@ -1484,7 +1521,10 @@
     const status = (payload && payload.status) || {};
     if (statusEl) {
       const bits = [
-        status.enabled === false ? "Scheduler off" : `Scheduler every ${status.intervalHours || 24}h`,
+        status.enabled === false
+          ? "Scheduler off"
+          : `Daily ${status.scheduleAt || "17:00"} ${status.timezone || "Australia/Sydney"}`,
+        status.nextRunLabel ? `next: ${status.nextRunLabel}` : null,
         `keep ${status.keep || 14}`,
         status.s3Bucket ? `S3: ${status.s3Bucket}` : "S3 not set",
         status.offsiteDir ? "off-site dir set" : null,
@@ -1493,7 +1533,7 @@
     }
     const rows = (payload && payload.backups) || [];
     if (!rows.length) {
-      listEl.innerHTML = `<p class="muted small">No backups yet — click “Back up now” or wait for the daily run.</p>`;
+      listEl.innerHTML = `<p class="muted small">No backups yet — click “Back up now” or wait for the 5pm daily run.</p>`;
       return;
     }
     listEl.innerHTML = rows
@@ -1518,6 +1558,7 @@
         void restoreAdminBackup(btn.getAttribute("data-backup-id"));
       });
     });
+    maybeAutoDownloadDailyBackup(rows);
   }
 
   async function loadAdminBackups() {
@@ -1534,6 +1575,15 @@
     } catch (err) {
       setAdminBackupMessage(err.message || "Could not load backups", true);
     }
+  }
+
+  function startAdminBackupPoll() {
+    if (adminBackupPollTimer) return;
+    adminBackupPollTimer = setInterval(() => {
+      const panel = byId("admin-panel");
+      if (!panel || panel.classList.contains("hidden")) return;
+      void loadAdminBackups();
+    }, 60_000);
   }
 
   async function runAdminBackupNow() {
@@ -1787,6 +1837,7 @@
         void runAdminBackupNow();
       });
     }
+    startAdminBackupPoll();
 
     const createForm = byId("admin-create-user-form");
     if (createForm) {

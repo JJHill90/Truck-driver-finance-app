@@ -200,16 +200,17 @@ accounts across restarts.
 ### Backups
 
 The server creates **full-store backups** (accounts, ledgers, receipt files,
-history) under `data/backups/` on a schedule (default daily, keep 14). Primary
-mod can also trigger, download or restore from **Profile → Primary mod → Data
-backups**.
+history) under `data/backups/` once a day at **5:00 pm Australia/Sydney**
+(`BACKUP_AT=17:00`, `BACKUP_TIMEZONE=Australia/Sydney`; keep 14). Primary mod
+can also trigger, download or restore from **Profile → Primary mod → Data
+backups**. Keep that tab open around 5pm and today’s archive downloads to your
+computer automatically.
 
 For release, configure at least one off-site copy so a lost Render disk is not
-catastrophic:
+catastrophic (browser download only works if you’re online):
 
 - `BACKUP_S3_BUCKET` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`, or
-- `BACKUP_OFFSITE_DIR` pointing at a second mounted volume, and/or
-- regularly download archives from the admin panel to your computer
+- `BACKUP_OFFSITE_DIR` pointing at a second mounted volume
 
 Optional: `BACKUP_NOTIFY_EMAIL` (falls back to `SUPPORT_EMAIL`) emails when a
 backup finishes if SMTP/Resend is configured. Set `BACKUP_ENABLED=0` to disable

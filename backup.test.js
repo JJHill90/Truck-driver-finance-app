@@ -9,6 +9,9 @@ const {
   getBackupFile,
   restoreBackup,
   getStatus,
+  getScheduleAt,
+  shouldRunScheduledBackup,
+  zonedParts,
   stopBackupScheduler,
 } = require("./lib/backup");
 
@@ -130,5 +133,25 @@ describe("data backups", () => {
     expect(status.keep).toBe(3);
     expect(status.backupDir).toContain(tmp);
     expect(typeof status.enabled).toBe("boolean");
+    expect(status.scheduleAt).toBe("17:00");
+    expect(status.timezone).toBe("Australia/Sydney");
+  });
+
+  it("defaults BACKUP_AT to 17:00 and respects overrides", () => {
+    expect(getScheduleAt()).toEqual({ hour: 17, minute: 0, label: "17:00" });
+    process.env.BACKUP_AT = "5:30";
+    expect(getScheduleAt()).toEqual({ hour: 5, minute: 30, label: "05:30" });
+    delete process.env.BACKUP_AT;
+  });
+
+  it("shouldRunScheduledBackup is true after schedule time when no backup today", () => {
+    process.env.BACKUP_TIMEZONE = "UTC";
+    process.env.BACKUP_AT = "00:00";
+    // Fresh temp dir has no backups; any time on/after midnight UTC is due.
+    expect(shouldRunScheduledBackup(new Date())).toBe(true);
+    const z = zonedParts(new Date(), "UTC");
+    expect(z.dayKey).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    delete process.env.BACKUP_TIMEZONE;
+    delete process.env.BACKUP_AT;
   });
 });
