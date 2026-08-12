@@ -285,6 +285,43 @@
                 Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
                 Enter date, vendor, amount and notes as usual; choose a car category below.
               </p>
+
+              <div id="car-vehicles-box" class="car-vehicles-box">
+                <div class="car-vehicles-box-head">
+                  <h3>Work vehicles</h3>
+                  <span id="car-vehicles-status" class="car-vehicles-status muted">Loading…</span>
+                </div>
+                <p class="muted small">
+                  Save make, model, registration and engine size for ATO work-related car claims.
+                  Mark a vehicle <strong>Active</strong> when you use it for work — you can keep more than one car on file.
+                </p>
+                <label class="car-vehicles-compiled-label" for="car-vehicles-compiled">Active vehicles (for your records / accountant)</label>
+                <textarea
+                  id="car-vehicles-compiled"
+                  class="car-vehicles-compiled"
+                  rows="3"
+                  readonly
+                  aria-live="polite"
+                ></textarea>
+                <div id="car-vehicles-list" class="car-vehicles-list"></div>
+                <form id="car-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
+                  <input type="hidden" name="id" id="car-vehicle-id" value="" />
+                  <label>Car make<input type="text" name="make" id="car-vehicle-make" placeholder="e.g. Toyota" maxlength="80" /></label>
+                  <label>Car model<input type="text" name="model" id="car-vehicle-model" placeholder="e.g. Hilux" maxlength="80" /></label>
+                  <label>Registration<input type="text" name="registration" id="car-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
+                  <label>Engine size<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="e.g. 2.8 L" maxlength="40" /></label>
+                  <label class="checkbox span-2">
+                    <input type="checkbox" name="active" id="car-vehicle-active" checked />
+                    Active for work claims
+                  </label>
+                  <div class="span-2 form-actions">
+                    <button type="submit" class="btn primary" id="car-vehicle-save">Save vehicle to profile</button>
+                    <button type="button" class="btn secondary" id="car-vehicle-cancel" hidden>Cancel edit</button>
+                  </div>
+                </form>
+                <p id="car-vehicles-message" class="muted small" role="status"></p>
+              </div>
+
               <form id="expense-form" class="form-grid">
                 <label>Date<input type="date" name="date" required /></label>
                 <label>Category

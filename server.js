@@ -80,6 +80,7 @@ const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
+const { normalizeCars } = require("./lib/profile-cars");
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -984,6 +985,9 @@ api.put("/admin/users/:username/profile", (req, res) => {
     body.licenceClass = fromSalary;
   }
   delete body.salaryBand;
+  if (Object.prototype.hasOwnProperty.call(body, "cars")) {
+    body.cars = normalizeCars(body.cars);
+  }
   const profile = storage.updateProfile(loaded.records, body);
   persistTarget(loaded, { reason: "admin-edit-profile", actor: sessionUsername(req) });
   res.json({ ok: true, profile });
@@ -1305,6 +1309,10 @@ api.put("/profile", (req, res) => {
   // Drop legacy Band 1/2/3 UI field if a client still posts it — ATO travel
   // bands are derived from salary in the tax calculator, not stored here.
   delete body.salaryBand;
+  // Work-car presets (Car Expenses) — validate shape before merge.
+  if (Object.prototype.hasOwnProperty.call(body, "cars")) {
+    body.cars = normalizeCars(body.cars);
+  }
   const profile = storage.updateProfile(records, body);
   persist(req);
   res.json({ profile });
