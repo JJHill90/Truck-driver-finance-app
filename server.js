@@ -1374,7 +1374,13 @@ api.get("/billing/entitlements", (req, res) => {
   res.json({
     entitlements: resolveReqEntitlements(req),
     stripeConfigured: billingStripe.stripeConfigured(),
+    founding: auth.getFoundingStatus(),
   });
+});
+
+/** Public: founding Pro trial spots left (for signup scarcity copy). */
+api.get("/billing/founding", (_req, res) => {
+  res.json(auth.getFoundingStatus());
 });
 
 api.post("/billing/checkout", async (req, res) => {

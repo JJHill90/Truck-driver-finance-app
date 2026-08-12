@@ -727,6 +727,44 @@
       pwd.autocomplete = isRegister ? "new-password" : "current-password";
       pwd.placeholder = isRegister ? "Strong password (8+ chars)" : "Your password";
     }
+    void refreshFoundingHints({ highlightRegister: isRegister });
+  }
+
+  function foundingHintText(founding, { highlightRegister } = {}) {
+    if (!founding) return "";
+    const months = founding.trialMonths || 6;
+    if (founding.open && founding.remaining > 0) {
+      const n = founding.remaining;
+      const spots = n === 1 ? "1 founding Pro trial left" : `${n} of ${founding.limit} founding Pro trials left`;
+      return `${spots} — first ${founding.limit} drivers get ${months} months Pro free${
+        highlightRegister ? ". Create your profile to claim a spot." : "."
+      }`;
+    }
+    return `Founding Pro trials are full. New profiles start on Free (15 uploads/month) — upgrade anytime for ${
+      founding.priceLabel || "$5/month"
+    }.`;
+  }
+
+  async function refreshFoundingHints(opts = {}) {
+    try {
+      const founding = await apiGet("/billing/founding");
+      const text = foundingHintText(founding, opts);
+      for (const id of ["title-founding-hint", "auth-founding-hint"]) {
+        const el = byId(id);
+        if (!el) continue;
+        if (!text) {
+          el.hidden = true;
+          el.textContent = "";
+          continue;
+        }
+        el.hidden = false;
+        el.textContent = text;
+        el.classList.toggle("founding-open", Boolean(founding.open));
+        el.classList.toggle("founding-closed", !founding.open);
+      }
+    } catch {
+      /* non-fatal */
+    }
   }
 
   function showTitleRecoverMode(show) {
@@ -1026,7 +1064,11 @@
     let statusText = "Free plan";
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
     else if (ent.status === "trialing") {
-      statusText = `Pro trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
+      const slot =
+        ent.foundingCohort && ent.foundingSlot
+          ? ` · founding #${ent.foundingSlot}`
+          : "";
+      statusText = `Pro trial${slot} · ends ${formatTrialEnd(ent.trialEndsAt)}`;
     } else if (ent.isPro) {
       statusText = `Pro (${price})`;
       if (ent.currentPeriodEnd) {
@@ -2253,6 +2295,7 @@
     wireBilling();
     wirePdfDownload();
     handleBillingReturnQuery();
+    void refreshFoundingHints();
     try {
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) {
@@ -5427,7 +5470,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — new profiles get six months Pro trial. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — the first 50 driver profiles get six months Pro trial at signup. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },

@@ -1,8 +1,12 @@
 const {
   FREE_UPLOADS_PER_MONTH,
   PRO_PRICE_AUD,
+  FOUNDING_TRIAL_LIMIT,
   addTrialEnd,
   countUploadsThisMonth,
+  countFoundingCohort,
+  foundingStatus,
+  assignFoundingTrial,
   isPro,
   ensureBillingFields,
   resolveEntitlements,
@@ -11,9 +15,10 @@ const {
 } = require("./lib/entitlements");
 
 describe("entitlements", () => {
-  it("locks Pro at $5 AUD", () => {
+  it("locks Pro at $5 AUD and founding cohort at 50", () => {
     expect(PRO_PRICE_AUD).toBe(5);
     expect(FREE_UPLOADS_PER_MONTH).toBe(15);
+    expect(FOUNDING_TRIAL_LIMIT).toBe(50);
   });
 
   it("counts uploads in the current calendar month only", () => {
@@ -42,12 +47,44 @@ describe("entitlements", () => {
     expect(isPro({ plan: "free" })).toBe(false);
   });
 
-  it("backfills a fresh trial for legacy users missing proTrialEndsAt", () => {
+  it("does not invent trials for legacy users missing proTrialEndsAt", () => {
     const user = { username: "legacy", createdAt: "2020-01-01T00:00:00Z" };
     expect(ensureBillingFields(user)).toBe(true);
-    expect(user.proTrialEndsAt).toBeTruthy();
-    expect(new Date(user.proTrialEndsAt).getTime()).toBeGreaterThan(Date.now());
+    expect(user.proTrialEndsAt).toBeUndefined();
+    expect(user.foundingCohort).toBe(false);
     expect(user.plan).toBe("free");
+    expect(isPro(user)).toBe(false);
+  });
+
+  it("assigns founding trials only while slots remain", () => {
+    const existing = {};
+    for (let i = 0; i < FOUNDING_TRIAL_LIMIT; i += 1) {
+      existing[`u${i}`] = {
+        username: `u${i}`,
+        foundingCohort: true,
+        foundingSlot: i + 1,
+        isAdmin: false,
+      };
+    }
+    expect(countFoundingCohort({ users: existing })).toBe(50);
+    expect(foundingStatus({ users: existing }).remaining).toBe(0);
+    expect(foundingStatus({ users: existing }).open).toBe(false);
+
+    const next = { username: "late", createdAt: "2026-08-12T00:00:00Z", isAdmin: false };
+    expect(assignFoundingTrial(next, { users: existing })).toBe(false);
+    expect(next.foundingCohort).toBe(false);
+    expect(next.proTrialEndsAt).toBeNull();
+
+    const early = { username: "early", createdAt: "2026-08-12T00:00:00Z", isAdmin: false };
+    expect(assignFoundingTrial(early, { users: {} })).toBe(true);
+    expect(early.foundingCohort).toBe(true);
+    expect(early.foundingSlot).toBe(1);
+    expect(early.proTrialEndsAt).toBeTruthy();
+    expect(isPro(early)).toBe(true);
+
+    const admin = { username: "admin", isAdmin: true };
+    expect(assignFoundingTrial(admin, { users: {} })).toBe(false);
+    expect(admin.foundingCohort).toBe(false);
   });
 
   it("enforces the free upload quota and soft warning", () => {
@@ -57,7 +94,7 @@ describe("entitlements", () => {
       createdAt: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
     }));
     const free = resolveEntitlements(
-      { plan: "free", proTrialEndsAt: "2020-01-01T00:00:00Z" },
+      { plan: "free", proTrialEndsAt: null, foundingCohort: false },
       { receipts },
       now
     );
@@ -69,9 +106,10 @@ describe("entitlements", () => {
     expect(free.canExportPdf).toBe(false);
     expect(free.canUseForecast).toBe(false);
     expect(free.priceAud).toBe(5);
+    expect(free.foundingTrialLimit).toBe(50);
 
     const atLimit = resolveEntitlements(
-      { plan: "free", proTrialEndsAt: "2020-01-01T00:00:00Z" },
+      { plan: "free", proTrialEndsAt: null },
       {
         receipts: [
           ...receipts,

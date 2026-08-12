@@ -298,11 +298,20 @@ button.title-hub-logout:hover {
   margin: 1rem 0 0.25rem;
   font-size: 1.05rem;
 }
-.profile-billing {
-  margin: 0 0 16px;
-  max-width: 36rem;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+.title-founding-hint,
+.founding-hint {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+.title-founding-hint.founding-open,
+.founding-hint.founding-open {
+  color: var(--text);
+  font-weight: 600;
+}
+.title-founding-hint.founding-closed,
+.founding-hint.founding-closed {
+  color: var(--text-dim);
 }
 .profile-billing .profile-section-title {
   margin-top: 0;
