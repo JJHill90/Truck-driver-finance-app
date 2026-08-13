@@ -2662,6 +2662,7 @@
 
   function getStoredWeek(key) {
     try {
+      // null = never chosen (default to this week). Persist "all" so All weeks sticks.
       return localStorage.getItem(weekStorageKey(key));
     } catch {
       return null;
@@ -2670,7 +2671,7 @@
 
   function setStoredWeek(key, value) {
     try {
-      if (!value || value === "all") localStorage.removeItem(weekStorageKey(key));
+      if (!value) localStorage.removeItem(weekStorageKey(key));
       else localStorage.setItem(weekStorageKey(key), value);
     } catch {
       /* ignore */
@@ -3256,7 +3257,9 @@
 
   function getWeekFilter(cfgOrKey) {
     try {
-      return localStorage.getItem(weekLedgerStorageKey(cfgOrKey)) || null;
+      // null = never chosen (default to this week). Persist "all" so All weeks sticks
+      // across re-renders — previously removing the key made sync snap back to this week.
+      return localStorage.getItem(weekLedgerStorageKey(cfgOrKey));
     } catch {
       return null;
     }
@@ -3264,7 +3267,7 @@
 
   function setWeekFilter(cfgOrKey, value) {
     try {
-      if (!value || value === "all") localStorage.removeItem(weekLedgerStorageKey(cfgOrKey));
+      if (!value) localStorage.removeItem(weekLedgerStorageKey(cfgOrKey));
       else localStorage.setItem(weekLedgerStorageKey(cfgOrKey), value);
     } catch {
       /* ignore */

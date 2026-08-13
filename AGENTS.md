@@ -227,9 +227,11 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   via `lib/ledger-edit.js` (receipt links preserved). Edit/Delete are disabled
   once a row is reconciled. Expense ledger + expense receipt gallery filter by
   **week** (Mon–Sun labels like `27/07 – 02/08`) next to the FY dropdown
-  (`localStorage` `haulage-ledger-week-*` / `haulage-gallery-week-*`); income
-  ledger still uses a month dropdown (`haulage-ledger-month-*`). “All weeks”
-  keeps full-year search. On each new **Monday** (local time), `enhancements.js`
+  (`localStorage` `haulage-ledger-week-*` / `haulage-gallery-week-*`, including
+  the literal value `all`); income ledger still uses a month dropdown
+  (`haulage-ledger-month-*`). “All weeks” keeps full-year search within the
+  selected FY — persist `all` explicitly so re-renders do not snap back to
+  this week. On each new **Monday** (local time), `enhancements.js`
   registers an empty week slot (`haulage-started-weeks`), sets
   `haulage-active-week-start`, points expense filters at that week, and toasts —
   no blank expense row is invented.
