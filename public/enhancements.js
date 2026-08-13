@@ -1066,13 +1066,17 @@
     const trialLabel = ent.trialLabel || "Pro+";
     let statusText = "Free plan";
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
-    else if (ent.status === "trialing") {
+    else if (ent.planGrant === "pro_plus" || ent.status === "pro_plus") {
+      statusText = `${trialLabel} (admin grant)`;
+    } else if (ent.status === "trialing") {
       statusText = `${trialLabel} trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
     } else if (ent.isPro) {
       statusText = `Pro (${price})`;
       if (ent.currentPeriodEnd) {
         statusText += ` · renews ${formatTrialEnd(ent.currentPeriodEnd)}`;
       }
+    } else if (ent.planGrant === "free") {
+      statusText = `Free plan (set by admin) · ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report`;
     } else if (ent.trialExpired) {
       statusText = `Free plan · ${trialLabel} trial ended — ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report; update to Pro (${price}) for unlimited + PDF`;
     } else {
@@ -1095,7 +1099,11 @@
     }
 
     if (upgradeBtn) {
-      if (ent.isAdmin || (ent.isPro && ent.status !== "trialing")) {
+      if (
+        ent.isAdmin ||
+        ent.planGrant === "pro_plus" ||
+        (ent.isPro && ent.status !== "trialing")
+      ) {
         upgradeBtn.classList.add("hidden");
       } else {
         upgradeBtn.classList.remove("hidden");
@@ -1369,6 +1377,11 @@
         const totals = u.totals || {};
         const counts = u.counts || {};
         const badge = u.isAdmin ? `<span class="admin-badge">primary mod</span>` : "";
+        const planBadge = u.isAdmin
+          ? ""
+          : u.planGrant === "pro_plus" || u.isPro
+            ? `<span class="admin-badge admin-plan-pro">${u.planGrant === "pro_plus" ? "Pro+" : "Pro"}</span>`
+            : `<span class="admin-badge admin-plan-free">Free</span>`;
         const active = adminSelected === u.username ? " active" : "";
         const deleteBtn = u.isAdmin
           ? ""
@@ -1376,7 +1389,7 @@
         return `<div class="admin-user-row${active}">
           <button type="button" class="admin-user-row-main" data-admin-user="${esc(u.username)}">
             <div>
-              <div class="admin-user-name">${esc(u.username)}${badge}</div>
+              <div class="admin-user-name">${esc(u.username)}${badge}${planBadge}</div>
               <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${esc(u.email || "no email")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
             </div>
             <div class="admin-user-totals">
@@ -1641,6 +1654,26 @@
         : `<span class="muted">Login OK</span>`;
 
     const canDelete = data.user && !data.user.isAdmin;
+    const ent = data.entitlements || {};
+    const planGrant = data.user.planGrant || ent.planGrant || null;
+    let planLabel = "Free";
+    if (data.user.isAdmin) planLabel = "Primary mod (always Pro)";
+    else if (planGrant === "pro_plus") planLabel = "Pro+ (admin grant)";
+    else if (ent.status === "trialing") planLabel = `Pro+ trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
+    else if (ent.isPro) planLabel = "Pro (paid / active)";
+    else if (planGrant === "free") planLabel = "Free (set by admin)";
+    const planActions = data.user.isAdmin
+      ? ""
+      : `<div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-plan-pro-plus"${
+              planGrant === "pro_plus" ? " disabled" : ""
+            }>Upgrade to Pro+</button>
+            <button type="button" class="btn secondary" id="admin-plan-free"${
+              planGrant === "free" && !ent.isPro ? " disabled" : ""
+            }>Downgrade to Free</button>
+          </div>
+          <p class="muted span-2">Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast). Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
+
     detail.classList.remove("hidden");
     detail.innerHTML = `
       <div class="admin-detail-head">
@@ -1651,6 +1684,14 @@
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
       <p class="muted">Username (tell the driver if forgotten): <strong>${esc(username)}</strong> · ${lockBadge}</p>
       <p class="muted admin-override-hint">Primary mod assist: reset login, edit profile/ledger mistakes, unlock/reconcile rows, and restore earlier full-page snapshots.</p>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Plan (Free / Pro+)</h4>
+        <div class="form-grid admin-assist-form">
+          <p class="span-2"><strong id="admin-plan-status">${esc(planLabel)}</strong></p>
+          ${planActions}
+        </div>
+      </div>
 
       <div class="admin-section admin-assist-section">
         <h4>Login &amp; account recovery</h4>
@@ -1790,6 +1831,26 @@
     byId("admin-detail-delete")?.addEventListener("click", () => {
       void deleteAdminUser(username);
     });
+
+    const setAdminPlan = async (plan) => {
+      const label = plan === "pro_plus" ? "Pro+" : "Free";
+      const ok = window.confirm(
+        plan === "pro_plus"
+          ? `Upgrade ${username} to Pro+ now? They get full Pro access until you downgrade them.`
+          : `Downgrade ${username} to Free now? Upload quotas and Pro feature gates will apply immediately.`
+      );
+      if (!ok) return;
+      try {
+        const result = await apiPost(`/admin/users/${encodeURIComponent(username)}/plan`, { plan });
+        if (window.toast) window.toast(result.message || `Plan set to ${label}`);
+        await loadAdminUsers();
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not update plan");
+      }
+    };
+    byId("admin-plan-pro-plus")?.addEventListener("click", () => void setAdminPlan("pro_plus"));
+    byId("admin-plan-free")?.addEventListener("click", () => void setAdminPlan("free"));
 
     wireAdminAssistForms(detail, username, data);
 
@@ -5514,7 +5575,7 @@
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
-        "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
+        "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },
   };

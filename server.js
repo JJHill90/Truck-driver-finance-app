@@ -850,9 +850,11 @@ api.get("/admin/users/:username", (req, res) => {
   const deletedExpenses = (records.expenses || []).filter((e) => isDeleted(e));
   const deletedIncome = (records.income || []).filter((i) => isDeleted(i));
 
+  const targetRecord = auth.getUserRecord(target.username);
   res.json({
     user: target,
     account: adminAssist.adminAccountStatus(target.username),
+    entitlements: entitlements.resolveEntitlements(targetRecord, records),
     profile: records.profile || {},
     expenses,
     income,
@@ -1034,6 +1036,33 @@ api.post("/admin/users/:username/password", (req, res) => {
 });
 
 /** Admin: set / update account email. */
+/** Admin: upgrade driver to Pro+ or downgrade to Free at any time. */
+api.post("/admin/users/:username/plan", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const grant = String((req.body && req.body.plan) || "").toLowerCase();
+  try {
+    const result = auth.setPlanGrant(req.params.username, grant, {
+      by: sessionUsername(req),
+    });
+    res.json({
+      ok: true,
+      user: result.user,
+      entitlements: result.entitlements,
+      message:
+        grant === "pro_plus"
+          ? `${result.user.username} upgraded to Pro+ (admin grant).`
+          : `${result.user.username} downgraded to Free.`,
+    });
+  } catch (err) {
+    const code = /not found/i.test(err.message)
+      ? 404
+      : /primary mod|must be/i.test(err.message)
+        ? 400
+        : 400;
+    res.status(code).json({ error: err.message });
+  }
+});
+
 api.post("/admin/users/:username/email", (req, res) => {
   if (!requireAdmin(req, res)) return;
   try {

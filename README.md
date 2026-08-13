@@ -112,7 +112,7 @@ on load — including prompts when email is missing or the password is older tha
   on server start; override with `HAULAGE_ADMIN_USERNAME` /
   `HAULAGE_ADMIN_PASSWORD`). On the Profile tab they see **Primary mod — user
   profiles** and can open any user’s income, expenses and receipt downloads
-  (read-only).
+  (read-only), and **upgrade/downgrade Free ↔ Pro+** at any time.
 
 ## Plans (Free / Pro / Pro+ trial)
 
@@ -124,6 +124,8 @@ on load — including prompts when email is missing or the password is older tha
   after the trial ends you keep the Free limits (15 uploads + 1 on-screen
   report) and a soft alert asks you to update to a paid plan.
   Signup copy via `GET /api/haulage/billing/trial`.
+- **Admin Pro+ grant:** `Haulage_Admin` can set any driver to Pro+ or Free via
+  Profile → Primary mod (`POST /api/haulage/admin/users/:username/plan`).
 - Profile → **Plan** shows remaining uploads and Upgrade / Manage billing.
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
   `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, plus `APP_BASE_URL` for return URLs.
