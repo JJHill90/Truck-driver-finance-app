@@ -30,11 +30,11 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   has a user, show the app picker (`#title-hub-picker`) unless
   `localStorage.driverhub-selected-app === "taxationhub"` (legacy `financehub`
   is migrated). Choosing Taxation Hub unlocks `.app-shell` (sidebar brand
-  **TaxationHub**). WIP apps stay on the picker lists **Diary Hub** as work in
-  progress (work diary / mandatory AU logbook — not available at Taxation Hub
-  release). `body.auth-locked` hides the shell. Logout clears the selected app
-  and returns to Driver Hub login. Brand wordmarks use Saira Condensed with a
-  sky Hub accent (navy/amber UI palette).
+  **TaxationHub**). The second picker slot is labelled **Work in Progress**
+  (product name withheld until ready — not available at Taxation Hub release).
+  `body.auth-locked` hides the shell. Logout clears the selected app and
+  returns to Driver Hub login. Brand wordmarks use Saira Condensed with a sky
+  Hub accent (navy/amber UI palette).
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is
