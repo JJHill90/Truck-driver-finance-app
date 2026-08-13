@@ -227,6 +227,10 @@
             isPdf: /pdf/i.test(mimeType),
             token: `${Date.now()}-${Math.random()}`,
           };
+          // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
+          if (typeof window.haulageRefreshBilling === "function") {
+            void window.haulageRefreshBilling();
+          }
         }
 
         // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
@@ -237,7 +241,7 @@
               : 0;
           const msg =
             data.error ||
-            `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month) for unlimited scans.`;
+            `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month or $60/year) for unlimited scans.`;
           if (typeof window.toast === "function") window.toast(msg);
           if (typeof window.haulagePromptUpgrade === "function") {
             window.haulagePromptUpgrade(data);
@@ -986,6 +990,7 @@
 
   function showAuthState(user) {
     updateBrandSignedIn(user && user.username ? user.username : null);
+    window.__haulageUser = user && user.username ? user : null;
     const outEl = byId("auth-logged-out");
     const inEl = byId("auth-logged-in");
     if (!outEl || !inEl) return;
@@ -1027,6 +1032,7 @@
     if (msg) msg.textContent = "";
     byId("billing-upgrade")?.classList.add("hidden");
     byId("billing-manage")?.classList.add("hidden");
+    byId("billing-price-hint")?.classList.add("hidden");
   }
 
   function setBillingMessage(text, isError) {
@@ -1093,9 +1099,19 @@
         const left = ent.uploadsRemaining ?? Math.max(0, limit - used);
         uploadsEl.textContent = `Uploads this month: ${used} of ${limit} used · ${left} left`;
         if (ent.softWarning) {
-          uploadsEl.textContent += " — nearly at the free limit";
+          uploadsEl.textContent += " — halfway through free uploads this month";
         }
       }
+    }
+
+    const priceHint = byId("billing-price-hint");
+    const yearly = ent.priceYearlyLabel || "$60/year";
+    if (priceHint) {
+      priceHint.textContent = `Pro is ${price} or ${yearly}.`;
+      priceHint.classList.toggle(
+        "hidden",
+        Boolean(ent.isAdmin || (ent.isPro && ent.status !== "trialing" && ent.planGrant !== "pro_plus"))
+      );
     }
 
     if (upgradeBtn) {
@@ -1107,11 +1123,9 @@
         upgradeBtn.classList.add("hidden");
       } else {
         upgradeBtn.classList.remove("hidden");
-        // Day-1 subscribe is always available during the Pro+ trial.
+        // Day-1 subscribe remains available; soft prompt waits until halfway free uploads.
         upgradeBtn.textContent =
-          ent.status === "trialing"
-            ? `Start Pro now — ${price}`
-            : `Upgrade to Pro — ${price}`;
+          ent.status === "trialing" ? "Choose Pro plan" : "Upgrade to Pro";
       }
     }
     if (manageBtn) {
@@ -1140,31 +1154,59 @@
       pdfBtn.disabled = !pro;
       pdfBtn.title = pro
         ? "Download accountant-ready PDF"
-        : "Pro feature — upgrade for $5/month";
+        : "Pro feature — upgrade for $5/month or $60/year";
       pdfBtn.classList.toggle("billing-locked", !pro);
     }
     if (jsonBtn) {
       jsonBtn.disabled = !pro;
       jsonBtn.title = pro
         ? "Export JSON for your accountant"
-        : "Pro feature — upgrade for $5/month";
+        : "Pro feature — upgrade for $5/month or $60/year";
       jsonBtn.classList.toggle("billing-locked", !pro);
     }
     document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
       btn.classList.toggle("billing-locked", !pro);
-      btn.title = pro ? "" : "Forecast is included with Pro ($5/month)";
+      btn.title = pro ? "" : "Forecast is included with Pro ($5/month or $60/year)";
     });
   }
 
-  let softWarnShown = false;
-  function maybeSoftWarnUploads(ent) {
-    if (!ent || ent.isPro || softWarnShown) return;
-    if (ent.softWarning && typeof window.toast === "function") {
-      softWarnShown = true;
-      window.toast(
-        `${ent.uploadsRemaining} free upload${ent.uploadsRemaining === 1 ? "" : "s"} left this month — upgrade to Pro ($5/month) for unlimited.`
-      );
+  function softWarnStorageKey(ent) {
+    const month =
+      (typeof ent.uploadsMonthKey === "string" && ent.uploadsMonthKey) ||
+      `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const who = (window.__haulageUser && window.__haulageUser.username) || "guest";
+    return `haulage-upload-soft-warn:${who}:${month}`;
+  }
+
+  function hasShownSoftWarn(ent) {
+    try {
+      return localStorage.getItem(softWarnStorageKey(ent)) === "1";
+    } catch {
+      return false;
     }
+  }
+
+  function markSoftWarnShown(ent) {
+    try {
+      localStorage.setItem(softWarnStorageKey(ent), "1");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** One Pro+ upgrade prompt per calendar month, only after halfway free uploads. */
+  function maybeSoftWarnUploads(ent) {
+    if (!ent || ent.isPro || !ent.softWarning) return;
+    if (hasShownSoftWarn(ent)) return;
+    markSoftWarnShown(ent);
+    const left = ent.uploadsRemaining;
+    const used = ent.uploadsUsed;
+    const limit = ent.freeUploadsPerMonth || 15;
+    promptUpgrade({
+      error: `You’ve used ${used} of ${limit} free uploads this month (${left} left). Upgrade to Pro+ for unlimited scans, PDF export and forecast.`,
+      code: "SOFT_UPLOAD_WARN",
+      entitlements: ent,
+    });
   }
 
   async function refreshBillingPanel() {
@@ -1173,6 +1215,7 @@
       renderBillingPanel(data.entitlements, data.stripeConfigured);
       // Attach hasStripeCustomer from /auth/me if needed for manage button
       const me = await apiGet("/auth/me");
+      if (me.user && me.user.username) window.__haulageUser = me.user;
       const manageBtn = byId("billing-manage");
       if (manageBtn && me.user && me.user.hasStripeCustomer && !me.user.isAdmin) {
         manageBtn.classList.remove("hidden");
@@ -1184,12 +1227,14 @@
       if (status) status.textContent = "Sign in to see your plan.";
     }
   }
+  window.haulageRefreshBilling = refreshBillingPanel;
 
   function promptUpgrade(data) {
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
     const ent = (data && data.entitlements) || cachedEntitlements || {};
     const price = ent.priceLabel || "$5/month";
+    const yearly = ent.priceYearlyLabel || "$60/year";
     const modal = document.createElement("div");
     modal.id = "enh-billing-modal";
     modal.className = "enh-dup-modal";
@@ -1197,11 +1242,15 @@
       <div class="enh-dup-backdrop" data-billing-dismiss></div>
       <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-billing-title">
         <h3 id="enh-billing-title">Upgrade to Pro</h3>
-        <p>${esc((data && data.error) || `Pro is ${price} — unlimited uploads, PDF export and forecast.`)}</p>
+        <p>${esc(
+          (data && data.error) ||
+            `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly}.`
+        )}</p>
         <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. PDF export stays with Pro.</p>
-        <div class="enh-dup-actions">
+        <div class="enh-dup-actions enh-billing-plan-actions">
           <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
-          <button type="button" class="btn primary" data-billing-upgrade>Upgrade — ${esc(price)}</button>
+          <button type="button" class="btn secondary" data-billing-upgrade="month">Pro — ${esc(price)}</button>
+          <button type="button" class="btn primary" data-billing-upgrade="year">Pro — ${esc(yearly)}</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -1209,17 +1258,23 @@
     modal.querySelectorAll("[data-billing-dismiss]").forEach((el) => {
       el.addEventListener("click", close);
     });
-    modal.querySelector("[data-billing-upgrade]")?.addEventListener("click", () => {
-      close();
-      void startCheckout();
+    modal.querySelectorAll("[data-billing-upgrade]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const interval = btn.getAttribute("data-billing-upgrade") || "month";
+        close();
+        void startCheckout(interval);
+      });
     });
   }
   window.haulagePromptUpgrade = promptUpgrade;
 
-  async function startCheckout() {
-    setBillingMessage("Opening secure checkout…");
+  async function startCheckout(interval = "month") {
+    const period = interval === "year" ? "year" : "month";
+    setBillingMessage(
+      period === "year" ? "Opening yearly checkout…" : "Opening monthly checkout…"
+    );
     try {
-      const data = await apiPost("/billing/checkout", {});
+      const data = await apiPost("/billing/checkout", { interval: period });
       if (data.url) {
         window.location.href = data.url;
         return;
@@ -1246,7 +1301,9 @@
   }
 
   function wireBilling() {
-    byId("billing-upgrade")?.addEventListener("click", () => void startCheckout());
+    byId("billing-upgrade")?.addEventListener("click", () => {
+      promptUpgrade({ entitlements: cachedEntitlements });
+    });
     byId("billing-manage")?.addEventListener("click", () => void openBillingPortal());
 
     // Soft-gate Forecast nav: intercept before app.js switches view when free.
@@ -1260,7 +1317,7 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           promptUpgrade({
-            error: "Forecast is included with Pro ($5/month). You’re on the free plan — upgrade to unlock.",
+            error: "Forecast is included with Pro ($5/month or $60/year). You’re on the free plan — upgrade to unlock.",
             code: "PRO_REQUIRED",
             entitlements: cachedEntitlements,
           });
@@ -1280,7 +1337,7 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           promptUpgrade({
-            error: "JSON accountant export is included with Pro ($5/month).",
+            error: "JSON accountant export is included with Pro ($5/month or $60/year).",
             code: "PRO_REQUIRED",
             entitlements: cachedEntitlements,
           });

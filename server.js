@@ -1456,9 +1456,13 @@ api.post("/billing/checkout", async (req, res) => {
   }
   try {
     const user = auth.getUserRecord(req.user);
+    const interval = billingStripe.normaliseInterval(
+      (req.body && (req.body.interval || req.body.planInterval)) || "month"
+    );
     const result = await billingStripe.createCheckoutSession({
       user,
       req,
+      interval,
       saveCustomerId: (customerId) => {
         auth.updateBilling(req.user, {
           stripeCustomerId: customerId,

@@ -1,11 +1,14 @@
 const {
   FREE_UPLOADS_PER_MONTH,
   FREE_ONSCREEN_REPORTS,
+  FREE_SOFT_WARN_USED,
   PRO_PRICE_AUD,
+  PRO_PRICE_YEARLY_AUD,
   TRIAL_MONTHS,
   TRIAL_PRODUCT_LABEL,
   addTrialEnd,
   countUploadsThisMonth,
+  shouldSoftWarnUploads,
   trialOfferStatus,
   assignSignupTrial,
   applyAdminPlanGrant,
@@ -19,9 +22,11 @@ const {
 } = require("./lib/entitlements");
 
 describe("entitlements", () => {
-  it("locks Pro at $5 AUD and a universal 3-month Pro+ trial", () => {
+  it("locks Pro at $5/mo or $60/yr and a universal 3-month Pro+ trial", () => {
     expect(PRO_PRICE_AUD).toBe(5);
+    expect(PRO_PRICE_YEARLY_AUD).toBe(60);
     expect(FREE_UPLOADS_PER_MONTH).toBe(15);
+    expect(FREE_SOFT_WARN_USED).toBe(8);
     expect(FREE_ONSCREEN_REPORTS).toBe(1);
     expect(TRIAL_MONTHS).toBe(3);
     expect(TRIAL_PRODUCT_LABEL).toBe("Pro+");
@@ -30,6 +35,15 @@ describe("entitlements", () => {
     expect(offer.universal).toBe(true);
     expect(offer.trialMonths).toBe(3);
     expect(offer.trialLabel).toBe("Pro+");
+    expect(offer.priceYearlyLabel).toBe("$60/year");
+  });
+
+  it("soft-warns only after halfway free uploads, before the hard cap", () => {
+    expect(shouldSoftWarnUploads(7, 8, false)).toBe(false);
+    expect(shouldSoftWarnUploads(8, 7, false)).toBe(true);
+    expect(shouldSoftWarnUploads(14, 1, false)).toBe(true);
+    expect(shouldSoftWarnUploads(15, 0, false)).toBe(false);
+    expect(shouldSoftWarnUploads(8, 7, true)).toBe(false);
   });
 
   it("falls back to Free 15 uploads + 1 on-screen report after Pro+ ends", () => {
@@ -125,7 +139,19 @@ describe("entitlements", () => {
 
   it("enforces the free upload quota and soft warning", () => {
     const now = new Date("2026-08-15T12:00:00Z");
-    const receipts = Array.from({ length: 13 }, (_, i) => ({
+    const beforeHalf = Array.from({ length: 7 }, (_, i) => ({
+      id: String(i),
+      createdAt: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+    }));
+    const early = resolveEntitlements(
+      { plan: "free", proTrialEndsAt: null },
+      { receipts: beforeHalf },
+      now
+    );
+    expect(early.uploadsUsed).toBe(7);
+    expect(early.softWarning).toBe(false);
+
+    const receipts = Array.from({ length: 8 }, (_, i) => ({
       id: String(i),
       createdAt: `2026-08-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
     }));
@@ -135,33 +161,35 @@ describe("entitlements", () => {
       now
     );
     expect(free.isPro).toBe(false);
-    expect(free.uploadsUsed).toBe(13);
-    expect(free.uploadsRemaining).toBe(2);
+    expect(free.uploadsUsed).toBe(8);
+    expect(free.uploadsRemaining).toBe(7);
     expect(free.canUpload).toBe(true);
     expect(free.softWarning).toBe(true);
     expect(free.canExportPdf).toBe(false);
     expect(free.canUseForecast).toBe(false);
     expect(free.priceAud).toBe(5);
+    expect(free.priceYearlyAud).toBe(60);
     expect(free.trialMonths).toBe(3);
     expect(free.trialLabel).toBe("Pro+");
 
     const atLimit = resolveEntitlements(
       { plan: "free", proTrialEndsAt: null },
       {
-        receipts: [
-          ...receipts,
-          { id: "a", createdAt: "2026-08-14T00:00:00Z" },
-          { id: "b", createdAt: "2026-08-15T00:00:00Z" },
-        ],
+        receipts: Array.from({ length: 15 }, (_, i) => ({
+          id: String(i),
+          createdAt: `2026-08-${String(Math.min(i + 1, 15)).padStart(2, "0")}T00:00:00Z`,
+        })),
       },
       now
     );
     expect(atLimit.canUpload).toBe(false);
     expect(atLimit.uploadsRemaining).toBe(0);
+    expect(atLimit.softWarning).toBe(false);
 
     const blocked = uploadBlockedPayload(atLimit);
     expect(blocked.code).toBe("UPLOAD_LIMIT");
     expect(blocked.error).toMatch(/\$5\/month/);
+    expect(blocked.error).toMatch(/\$60\/year/);
 
     const proBlocked = proFeatureBlockedPayload("pdf", free);
     expect(proBlocked.code).toBe("PRO_REQUIRED");
