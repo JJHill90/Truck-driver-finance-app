@@ -118,7 +118,9 @@ on load — including prompts when email is missing or the password is older tha
 
 - **Free:** 15 document uploads per calendar month + 1 on-screen EOFY report
   (live summary/report in the app). PDF/JSON export and forecast stay Pro.
-- **Pro ($5/month AUD):** unlimited uploads, PDF + JSON accountant export, forecast.
+  One soft upgrade prompt per month after **8 of 15** free uploads are used.
+- **Pro:** unlimited uploads, PDF + JSON accountant export, forecast —
+  **$5/month** or **$60/year** AUD.
 - **Pro+ trial:** every new driver profile gets **3 months Pro+** (full Pro
   access) at signup (primary mod excluded). Subscribe from day one, or wait —
   after the trial ends you keep the Free limits (15 uploads + 1 on-screen
@@ -126,10 +128,10 @@ on load — including prompts when email is missing or the password is older tha
   Signup copy via `GET /api/haulage/billing/trial`.
 - **Admin Pro+ grant:** `Haulage_Admin` can set any driver to Pro+ or Free via
   Profile → Primary mod (`POST /api/haulage/admin/users/:username/plan`).
-- Profile → **Plan** shows remaining uploads and Upgrade / Manage billing.
+- Profile → **Plan** shows remaining uploads and Choose Pro plan (month/year).
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
-  `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, plus `APP_BASE_URL` for return URLs.
-  Webhook path: `POST /api/haulage/billing/webhook`.
+  `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`, `STRIPE_WEBHOOK_SECRET`, plus
+  `APP_BASE_URL` for return URLs. Webhook path: `POST /api/haulage/billing/webhook`.
 
 ## Environment variables
 
@@ -138,8 +140,9 @@ on load — including prompts when email is missing or the password is older tha
 - `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
 - `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
   username is `Haulage_Admin`).
-- `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` — optional
-  Stripe billing for Pro ($5/mo). Without them, free quotas and trials still work.
+- `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`,
+  `STRIPE_WEBHOOK_SECRET` — optional Stripe billing for Pro ($5/mo or $60/yr).
+  Without them, free quotas and trials still work.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
   `APP_BASE_URL` — optional outbound email for recovery links and 90-day
   password reminders (`lib/mail.js`).

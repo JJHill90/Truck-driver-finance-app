@@ -1118,6 +1118,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-dup-matches { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .enh-dup-scan { margin-top: 4px !important; }
 .enh-dup-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+.enh-billing-plan-actions { justify-content: stretch; }
+.enh-billing-plan-actions .btn { flex: 1 1 auto; }
 
 /* --- Accounts + alerts -------------------------------------------------- */
 #account-panel { border-left: 4px solid var(--accent); }
