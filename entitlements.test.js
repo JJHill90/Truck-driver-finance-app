@@ -8,6 +8,7 @@ const {
   countUploadsThisMonth,
   trialOfferStatus,
   assignSignupTrial,
+  applyAdminPlanGrant,
   isPro,
   ensureBillingFields,
   resolveEntitlements,
@@ -179,5 +180,48 @@ describe("entitlements", () => {
     expect(ent.canExportPdf).toBe(true);
     expect(ent.canExportJson).toBe(true);
     expect(ent.canUseForecast).toBe(true);
+  });
+
+  it("lets admin upgrade Free → Pro+ and downgrade back to Free whenever", () => {
+    const now = new Date("2026-08-15T12:00:00Z");
+    const user = {
+      username: "dave",
+      isAdmin: false,
+      plan: "free",
+      proTrialEndsAt: "2026-05-01T00:00:00Z",
+    };
+    expect(isPro(user, now)).toBe(false);
+
+    applyAdminPlanGrant(user, "pro_plus", { by: "Haulage_Admin", at: now.toISOString() });
+    expect(user.planGrant).toBe("pro_plus");
+    expect(isPro(user, now)).toBe(true);
+    const up = resolveEntitlements(user, { receipts: [] }, now);
+    expect(up.status).toBe("pro_plus");
+    expect(up.planGrant).toBe("pro_plus");
+    expect(up.canExportPdf).toBe(true);
+
+    applyAdminPlanGrant(user, "free", { by: "Haulage_Admin", at: now.toISOString() });
+    expect(user.planGrant).toBe("free");
+    expect(user.plan).toBe("free");
+    expect(isPro(user, now)).toBe(false);
+    const down = resolveEntitlements(user, { receipts: [] }, now);
+    expect(down.status).toBe("free");
+    expect(down.planGrant).toBe("free");
+    expect(down.canExportPdf).toBe(false);
+
+    expect(() => applyAdminPlanGrant({ isAdmin: true }, "pro_plus")).toThrow(/Primary mod/);
+  });
+
+  it("admin Free grant overrides an open trial until upgraded again", () => {
+    const now = new Date("2026-08-15T12:00:00Z");
+    const user = {
+      username: "sam",
+      isAdmin: false,
+      proTrialEndsAt: addTrialEnd("2026-08-01T00:00:00Z"),
+    };
+    expect(isPro(user, now)).toBe(true);
+    applyAdminPlanGrant(user, "free", { by: "Haulage_Admin", at: now.toISOString() });
+    expect(isPro(user, now)).toBe(false);
+    expect(new Date(user.proTrialEndsAt).getTime()).toBeLessThanOrEqual(now.getTime());
   });
 });

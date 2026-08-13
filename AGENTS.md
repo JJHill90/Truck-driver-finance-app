@@ -114,10 +114,13 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   (wipe account + records + receipt files; cannot delete primary mod),
   `GET /admin/users/:username` (`?includeDeleted=1` for soft-deleted ledger
   rows), `GET /admin/users/:username/receipts/:id/file`, plus ledger overrides
-  `POST /admin/users/:username/{expenses|income}/unreconcile|restore|soft-delete`.
-  Profile tab shows the admin panel via `enhancements.js` when `user.isAdmin`.
-  Opening another user is read-only and does not switch your signed-in session;
-  the detail view can unlock reconciliations and restore accidental deletes.
+  `POST /admin/users/:username/{expenses|income}/unreconcile|restore|soft-delete`,
+  and `POST /admin/users/:username/plan` with `{ plan: "pro_plus" | "free" }`
+  to grant complimentary **Pro+** or force **Free** at any time (`planGrant`
+  on the user record). Profile tab shows the admin panel via `enhancements.js`
+  when `user.isAdmin`. Opening another user is read-only and does not switch
+  your signed-in session; the detail view can unlock reconciliations, restore
+  accidental deletes, and upgrade/downgrade plans.
 - **Ledger reconcile.** Expense and income ledgers get a select-all column and
   per-row checkboxes. When any open row is ticked, **Reconcile entries** appears
   in the ledger header — `POST /expenses/reconcile` or `POST /income/reconcile`
@@ -281,14 +284,16 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   backfilled on later login for existing accounts. Subscribe from day one
   via Profile → Plan (Stripe Checkout). After the trial ends, `/alerts`
   soft-notifies to update to a paid plan; the account falls back to Free
-  (**15 uploads + 1 on-screen report**) until they upgrade. Soft gates
-  return `402` with `UPLOAD_LIMIT` / `PRO_REQUIRED` (checked before OCR on
-  scan/manual; PDF/forecast Pro-gated). Stripe Checkout + Customer Portal
-  via `lib/billing-stripe.js` (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`,
-  `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`); webhook at
-  `POST /api/haulage/billing/webhook` (raw body). Public `GET /billing/trial`
-  (alias `/billing/founding`) powers signup copy. Without Stripe keys,
-  trials/quotas still apply; checkout returns a clear error.
+  (**15 uploads + 1 on-screen report**) until they upgrade. **Haulage_Admin**
+  may also set `planGrant` to `pro_plus` or `free` anytime (Profile → Primary
+  mod → Plan). Soft gates return `402` with `UPLOAD_LIMIT` / `PRO_REQUIRED`
+  (checked before OCR on scan/manual; PDF/forecast Pro-gated). Stripe
+  Checkout + Customer Portal via `lib/billing-stripe.js` (`STRIPE_SECRET_KEY`,
+  `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`); webhook at
+  `POST /api/haulage/billing/webhook` (raw body) — a later paid Stripe
+  activation clears a forced-Free grant. Public `GET /billing/trial` (alias
+  `/billing/founding`) powers signup copy. Without Stripe keys, trials/quotas
+  still apply; checkout returns a clear error.
 - **Version label** sits under the Support button (sidebar bottom-left) and on
  the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
  Bump `HAULAGE_PR_NUMBER` with each new PR. Display rules: PR *n* →
