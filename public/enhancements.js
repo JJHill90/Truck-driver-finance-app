@@ -724,6 +724,11 @@
     const hint = byId("title-password-hint");
     const strength = byId("title-password-strength");
     const pwd = byId("title-auth-password");
+    const loginBtn = byId("title-auth-login");
+    const registerBtn = byId("title-auth-register");
+    const backLogin = byId("title-auth-back-login");
+    const headline = document.querySelector("#title-auth-panel .title-screen-headline");
+    const sub = document.querySelector("#title-auth-panel .title-screen-sub");
     if (emailWrap) emailWrap.classList.toggle("hidden", !isRegister);
     if (hint) hint.classList.toggle("hidden", !isRegister);
     if (strength) strength.classList.toggle("hidden", !isRegister);
@@ -731,6 +736,29 @@
       pwd.autocomplete = isRegister ? "new-password" : "current-password";
       pwd.placeholder = isRegister ? "Strong password (8+ chars)" : "Your password";
     }
+    // Creating a profile: hide Log in and highlight Create so new users are not confused.
+    if (loginBtn) {
+      loginBtn.classList.toggle("hidden", Boolean(isRegister));
+      loginBtn.classList.toggle("primary", !isRegister);
+      loginBtn.classList.toggle("secondary", Boolean(isRegister));
+    }
+    if (registerBtn) {
+      registerBtn.classList.toggle("primary", Boolean(isRegister));
+      registerBtn.classList.toggle("secondary", !isRegister);
+    }
+    if (backLogin) backLogin.classList.toggle("hidden", !isRegister);
+    if (headline) {
+      headline.textContent = isRegister
+        ? "Create your Driver Hub profile."
+        : "One login for every driver app.";
+    }
+    if (sub) {
+      sub.textContent = isRegister
+        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub and future Driver Hub apps."
+        : "Sign in with your Driver Hub account, then open Taxation Hub or another app from your hub.";
+    }
+    const form = byId("title-auth-form");
+    if (form) form.classList.toggle("title-register-mode", Boolean(isRegister));
     void refreshTrialHints({ highlightRegister: isRegister });
   }
 
@@ -922,7 +950,8 @@
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      void doLogin();
+      if (registerMode) void doRegister();
+      else void doLogin();
     });
     if (loginBtn) {
       loginBtn.addEventListener("click", (e) => {
@@ -938,6 +967,13 @@
         void doRegister();
       });
     }
+    byId("title-auth-back-login")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      registerMode = false;
+      showTitleRegisterMode(false);
+      setTitleMessage("");
+      byId("title-auth-username")?.focus();
+    });
     if (forgotBtn) {
       forgotBtn.addEventListener("click", (e) => {
         e.preventDefault();
