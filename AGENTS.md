@@ -185,6 +185,13 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   the API returns `possibleDuplicate` without saving. `enhancements.js` shows
   “possible duplicate detected, do you wish to continue with the upload?” —
   Cancel returns 409 to `app.js`; Continue re-posts with `forceDuplicate: true`.
+- **Scan vs ledger:** `/receipts/scan` saves the photo to the gallery immediately;
+  the income/expense ledger row is created only on **Approve**
+  (`POST /receipts/:id/confirm`). Unconfirmed scans get `awaitingConfirm` on
+  `/records`; soft-deleted ledger rows with a remaining photo get
+  `missingLinkedLedger`. Income/Expenses show a banner plus gallery
+  “Finish approval” / “Discard” / “Restore” (`POST /income|:expenses/:id/restore`).
+  Confirm is idempotent for already-linked or soft-deleted income.
 - **Expenses tab** has two sub-tabs: **General Expenses and Claims**
   (scan/manual, totals, general receipt gallery + ledger) and **Car Expenses
   and Claims** (ATO D1 cents/km or logbook, plus fuel / repairs / tyres /
