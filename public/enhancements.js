@@ -5646,7 +5646,7 @@
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance appears with your income view so you can cross-check living-away amounts against what you’ve been paid.",
-        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. Sign in before uploading so everything lands in your profile, not the shared guest store.",
+        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
     report: {
