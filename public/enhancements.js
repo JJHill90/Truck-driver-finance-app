@@ -7434,3 +7434,74 @@
     start();
   }
 })();
+
+/* --- Highlight selected detected-total on multi-total scan confirm -------
+ * app.js updates pending.detectedTotals.primary and the amount field on
+ * click, but leaves the old .detected-total-primary class on the first row.
+ * Re-apply highlight + "Selected" tag so the choice is obvious.
+ */
+(function () {
+  "use strict";
+
+  function ensureSelectedTag(btn) {
+    if (!btn || btn.querySelector(".detected-total-selected-tag")) return;
+    const tag = document.createElement("span");
+    tag.className = "detected-total-selected-tag";
+    tag.textContent = "Selected";
+    // Place before the amount <strong> when present.
+    const amount = btn.querySelector("strong");
+    if (amount) btn.insertBefore(tag, amount);
+    else btn.appendChild(tag);
+  }
+
+  function highlightSelected(list, selectedBtn) {
+    if (!list) return;
+    list.querySelectorAll("[data-total-idx]").forEach((btn) => {
+      ensureSelectedTag(btn);
+      const on = btn === selectedBtn;
+      btn.classList.toggle("detected-total-primary", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function syncList(list) {
+    if (!list) return;
+    const buttons = [...list.querySelectorAll("[data-total-idx]")];
+    if (!buttons.length) return;
+    buttons.forEach(ensureSelectedTag);
+    let selected =
+      list.querySelector("[data-total-idx].detected-total-primary") ||
+      list.querySelector('[data-total-idx][aria-pressed="true"]');
+    if (!selected) selected = buttons[0];
+    highlightSelected(list, selected);
+  }
+
+  function onClick(e) {
+    const btn = e.target.closest("[data-total-idx]");
+    if (!btn) return;
+    const list = btn.closest(".detected-totals");
+    if (!list) return;
+    // Run after app.js's own click handler updates pending + amount.
+    requestAnimationFrame(() => highlightSelected(list, btn));
+  }
+
+  function start() {
+    document.addEventListener("click", onClick, false);
+
+    ["income-scan-result", "scan-result"].forEach((id) => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      const mo = new MutationObserver(() => {
+        box.querySelectorAll("ul.detected-totals").forEach(syncList);
+      });
+      mo.observe(box, { childList: true, subtree: true });
+      box.querySelectorAll("ul.detected-totals").forEach(syncList);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

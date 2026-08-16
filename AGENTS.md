@@ -216,7 +216,9 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   and do not need adjusting before save. Income scans still show multi-field
   amounts (gross/net/etc.) but the **primary / approve amount** prefers
   **net income / net pay** via `lib/income-total.js` (falls back to the largest
-  non-GST/PAYG/YTD figure when no net wording is present).
+  non-GST/PAYG/YTD figure when no net wording is present). Clicking another
+  detected total re-highlights that row (amber + “Selected”) via
+  `enhancements.js` — app.js updates the amount but left the old primary class.
 - **ABN + vendor memory.** After OCR, `lib/abn-entity.js` picks the best
   checksum-valid ABN with the entity/vendor name attached to it (prefers
   supplier/employer ABNs near the business header; demotes customer/buyer ABNs)
