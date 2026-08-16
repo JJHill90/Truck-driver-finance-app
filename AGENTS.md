@@ -47,15 +47,15 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   segment spend (breakfast/lunch/dinner/food/OT/accom/incidentals), and a
   day/week/month selector with per-day breakdown. Resets at midnight AEST.
 - **Recent activity (dashboard).** Capped at the **10** newest expense/income uploads (by `createdAt`, then date) via `enhancements.js`; the panel sits below Allowance caps and LAFHA on the dashboard.
-- **Living Away from Home (LAFHA) boxes.** Dashboard + Income panels
-  (`#dashboard-lafha-box`, `#income-lafha-box`) via `GET /lafha?financialYear=`
+- **Living Away from Home (LAFHA) box.** Dashboard panel
+  (`#dashboard-lafha-box`) via `GET /lafha?financialYear=`
   / `lib/lafha.js`. Truck-driver overnight meal rates are **FY-aware** via
   `lib/historical-rates.js` (TD 2025/4 → **$128/day** for 2025–26; TD 2026/4 →
   **$132.50/day** for 2026–27+, reused until the next TD). Salary bands and
   overtime meal caps follow the same determination. ATO updates these
   annually (income year), not every Jan/Jul. Paid Travel/LAFHA lines are
   detected on income. Income menu includes “Living Away from Home / Travel
-  allowance”.
+  allowance” (the LAFHA summary box lives on the dashboard only).
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default

@@ -5177,7 +5177,7 @@
   }
 })();
 
-/* --- Living Away from Home allowance boxes (dashboard + income) ------------
+/* --- Living Away from Home allowance box (dashboard) ---------------------
  * Shows ATO truck-driver overnight meal rates for the selected financial year
  * (TD 2025/4 → $128/day; TD 2026/4 → ~$132.50/day), salary band, plus any
  * Travel / LAFHA amounts recorded on income / scanned payslips.
@@ -5186,7 +5186,7 @@
   "use strict";
 
   const API = `${window.location.origin}/api/haulage`;
-  const BOX_IDS = ["dashboard-lafha-box", "income-lafha-box"];
+  const BOX_IDS = ["dashboard-lafha-box"];
 
   const money = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
