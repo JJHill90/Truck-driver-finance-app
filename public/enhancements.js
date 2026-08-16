@@ -5628,7 +5628,7 @@
     dashboard: {
       title: "Dashboard",
       body: [
-        "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot and Recent activity show what’s changed lately so you can spot gaps without digging through every ledger line.",
+        "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot summarises the year; Allowance caps and LAFHA sit above Recent activity, which shows only the 10 most recent uploads and refreshes as you add more.",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
         "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
@@ -7746,6 +7746,128 @@
       mo.observe(box, { childList: true, subtree: true });
       box.querySelectorAll("ul.detected-totals").forEach(syncList);
     });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Dashboard recent activity: newest 10 only ---------------------------
+ * app.js already slices, but it samples the first N expenses/income before
+ * a global sort — older array order can leave the feed feeling stale/long.
+ * Replace with a true newest-10 across all ledger rows (date, then createdAt).
+ */
+(function () {
+  "use strict";
+  /* global fmtDate, fmt */
+
+  const LIMIT = 10;
+
+  function moneyAbs(n) {
+    if (typeof fmt === "function") return fmt(Math.abs(Number(n) || 0));
+    return `$${Math.abs(Number(n) || 0).toFixed(2)}`;
+  }
+
+  function dateLabel(d) {
+    if (typeof fmtDate === "function") return fmtDate(d);
+    return String(d || "—");
+  }
+
+  function buildRows() {
+    const expenses = (state && state.records && state.records.expenses) || [];
+    const income = (state && state.records && state.records.income) || [];
+    const rows = [];
+    for (const e of expenses) {
+      if (!e || e.deletedAt) continue;
+      rows.push({
+        date: e.date || "",
+        createdAt: e.createdAt || e.updatedAt || "",
+        type: "Expense",
+        desc: e.description || e.vendor || e.category || "Expense",
+        amount: -(Number(e.amount) || 0),
+      });
+    }
+    for (const i of income) {
+      if (!i || i.deletedAt) continue;
+      rows.push({
+        date: i.date || "",
+        createdAt: i.createdAt || i.updatedAt || "",
+        type: "Income",
+        desc: i.description || i.entity || i.payer || i.type || "Income",
+        amount: Number(i.grossTotal ?? i.amount) || 0,
+      });
+    }
+    rows.sort((a, b) => {
+      const byCreated = String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+      if (byCreated) return byCreated;
+      return String(b.date || "").localeCompare(String(a.date || ""));
+    });
+    return rows.slice(0, LIMIT);
+  }
+
+  function renderLimitedRecentActivity() {
+    const el = document.getElementById("recent-activity");
+    if (!el) return;
+    const rows = buildRows();
+    if (!rows.length) {
+      el.innerHTML =
+        `<p class="muted">No transactions yet — add an expense or scan a receipt.</p>`;
+      return;
+    }
+    el.innerHTML = `
+      <p class="muted recent-activity-note">Showing the ${rows.length} most recent upload${rows.length === 1 ? "" : "s"}.</p>
+      <table class="data recent-activity-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead>
+        <tbody>${rows
+          .map(
+            (r) =>
+              `<tr><td>${dateLabel(r.date)}</td><td><span class="tag ${
+                r.type === "Income" ? "green" : ""
+              }">${r.type}</span></td><td>${String(r.desc || "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</td><td class="amount">${moneyAbs(r.amount)}${
+                r.amount < 0 ? " DR" : " CR"
+              }</td></tr>`
+          )
+          .join("")}</tbody>
+      </table>`;
+  }
+
+  function patch() {
+    globalThis.renderRecentActivity = renderLimitedRecentActivity;
+    globalThis.renderRecentActivity.__haulageRecent10 = true;
+  }
+
+  function start() {
+    patch();
+    setTimeout(patch, 0);
+    setTimeout(patch, 400);
+    // Keep the list capped if app.js re-renders the full table first.
+    const el = document.getElementById("recent-activity");
+    if (el) {
+      const mo = new MutationObserver(() => {
+        if (el.querySelectorAll("tbody tr").length > LIMIT) {
+          renderLimitedRecentActivity();
+        }
+      });
+      mo.observe(el, { childList: true, subtree: true });
+    }
+    if (typeof globalThis.refreshAll === "function" && !globalThis.refreshAll.__haulageRecent10) {
+      const prev = globalThis.refreshAll;
+      async function wrapped() {
+        const result = await prev.apply(this, arguments);
+        patch();
+        renderLimitedRecentActivity();
+        return result;
+      }
+      wrapped.__haulageRecent10 = true;
+      globalThis.refreshAll = wrapped;
+    }
+    renderLimitedRecentActivity();
   }
 
   if (document.readyState === "loading") {

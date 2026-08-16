@@ -1172,6 +1172,8 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .awaiting-approval { outline: 1px dashed var(--accent); outline-offset: 6px; border-radius: 8px; }
 .select-total-hint { font-size: 0.8rem; }
 .saving-note { font-style: italic; }
+.recent-activity-note { margin: 0 0 10px; font-size: 0.82rem; }
+
 
 /* Tables */
 table.data { width: 100%; border-collapse: collapse; font-size: 0.88rem; }

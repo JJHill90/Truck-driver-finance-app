@@ -46,6 +46,7 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   `enhancements.js` + `lib/allowance-tally.js` shows grand total, roaming
   segment spend (breakfast/lunch/dinner/food/OT/accom/incidentals), and a
   day/week/month selector with per-day breakdown. Resets at midnight AEST.
+- **Recent activity (dashboard).** Capped at the **10** newest expense/income uploads (by `createdAt`, then date) via `enhancements.js`; the panel sits below Allowance caps and LAFHA on the dashboard.
 - **Living Away from Home (LAFHA) boxes.** Dashboard + Income panels
   (`#dashboard-lafha-box`, `#income-lafha-box`) via `GET /lafha?financialYear=`
   / `lib/lafha.js`. Truck-driver overnight meal rates are **FY-aware** via
