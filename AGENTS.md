@@ -214,7 +214,9 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   overall/grand total (or largest amount if unlabeled) is primary. The confirm
   UI asks to approve that single total — other line amounts are informational
   and do not need adjusting before save. Income scans still show multi-field
-  amounts (gross/net/etc.).
+  amounts (gross/net/etc.) but the **primary / approve amount** prefers
+  **net income / net pay** via `lib/income-total.js` (falls back to the largest
+  non-GST/PAYG/YTD figure when no net wording is present).
 - **ABN + vendor memory.** After OCR, `lib/abn-entity.js` picks the best
   checksum-valid ABN with the entity/vendor name attached to it (prefers
   supplier/employer ABNs near the business header; demotes customer/buyer ABNs)

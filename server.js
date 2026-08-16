@@ -18,6 +18,10 @@ const {
 const { listMenuIncomeTypes, normalizeIncomeTypeId } = require("./lib/income-menu");
 const { toIsoAusDate, resolveDocumentDate } = require("./lib/aus-date");
 const { refineExpenseDetectedTotals } = require("./lib/expense-total");
+const {
+  refineIncomeDetectedTotals,
+  applyIncomePrimaryToOcr,
+} = require("./lib/income-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
@@ -1850,6 +1854,10 @@ api.post("/receipts/scan", async (req, res, next) => {
     let detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
     if (scanPurpose === "expense") {
       detectedTotals = refineExpenseDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
+    } else {
+      // Remittances/invoices: prefer net income / net pay over gross for the
+      // amount users approve into the ledger (gross stays available as a field).
+      detectedTotals = refineIncomeDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
     }
     const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
     // Keep OCR amount fields in sync with the primary detected total for the confirm UI.
@@ -1857,10 +1865,13 @@ api.post("/receipts/scan", async (req, res, next) => {
       if (scanPurpose === "expense") {
         ocrResult.amount = primaryTotal.amount;
       } else {
-        if (!(Number(ocrResult.grossTotal) > 0)) ocrResult.grossTotal = primaryTotal.amount;
-        if (!(Number(ocrResult.taxableIncome) > 0)) ocrResult.taxableIncome = primaryTotal.amount;
-        if (!(Number(ocrResult.amount) > 0)) {
-          ocrResult.amount = Number(ocrResult.netPay) > 0 ? ocrResult.netPay : primaryTotal.amount;
+        applyIncomePrimaryToOcr(ocrResult, primaryTotal);
+        // Fill missing gross/taxable from OCR only — never from the net primary.
+        if (!(Number(ocrResult.grossTotal) > 0) && Number(ocrResult.taxableIncome) > 0) {
+          ocrResult.grossTotal = Number(ocrResult.taxableIncome);
+        }
+        if (!(Number(ocrResult.taxableIncome) > 0) && Number(ocrResult.grossTotal) > 0) {
+          ocrResult.taxableIncome = Number(ocrResult.grossTotal);
         }
       }
     }
