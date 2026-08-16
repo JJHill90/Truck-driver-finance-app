@@ -198,6 +198,25 @@
               <div class="panel">
                 <div class="panel-header"><h2>Upload expense receipt</h2></div>
                 <p class="muted">Scan a photo or PDF — approve the totals before they are saved to expenses.</p>
+                <details class="receipt-photo-guide" open>
+                  <summary>Photograph receipts clearly for a better scan</summary>
+                  <div class="receipt-photo-guide-body">
+                    <img
+                      class="receipt-photo-guide-gif"
+                      src="assets/receipt-photo-guide.gif"
+                      width="720"
+                      height="405"
+                      alt="Animated guide: frame the whole receipt on a dark surface so vendor, ABN, total and date stay sharp and in view"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <ul class="receipt-photo-guide-tips">
+                      <li><strong>Whole receipt in frame</strong> — leave a little dark margin; don’t crop the top vendor line or the date at the bottom.</li>
+                      <li><strong>Flat and sharp</strong> — dark surface, even light, no finger glare over the total or ABN.</li>
+                      <li><strong>Scanner needs</strong> — vendor name, ABN, SALE TOTAL (or amount due), and the purchase date.</li>
+                    </ul>
+                  </div>
+                </details>
                 <div id="upload-zone" class="upload-zone">
                   <p>Drag &amp; drop an expense receipt (image or PDF)</p>
                   <button type="button" class="btn primary" id="pick-receipt">Upload file</button>

@@ -5636,7 +5636,7 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Before uploading, open Photograph receipts clearly for a better scan — keep the whole receipt in frame on a dark surface so vendor, ABN, SALE TOTAL and date stay sharp. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
         "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active for ATO acknowledgment — the compiled box lists active cars. The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. Then enter cents-per-km, logbook or actual running costs. That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
@@ -5646,8 +5646,7 @@
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance appears with your income view so you can cross-check living-away amounts against what you’ve been paid.",
-        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
-      ],
+        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",      ],
     },
     report: {
       title: "EOFY report",
@@ -6880,6 +6879,552 @@
     });
 
     void loadDefaults();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Unconfirmed income/expense scans (gallery photo, no ledger row) -----
+ * /receipts/scan saves the image immediately; the ledger row is only created
+ * when the user clicks Approve. Navigating away leaves orphans in the gallery.
+ * Soft-deleted ledger rows can leave the same symptom (linked id, no active row).
+ */
+(function () {
+  "use strict";
+  /* global findReceipt, getDetectedTotalsClient */
+
+  const fmt = (n) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+
+  function esc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function apiBase() {
+    return typeof API !== "undefined" && API ? API : `${window.location.origin}/api/haulage`;
+  }
+
+  function notify(msg) {
+    if (typeof toast === "function") toast(msg);
+  }
+
+  function receipts() {
+    return (typeof state !== "undefined" && state && state.records && state.records.receipts) || [];
+  }
+
+  function activeIncome() {
+    return (typeof state !== "undefined" && state && state.records && state.records.income) || [];
+  }
+
+  function activeExpenses() {
+    return (typeof state !== "undefined" && state && state.records && state.records.expenses) || [];
+  }
+
+  function purposeOf(r) {
+    if (!r) return null;
+    if (r.purpose === "income" || r.purpose === "expense") return r.purpose;
+    if (r.linkedIncomeId) return "income";
+    if (r.linkedExpenseId) return "expense";
+    if (r.ocrResult && r.ocrResult.documentType === "income") return "income";
+    return "expense";
+  }
+
+  function isAwaiting(r, purpose) {
+    if (!r || !(r.hasImage || r.imagePath)) return false;
+    if (r.linkedIncomeId || r.linkedExpenseId) return false;
+    if (r.awaitingConfirm === true) return !purpose || purposeOf(r) === purpose;
+    if (r.awaitingConfirm === false) return false;
+    const p = purposeOf(r);
+    if (purpose && p !== purpose) return false;
+    return p === "income" || p === "expense";
+  }
+
+  function isMissingLink(r, purpose) {
+    if (!r || !(r.hasImage || r.imagePath)) return false;
+    if (r.missingLinkedLedger === true) return !purpose || purposeOf(r) === purpose;
+    if (r.linkedIncomeId) {
+      const found = activeIncome().some(
+        (i) => i && (i.id === r.linkedIncomeId || i.receiptId === r.id)
+      );
+      if (!found) return !purpose || purpose === "income";
+    }
+    if (r.linkedExpenseId) {
+      const found = activeExpenses().some(
+        (e) => e && (e.id === r.linkedExpenseId || e.receiptId === r.id)
+      );
+      if (!found) return !purpose || purpose === "expense";
+    }
+    return false;
+  }
+
+  function listAwaiting(purpose) {
+    return receipts().filter((r) => isAwaiting(r, purpose));
+  }
+
+  function listMissing(purpose) {
+    return receipts().filter((r) => isMissingLink(r, purpose));
+  }
+
+  function ensureBanner(viewId, bannerId) {
+    const view = document.getElementById(viewId);
+    if (!view) return null;
+    let banner = document.getElementById(bannerId);
+    if (banner) return banner;
+    banner = document.createElement("div");
+    banner.id = bannerId;
+    banner.className = "enh-awaiting-banner hidden";
+    banner.setAttribute("role", "status");
+    view.insertBefore(banner, view.firstChild);
+    return banner;
+  }
+
+  function rebuildDetectedTotals(ocr) {
+    if (typeof getDetectedTotalsClient === "function") {
+      try {
+        const t = getDetectedTotalsClient(ocr || {});
+        if (Array.isArray(t)) return t;
+      } catch {
+        /* fall through */
+      }
+    }
+    const amount = Number(ocr && (ocr.grossTotal ?? ocr.amount));
+    if (Number.isFinite(amount) && amount > 0) {
+      return [{ label: "Amount", amount, primary: true }];
+    }
+    return [];
+  }
+
+  function primaryAmount(ocr, totals) {
+    const fromTotals = (totals || []).find((t) => t.primary)?.amount ?? (totals || [])[0]?.amount;
+    const n = Number(fromTotals ?? ocr?.grossTotal ?? ocr?.amount ?? ocr?.netPay);
+    return Number.isFinite(n) && n > 0 ? n : "";
+  }
+
+  function todayIso() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  }
+
+  async function postConfirm(receiptId, purpose, payload) {
+    const res = await fetch(`${apiBase()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmed: true, purpose, ...payload }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not save to ledger");
+    return data;
+  }
+
+  /** Self-contained approve modal — does not rely on app.js pendingReceiptConfirm. */
+  function openApproveModal(receipt, purpose) {
+    document.getElementById("enh-awaiting-modal")?.remove();
+    const o = receipt.ocrResult || {};
+    const totals = rebuildDetectedTotals(o);
+    const amount = primaryAmount(o, totals);
+    const entity = o.entity || o.vendor || o.payer || "";
+    const date = o.date || todayIso();
+
+    const modal = document.createElement("div");
+    modal.id = "enh-awaiting-modal";
+    modal.className = "enh-dup-modal";
+    const incomeFields =
+      purpose === "income"
+        ? `
+          <label>Entity / company<input type="text" id="enh-await-entity" value="${esc(entity)}" /></label>
+          <label>Gross ($)<input type="number" id="enh-await-gross" step="0.01" min="0" value="${esc(
+            o.grossTotal ?? amount
+          )}" /></label>
+          <label>Taxable ($)<input type="number" id="enh-await-taxable" step="0.01" min="0" value="${esc(
+            o.taxableIncome ?? o.grossTotal ?? amount
+          )}" /></label>
+          <label>GST ($)<input type="number" id="enh-await-gst" step="0.01" min="0" value="${esc(
+            o.gstAmount ?? o.gst ?? 0
+          )}" /></label>`
+        : `
+          <label>Vendor<input type="text" id="enh-await-entity" value="${esc(entity)}" /></label>
+          <label>Category<input type="text" id="enh-await-category" value="${esc(
+            o.suggestedCategory || "other_work"
+          )}" /></label>`;
+
+    modal.innerHTML = `
+      <div class="enh-dup-backdrop" data-enh-await-cancel></div>
+      <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-await-title">
+        <h3 id="enh-await-title">Approve &amp; add to ${purpose === "income" ? "income" : "expense"} ledger</h3>
+        <p class="muted"><strong>${esc(receipt.filename || "Document")}</strong> was scanned but never approved — that is why the photo shows in the gallery with no ledger row.</p>
+        <div class="form-grid scan-confirm-form">
+          <label>Date<input type="date" id="enh-await-date" value="${esc(date)}" /></label>
+          ${incomeFields}
+          <label>Amount ($)<input type="number" id="enh-await-amount" step="0.01" min="0" value="${esc(
+            amount
+          )}" required /></label>
+          <label class="span-2">Description<input type="text" id="enh-await-desc" value="${esc(
+            o.description || ""
+          )}" /></label>
+        </div>
+        <div class="enh-dup-actions">
+          <button type="button" class="btn secondary" data-enh-await-cancel>Cancel</button>
+          <button type="button" class="btn primary" data-enh-await-save>Approve &amp; save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelectorAll("[data-enh-await-cancel]").forEach((el) => {
+      el.addEventListener("click", close);
+    });
+    modal.querySelector("[data-enh-await-save]")?.addEventListener("click", () => {
+      void (async () => {
+        const amt = Number(document.getElementById("enh-await-amount")?.value);
+        if (!Number.isFinite(amt) || amt <= 0) {
+          notify("Enter a valid total amount from the document");
+          document.getElementById("enh-await-amount")?.focus();
+          return;
+        }
+        const payload =
+          purpose === "income"
+            ? {
+                date: document.getElementById("enh-await-date")?.value || date,
+                entity: document.getElementById("enh-await-entity")?.value || entity,
+                payer: document.getElementById("enh-await-entity")?.value || entity,
+                amount: amt,
+                grossTotal: Number(document.getElementById("enh-await-gross")?.value) || amt,
+                taxableIncome: Number(document.getElementById("enh-await-taxable")?.value) || amt,
+                gstAmount: Number(document.getElementById("enh-await-gst")?.value) || 0,
+                netPay: amt,
+                type: o.suggestedIncomeType || o.type || "salary_wages",
+                description: document.getElementById("enh-await-desc")?.value || o.description || "",
+              }
+            : {
+                date: document.getElementById("enh-await-date")?.value || date,
+                vendor: document.getElementById("enh-await-entity")?.value || entity,
+                category: document.getElementById("enh-await-category")?.value || "other_work",
+                amount: amt,
+                description: document.getElementById("enh-await-desc")?.value || o.description || "",
+                workUsePercent: 100,
+              };
+        try {
+          const btn = modal.querySelector("[data-enh-await-save]");
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Saving…";
+          }
+          await postConfirm(receipt.id, purpose, payload);
+          close();
+          notify(
+            purpose === "income"
+              ? `${fmt(amt)} added to Income`
+              : `${fmt(amt)} added to Expenses`
+          );
+          if (typeof setView === "function") setView(purpose === "income" ? "income" : "expenses");
+          if (typeof refreshAll === "function") await refreshAll();
+          else scheduleRefreshUi();
+        } catch (err) {
+          notify(err.message || "Save failed");
+          const btn = modal.querySelector("[data-enh-await-save]");
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Approve & save";
+          }
+        }
+      })();
+    });
+
+    if (typeof setView === "function") setView(purpose === "income" ? "income" : "expenses");
+  }
+
+  function resumeApproval(receipt, purpose) {
+    openApproveModal(receipt, purpose);
+  }
+
+  async function discardReceipt(receiptId) {
+    const res = await fetch(`${apiBase()}/receipts/${encodeURIComponent(receiptId)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not discard upload");
+    return data;
+  }
+
+  async function restoreLedger(purpose, entryId) {
+    const path = purpose === "income" ? "income" : "expenses";
+    const res = await fetch(`${apiBase()}/${path}/${encodeURIComponent(entryId)}/restore`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not restore ledger entry");
+    return data;
+  }
+
+  function renderBanner(purpose) {
+    const viewId = purpose === "income" ? "view-income" : "view-expenses";
+    const bannerId = purpose === "income" ? "enh-income-awaiting" : "enh-expense-awaiting";
+    const banner = ensureBanner(viewId, bannerId);
+    if (!banner) return;
+
+    const awaiting = listAwaiting(purpose);
+    const missing = listMissing(purpose);
+    if (!awaiting.length && !missing.length) {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+      return;
+    }
+
+    const noun = purpose === "income" ? "income" : "expense";
+    const parts = [];
+    if (awaiting.length) {
+      parts.push(
+        `<strong>${awaiting.length}</strong> scanned ${noun} document${
+          awaiting.length === 1 ? "" : "s"
+        } still need approval before ${
+          awaiting.length === 1 ? "it appears" : "they appear"
+        } in the ledger.`
+      );
+    }
+    if (missing.length) {
+      parts.push(
+        `<strong>${missing.length}</strong> ${noun} photo${
+          missing.length === 1 ? "" : "s"
+        } link to ${noun} removed from the ledger — restore to bring ${
+          missing.length === 1 ? "it" : "them"
+        } back.`
+      );
+    }
+
+    const firstAwait = awaiting[0];
+    const firstMissing = missing[0];
+    const actions = [];
+    if (firstAwait) {
+      actions.push(
+        `<button type="button" class="btn primary" data-enh-resume="${esc(
+          firstAwait.id
+        )}" data-purpose="${purpose}">Finish approval</button>`
+      );
+      actions.push(
+        `<button type="button" class="btn secondary" data-enh-discard="${esc(
+          firstAwait.id
+        )}">Discard scan</button>`
+      );
+    }
+    if (firstMissing) {
+      const linkId =
+        purpose === "income" ? firstMissing.linkedIncomeId : firstMissing.linkedExpenseId;
+      if (linkId) {
+        actions.push(
+          `<button type="button" class="btn primary" data-enh-restore="${esc(
+            linkId
+          )}" data-purpose="${purpose}">Restore to ledger</button>`
+        );
+      }
+    }
+
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <div class="enh-awaiting-copy">
+        <p>${parts.join(" ")}</p>
+        <p class="muted">Photos can appear in the gallery as soon as you upload — the ledger only updates after you approve (or restore).</p>
+      </div>
+      <div class="enh-awaiting-actions">${actions.join("")}</div>`;
+  }
+
+  let refreshScheduled = false;
+  function scheduleRefreshUi() {
+    if (refreshScheduled) return;
+    refreshScheduled = true;
+    requestAnimationFrame(() => {
+      refreshScheduled = false;
+      refreshUi();
+    });
+  }
+
+  function decorateGalleryCards(purpose) {
+    const galleryId = purpose === "income" ? "income-gallery" : "receipt-gallery";
+    const gallery = document.getElementById(galleryId);
+    if (!gallery) return;
+    const awaitingIds = new Set(listAwaiting(purpose).map((r) => r.id));
+    const missingIds = new Set(listMissing(purpose).map((r) => r.id));
+
+    gallery.querySelectorAll(".receipt-card[data-receipt-card]").forEach((card) => {
+      const id = card.getAttribute("data-receipt-card");
+      if (!id) return;
+      let badge = card.querySelector(".enh-awaiting-badge");
+      const needsApprove = awaitingIds.has(id);
+      const needsRestore = missingIds.has(id);
+      if (!needsApprove && !needsRestore) {
+        if (badge) badge.remove();
+        card.querySelector(".enh-awaiting-card-actions")?.remove();
+        return;
+      }
+      const badgeText = needsApprove ? "Needs approval" : "Not in ledger";
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "enh-awaiting-badge";
+        card.appendChild(badge);
+      }
+      if (badge.textContent !== badgeText) badge.textContent = badgeText;
+
+      let actions = card.querySelector(".enh-awaiting-card-actions");
+      let desiredHtml = "";
+      if (needsApprove) {
+        desiredHtml = `
+            <button type="button" class="btn primary small" data-enh-resume="${esc(
+              id
+            )}" data-purpose="${purpose}">Finish approval</button>
+            <button type="button" class="btn secondary small" data-enh-discard="${esc(
+              id
+            )}">Discard</button>`;
+      } else if (needsRestore) {
+        const r = receipts().find((x) => x.id === id);
+        const linkId = purpose === "income" ? r?.linkedIncomeId : r?.linkedExpenseId;
+        desiredHtml = linkId
+          ? `<button type="button" class="btn primary small" data-enh-restore="${esc(
+              linkId
+            )}" data-purpose="${purpose}">Restore</button>`
+          : "";
+      }
+      if (!desiredHtml) {
+        if (actions) actions.remove();
+        return;
+      }
+      if (!actions) {
+        actions = document.createElement("div");
+        actions.className = "enh-awaiting-card-actions";
+        card.appendChild(actions);
+      }
+      if (actions.dataset.enhHtml !== desiredHtml) {
+        actions.innerHTML = desiredHtml;
+        actions.dataset.enhHtml = desiredHtml;
+      }
+    });
+  }
+
+  function refreshUi() {
+    renderBanner("income");
+    renderBanner("expense");
+    decorateGalleryCards("income");
+    decorateGalleryCards("expense");
+  }
+
+  async function onClick(e) {
+    const resume = e.target.closest("[data-enh-resume]");
+    if (resume) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = resume.getAttribute("data-enh-resume");
+      const purpose = resume.getAttribute("data-purpose") || "income";
+      const receipt =
+        (typeof findReceipt === "function" && findReceipt(id)) ||
+        receipts().find((r) => r.id === id);
+      if (!receipt) {
+        notify("Could not find that scan");
+        return;
+      }
+      resumeApproval(receipt, purpose);
+      return;
+    }
+
+    const discardBtn = e.target.closest("[data-enh-discard]");
+    if (discardBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = discardBtn.getAttribute("data-enh-discard");
+      if (!id) return;
+      if (!window.confirm("Discard this scanned upload? The photo will be removed.")) return;
+      try {
+        await discardReceipt(id);
+        notify("Upload discarded");
+        if (typeof refreshAll === "function") await refreshAll();
+        else scheduleRefreshUi();
+      } catch (err) {
+        notify(err.message || "Discard failed");
+      }
+      return;
+    }
+
+    const restoreBtn = e.target.closest("[data-enh-restore]");
+    if (restoreBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = restoreBtn.getAttribute("data-enh-restore");
+      const purpose = restoreBtn.getAttribute("data-purpose") || "income";
+      if (!id) return;
+      try {
+        await restoreLedger(purpose, id);
+        notify("Restored to ledger");
+        if (typeof refreshAll === "function") await refreshAll();
+        else scheduleRefreshUi();
+      } catch (err) {
+        notify(err.message || "Restore failed");
+      }
+    }
+  }
+
+  function start() {
+    document.addEventListener("click", onClick, true);
+
+    const observe = (id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      new MutationObserver(() => scheduleRefreshUi()).observe(el, { childList: true, subtree: true });
+    };
+    observe("income-gallery");
+    observe("receipt-gallery");
+    observe("income-list");
+    observe("expense-list");
+
+    const wrapSetView = () => {
+      if (typeof globalThis.setView !== "function") return;
+      if (globalThis.setView.__haulageAwaitingWrapped) return;
+      const prev = globalThis.setView;
+      function awaitingAwareSetView(name) {
+        const result = prev.apply(this, arguments);
+        if (name === "income" || name === "expenses" || name === "receipts") {
+          requestAnimationFrame(scheduleRefreshUi);
+        }
+        return result;
+      }
+      awaitingAwareSetView.__haulageAwaitingWrapped = true;
+      if (prev.__haulageSupportWrapped) awaitingAwareSetView.__haulageSupportWrapped = true;
+      globalThis.setView = awaitingAwareSetView;
+    };
+    wrapSetView();
+    setTimeout(wrapSetView, 0);
+    setTimeout(wrapSetView, 500);
+
+    if (typeof globalThis.refreshAll === "function" && !globalThis.refreshAll.__haulageAwaitingWrapped) {
+      const prevRefresh = globalThis.refreshAll;
+      async function wrappedRefresh() {
+        const result = await prevRefresh.apply(this, arguments);
+        refreshUi();
+        return result;
+      }
+      wrappedRefresh.__haulageAwaitingWrapped = true;
+      globalThis.refreshAll = wrappedRefresh;
+    }
+
+    scheduleRefreshUi();
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks += 1;
+      wrapSetView();
+      scheduleRefreshUi();
+      if (ticks >= 15) clearInterval(iv);
+    }, 400);
   }
 
   if (document.readyState === "loading") {

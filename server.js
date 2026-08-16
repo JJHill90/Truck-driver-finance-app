@@ -35,6 +35,7 @@ const {
   isDeleted,
   findEntry,
 } = require("./lib/ledger-lifecycle");
+const { isAwaitingConfirm, isMissingLinkedLedger } = require("./lib/unconfirmed-receipts");
 const {
   listLicenceClasses,
   getLicenceClassForSalary,
@@ -1344,11 +1345,19 @@ api.get("/driver-role-defaults", (req, res) => {
 api.get("/records", (req, res) => {
   const full = getRecords(req);
   const records = withActiveLedger(full);
-  const receipts = (records.receipts || []).map((r) => ({
-    ...r,
-    hasImage: Boolean(r.imagePath),
-    dataUrl: undefined,
-  }));
+  const activeIncome = records.income || [];
+  const activeExpenses = records.expenses || [];
+  const receipts = (records.receipts || []).map((r) => {
+    const base = {
+      ...r,
+      hasImage: Boolean(r.imagePath),
+      dataUrl: undefined,
+    };
+    // Gallery can show scans before Approve — flag orphans for the UI.
+    base.awaitingConfirm = isAwaitingConfirm(base);
+    base.missingLinkedLedger = isMissingLinkedLedger(base, activeIncome, activeExpenses);
+    return base;
+  });
   res.json({ ...records, receipts, vendors: storage.listVendors(full) });
 });
 
@@ -1591,7 +1600,24 @@ api.delete("/expenses/:id", (req, res) => {
   res.json({ ok: true, softDeleted: true });
 });
 
-// --- Income --------------------------------------------------------------
+/** Owner restore — soft-deleted expenses can leave gallery photos with no ledger row. */
+api.post("/expenses/:id/restore", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to restore an expense." });
+    return;
+  }
+  const records = getRecords(req);
+  const result = restoreEntry(records, "expense", req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    const status = result.code === "not_found" ? 404 : 400;
+    res.status(status).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({ ok: true, entry: result.entry });
+});
 api.post("/income", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
@@ -1646,6 +1672,25 @@ api.delete("/income/:id", (req, res) => {
   }
   persist(req);
   res.json({ ok: true, softDeleted: true });
+});
+
+/** Owner restore — soft-deleted income can leave gallery photos with no ledger row. */
+api.post("/income/:id/restore", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to restore income." });
+    return;
+  }
+  const records = getRecords(req);
+  const result = restoreEntry(records, "income", req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    const status = result.code === "not_found" ? 404 : 400;
+    res.status(status).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({ ok: true, entry: result.entry });
 });
 
 // --- Receipts ------------------------------------------------------------
@@ -1966,6 +2011,60 @@ api.post("/receipts/:id/confirm", (req, res) => {
     normalizePayloadDate(payload);
     if (payload.type) payload.type = normalizeIncomeTypeId(payload.type);
     if (!payload.description) payload.description = buildIncomeDescription(payload);
+
+    // Idempotent confirm: already linked to active income, or restore soft-deleted.
+    let existing =
+      (receipt?.linkedIncomeId && findEntry(records, "income", receipt.linkedIncomeId)) ||
+      (receipt && (records.income || []).find((i) => i && i.receiptId === receipt.id)) ||
+      null;
+    if (existing && isDeleted(existing)) {
+      restoreEntry(records, "income", existing.id, { username: sessionUsername(req) });
+      existing = updateIncome(records, existing.id, { ...payload, receiptId: receipt.id }) || existing;
+      rememberVendor(records, {
+        name: payload.entity || payload.vendor || payload.payer || existing.entity,
+        abn: payload.vendorAbn || payload.abn || existing.vendorAbn,
+      });
+      if (receipt) {
+        receipt.purpose = "income";
+        receipt.linkedIncomeId = existing.id;
+        receipt.manual = payload;
+        receipt.filename = buildDocumentFilename({
+          date: payload.date || existing.date,
+          amount: labelAmountFromConfirm(payload, "income"),
+          mimeType: receipt.mimeType,
+          originalFilename: receipt.filename,
+        });
+      }
+      persist(req);
+      res.json({
+        entry: existing,
+        restored: true,
+        receipt: receipt ? { id: receipt.id, filename: receipt.filename, purpose: receipt.purpose } : null,
+      });
+      return;
+    }
+    if (existing && !isDeleted(existing)) {
+      const entry = updateIncome(records, existing.id, { ...payload, receiptId: receipt?.id || null }) || existing;
+      if (receipt) {
+        receipt.purpose = "income";
+        receipt.linkedIncomeId = entry.id;
+        receipt.manual = payload;
+        receipt.filename = buildDocumentFilename({
+          date: payload.date || entry.date,
+          amount: labelAmountFromConfirm(payload, "income"),
+          mimeType: receipt.mimeType,
+          originalFilename: receipt.filename,
+        });
+      }
+      persist(req);
+      res.json({
+        entry,
+        alreadyLinked: true,
+        receipt: receipt ? { id: receipt.id, filename: receipt.filename, purpose: receipt.purpose } : null,
+      });
+      return;
+    }
+
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     rememberVendor(records, {
       name: payload.entity || payload.vendor || payload.payer || entry.entity,

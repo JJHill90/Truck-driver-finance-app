@@ -869,6 +869,64 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 26px; text-align: center; color: var(--text-dim); }
 .upload-zone.drag-over { border-color: var(--accent); background: rgba(245, 158, 11, 0.08); }
 .upload-zone .btn { margin-top: 10px; }
+
+/* --- Receipt photo guide (Expenses upload) ------------------------------ */
+.receipt-photo-guide {
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.55), rgba(30, 41, 59, 0.35));
+  overflow: hidden;
+}
+.receipt-photo-guide > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 11px 14px;
+  font-weight: 650;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.receipt-photo-guide > summary::-webkit-details-marker { display: none; }
+.receipt-photo-guide > summary::before {
+  content: "";
+  width: 0.45em;
+  height: 0.45em;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+  transition: transform 0.18s ease;
+  flex: 0 0 auto;
+}
+.receipt-photo-guide[open] > summary::before {
+  transform: rotate(45deg);
+  margin-top: -2px;
+}
+.receipt-photo-guide-body {
+  padding: 0 12px 14px;
+  display: grid;
+  gap: 12px;
+}
+.receipt-photo-guide-gif {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: #0b1220;
+}
+.receipt-photo-guide-tips {
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  display: grid;
+  gap: 7px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.receipt-photo-guide-tips strong { color: var(--text); font-weight: 650; }
+
 /* Slightly larger primary upload control so it reads clearly in the drop zone. */
 .upload-zone .btn.primary,
 #pick-receipt,
@@ -1131,6 +1189,46 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-dup-matches { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .enh-dup-scan { margin-top: 4px !important; }
 .enh-dup-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+
+/* --- Unconfirmed scan → ledger recovery -------------------------------- */
+.enh-awaiting-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.35));
+}
+.enh-awaiting-banner.hidden { display: none; }
+.enh-awaiting-copy { flex: 1 1 220px; min-width: 0; }
+.enh-awaiting-copy p { margin: 0 0 6px; }
+.enh-awaiting-copy p:last-child { margin-bottom: 0; }
+.enh-awaiting-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.receipt-card { position: relative; }
+.enh-awaiting-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(245, 158, 11, 0.95);
+  color: #0f172a;
+  pointer-events: none;
+}
+.enh-awaiting-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
 .enh-billing-plan-actions { justify-content: stretch; }
 .enh-billing-plan-actions .btn { flex: 1 1 auto; }
 
