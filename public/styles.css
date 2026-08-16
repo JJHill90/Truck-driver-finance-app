@@ -1103,8 +1103,53 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 /* Scan confirm */
 .scan-confirm h3 { margin-top: 0; }
 .detected-totals { list-style: none; margin: 12px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.detected-total-btn { width: 100%; display: flex; justify-content: space-between; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 9px 12px; cursor: pointer; }
-.detected-total-primary { border-color: var(--accent); background: rgba(245, 158, 11, 0.14); }
+.detected-total-btn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.detected-total-btn:hover {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.08);
+}
+.detected-total-btn.detected-total-primary,
+.detected-total-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  border-width: 2px;
+  padding: 8px 11px; /* keep size stable with thicker border */
+  background: rgba(245, 158, 11, 0.22);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28);
+  font-weight: 650;
+}
+.detected-total-btn.detected-total-primary .detected-total-selected-tag,
+.detected-total-btn[aria-pressed="true"] .detected-total-selected-tag {
+  display: inline-block;
+}
+.detected-total-selected-tag {
+  display: none;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1a1205;
+  background: var(--accent);
+}
+.detected-total-btn strong {
+  font-variant-numeric: tabular-nums;
+}
 .detected-total-empty { color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; }
 .scan-confirm-amount-label { display: flex; flex-direction: column; gap: 5px; margin: 10px 0; font-size: 0.85rem; color: var(--text-dim); }
 .scan-confirm-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
