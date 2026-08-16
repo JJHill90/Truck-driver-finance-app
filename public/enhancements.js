@@ -5636,7 +5636,7 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Before uploading, open Photograph receipts clearly for a better scan — keep the whole receipt in frame on a dark surface so vendor, ABN, SALE TOTAL and date stay sharp. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
         "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active for ATO acknowledgment — the compiled box lists active cars. The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. Then enter cents-per-km, logbook or actual running costs. That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
