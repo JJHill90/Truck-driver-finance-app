@@ -207,9 +207,10 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   **Vehicle & fuel** group (car claims only via the Car tab) and show a
   **Medical** group containing Medical equipment (`compulsory_assessment`). Nav
   no longer has a separate Scan receipt item; `setView("receipts")` redirects
-  to `expenses`. General upload includes a collapsible **Photograph receipts
-  clearly** guide (`public/assets/receipt-photo-guide.gif`) — whole receipt in
-  frame on a dark surface so vendor, ABN, SALE TOTAL and date stay sharp.
+  to `expenses`. General upload includes a collapsible **Recommended best way
+  to scan your receipts** guide (`public/assets/receipt-photo-guide.gif`) and a
+  **Scan with camera** flow (`enhancements.js`) with a live amber receipt frame
+  so drivers can fit the top of the slip and the date before capture.
 - **Expense scan approval:** when OCR finds multiple line amounts, only the
   overall/grand total (or largest amount if unlabeled) is primary. The confirm
   UI asks to approve that single total — other line amounts are informational

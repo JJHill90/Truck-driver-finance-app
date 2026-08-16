@@ -927,9 +927,165 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 }
 .receipt-photo-guide-tips strong { color: var(--text); font-weight: 650; }
 
+.upload-zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.upload-zone-actions .btn { margin-top: 0; }
+
+/* --- Live receipt camera + scan frame ----------------------------------- */
+.receipt-camera-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: #020617;
+  color: #f8fafc;
+}
+.receipt-camera-modal[hidden] { display: none !important; }
+.receipt-camera-stage {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #000;
+}
+.receipt-camera-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(1);
+}
+.receipt-camera-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.receipt-camera-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  /* Cut a tall receipt window; fallback if mask unsupported uses border frame only */
+  -webkit-mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+  mask-image: linear-gradient(#000, #000), linear-gradient(#000, #000);
+}
+.receipt-camera-frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 340px);
+  height: min(78vh, 560px);
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(245, 158, 11, 0.95);
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 9999px rgba(2, 6, 23, 0.58),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: transparent;
+}
+.receipt-camera-frame::before,
+.receipt-camera-frame::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(245, 158, 11, 0.15),
+    rgba(245, 158, 11, 0.85),
+    rgba(245, 158, 11, 0.15),
+    transparent
+  );
+  animation: receipt-scan-sweep 2.4s ease-in-out infinite;
+}
+.receipt-camera-frame::before { top: 12%; }
+.receipt-camera-frame::after { display: none; }
+.receipt-camera-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #f59e0b;
+  border-radius: 4px;
+}
+.receipt-camera-corner.tl { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
+.receipt-camera-corner.tr { top: -2px; right: -2px; border-left: 0; border-bottom: 0; }
+.receipt-camera-corner.bl { bottom: -2px; left: -2px; border-right: 0; border-top: 0; }
+.receipt-camera-corner.br { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+.receipt-camera-hint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + min(39vh, 280px) + 14px);
+  transform: translateX(-50%);
+  width: min(86vw, 360px);
+  text-align: center;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: #e2e8f0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.receipt-camera-hint strong { color: #fbbf24; }
+.receipt-camera-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.92) 40%);
+  z-index: 2;
+}
+.receipt-camera-toolbar .btn { min-width: 7.5rem; }
+.receipt-camera-capture {
+  width: 68px;
+  height: 68px;
+  border-radius: 999px;
+  border: 3px solid #f8fafc;
+  background: radial-gradient(circle at center, #f59e0b 0 58%, transparent 60%), #0f172a;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.35);
+  cursor: pointer;
+}
+.receipt-camera-capture:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.receipt-camera-status {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  font-size: 0.8rem;
+  color: #fde68a;
+}
+@keyframes receipt-scan-sweep {
+  0% { top: 10%; opacity: 0.35; }
+  50% { top: 78%; opacity: 1; }
+  100% { top: 10%; opacity: 0.35; }
+}
+
 /* Slightly larger primary upload control so it reads clearly in the drop zone. */
 .upload-zone .btn.primary,
 #pick-receipt,
+#pick-receipt-camera,
 #pick-income {
   padding: 12px 22px;
   font-size: 1rem;

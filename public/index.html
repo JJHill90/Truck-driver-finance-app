@@ -199,27 +199,30 @@
                 <div class="panel-header"><h2>Upload expense receipt</h2></div>
                 <p class="muted">Scan a photo or PDF — approve the totals before they are saved to expenses.</p>
                 <details class="receipt-photo-guide" open>
-                  <summary>Photograph receipts clearly for a better scan</summary>
+                  <summary>Recommended best way to scan your receipts</summary>
                   <div class="receipt-photo-guide-body">
                     <img
                       class="receipt-photo-guide-gif"
                       src="assets/receipt-photo-guide.gif"
                       width="720"
                       height="405"
-                      alt="Animated guide: frame the whole receipt on a dark surface so vendor, ABN, total and date stay sharp and in view"
+                      alt="Animated guide: recommended way to photograph a receipt so vendor, ABN, total and date stay sharp and in view"
                       loading="lazy"
                       decoding="async"
                     />
                     <ul class="receipt-photo-guide-tips">
-                      <li><strong>Whole receipt in frame</strong> — leave a little dark margin; don’t crop the top vendor line or the date at the bottom.</li>
+                      <li><strong>Whole receipt in frame</strong> — try to include the top of the receipt and fit the date in the photo.</li>
                       <li><strong>Flat and sharp</strong> — dark surface, even light, no finger glare over the total or ABN.</li>
                       <li><strong>Scanner needs</strong> — vendor name, ABN, SALE TOTAL (or amount due), and the purchase date.</li>
                     </ul>
                   </div>
                 </details>
                 <div id="upload-zone" class="upload-zone">
-                  <p>Drag &amp; drop an expense receipt (image or PDF)</p>
-                  <button type="button" class="btn primary" id="pick-receipt">Upload file</button>
+                  <p>Drag &amp; drop an expense receipt (image or PDF), or use the camera with a live scan frame</p>
+                  <div class="upload-zone-actions">
+                    <button type="button" class="btn primary" id="pick-receipt-camera">Scan with camera</button>
+                    <button type="button" class="btn secondary" id="pick-receipt">Upload file</button>
+                  </div>
                   <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
                 </div>
                 <div id="receipt-preview" class="preview hidden"></div>
