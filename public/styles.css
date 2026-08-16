@@ -1131,6 +1131,46 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .enh-dup-matches { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
 .enh-dup-scan { margin-top: 4px !important; }
 .enh-dup-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+
+/* --- Unconfirmed scan → ledger recovery -------------------------------- */
+.enh-awaiting-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.35));
+}
+.enh-awaiting-banner.hidden { display: none; }
+.enh-awaiting-copy { flex: 1 1 220px; min-width: 0; }
+.enh-awaiting-copy p { margin: 0 0 6px; }
+.enh-awaiting-copy p:last-child { margin-bottom: 0; }
+.enh-awaiting-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.receipt-card { position: relative; }
+.enh-awaiting-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(245, 158, 11, 0.95);
+  color: #0f172a;
+  pointer-events: none;
+}
+.enh-awaiting-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
 .enh-billing-plan-actions { justify-content: stretch; }
 .enh-billing-plan-actions .btn { flex: 1 1 auto; }
 
