@@ -6950,7 +6950,10 @@
 
   function isMissingLink(r, purpose) {
     if (!r || !(r.hasImage || r.imagePath)) return false;
+    // Honour server flag when present — including false, so a stale banner
+    // clears after restore / refresh even if local income/expense arrays lag.
     if (r.missingLinkedLedger === true) return !purpose || purposeOf(r) === purpose;
+    if (r.missingLinkedLedger === false) return false;
     if (r.linkedIncomeId) {
       const found = activeIncome().some(
         (i) => i && (i.id === r.linkedIncomeId || i.receiptId === r.id)
@@ -7365,14 +7368,35 @@
       const purpose = restoreBtn.getAttribute("data-purpose") || "income";
       if (!id) return;
       try {
+        restoreBtn.disabled = true;
         await restoreLedger(purpose, id);
         notify("Restored to ledger");
-        if (typeof refreshAll === "function") await refreshAll();
-        else scheduleRefreshUi();
       } catch (err) {
         notify(err.message || "Restore failed");
+      } finally {
+        // Always refresh — clears a stale banner when the row was already active.
+        try {
+          if (typeof refreshAll === "function") await refreshAll();
+          else scheduleRefreshUi();
+        } catch {
+          scheduleRefreshUi();
+        }
+        restoreBtn.disabled = false;
       }
     }
+  }
+
+  function wrapRefreshAll() {
+    if (typeof globalThis.refreshAll !== "function") return;
+    if (globalThis.refreshAll.__haulageAwaitingWrapped) return;
+    const prevRefresh = globalThis.refreshAll;
+    async function wrappedRefresh() {
+      const result = await prevRefresh.apply(this, arguments);
+      refreshUi();
+      return result;
+    }
+    wrappedRefresh.__haulageAwaitingWrapped = true;
+    globalThis.refreshAll = wrappedRefresh;
   }
 
   function start() {
@@ -7387,6 +7411,8 @@
     observe("receipt-gallery");
     observe("income-list");
     observe("expense-list");
+    observe("car-expense-list");
+    observe("car-receipt-gallery");
 
     const wrapSetView = () => {
       if (typeof globalThis.setView !== "function") return;
@@ -7404,25 +7430,18 @@
       globalThis.setView = awaitingAwareSetView;
     };
     wrapSetView();
+    wrapRefreshAll();
     setTimeout(wrapSetView, 0);
+    setTimeout(wrapRefreshAll, 0);
     setTimeout(wrapSetView, 500);
-
-    if (typeof globalThis.refreshAll === "function" && !globalThis.refreshAll.__haulageAwaitingWrapped) {
-      const prevRefresh = globalThis.refreshAll;
-      async function wrappedRefresh() {
-        const result = await prevRefresh.apply(this, arguments);
-        refreshUi();
-        return result;
-      }
-      wrappedRefresh.__haulageAwaitingWrapped = true;
-      globalThis.refreshAll = wrappedRefresh;
-    }
+    setTimeout(wrapRefreshAll, 500);
 
     scheduleRefreshUi();
     let ticks = 0;
     const iv = setInterval(() => {
       ticks += 1;
       wrapSetView();
+      wrapRefreshAll();
       scheduleRefreshUi();
       if (ticks >= 15) clearInterval(iv);
     }, 400);

@@ -76,6 +76,15 @@ describe("ledger-lifecycle soft-delete", () => {
     expect(records.income[0].restoredBy).toBe("Haulage_Admin");
   });
 
+  it("restore is idempotent when the entry is already active", () => {
+    const records = makeRecords();
+    const again = restoreEntry(records, "income", "i1", { username: "dave" });
+    expect(again.ok).toBe(true);
+    expect(again.alreadyActive).toBe(true);
+    expect(isActive(records.income[0])).toBe(true);
+    expect(records.income[0].restoredAt).toBeUndefined();
+  });
+
   it("assertEditable blocks reconciled and deleted rows", () => {
     const records = makeRecords();
     expect(assertEditable(records.expenses[0]).ok).toBe(true);

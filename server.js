@@ -1615,8 +1615,8 @@ api.post("/expenses/:id/restore", (req, res) => {
     res.status(status).json({ ok: false, error: result.error, code: result.code });
     return;
   }
-  persist(req);
-  res.json({ ok: true, entry: result.entry });
+  if (!result.alreadyActive) persist(req);
+  res.json({ ok: true, entry: result.entry, alreadyActive: Boolean(result.alreadyActive) });
 });
 api.post("/income", (req, res) => {
   const records = getRecords(req);
@@ -1689,8 +1689,8 @@ api.post("/income/:id/restore", (req, res) => {
     res.status(status).json({ ok: false, error: result.error, code: result.code });
     return;
   }
-  persist(req);
-  res.json({ ok: true, entry: result.entry });
+  if (!result.alreadyActive) persist(req);
+  res.json({ ok: true, entry: result.entry, alreadyActive: Boolean(result.alreadyActive) });
 });
 
 // --- Receipts ------------------------------------------------------------
