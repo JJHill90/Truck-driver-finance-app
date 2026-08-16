@@ -5636,7 +5636,7 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Before uploading, open Photograph receipts clearly for a better scan — keep the whole receipt in frame on a dark surface so vendor, ABN, SALE TOTAL and date stay sharp. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Before uploading, open Recommended best way to scan your receipts, or tap Scan with camera for a live amber frame so you can fit the top of the slip and the date. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
         "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active for ATO acknowledgment — the compiled box lists active cars. The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. Then enter cents-per-km, logbook or actual running costs. That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
         "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
       ],
@@ -7426,6 +7426,236 @@
       scheduleRefreshUi();
       if (ticks >= 15) clearInterval(iv);
     }, 400);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Live expense receipt camera with scan-frame guide -------------------
+ * Opens rear camera, shows a tall receipt frame overlay (safeguard), captures
+ * the framed region, then hands a File to app.js uploadReceiptFile.
+ */
+(function () {
+  "use strict";
+  /* global uploadReceiptFile */
+
+  let stream = null;
+  let modal = null;
+
+  function notify(msg) {
+    if (typeof toast === "function") toast(msg);
+  }
+
+  function ensureModal() {
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.id = "receipt-camera-modal";
+    modal.className = "receipt-camera-modal";
+    modal.hidden = true;
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-label", "Scan receipt with camera");
+    modal.innerHTML = `
+      <div class="receipt-camera-stage">
+        <video class="receipt-camera-video" id="receipt-camera-video" playsinline muted autoplay></video>
+        <div class="receipt-camera-overlay" aria-hidden="true">
+          <div class="receipt-camera-frame" id="receipt-camera-frame">
+            <span class="receipt-camera-corner tl"></span>
+            <span class="receipt-camera-corner tr"></span>
+            <span class="receipt-camera-corner bl"></span>
+            <span class="receipt-camera-corner br"></span>
+          </div>
+          <p class="receipt-camera-hint">
+            Line the receipt up inside the amber frame — include the
+            <strong>top of the slip</strong> and the <strong>date</strong>.
+          </p>
+        </div>
+        <div class="receipt-camera-status" id="receipt-camera-status">Align receipt in frame</div>
+        <div class="receipt-camera-toolbar">
+          <button type="button" class="btn secondary" id="receipt-camera-cancel">Cancel</button>
+          <button type="button" class="receipt-camera-capture" id="receipt-camera-shutter" aria-label="Capture receipt"></button>
+          <button type="button" class="btn secondary" id="receipt-camera-flip" hidden>Flip</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector("#receipt-camera-cancel")?.addEventListener("click", () => closeCamera());
+    modal.querySelector("#receipt-camera-shutter")?.addEventListener("click", () => {
+      void captureAndUpload();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal && !modal.hidden) closeCamera();
+    });
+    return modal;
+  }
+
+  function stopStream() {
+    if (!stream) return;
+    stream.getTracks().forEach((t) => {
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    });
+    stream = null;
+  }
+
+  function closeCamera() {
+    stopStream();
+    const video = document.getElementById("receipt-camera-video");
+    if (video) video.srcObject = null;
+    if (modal) modal.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  /**
+   * Map the on-screen frame rect into video source pixels (object-fit: cover).
+   */
+  function frameCropInVideo(video, frameEl) {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!(vw > 0 && vh > 0)) return null;
+
+    const stage = video.parentElement;
+    const stageRect = stage.getBoundingClientRect();
+    const frameRect = frameEl.getBoundingClientRect();
+
+    const stageW = stageRect.width;
+    const stageH = stageRect.height;
+    const videoAspect = vw / vh;
+    const stageAspect = stageW / stageH;
+
+    let drawnW;
+    let drawnH;
+    let offsetX;
+    let offsetY;
+    if (videoAspect > stageAspect) {
+      // video wider — cropped on sides
+      drawnH = stageH;
+      drawnW = stageH * videoAspect;
+      offsetX = (stageW - drawnW) / 2;
+      offsetY = 0;
+    } else {
+      drawnW = stageW;
+      drawnH = stageW / videoAspect;
+      offsetX = 0;
+      offsetY = (stageH - drawnH) / 2;
+    }
+
+    const scaleX = vw / drawnW;
+    const scaleY = vh / drawnH;
+
+    const left = (frameRect.left - stageRect.left - offsetX) * scaleX;
+    const top = (frameRect.top - stageRect.top - offsetY) * scaleY;
+    const width = frameRect.width * scaleX;
+    const height = frameRect.height * scaleY;
+
+    const sx = Math.max(0, Math.min(vw, Math.round(left)));
+    const sy = Math.max(0, Math.min(vh, Math.round(top)));
+    const sw = Math.max(1, Math.min(vw - sx, Math.round(width)));
+    const sh = Math.max(1, Math.min(vh - sy, Math.round(height)));
+    return { sx, sy, sw, sh };
+  }
+
+  async function captureAndUpload() {
+    const video = document.getElementById("receipt-camera-video");
+    const frame = document.getElementById("receipt-camera-frame");
+    const shutter = document.getElementById("receipt-camera-shutter");
+    const status = document.getElementById("receipt-camera-status");
+    if (!video || !frame || !(video.videoWidth > 0)) {
+      notify("Camera is still starting — try again in a moment");
+      return;
+    }
+    if (shutter) shutter.disabled = true;
+    if (status) status.textContent = "Capturing…";
+
+    try {
+      const crop = frameCropInVideo(video, frame);
+      const canvas = document.createElement("canvas");
+      if (crop) {
+        canvas.width = crop.sw;
+        canvas.height = crop.sh;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
+      } else {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+      }
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not capture photo"))), "image/jpeg", 0.92);
+      });
+      const file = new File([blob], `receipt-scan-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      });
+
+      closeCamera();
+      if (typeof uploadReceiptFile === "function") {
+        await uploadReceiptFile(file);
+      } else {
+        notify("Could not start upload — refresh and try again");
+      }
+    } catch (err) {
+      notify(err.message || "Capture failed");
+      if (status) status.textContent = "Align receipt in frame";
+      if (shutter) shutter.disabled = false;
+    }
+  }
+
+  async function openCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      notify("Camera not available in this browser — use Upload file instead");
+      document.getElementById("receipt-file")?.click();
+      return;
+    }
+
+    ensureModal();
+    const video = document.getElementById("receipt-camera-video");
+    const shutter = document.getElementById("receipt-camera-shutter");
+    const status = document.getElementById("receipt-camera-status");
+    if (shutter) shutter.disabled = true;
+    if (status) status.textContent = "Starting camera…";
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+
+    stopStream();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      });
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+      if (status) status.textContent = "Align receipt in frame";
+      if (shutter) shutter.disabled = false;
+    } catch (err) {
+      closeCamera();
+      const denied = /NotAllowed|Permission|denied/i.test(String(err && err.name) + err.message);
+      notify(
+        denied
+          ? "Camera permission blocked — allow camera access, or use Upload file"
+          : "Could not open camera — use Upload file instead"
+      );
+      document.getElementById("receipt-file")?.click();
+    }
+  }
+
+  function start() {
+    const btn = document.getElementById("pick-receipt-camera");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      void openCamera();
+    });
   }
 
   if (document.readyState === "loading") {
