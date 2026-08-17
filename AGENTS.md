@@ -305,7 +305,9 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
  gets a confirmation email. If neither channel is configured, the UI delivers
  via **FormSubmit** in the browser (first use may require the inbox owner to
  click FormSubmit’s activation email). Help blurbs live in
- `public/enhancements.js`.
+ `public/enhancements.js`. A general **Disclaimer** box at the bottom of
+ Support states the app is not financial advice and is an assistance tool for
+ receipts/entries — seek accredited tax, financial or legal advice.
 - **Freemium / Pro ($5/mo or $60/yr AUD).** Free plan: **15 uploads/month**
   (scans + manual receipts) + **1 on-screen EOFY report** (live `/summary` +
   `/report` in the app). Pro: unlimited uploads, PDF + JSON accountant
