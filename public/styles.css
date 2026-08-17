@@ -1319,21 +1319,21 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   z-index: 2;
   pointer-events: none;
   /* Keep copy inside the ~62% hole (not the coloured ring). */
-  padding: 0 20%;
+  padding: 0 22%;
   box-sizing: border-box;
   text-align: center;
 }
 .enh-pie-net-label {
   color: var(--text-dim);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  line-height: 1.2;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
   max-width: 100%;
 }
 .enh-pie-lg .enh-pie-net-label {
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
+  font-size: 0.55rem;
+  letter-spacing: 0.015em;
 }
 .enh-pie-net {
   font-size: 1.02rem;
@@ -1344,7 +1344,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.enh-pie-lg .enh-pie-net { font-size: 1.18rem; }
+.enh-pie-lg .enh-pie-net { font-size: 1.12rem; }
 .enh-pie-net.pos { color: var(--green); }
 .enh-pie-net.neg { color: var(--red); }
 .enh-pie-side { flex: 1 1 200px; min-width: 180px; }
