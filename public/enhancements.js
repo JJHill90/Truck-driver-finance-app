@@ -1844,9 +1844,9 @@
       </div>
 
       <div class="admin-stat-row">
-        <div class="admin-stat"><div class="label">Gross Income</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
+        <div class="admin-stat"><div class="label">Net income (income in hand)</div><div class="value">${fmt(s.income && s.income.assessableTotal)}</div></div>
         <div class="admin-stat"><div class="label">Deductible expenses</div><div class="value">${fmt(s.expenses && s.expenses.deductibleTotal)}</div></div>
-        <div class="admin-stat"><div class="label">Net Taxable Income</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.taxableIncome)}</div></div>
+        <div class="admin-stat"><div class="label">Net taxable income minus expenses</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.taxableIncome)}</div></div>
         <div class="admin-stat"><div class="label">Est. tax</div><div class="value">${fmt(s.taxEstimate && s.taxEstimate.totalTax)}</div></div>
       </div>
 
@@ -2496,8 +2496,9 @@
 
 /*
  * Dashboard charts:
- *  1) Snapshot pie — Gross Income / Deductible expenses / Net Taxable Income
- *     with colour legend + live totals from /summary.
+ *  1) Snapshot pie — Net income (income in hand) / Deductible expenses /
+ *     Net taxable income minus expenses, with colour legend + live totals
+ *     from /summary.
  *  2) Total Spend vs Net Income pie — blue income, red spend; centre % =
  *     spend as a share of net income. Also replaces the 4th stat card
  *     (“Est. tax…”) with the same percentage readout.
@@ -2507,6 +2508,9 @@
   "use strict";
 
   let latest = null;
+
+  const LABEL_NET_IN_HAND = "Net income (income in hand)";
+  const LABEL_NET_TAXABLE_MINUS = "Net taxable income minus expenses";
 
   const origFetch = window.fetch;
   window.fetch = async function (...args) {
@@ -2575,6 +2579,20 @@
     return Math.round((spend / income) * 1000) / 10;
   }
 
+  /**
+   * app.js writes Gross Income / Net Taxable Income verbatim — rewrite the
+   * visible labels without editing app.js.
+   */
+  function relabelIncomeStatCards() {
+    const grid = document.getElementById("stat-grid");
+    if (!grid) return;
+    grid.querySelectorAll(".stat-card .label").forEach((el) => {
+      const t = (el.textContent || "").trim();
+      if (/^gross income$/i.test(t)) el.textContent = LABEL_NET_IN_HAND;
+      else if (/^net taxable income$/i.test(t)) el.textContent = LABEL_NET_TAXABLE_MINUS;
+    });
+  }
+
   function renderSpendStatCard(nums) {
     const grid = document.getElementById("stat-grid");
     if (!grid) return;
@@ -2588,14 +2606,15 @@
       <div class="label">Total Spend vs Net Income</div>
       <div class="value">${pct == null ? "—" : fmtPct(pct)}</div>
       <div class="sub">Spend ${fmt(nums.grossSpend)} · Net income ${fmt(nums.netIncome)}</div>`;
+    relabelIncomeStatCards();
   }
 
   function renderSnapshot(nums, host, extras) {
     if (!host) return;
     const slices = [
-      { color: "var(--green)", value: nums.grossIncome, label: "Gross income", cls: "enh-dot-green" },
+      { color: "var(--green)", value: nums.grossIncome, label: LABEL_NET_IN_HAND, cls: "enh-dot-green" },
       { color: "var(--accent)", value: nums.deductible, label: "Deductible expenses", cls: "enh-dot-accent" },
-      { color: "var(--blue)", value: nums.netTaxable, label: "Net taxable income", cls: "enh-dot-blue" },
+      { color: "var(--blue)", value: nums.netTaxable, label: LABEL_NET_TAXABLE_MINUS, cls: "enh-dot-blue" },
     ];
     const gradient = conicFromSlices(slices);
     const legend = slices
@@ -2621,7 +2640,7 @@
           <div class="enh-pie-wrap enh-pie-lg">
             <div class="enh-pie" style="background: ${gradient}"></div>
             <div class="enh-pie-center">
-              <span class="enh-pie-net-label">Net taxable</span>
+              <span class="enh-pie-net-label">Net taxable − expenses</span>
               <span class="enh-pie-net">${fmt(nums.netTaxable)}</span>
             </div>
           </div>
@@ -2702,6 +2721,7 @@
     const force = Boolean(opts && opts.force);
     const nums = numbersFromSummary(latest);
     renderSpendStatCard(nums);
+    relabelIncomeStatCards();
 
     const snapHost = document.getElementById("snapshot-content");
     const spendHost = document.getElementById("spend-income-chart");
@@ -2714,6 +2734,7 @@
   }
 
   const observer = new MutationObserver(() => {
+    relabelIncomeStatCards();
     if (!latest) return;
     const snapHost = document.getElementById("snapshot-content");
     const grid = document.getElementById("stat-grid");
@@ -5766,7 +5787,7 @@
     dashboard: {
       title: "Dashboard",
       body: [
-        "The Dashboard is your home screen for the selected financial year. Top stats show Gross Income, Deductible expenses, Net Taxable Income, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (gross / deductible / net taxable with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
+        "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
         "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
