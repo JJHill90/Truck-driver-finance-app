@@ -16,14 +16,8 @@ describe("formatVersionLabel", () => {
     expect(formatVersionLabel(153)).toBe("Version 3.00");
   });
 
-<<<<<<< HEAD
-  it("maps the current PR constant (this PR is #94 → Version 1.43)", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(94);
-    expect(formatVersionLabel(94)).toBe("Version 1.43");
-=======
   it("maps the current PR constant (this PR is #95 → Version 1.44)", () => {
     expect(HAULAGE_PR_NUMBER).toBe(95);
     expect(formatVersionLabel(95)).toBe("Version 1.44");
->>>>>>> origin/cursor/dashboard-dual-pies-45bc
   });
 });
