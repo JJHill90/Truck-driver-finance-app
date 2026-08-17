@@ -114,6 +114,7 @@
           <button class="nav-btn active" data-view="dashboard">Dashboard</button>
           <button class="nav-btn" data-view="expenses">Expenses</button>
           <button class="nav-btn" data-view="income">Income</button>
+          <button class="nav-btn" data-view="car-expenses">Car expenses</button>
           <button class="nav-btn" data-view="report">EOFY report</button>
           <button class="nav-btn" data-view="forecast">Forecast</button>
         </nav>
@@ -161,39 +162,8 @@
           </div>
         </section>
 
-        <!-- Expenses (includes receipt scan + manual entry) + Car Expenses sub-tab -->
+        <!-- Expenses (general work receipts — scan / manual / ledger) -->
         <section id="view-expenses" class="view">
-          <div class="expenses-subnav" role="tablist" aria-label="Expenses sections">
-            <button
-              type="button"
-              class="expenses-subtab active"
-              role="tab"
-              id="expenses-tab-general"
-              aria-selected="true"
-              aria-controls="expenses-pane-general"
-              data-expenses-pane="general"
-            >
-              General Expenses and Claims
-            </button>
-            <button
-              type="button"
-              class="expenses-subtab"
-              role="tab"
-              id="expenses-tab-car"
-              aria-selected="false"
-              aria-controls="expenses-pane-car"
-              data-expenses-pane="car"
-            >
-              Car Expenses and Claims
-            </button>
-          </div>
-
-          <div
-            id="expenses-pane-general"
-            class="expenses-pane"
-            role="tabpanel"
-            aria-labelledby="expenses-tab-general"
-          >
             <div class="grid-2">
               <div class="panel">
                 <div class="panel-header"><h2>Upload expense receipt</h2></div>
@@ -295,115 +265,6 @@
               </div>
               <div id="expense-list"></div>
             </div>
-          </div>
-
-          <div
-            id="expenses-pane-car"
-            class="expenses-pane hidden"
-            role="tabpanel"
-            aria-labelledby="expenses-tab-car"
-            hidden
-          >
-            <div class="panel">
-              <div class="panel-header"><h2>Car Expenses and Claims</h2></div>
-              <p class="muted">
-                Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
-                Enter date, vendor, amount and notes as usual; choose a car category below.
-              </p>
-
-              <div id="car-vehicles-box" class="car-vehicles-box">
-                <div class="car-vehicles-box-head">
-                  <h3>Work vehicles</h3>
-                  <span id="car-vehicles-status" class="car-vehicles-status muted">Loading…</span>
-                </div>
-                <p class="muted small">
-                  Save make, model, registration and engine size for ATO work-related car claims.
-                  Mark a vehicle <strong>Active</strong> when you use it for work — you can keep more than one car on file.
-                </p>
-                <label class="car-vehicles-compiled-label" for="car-vehicles-compiled">Active vehicles (for your records / accountant)</label>
-                <textarea
-                  id="car-vehicles-compiled"
-                  class="car-vehicles-compiled"
-                  rows="3"
-                  readonly
-                  aria-live="polite"
-                ></textarea>
-                <div id="car-vehicles-list" class="car-vehicles-list"></div>
-                <form id="car-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
-                  <input type="hidden" name="id" id="car-vehicle-id" value="" />
-                  <label>Car make<input type="text" name="make" id="car-vehicle-make" placeholder="e.g. Toyota" maxlength="80" /></label>
-                  <label>Car model<input type="text" name="model" id="car-vehicle-model" placeholder="e.g. Hilux" maxlength="80" /></label>
-                  <label>Registration<input type="text" name="registration" id="car-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
-                  <label>Engine size<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="e.g. 2.8 L" maxlength="40" /></label>
-                  <label class="span-2">Speedometer / odometer reading
-                    <input type="text" name="odometerReading" id="car-vehicle-odometer" placeholder="e.g. 142,350 km" maxlength="40" />
-                  </label>
-                  <div class="span-2 car-workuse-field">
-                    <label class="car-workuse-label" for="car-vehicle-workuse">
-                      Estimated work use
-                      <span class="car-workuse-value"><span id="car-vehicle-workuse-display">63</span>%</span>
-                    </label>
-                    <input
-                      type="range"
-                      name="estimatedWorkUsePercent"
-                      id="car-vehicle-workuse"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value="63"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                      aria-valuenow="63"
-                    />
-                    <p id="car-vehicle-workuse-hint" class="muted small car-workuse-hint">
-                      ATO public D1 guidance uses a worked example of about 63% work use (4,100 work km ÷ 6,500 total km).
-                      Set your own estimate from a logbook — home to your usual depot is generally private.
-                    </p>
-                  </div>
-                  <label class="checkbox span-2">
-                    <input type="checkbox" name="active" id="car-vehicle-active" checked />
-                    Active for work claims
-                  </label>
-                  <div class="span-2 form-actions">
-                    <button type="submit" class="btn primary" id="car-vehicle-save">Save vehicle to profile</button>
-                    <button type="button" class="btn secondary" id="car-vehicle-cancel" hidden>Cancel edit</button>
-                  </div>
-                </form>
-                <p id="car-vehicles-message" class="muted small" role="status"></p>
-              </div>
-
-              <form id="expense-form" class="form-grid">
-                <label>Date<input type="date" name="date" required /></label>
-                <label>Category
-                  <select id="expense-category" name="category" class="category-select" required></select>
-                </label>
-                <label>Vendor<input type="text" name="vendor" placeholder="Vendor name" /></label>
-                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required /></label>
-                <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
-                <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
-                <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
-                <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save car claim</button>
-                </div>
-              </form>
-              <div id="expense-preview" class="preview-note hidden"></div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-header"><h2>Car receipt photos</h2></div>
-              <p class="muted">Receipt images linked to car expense claims (fuel, servicing, tyres, and similar).</p>
-              <div id="car-receipt-gallery" class="receipt-gallery"></div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-header">
-                <h2>Car Expenses Ledger</h2>
-                <span class="muted" id="car-expense-list-summary"></span>
-              </div>
-              <div id="car-expense-list"></div>
-            </div>
-          </div>
         </section>
 
         <!-- Income -->
@@ -462,6 +323,109 @@
           <div class="panel">
             <div class="panel-header"><h2>Income Ledger</h2></div>
             <div id="income-list"></div>
+          </div>
+        </section>
+
+        <!-- Car Expenses and Claims (sidebar item under Income) -->
+        <section id="view-car-expenses" class="view">
+          <div class="panel">
+            <div class="panel-header"><h2>Car Expenses and Claims</h2></div>
+            <p class="muted">
+              Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
+              Enter date, vendor, amount and notes as usual; choose a car category below.
+            </p>
+
+            <div id="car-vehicles-box" class="car-vehicles-box">
+              <div class="car-vehicles-box-head">
+                <h3>Work vehicles</h3>
+                <span id="car-vehicles-status" class="car-vehicles-status muted">Loading…</span>
+              </div>
+              <p class="muted small">
+                Save make, model, registration and engine size for ATO work-related car claims.
+                Mark a vehicle <strong>Active</strong> when you use it for work — you can keep more than one car on file.
+              </p>
+              <label class="car-vehicles-compiled-label" for="car-vehicles-compiled">Active vehicles (for your records / accountant)</label>
+              <textarea
+                id="car-vehicles-compiled"
+                class="car-vehicles-compiled"
+                rows="3"
+                readonly
+                aria-live="polite"
+              ></textarea>
+              <div id="car-vehicles-list" class="car-vehicles-list"></div>
+              <form id="car-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
+                <input type="hidden" name="id" id="car-vehicle-id" value="" />
+                <label>Car make<input type="text" name="make" id="car-vehicle-make" placeholder="e.g. Toyota" maxlength="80" /></label>
+                <label>Car model<input type="text" name="model" id="car-vehicle-model" placeholder="e.g. Hilux" maxlength="80" /></label>
+                <label>Registration<input type="text" name="registration" id="car-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
+                <label>Engine size<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="e.g. 2.8 L" maxlength="40" /></label>
+                <label class="span-2">Speedometer / odometer reading
+                  <input type="text" name="odometerReading" id="car-vehicle-odometer" placeholder="e.g. 142,350 km" maxlength="40" />
+                </label>
+                <div class="span-2 car-workuse-field">
+                  <label class="car-workuse-label" for="car-vehicle-workuse">
+                    Estimated work use
+                    <span class="car-workuse-value"><span id="car-vehicle-workuse-display">63</span>%</span>
+                  </label>
+                  <input
+                    type="range"
+                    name="estimatedWorkUsePercent"
+                    id="car-vehicle-workuse"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="63"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="63"
+                  />
+                  <p id="car-vehicle-workuse-hint" class="muted small car-workuse-hint">
+                    ATO public D1 guidance uses a worked example of about 63% work use (4,100 work km ÷ 6,500 total km).
+                    Set your own estimate from a logbook — home to your usual depot is generally private.
+                  </p>
+                </div>
+                <label class="checkbox span-2">
+                  <input type="checkbox" name="active" id="car-vehicle-active" checked />
+                  Active for work claims
+                </label>
+                <div class="span-2 form-actions">
+                  <button type="submit" class="btn primary" id="car-vehicle-save">Save vehicle to profile</button>
+                  <button type="button" class="btn secondary" id="car-vehicle-cancel" hidden>Cancel edit</button>
+                </div>
+              </form>
+              <p id="car-vehicles-message" class="muted small" role="status"></p>
+            </div>
+
+            <form id="expense-form" class="form-grid">
+              <label>Date<input type="date" name="date" required /></label>
+              <label>Category
+                <select id="expense-category" name="category" class="category-select" required></select>
+              </label>
+              <label>Vendor<input type="text" name="vendor" placeholder="Vendor name" /></label>
+              <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required /></label>
+              <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
+              <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
+              <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
+              <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
+              <div class="span-2 form-actions">
+                <button type="submit" class="btn primary">Save car claim</button>
+              </div>
+            </form>
+            <div id="expense-preview" class="preview-note hidden"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><h2>Car receipt photos</h2></div>
+            <p class="muted">Receipt images linked to car expense claims (fuel, servicing, tyres, and similar).</p>
+            <div id="car-receipt-gallery" class="receipt-gallery"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2>Car Expenses Ledger</h2>
+              <span class="muted" id="car-expense-list-summary"></span>
+            </div>
+            <div id="car-expense-list"></div>
           </div>
         </section>
 
@@ -695,6 +659,7 @@
                 <button type="button" class="btn secondary support-help-btn active" data-help-topic="dashboard">Dashboard</button>
                 <button type="button" class="btn secondary support-help-btn" data-help-topic="expenses">Expenses</button>
                 <button type="button" class="btn secondary support-help-btn" data-help-topic="income">Income</button>
+                <button type="button" class="btn secondary support-help-btn" data-help-topic="car-expenses">Car expenses</button>
                 <button type="button" class="btn secondary support-help-btn" data-help-topic="report">EOFY report</button>
                 <button type="button" class="btn secondary support-help-btn" data-help-topic="forecast">Forecast</button>
                 <button type="button" class="btn secondary support-help-btn" data-help-topic="profile">Profile</button>
@@ -729,6 +694,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=car-expenses-tab-1"></script>
+    <script src="./enhancements.js?v=car-expenses-sidebar-1"></script>
   </body>
 </html>

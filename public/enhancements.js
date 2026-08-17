@@ -5636,17 +5636,23 @@
     expenses: {
       title: "Expenses",
       body: [
-        "Expenses has two sub-tabs: General Expenses and Claims (work receipts) and Car Expenses and Claims (ATO car claims). Before uploading, open Recommended best way to scan your receipts, or tap Scan with camera for a live amber frame so you can fit the top of the slip and the date. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "On the Car Expenses and Claims tab, save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active for ATO acknowledgment — the compiled box lists active cars. The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. Then enter cents-per-km, logbook or actual running costs. That tab has its own car receipt photos gallery and car expenses ledger so you can review car claims separately.",
-        "Manual entry on the general tab covers cash claims and “no receipt” ticks. Both ledgers filter by financial year and week so large lists stay scannable.",
+        "Expenses is for general work receipts (meals, accommodation, tools, and similar). Before uploading, open Recommended best way to scan your receipts, or tap Scan with camera for a live amber frame so you can fit the top of the slip and the date. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
+        "Manual entry covers cash claims and “no receipt” ticks. The expense ledger and receipt gallery filter by financial year and week so large lists stay scannable. Vehicle & fuel / ATO car claims live under the separate Car expenses item in the sidebar (under Income).",
       ],
     },
     income: {
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance appears with your income view so you can cross-check living-away amounts against what you’ve been paid.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for overnight meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
+      ],
+    },
+    "car-expenses": {
+      title: "Car Expenses and Claims",
+      body: [
+        "Car expenses is a sidebar item under Income for ATO work-related car claims (cents per km, logbook, or actual running costs). Save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active — the compiled box lists active cars for your records.",
+        "The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. This view has its own car receipt photos gallery and car expenses ledger so you can review car claims separately from general expenses.",
       ],
     },
     report: {
@@ -6378,66 +6384,76 @@
   }
 })();
 
-/* --- Expenses sub-tabs: General vs Car Expenses and Claims --------------- */
+/* --- Car Expenses sidebar view (under Income) ----------------------------
+ * Formerly an Expenses sub-tab. Own nav item + #view-car-expenses; setView
+ * title + work-use prefill live here. Car claim saves return to this view.
+ */
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "haulage-expenses-pane";
+  const CAR_CLAIM_IDS = new Set([
+    "vehicle_car",
+    "fuel",
+    "repairs_maintenance",
+    "tyres",
+    "registration_insurance",
+    "parking_tolls",
+  ]);
 
-  function currentPane() {
-    try {
-      return localStorage.getItem(STORAGE_KEY) === "car" ? "car" : "general";
-    } catch {
-      return "general";
-    }
-  }
+  const TITLE = "Car Expenses and Claims";
 
-  function setPane(pane) {
-    const name = pane === "car" ? "car" : "general";
-    try {
-      localStorage.setItem(STORAGE_KEY, name);
-    } catch {
-      /* ignore */
-    }
-    const general = document.getElementById("expenses-pane-general");
-    const car = document.getElementById("expenses-pane-car");
-    const tabs = document.querySelectorAll(".expenses-subtab[data-expenses-pane]");
-    if (general) {
-      general.hidden = name !== "general";
-      general.classList.toggle("hidden", name !== "general");
-    }
-    if (car) {
-      car.hidden = name !== "car";
-      car.classList.toggle("hidden", name !== "car");
-    }
-    tabs.forEach((btn) => {
-      const active = btn.getAttribute("data-expenses-pane") === name;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-selected", active ? "true" : "false");
-    });
-    if (name === "car" && typeof window.haulageApplyCarWorkUse === "function") {
+  function onCarExpensesView() {
+    const title = document.getElementById("page-title");
+    if (title) title.textContent = TITLE;
+    if (typeof window.haulageApplyCarWorkUse === "function") {
       window.haulageApplyCarWorkUse();
     }
   }
 
-  function start() {
-    const nav = document.querySelector(".expenses-subnav");
-    if (!nav) return;
-    nav.querySelectorAll(".expenses-subtab[data-expenses-pane]").forEach((btn) => {
-      btn.addEventListener("click", () => setPane(btn.getAttribute("data-expenses-pane")));
-    });
-    setPane(currentPane());
+  function wrapSetView() {
+    if (typeof globalThis.setView !== "function") return;
+    if (globalThis.setView.__haulageCarExpensesWrapped) return;
+    const prev = globalThis.setView;
+    function carExpensesSetView(name) {
+      const result = prev.apply(this, arguments);
+      if (name === "car-expenses") onCarExpensesView();
+      return result;
+    }
+    carExpensesSetView.__haulageCarExpensesWrapped = true;
+    if (prev.__haulageSupportWrapped) carExpensesSetView.__haulageSupportWrapped = true;
+    if (prev.__haulageExpensesPaneWrapped) carExpensesSetView.__haulageExpensesPaneWrapped = true;
+    if (prev.__haulageAwaitingWrapped) carExpensesSetView.__haulageAwaitingWrapped = true;
+    globalThis.setView = carExpensesSetView;
+  }
 
-    // When navigating to Expenses, restore the last pane.
-    const prevSetView = globalThis.setView;
-    if (typeof prevSetView === "function" && !prevSetView.__haulageExpensesPaneWrapped) {
-      function expensesPaneSetView(name) {
-        const result = prevSetView.apply(this, arguments);
-        if (name === "expenses" || name === "receipts") setPane(currentPane());
-        return result;
+  function wrapAfterExpenseSaved() {
+    if (typeof globalThis.afterExpenseSaved !== "function") return;
+    if (globalThis.afterExpenseSaved.__haulageCarExpensesWrapped) return;
+    const prev = globalThis.afterExpenseSaved;
+    async function wrapped(entry, _message) {
+      await prev.apply(this, arguments);
+      if (entry && CAR_CLAIM_IDS.has(entry.category) && typeof globalThis.setView === "function") {
+        globalThis.setView("car-expenses");
       }
-      expensesPaneSetView.__haulageExpensesPaneWrapped = true;
-      globalThis.setView = expensesPaneSetView;
+    }
+    wrapped.__haulageCarExpensesWrapped = true;
+    globalThis.afterExpenseSaved = wrapped;
+  }
+
+  function start() {
+    wrapSetView();
+    wrapAfterExpenseSaved();
+    setTimeout(wrapSetView, 0);
+    setTimeout(wrapAfterExpenseSaved, 0);
+    setTimeout(wrapSetView, 500);
+    setTimeout(wrapAfterExpenseSaved, 500);
+    // One-time migrate: users who last left Expenses on the car sub-tab.
+    try {
+      if (localStorage.getItem("haulage-expenses-pane") === "car") {
+        localStorage.removeItem("haulage-expenses-pane");
+      }
+    } catch {
+      /* ignore */
     }
   }
 
