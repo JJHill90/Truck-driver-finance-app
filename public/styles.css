@@ -1308,7 +1308,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 .enh-pie { position: absolute; inset: 0; border-radius: 50%; }
 .enh-pie-empty { background: var(--bg-2); border: 1px dashed var(--border); }
-.enh-pie-wrap::before { content: ""; position: absolute; top: 50%; left: 50%; width: 62%; height: 62%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 50%; z-index: 1; }
+.enh-pie-wrap::before { content: ""; position: absolute; top: 50%; left: 50%; width: 68%; height: 68%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 50%; z-index: 1; }
 .enh-pie-center {
   position: absolute;
   inset: 0;
@@ -1318,8 +1318,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   justify-content: center;
   z-index: 2;
   pointer-events: none;
-  /* Keep copy inside the ~62% hole (not the coloured ring). */
-  padding: 0 22%;
+  /* Keep copy inside the ~68% hole (not the coloured ring). */
+  padding: 0 20%;
   box-sizing: border-box;
   text-align: center;
 }
@@ -1332,8 +1332,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   max-width: 100%;
 }
 .enh-pie-lg .enh-pie-net-label {
-  font-size: 0.55rem;
-  letter-spacing: 0.015em;
+  font-size: 0.52rem;
+  letter-spacing: 0.01em;
 }
 .enh-pie-net {
   font-size: 1.02rem;
@@ -1344,7 +1344,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.enh-pie-lg .enh-pie-net { font-size: 1.12rem; }
+.enh-pie-lg .enh-pie-net { font-size: 1.08rem; }
 .enh-pie-net.pos { color: var(--green); }
 .enh-pie-net.neg { color: var(--red); }
 .enh-pie-side { flex: 1 1 200px; min-width: 180px; }
