@@ -202,7 +202,7 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   “Finish approval” / “Discard” / “Restore” (`POST /income|:expenses/:id/restore`).
   Confirm is idempotent for already-linked or soft-deleted income.
 - **Expenses tab** covers general work receipts (scan/manual, totals, receipt
-  gallery + ledger). **Car expenses** is a separate sidebar item under Income
+  gallery + ledger). **Car Expenses** is a separate sidebar item under Income
   (`#view-car-expenses`): ATO D1 cents/km or logbook, plus fuel / repairs /
   tyres / rego–insurance / parking–tolls via `listSpecialClaimCategories`, with
   its own car receipt gallery + car ledger. Car Expenses also stores **work
@@ -213,7 +213,7 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   Active-car work-use % prefills Car Expenses claim forms and deductible
   previews (actual running costs). Car rows stay in the same `expenses` store;
   the UI filters by car category ids. The general expense menus hide the whole
-  **Vehicle & fuel** group (car claims only via Car expenses) and show a
+  **Vehicle & fuel** group (car claims only via Car Expenses) and show a
   **Medical** group containing Medical equipment (`compulsory_assessment`). Nav
   no longer has a separate Scan receipt item; `setView("receipts")` redirects
   to `expenses`. General upload includes a collapsible **Recommended best way

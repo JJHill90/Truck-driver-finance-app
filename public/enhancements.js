@@ -5796,7 +5796,7 @@
       title: "Expenses",
       body: [
         "Expenses is for general work receipts (meals, accommodation, tools, and similar). Before uploading, open Recommended best way to scan your receipts, or tap Scan with camera for a live amber frame so you can fit the top of the slip and the date. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "Manual entry covers cash claims and “no receipt” ticks. The expense ledger and receipt gallery filter by financial year and week so large lists stay scannable. Vehicle & fuel / ATO car claims live under the separate Car expenses item in the sidebar (under Income).",
+        "Manual entry covers cash claims and “no receipt” ticks. The expense ledger and receipt gallery filter by financial year and week so large lists stay scannable. Vehicle & fuel / ATO car claims live under the separate Car Expenses item in the sidebar (under Income).",
       ],
     },
     income: {
@@ -5810,12 +5810,12 @@
     "car-expenses": {
       title: "Car Expenses and Claims",
       body: [
-        "Car expenses is a sidebar item under Income for ATO work-related car claims (cents per km, logbook, or actual running costs). Save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active — the compiled box lists active cars for your records.",
+        "Car Expenses is a sidebar item under Income for ATO work-related car claims (cents per km, logbook, or actual running costs). Save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active — the compiled box lists active cars for your records.",
         "The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. This view has its own car receipt photos gallery and car expenses ledger so you can review car claims separately from general expenses.",
       ],
     },
     report: {
-      title: "EOFY report",
+      title: "EOFY Report",
       body: [
         "The EOFY performance statement rolls up the selected financial year’s income, expense deductions (by ATO-style schedules) and a tax estimate from your saved profile and ledgers. It updates as you add or change records — use it as a live working paper for you or your accountant, not as a lodged return.",
         "Download FY report builds a PDF of the current statement; Export JSON is for backups or importing elsewhere. Check that your Profile salary, driver type and TFN flag look right before you share the report, and switch financial year in the top bar if you’re reviewing a prior year.",
@@ -5832,7 +5832,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },
