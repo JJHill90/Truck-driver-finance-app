@@ -75,6 +75,47 @@ describe("inferBusinessTypeCategory", () => {
   it("maps Bunnings to tools_equipment", () => {
     expect(inferBusinessTypeCategory({ name: "Bunnings Warehouse" })).toBe("tools_equipment");
   });
+
+  it("maps supermarket / butcher / greengrocer wording to groceries_travel", () => {
+    expect(inferBusinessTypeCategory({ name: "Local Supermarket" })).toBe("groceries_travel");
+    expect(inferBusinessTypeCategory({ name: "Smith's Butcher" })).toBe("groceries_travel");
+    expect(inferBusinessTypeCategory({ name: "Valley Greengrocer" })).toBe("groceries_travel");
+    expect(inferBusinessTypeCategory({ name: "Town General Store" })).toBe("groceries_travel");
+  });
+
+  it("maps bakery wording to meals", () => {
+    expect(inferBusinessTypeCategory({ name: "Sunrise Bakery" })).toBe("meals");
+    expect(inferBusinessTypeCategory({ name: "Bakers Delight" })).toBe("meals");
+  });
+
+  it("maps pharmacy / chemist to first_aid", () => {
+    expect(inferBusinessTypeCategory({ name: "Chemist Warehouse" })).toBe("first_aid");
+    expect(inferBusinessTypeCategory({ name: "High St Pharmacy" })).toBe("first_aid");
+    expect(inferBusinessTypeCategory({ name: "Priceline" })).toBe("first_aid");
+  });
+
+  it("maps department / discount / thrift / boutique / florist to business_supplies", () => {
+    expect(inferBusinessTypeCategory({ name: "Myer" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Kmart" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Target Australia" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Big W" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "City Discount Store" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Vinnies Op Shop" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Lane Boutique" })).toBe("business_supplies");
+    expect(inferBusinessTypeCategory({ name: "Rose Florist" })).toBe("business_supplies");
+  });
+
+  it("maps electronics and bookstore specialty shops", () => {
+    expect(inferBusinessTypeCategory({ name: "JB Hi-Fi" })).toBe("tools_equipment");
+    expect(inferBusinessTypeCategory({ name: "Harvey Norman" })).toBe("tools_equipment");
+    expect(inferBusinessTypeCategory({ name: "City Electronics Store" })).toBe("tools_equipment");
+    expect(inferBusinessTypeCategory({ name: "Dymocks" })).toBe("trade_subscriptions");
+    expect(inferBusinessTypeCategory({ name: "Main Street Bookstore" })).toBe("trade_subscriptions");
+  });
+
+  it("maps Officeworks to office_admin", () => {
+    expect(inferBusinessTypeCategory({ name: "Officeworks" })).toBe("office_admin");
+  });
 });
 
 describe("enrichOcrFromVendors", () => {
@@ -348,5 +389,78 @@ describe("dual-purpose vendor content (7-Eleven / servo food vs fuel)", () => {
     enrichOcrFromVendors(ocr, [], "expense");
     expect(ocr.suggestedCategory).toBe("groceries_travel");
     expect(ocr.categorySource).toBe("business_type");
+  });
+});
+
+describe("retail vendor business types beyond servo/convenience", () => {
+  it("forces groceries for butcher / greengrocer when OCR says other_work", () => {
+    const butcher = {
+      vendor: "Joe's Butcher",
+      suggestedCategory: "other_work",
+      rawText: "JOE'S BUTCHER\nSteak mince\nTOTAL 28.00",
+    };
+    enrichOcrFromVendors(butcher, [], "expense");
+    expect(butcher.suggestedCategory).toBe("groceries_travel");
+    expect(butcher.categorySource).toBe("business_type");
+
+    const green = {
+      vendor: "Fresh Greengrocer",
+      suggestedCategory: "other_work",
+      rawText: "FRESH GREENGROCER\nBananas\nTOTAL 6.50",
+    };
+    enrichOcrFromVendors(green, [], "expense");
+    expect(green.suggestedCategory).toBe("groceries_travel");
+  });
+
+  it("forces meals for bakery and first_aid for pharmacy", () => {
+    const bakery = {
+      vendor: "Sunrise Bakery",
+      suggestedCategory: "other_work",
+      rawText: "SUNRISE BAKERY\nSourdough\nTOTAL 7.00",
+    };
+    enrichOcrFromVendors(bakery, [], "expense");
+    expect(bakery.suggestedCategory).toBe("meals");
+
+    const pharmacy = {
+      vendor: "Chemist Warehouse",
+      suggestedCategory: "other_work",
+      rawText: "CHEMIST WAREHOUSE\nPanadol\nTOTAL 12.00",
+    };
+    enrichOcrFromVendors(pharmacy, [], "expense");
+    expect(pharmacy.suggestedCategory).toBe("first_aid");
+    expect(pharmacy.vendor).toBe("Chemist Warehouse");
+  });
+
+  it("maps department, discount, electronics, bookstore, thrift vendors", () => {
+    const cases = [
+      { vendor: "Myer", cat: "business_supplies" },
+      { vendor: "Kmart", cat: "business_supplies" },
+      { vendor: "Big W", cat: "business_supplies" },
+      { vendor: "JB Hi-Fi", cat: "tools_equipment" },
+      { vendor: "Dymocks", cat: "trade_subscriptions" },
+      { vendor: "Vinnies", cat: "business_supplies" },
+      { vendor: "Officeworks", cat: "office_admin" },
+    ];
+    for (const { vendor, cat } of cases) {
+      const ocr = {
+        vendor,
+        suggestedCategory: "other_work",
+        rawText: `${vendor}\nTOTAL 20.00`,
+      };
+      enrichOcrFromVendors(ocr, [], "expense");
+      expect(ocr.suggestedCategory).toBe(cat);
+      expect(ocr.categorySource).toBe("business_type");
+    }
+  });
+
+  it("defaults a bare convenience store docket to meals", () => {
+    const ocr = {
+      vendor: "Corner Convenience Store",
+      suggestedCategory: "other_work",
+      rawText: "Corner Convenience Store\nTOTAL 4.50",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.suggestedCategory).toBe("meals");
+    expect(ocr.categorySource).toBe("vendor_content");
   });
 });

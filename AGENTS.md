@@ -234,14 +234,18 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   for both expense receipts and income payslips/invoices, then
   `lib/vendor-enrichment.js` uses that ABN as the key to remembered business
   names. Once ABN/name establish a known **business type** (e.g.
-  Woolworths/Coles/ALDI → `groceries_travel`, Bunnings → `tools_equipment`),
-  that category always overrides weak OCR (`other_work`) and conflicting
-  remembered defaults. **Dual-purpose** servos / convenience (7-Eleven, BP,
-  Shell, Ampol, Coles Express, …) pick category from **receipt line items**:
-  diesel/petrol/pump → `fuel`; coffee/snacks/hot food → `meals` (or
-  `groceries_travel` for packed grocery-like lines); bare 7-Eleven dockets
-  default to `meals` instead of `other_work`. Otherwise vendor memory + text
-  heuristics apply. Confirm UI prefills vendor/entity, ABN, and the dollar
+  Woolworths/Coles/ALDI → `groceries_travel`, Bunnings → `tools_equipment`,
+  bakery → `meals`, butcher/greengrocer → `groceries_travel`, pharmacy →
+  `first_aid`, department/discount/thrift/boutique/florist →
+  `business_supplies`, electronics → `tools_equipment`, bookstore →
+  `trade_subscriptions`, Officeworks → `office_admin`), that category always
+  overrides weak OCR (`other_work`) and conflicting remembered defaults.
+  **Dual-purpose** servos / convenience (7-Eleven, BP, Shell, Ampol, Coles
+  Express, generic “convenience store”, …) pick category from **receipt line
+  items**: diesel/petrol/pump → `fuel`; coffee/snacks/hot food → `meals` (or
+  `groceries_travel` for packed grocery-like lines); bare 7-Eleven / convenience
+  dockets default to `meals` instead of `other_work`. Otherwise vendor memory +
+  text heuristics apply. Confirm UI prefills vendor/entity, ABN, and the dollar
   total together. Income confirm gets an ABN field via `enhancements.js`.
   **Canonical chain names:** after OCR, enrichment rewrites junk/boilerplate
   vendor strings (e.g. `TAX INVOICE`, `7 EIEVEN`, random letters) to clean names
