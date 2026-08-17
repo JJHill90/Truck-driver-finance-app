@@ -1308,7 +1308,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 .enh-pie { position: absolute; inset: 0; border-radius: 50%; }
 .enh-pie-empty { background: var(--bg-2); border: 1px dashed var(--border); }
-.enh-pie-wrap::before { content: ""; position: absolute; top: 50%; left: 50%; width: 68%; height: 68%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 50%; z-index: 1; }
+.enh-pie-wrap::before { content: ""; position: absolute; top: 50%; left: 50%; width: 72%; height: 72%; transform: translate(-50%, -50%); background: var(--panel); border-radius: 50%; z-index: 1; }
 .enh-pie-center {
   position: absolute;
   inset: 0;
@@ -1318,8 +1318,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   justify-content: center;
   z-index: 2;
   pointer-events: none;
-  /* Keep copy inside the ~68% hole (not the coloured ring). */
-  padding: 0 20%;
+  /* Keep copy inside the ~72% hole (not the coloured ring). */
+  padding: 0 18%;
   box-sizing: border-box;
   text-align: center;
 }
@@ -1332,7 +1332,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   max-width: 100%;
 }
 .enh-pie-lg .enh-pie-net-label {
-  font-size: 0.52rem;
+  font-size: 0.5rem;
   letter-spacing: 0.01em;
 }
 .enh-pie-net {
@@ -1344,13 +1344,28 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.enh-pie-lg .enh-pie-net { font-size: 1.08rem; }
+.enh-pie-lg .enh-pie-net { font-size: 1.05rem; }
 .enh-pie-net.pos { color: var(--green); }
 .enh-pie-net.neg { color: var(--red); }
 .enh-pie-side { flex: 1 1 200px; min-width: 180px; }
 .enh-pie-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.enh-pie-legend li { display: flex; align-items: center; gap: 10px; font-size: 1rem; }
-.enh-pie-legend li strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.enh-pie-legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.enh-pie-legend-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.enh-pie-legend li strong {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .enh-pie-net-row { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; }
 .enh-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
 .enh-dot-green { background: var(--green); }
