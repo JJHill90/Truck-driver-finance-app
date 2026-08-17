@@ -236,9 +236,13 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   names. Once ABN/name establish a known **business type** (e.g.
   Woolworths/Coles/ALDI → `groceries_travel`, Bunnings → `tools_equipment`),
   that category always overrides weak OCR (`other_work`) and conflicting
-  remembered defaults. Otherwise vendor memory + text heuristics apply.
-  Confirm UI prefills vendor/entity, ABN, and the dollar total together.
-  Income confirm gets an ABN field via `enhancements.js`.
+  remembered defaults. **Dual-purpose** servos / convenience (7-Eleven, BP,
+  Shell, Ampol, Coles Express, …) pick category from **receipt line items**:
+  diesel/petrol/pump → `fuel`; coffee/snacks/hot food → `meals` (or
+  `groceries_travel` for packed grocery-like lines); bare 7-Eleven dockets
+  default to `meals` instead of `other_work`. Otherwise vendor memory + text
+  heuristics apply. Confirm UI prefills vendor/entity, ABN, and the dollar
+  total together. Income confirm gets an ABN field via `enhancements.js`.
   **Canonical chain names:** after OCR, enrichment rewrites junk/boilerplate
   vendor strings (e.g. `TAX INVOICE`, `7 EIEVEN`, random letters) to clean names
   like `7-Eleven` when the brand appears in the vendor field or receipt header —

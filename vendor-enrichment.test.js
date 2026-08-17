@@ -3,6 +3,7 @@ const {
   extractAbnFromText,
   findKnownVendor,
   suggestCategoryFromText,
+  suggestCategoryFromVendorContent,
   inferBusinessTypeCategory,
   enrichOcrFromVendors,
   rememberVendor,
@@ -43,6 +44,10 @@ describe("ABN helpers", () => {
 describe("suggestCategoryFromText", () => {
   it("suggests meals for cafe/restaurant wording", () => {
     expect(suggestCategoryFromText("Cafe latte and toast", "Roadhouse Cafe")).toBe("meals");
+  });
+
+  it("suggests meals for coffee / snack wording without a cafe vendor", () => {
+    expect(suggestCategoryFromText("Cappuccino\nChocolate bar\nTOTAL 8.50", "")).toBe("meals");
   });
 
   it("suggests training_education for course wording", () => {
@@ -275,5 +280,73 @@ describe("canonical vendor names from OCR junk", () => {
     enrichOcrFromVendors(ocr, vendors, "expense");
     expect(ocr.vendor).toBe("7-Eleven");
     expect(ocr.vendorMatch.source).toBe("name");
+  });
+});
+
+describe("dual-purpose vendor content (7-Eleven / servo food vs fuel)", () => {
+  it("classifies 7-Eleven coffee and snacks as meals, not other_work", () => {
+    expect(
+      suggestCategoryFromVendorContent({
+        name: "7-Eleven",
+        text: "7-ELEVEN\nCAPPUCCINO\nCHOC BAR\nTOTAL 9.80",
+      })
+    ).toBe("meals");
+
+    const ocr = {
+      vendor: "7-Eleven",
+      suggestedCategory: "other_work",
+      rawText: "7-ELEVEN STORE 2145\nCoffee\nSlurpee\nChips\nTOTAL 12.40",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.suggestedCategory).toBe("meals");
+    expect(ocr.categorySource).toBe("vendor_content");
+  });
+
+  it("classifies 7-Eleven diesel / pump lines as fuel", () => {
+    expect(
+      suggestCategoryFromVendorContent({
+        name: "7-Eleven",
+        text: "7-ELEVEN\nDIESEL\n42.10 L @ 1.899\nTOTAL 80.00",
+      })
+    ).toBe("fuel");
+
+    const ocr = {
+      vendor: "TAX INVOICE",
+      suggestedCategory: "other_work",
+      rawText: "TAX INVOICE\n7 EIEVEN\nUNLEADED 91\nPUMP 3\nTOTAL 55.00",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.vendor).toBe("7-Eleven");
+    expect(ocr.suggestedCategory).toBe("fuel");
+  });
+
+  it("prefers fuel when both fuel and a drink appear (bowser + bottle)", () => {
+    expect(
+      suggestCategoryFromVendorContent({
+        name: "BP",
+        text: "BP Truck Stop\nDIESEL 80.00 L\nWater 3.50\nTOTAL 155.00",
+      })
+    ).toBe("fuel");
+  });
+
+  it("defaults bare 7-Eleven dockets to meals instead of other_work", () => {
+    const ocr = {
+      vendor: "7-Eleven",
+      suggestedCategory: "other_work",
+      rawText: "7-Eleven\nABN 12 345 678 901\nTOTAL 6.50",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.suggestedCategory).toBe("meals");
+  });
+
+  it("keeps Woolworths on groceries_travel (not dual-purpose food override)", () => {
+    const ocr = {
+      vendor: "Woolworths",
+      suggestedCategory: "other_work",
+      rawText: "WOOLWORTHS\nCoffee pods\nTOTAL 40.00",
+    };
+    enrichOcrFromVendors(ocr, [], "expense");
+    expect(ocr.suggestedCategory).toBe("groceries_travel");
+    expect(ocr.categorySource).toBe("business_type");
   });
 });
