@@ -2620,7 +2620,7 @@
     const legend = slices
       .map(
         (s) =>
-          `<li><span class="enh-dot ${s.cls}"></span>${esc(s.label)} <strong>${fmt(s.value)}</strong></li>`
+          `<li><span class="enh-dot ${s.cls}"></span><span class="enh-pie-legend-text">${esc(s.label)}</span> <strong>${fmt(s.value)}</strong></li>`
       )
       .join("");
 
@@ -2640,7 +2640,7 @@
           <div class="enh-pie-wrap enh-pie-lg">
             <div class="enh-pie" style="background: ${gradient}"></div>
             <div class="enh-pie-center">
-              <span class="enh-pie-net-label">Net taxable − expenses</span>
+              <span class="enh-pie-net-label"><span class="enh-pie-net-label-line">After</span><span class="enh-pie-net-label-line">expenses</span></span>
               <span class="enh-pie-net">${fmt(nums.netTaxable)}</span>
             </div>
           </div>
@@ -2666,7 +2666,7 @@
     const legend = slices
       .map(
         (s) =>
-          `<li><span class="enh-dot ${s.cls}"></span>${esc(s.label)} <strong>${fmt(s.value)}</strong></li>`
+          `<li><span class="enh-dot ${s.cls}"></span><span class="enh-pie-legend-text">${esc(s.label)}</span> <strong>${fmt(s.value)}</strong></li>`
       )
       .join("");
 
