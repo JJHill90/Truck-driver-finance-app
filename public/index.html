@@ -141,9 +141,15 @@
         <!-- Dashboard -->
         <section id="view-dashboard" class="view active">
           <div id="stat-grid" class="stat-grid"></div>
-          <div class="panel">
-            <div class="panel-header"><h2>Snapshot</h2></div>
-            <div id="snapshot-content"></div>
+          <div class="dashboard-charts grid-2">
+            <div class="panel dashboard-chart-panel">
+              <div class="panel-header"><h2>Snapshot</h2></div>
+              <div id="snapshot-content"></div>
+            </div>
+            <div class="panel dashboard-chart-panel">
+              <div class="panel-header"><h2>Total Spend vs Net Income</h2></div>
+              <div id="spend-income-chart"></div>
+            </div>
           </div>
           <div class="panel">
             <div class="panel-header"><h2>Allowance caps</h2></div>
@@ -729,6 +735,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=car-expenses-tab-1"></script>
+    <script src="./enhancements.js?v=dashboard-dual-pies-1"></script>
   </body>
 </html>

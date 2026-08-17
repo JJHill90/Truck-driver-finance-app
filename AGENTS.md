@@ -46,6 +46,13 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   `enhancements.js` + `lib/allowance-tally.js` shows grand total, roaming
   segment spend (breakfast/lunch/dinner/food/OT/accom/incidentals), and a
   day/week/month selector with per-day breakdown. Resets at midnight AEST.
+- **Dashboard charts.** Snapshot pie shows **Gross income** (green), **Deductible
+  expenses** (amber) and **Net taxable income** (blue) with live totals in the
+  legend. Beside it, **Total Spend vs Net Income** is a second pie (blue income,
+  red spend) with spend-as-%-of-income in the centre; the fourth top stat card
+  shows the same percentage (replacing Est. tax inc. Medicare). Charts are
+  large and side-by-side via `.dashboard-charts` in `enhancements.js` /
+  `styles.css`.
 - **Recent activity (dashboard).** Capped at the **10** newest expense/income uploads (by `createdAt`, then date) via `enhancements.js`; the panel sits below Allowance caps and LAFHA on the dashboard.
 - **Living Away from Home (LAFHA) box.** Dashboard panel
   (`#dashboard-lafha-box`) via `GET /lafha?financialYear=`

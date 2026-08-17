@@ -2495,9 +2495,13 @@
 })();
 
 /*
- * Dashboard "Snapshot" → income-vs-expenses pie/donut with the net position in
- * the centre. Reads the live /summary response and re-renders into
- * #snapshot-content whenever app.js rewrites it (FY change / new data).
+ * Dashboard charts:
+ *  1) Snapshot pie — Gross Income / Deductible expenses / Net Taxable Income
+ *     with colour legend + live totals from /summary.
+ *  2) Total Spend vs Net Income pie — blue income, red spend; centre % =
+ *     spend as a share of net income. Also replaces the 4th stat card
+ *     (“Est. tax…”) with the same percentage readout.
+ * Charts sit side-by-side and scale larger for visual impact.
  */
 (function () {
   "use strict";
@@ -2513,7 +2517,7 @@
         const data = await res.clone().json();
         if (data && data.income && data.expenses) {
           latest = data;
-          render();
+          renderAll({ force: true });
         }
       }
     } catch {
@@ -2525,23 +2529,160 @@
   const fmt = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
 
+  const fmtPct = (n) => {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "—";
+    return `${v.toFixed(v >= 10 || v === 0 ? 0 : 1)}%`;
+  };
+
   function esc(s) {
-    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
-  function render() {
-    const host = document.getElementById("snapshot-content");
-    if (!host || !latest) return;
-    if (host.querySelector(".enh-snapshot")) return; // already rendered for this pass
+  function numbersFromSummary(s) {
+    const grossIncome = Number(s.income && s.income.assessableTotal) || 0;
+    const deductible = Number(s.expenses && s.expenses.deductibleTotal) || 0;
+    const grossSpend = Number(s.expenses && s.expenses.grossTotal) || 0;
+    const netTaxable =
+      s.taxEstimate && s.taxEstimate.taxableIncome != null
+        ? Number(s.taxEstimate.taxableIncome) || 0
+        : Math.max(0, grossIncome - deductible);
+    const netIncome = grossIncome;
+    return { grossIncome, deductible, grossSpend, netTaxable, netIncome };
+  }
 
-    const income = Number(latest.income.assessableTotal) || 0;
-    const expenses = Number(latest.expenses.grossTotal) || 0;
-    const net = Math.round((income - expenses) * 100) / 100;
-    const total = income + expenses;
-    const incPct = total > 0 ? (income / total) * 100 : 0;
+  /** Build a conic-gradient from [{color, value}, ...] (skips non-positive). */
+  function conicFromSlices(slices) {
+    const positive = slices.filter((x) => Number(x.value) > 0);
+    const sum = positive.reduce((a, x) => a + Number(x.value), 0);
+    if (sum <= 0) return null;
+    let cursor = 0;
+    const stops = [];
+    positive.forEach((x, i) => {
+      const start = cursor;
+      const end = i === positive.length - 1 ? 100 : cursor + (Number(x.value) / sum) * 100;
+      cursor = end;
+      stops.push(`${x.color} ${start}% ${end}%`);
+    });
+    return `conic-gradient(${stops.join(", ")})`;
+  }
 
-    // Preserve the substantiation message. Drop dashboard-noise warnings such
-    // as "Unknown expense category." — those are not useful on this page.
+  function spendOfIncomePct(spend, income) {
+    if (!(income > 0)) return income === 0 && spend > 0 ? 100 : null;
+    return Math.round((spend / income) * 1000) / 10;
+  }
+
+  function renderSpendStatCard(nums) {
+    const grid = document.getElementById("stat-grid");
+    if (!grid) return;
+    const cards = grid.querySelectorAll(".stat-card");
+    // app.js writes 4 cards; replace the last (Est. tax) with spend-vs-income %.
+    if (cards.length < 4) return;
+    const pct = spendOfIncomePct(nums.grossSpend, nums.netIncome);
+    const card = cards[3];
+    card.className = "stat-card tax enh-spend-vs-income-stat";
+    card.innerHTML = `
+      <div class="label">Total Spend vs Net Income</div>
+      <div class="value">${pct == null ? "—" : fmtPct(pct)}</div>
+      <div class="sub">Spend ${fmt(nums.grossSpend)} · Net income ${fmt(nums.netIncome)}</div>`;
+  }
+
+  function renderSnapshot(nums, host, extras) {
+    if (!host) return;
+    const slices = [
+      { color: "var(--green)", value: nums.grossIncome, label: "Gross income", cls: "enh-dot-green" },
+      { color: "var(--accent)", value: nums.deductible, label: "Deductible expenses", cls: "enh-dot-accent" },
+      { color: "var(--blue)", value: nums.netTaxable, label: "Net taxable income", cls: "enh-dot-blue" },
+    ];
+    const gradient = conicFromSlices(slices);
+    const legend = slices
+      .map(
+        (s) =>
+          `<li><span class="enh-dot ${s.cls}"></span>${esc(s.label)} <strong>${fmt(s.value)}</strong></li>`
+      )
+      .join("");
+
+    let chart;
+    if (!gradient) {
+      chart = `<div class="enh-snapshot enh-snapshot-empty">
+          <div class="enh-pie-wrap enh-pie-lg"><div class="enh-pie enh-pie-empty"></div>
+            <div class="enh-pie-center"><span class="enh-pie-net-label">Snapshot</span><span class="enh-pie-net">${fmt(0)}</span></div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">${legend}</ul>
+            <p class="muted">Add income or expenses to fill the chart.</p>
+          </div>
+        </div>`;
+    } else {
+      chart = `<div class="enh-snapshot">
+          <div class="enh-pie-wrap enh-pie-lg">
+            <div class="enh-pie" style="background: ${gradient}"></div>
+            <div class="enh-pie-center">
+              <span class="enh-pie-net-label">Net taxable</span>
+              <span class="enh-pie-net">${fmt(nums.netTaxable)}</span>
+            </div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">${legend}</ul>
+          </div>
+        </div>`;
+    }
+
+    host.innerHTML = `${chart}${extras.msg ? `<p class="muted">${esc(extras.msg)}</p>` : ""}${extras.warn || ""}`;
+  }
+
+  function renderSpendIncome(nums, host) {
+    if (!host) return;
+    const income = nums.netIncome;
+    const spend = nums.grossSpend;
+    const pct = spendOfIncomePct(spend, income);
+    const slices = [
+      { color: "var(--blue)", value: income, label: "Net income", cls: "enh-dot-blue" },
+      { color: "var(--red)", value: spend, label: "Total spend", cls: "enh-dot-red" },
+    ];
+    const gradient = conicFromSlices(slices);
+    const legend = slices
+      .map(
+        (s) =>
+          `<li><span class="enh-dot ${s.cls}"></span>${esc(s.label)} <strong>${fmt(s.value)}</strong></li>`
+      )
+      .join("");
+
+    let chart;
+    if (!gradient) {
+      chart = `<div class="enh-snapshot enh-snapshot-empty">
+          <div class="enh-pie-wrap enh-pie-lg"><div class="enh-pie enh-pie-empty"></div>
+            <div class="enh-pie-center"><span class="enh-pie-net-label">Spend / income</span><span class="enh-pie-net">—</span></div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">${legend}</ul>
+            <p class="muted">Log income and spending to compare.</p>
+          </div>
+        </div>`;
+    } else {
+      chart = `<div class="enh-snapshot">
+          <div class="enh-pie-wrap enh-pie-lg">
+            <div class="enh-pie" style="background: ${gradient}"></div>
+            <div class="enh-pie-center">
+              <span class="enh-pie-net-label">Spend of income</span>
+              <span class="enh-pie-net ${pct != null && pct > 100 ? "neg" : "pos"}">${pct == null ? "—" : fmtPct(pct)}</span>
+            </div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">
+              ${legend}
+              <li class="enh-pie-net-row">Total Spend vs Net Income <strong>${pct == null ? "—" : fmtPct(pct)}</strong></li>
+            </ul>
+          </div>
+        </div>`;
+    }
+    host.innerHTML = chart;
+  }
+
+  function extractSnapshotExtras(host) {
     const msg = (host.querySelector("p.muted") && host.querySelector("p.muted").textContent) || "";
     const warnList = host.querySelector(".warning-list");
     let warn = "";
@@ -2553,51 +2694,48 @@
         warn = `<ul class="warning-list">${kept.map((li) => li.outerHTML).join("")}</ul>`;
       }
     }
-    const afterTax =
-      latest.taxEstimate && latest.taxEstimate.totalTax != null
-        ? income - Number(latest.taxEstimate.totalTax)
-        : null;
+    return { msg, warn };
+  }
 
-    let chart;
-    if (total <= 0) {
-      chart = `<div class="enh-snapshot enh-snapshot-empty">
-          <div class="enh-pie-wrap"><div class="enh-pie enh-pie-empty"></div>
-            <div class="enh-pie-center"><span class="enh-pie-net-label">Net</span><span class="enh-pie-net">${fmt(0)}</span></div>
-          </div>
-          <p class="muted">Add income or expenses to see your position.</p>
-        </div>`;
-    } else {
-      chart = `<div class="enh-snapshot">
-          <div class="enh-pie-wrap">
-            <div class="enh-pie" style="background: conic-gradient(var(--green) 0 ${incPct}%, var(--red) ${incPct}% 100%)"></div>
-            <div class="enh-pie-center">
-              <span class="enh-pie-net-label">Net position</span>
-              <span class="enh-pie-net ${net >= 0 ? "pos" : "neg"}">${fmt(net)}</span>
-            </div>
-          </div>
-          <div class="enh-pie-side">
-            <ul class="enh-pie-legend">
-              <li><span class="enh-dot enh-dot-green"></span>Income <strong>${fmt(income)}</strong></li>
-              <li><span class="enh-dot enh-dot-red"></span>Expenses <strong>${fmt(expenses)}</strong></li>
-              <li class="enh-pie-net-row">Net position <strong class="${net >= 0 ? "enh-pos" : "enh-neg"}">${fmt(net)}</strong></li>
-            </ul>
-            ${afterTax != null ? `<p class="muted enh-aftertax">After estimated tax: <strong>${fmt(afterTax)}</strong></p>` : ""}
-          </div>
-        </div>`;
+  function renderAll(opts) {
+    if (!latest) return;
+    const force = Boolean(opts && opts.force);
+    const nums = numbersFromSummary(latest);
+    renderSpendStatCard(nums);
+
+    const snapHost = document.getElementById("snapshot-content");
+    const spendHost = document.getElementById("spend-income-chart");
+    if (snapHost && (force || !snapHost.querySelector(".enh-snapshot"))) {
+      renderSnapshot(nums, snapHost, extractSnapshotExtras(snapHost));
     }
-
-    host.innerHTML = `${chart}${msg ? `<p class="muted">${esc(msg)}</p>` : ""}${warn}`;
+    if (spendHost && (force || !spendHost.querySelector(".enh-snapshot"))) {
+      renderSpendIncome(nums, spendHost);
+    }
   }
 
   const observer = new MutationObserver(() => {
-    const host = document.getElementById("snapshot-content");
-    if (host && latest && !host.querySelector(".enh-snapshot")) render();
+    if (!latest) return;
+    const snapHost = document.getElementById("snapshot-content");
+    const grid = document.getElementById("stat-grid");
+    const needsSnap = snapHost && !snapHost.querySelector(".enh-snapshot");
+    const needsStat =
+      grid &&
+      grid.querySelectorAll(".stat-card").length >= 4 &&
+      !grid.querySelector(".enh-spend-vs-income-stat");
+    const needsSpend =
+      document.getElementById("spend-income-chart") &&
+      !document.getElementById("spend-income-chart").querySelector(".enh-snapshot");
+    if (needsSnap || needsStat || needsSpend) renderAll();
   });
 
   function start() {
-    const host = document.getElementById("snapshot-content");
-    if (host) observer.observe(host, { childList: true });
-    render();
+    const snapHost = document.getElementById("snapshot-content");
+    const grid = document.getElementById("stat-grid");
+    const spendHost = document.getElementById("spend-income-chart");
+    if (snapHost) observer.observe(snapHost, { childList: true });
+    if (grid) observer.observe(grid, { childList: true });
+    if (spendHost) observer.observe(spendHost, { childList: true });
+    renderAll({ force: true });
   }
 
   if (document.readyState === "loading") {
@@ -5628,7 +5766,7 @@
     dashboard: {
       title: "Dashboard",
       body: [
-        "The Dashboard is your home screen for the selected financial year. The top stats summarise income, deductions and a rough tax picture from what you’ve already entered. Snapshot summarises the year; Allowance caps and LAFHA sit above Recent activity, which shows only the 10 most recent uploads and refreshes as you add more.",
+        "The Dashboard is your home screen for the selected financial year. Top stats show Gross Income, Deductible expenses, Net Taxable Income, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (gross / deductible / net taxable with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
         "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
