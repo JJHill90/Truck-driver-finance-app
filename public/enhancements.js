@@ -2640,7 +2640,7 @@
           <div class="enh-pie-wrap enh-pie-lg">
             <div class="enh-pie" style="background: ${gradient}"></div>
             <div class="enh-pie-center">
-              <span class="enh-pie-net-label">Taxable<br />− expenses</span>
+              <span class="enh-pie-net-label">After expenses</span>
               <span class="enh-pie-net">${fmt(nums.netTaxable)}</span>
             </div>
           </div>

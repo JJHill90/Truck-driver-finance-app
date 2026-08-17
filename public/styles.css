@@ -1332,8 +1332,8 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   max-width: 100%;
 }
 .enh-pie-lg .enh-pie-net-label {
-  font-size: 0.5rem;
-  letter-spacing: 0.01em;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
 }
 .enh-pie-net {
   font-size: 1.02rem;
@@ -1344,7 +1344,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.enh-pie-lg .enh-pie-net { font-size: 1.05rem; }
+.enh-pie-lg .enh-pie-net { font-size: 1.12rem; }
 .enh-pie-net.pos { color: var(--green); }
 .enh-pie-net.neg { color: var(--red); }
 .enh-pie-side { flex: 1 1 200px; min-width: 180px; }
