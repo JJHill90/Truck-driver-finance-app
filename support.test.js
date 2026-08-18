@@ -91,7 +91,7 @@ describe("support.saveContactMessage", () => {
   it("defaults support inbox to the business email", () => {
     const prev = process.env.SUPPORT_EMAIL;
     delete process.env.SUPPORT_EMAIL;
-    expect(support.supportInbox()).toBe("hilljj1990@gmail.com");
+    expect(support.supportInbox()).toBe("support@godriverhub.com");
     if (prev !== undefined) process.env.SUPPORT_EMAIL = prev;
   });
 });
