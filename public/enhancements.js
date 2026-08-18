@@ -134,22 +134,66 @@
 
     // Inject cash / no-receipt flags from the manual expense form (app.js
     // builds its own payload and does not read these checkboxes).
+    // Also ensure Profile presets land on expense saves when forms still have
+    // HTML defaults (work-use 100 / weak category).
     if (
       url &&
-      /\/receipts\/manual(\?|$)/.test(url) &&
+      (/\/receipts\/manual(\?|$)/.test(url) ||
+        /\/receipts\/[^/]+\/confirm(\?|$)/.test(url) ||
+        /\/expenses(\?|$)/.test(url)) &&
       String(options.method || "GET").toUpperCase() === "POST" &&
       typeof options.body === "string"
     ) {
       try {
         const bodyObj = JSON.parse(options.body);
-        const cashEl = document.querySelector(
-          "#manual-receipt-form [name=cashTransaction], #manual-cash-transaction"
-        );
-        const noReceiptEl = document.querySelector(
-          "#manual-receipt-form [name=noReceipt], #manual-no-receipt"
-        );
-        if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
-        if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
+        const isIncomeConfirm =
+          /\/confirm(\?|$)/.test(url) && bodyObj.purpose === "income";
+        if (!isIncomeConfirm) {
+          const cashEl = document.querySelector(
+            "#manual-receipt-form [name=cashTransaction], #manual-cash-transaction"
+          );
+          const noReceiptEl = document.querySelector(
+            "#manual-receipt-form [name=noReceipt], #manual-no-receipt"
+          );
+          if (/\/receipts\/manual(\?|$)/.test(url)) {
+            if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
+            if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
+          }
+
+          const presets = (window.__haulageUser && window.__haulageUser.presets) || {};
+          const presetWork = Number(presets.defaultWorkUsePercent);
+          const presetCat = String(presets.defaultCategory || "").trim();
+          const carIds = new Set([
+            "vehicle_car",
+            "fuel",
+            "repairs_maintenance",
+            "tyres",
+            "registration_insurance",
+            "parking_tolls",
+          ]);
+          const cat = String(bodyObj.category || "").trim();
+          if (!carIds.has(cat)) {
+            const formWork =
+              document.querySelector("#scan-confirm-work") ||
+              document.querySelector("#manual-receipt-form [name=workUsePercent]");
+            const fromPreset =
+              formWork && formWork.dataset && formWork.dataset.fromProfilePreset === "1";
+            if (
+              Number.isFinite(presetWork) &&
+              presetWork >= 0 &&
+              presetWork <= 100 &&
+              (fromPreset ||
+                bodyObj.workUsePercent == null ||
+                bodyObj.workUsePercent === "")
+            ) {
+              bodyObj.workUsePercent = Math.round(presetWork);
+            }
+            const weak = !cat || cat === "other_work" || cat === "other";
+            if (weak && presetCat) {
+              bodyObj.category = presetCat;
+            }
+          }
+        }
         options = {
           ...options,
           body: JSON.stringify(bodyObj),
@@ -333,6 +377,10 @@
         matchBits.push("Category from previous saves for this business");
       } else if (data.categorySource === "text_heuristic") {
         matchBits.push("Category suggested from receipt wording");
+      } else if (data.categorySource === "user_preset") {
+        matchBits.push("Category from your Profile default expense category");
+      } else if (data.categorySource === "vendor_content") {
+        matchBits.push("Category from receipt line items");
       }
       vendorHtml = `<div class="enh-section enh-vendor-match">
           <h4>Business / ABN</h4>
@@ -417,6 +465,9 @@
     if (!box.querySelector(".scan-confirm")) return;
     ensureIncomeAbnField(box);
     syncExpenseAbnFields(box);
+    if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
+      window.haulageApplyProfilePresets({ forceWorkUse: false });
+    }
     if (box.__enhToken === latest.token) return;
     box.__enhToken = latest.token;
     const existing = box.querySelector("#enh-panel");
@@ -1043,6 +1094,7 @@
       const presets = user.presets || {};
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
+      applyProfilePresetsToExpenseForms({ forceWorkUse: true });
       void refreshBillingPanel();
     } else {
       outEl.classList.remove("hidden");
@@ -1055,6 +1107,80 @@
       else adminPanel.classList.add("hidden");
     }
   }
+
+  /** Profile presets used by expense forms / scan confirm (not income; not car claims). */
+  function readProfilePresets() {
+    const presets = (window.__haulageUser && window.__haulageUser.presets) || {};
+    const workRaw = Number(presets.defaultWorkUsePercent);
+    const workUse =
+      Number.isFinite(workRaw) && workRaw >= 0 && workRaw <= 100 ? Math.round(workRaw) : null;
+    const category = String(presets.defaultCategory || "").trim() || null;
+    return { workUse, category };
+  }
+
+  function isWeakExpenseCategory(id) {
+    const v = String(id || "")
+      .trim()
+      .toLowerCase();
+    return !v || v === "other_work" || v === "other";
+  }
+
+  function setSelectValueIfPresent(selectEl, value) {
+    if (!selectEl || value == null || value === "") return false;
+    const ok = [...selectEl.options].some((o) => o.value === value);
+    if (!ok) return false;
+    selectEl.value = value;
+    return true;
+  }
+
+  /**
+   * Prefill general expense work-use % and category from Profile → Presets.
+   * Does not touch Car Expenses claim forms (those use the active vehicle %).
+   */
+  function applyProfilePresetsToExpenseForms(opts = {}) {
+    const { workUse, category } = readProfilePresets();
+    const forceWorkUse = Boolean(opts.forceWorkUse);
+
+    const markWorkField = (workField) => {
+      if (!workField || workUse == null) return;
+      const cur = Number(workField.value);
+      if (forceWorkUse || !Number.isFinite(cur) || workField.value === "" || cur === 100) {
+        workField.value = String(workUse);
+        workField.dataset.fromProfilePreset = "1";
+        workField.title = `From Profile presets (${workUse}% work use)`;
+        if (!workField.__presetInputHook) {
+          workField.__presetInputHook = true;
+          workField.addEventListener("input", () => {
+            delete workField.dataset.fromProfilePreset;
+            workField.title = "";
+          });
+        }
+      }
+    };
+
+    const manualForm = byId("manual-receipt-form");
+    if (manualForm && manualForm.elements) {
+      markWorkField(manualForm.elements.workUsePercent);
+      const catField =
+        byId("manual-receipt-category") || (manualForm.elements && manualForm.elements.category);
+      if (catField && category && (forceWorkUse || isWeakExpenseCategory(catField.value))) {
+        setSelectValueIfPresent(catField, category);
+      }
+    }
+
+    markWorkField(byId("scan-confirm-work"));
+    const scanCat = byId("scan-confirm-category");
+    if (scanCat && category && (forceWorkUse || isWeakExpenseCategory(scanCat.value))) {
+      setSelectValueIfPresent(scanCat, category);
+    }
+
+    // Keep awaiting-approve modal category in sync when still weak.
+    const awaitCat = byId("enh-await-category");
+    if (awaitCat && category && isWeakExpenseCategory(awaitCat.value)) {
+      awaitCat.value = category;
+    }
+  }
+  window.haulageApplyProfilePresets = applyProfilePresetsToExpenseForms;
 
   let cachedEntitlements = null;
 
@@ -2331,12 +2457,38 @@
           defaultCategory: (byId("preset-category") || {}).value || undefined,
         };
         try {
-          await apiPost("/auth/presets", presets);
-          if (window.toast) window.toast("Presets saved");
+          const data = await apiPost("/auth/presets", presets);
+          if (data && data.user) {
+            window.__haulageUser = data.user;
+            showAuthState(data.user);
+          } else if (window.__haulageUser) {
+            window.__haulageUser.presets = {
+              ...(window.__haulageUser.presets || {}),
+              ...presets,
+            };
+            applyProfilePresetsToExpenseForms({ forceWorkUse: true });
+          }
+          if (window.toast) window.toast("Presets saved — applied to expense forms");
         } catch (e) {
           if (window.toast) window.toast(e.message);
         }
       });
+    }
+
+    // After app.js clears manual/expense forms (work-use → 100, category empty), re-apply presets.
+    const reapplyPresetsSoon = () => {
+      setTimeout(() => applyProfilePresetsToExpenseForms({ forceWorkUse: true }), 0);
+    };
+    byId("manual-receipt-form")?.addEventListener("submit", reapplyPresetsSoon);
+    // Scan confirm "Edit details" injects #scan-confirm-work — watch scan-result for it.
+    const scanBox = byId("scan-result");
+    if (scanBox && !scanBox.__presetMo) {
+      scanBox.__presetMo = new MutationObserver(() => {
+        if (byId("scan-confirm-work") || byId("scan-confirm-category")) {
+          applyProfilePresetsToExpenseForms({ forceWorkUse: false });
+        }
+      });
+      scanBox.__presetMo.observe(scanBox, { childList: true, subtree: true });
     }
 
     const adminRefresh = byId("admin-refresh");
@@ -5611,6 +5763,20 @@
 
     // Profile default category
     fillSelect(document.getElementById("preset-category"), menuHtml, { allowEmptyLabel: true });
+    // Re-apply saved defaults after menus are rebuilt (options were wiped).
+    if (typeof window.haulageApplyProfilePresets === "function") {
+      window.haulageApplyProfilePresets({ forceWorkUse: true });
+    }
+    try {
+      const presetCat = document.getElementById("preset-category");
+      const saved =
+        window.__haulageUser &&
+        window.__haulageUser.presets &&
+        window.__haulageUser.presets.defaultCategory;
+      if (presetCat && saved) presetCat.value = saved;
+    } catch {
+      /* ignore */
+    }
   }
 
   function afterPopulate(fn) {

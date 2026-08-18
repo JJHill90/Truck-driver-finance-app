@@ -330,6 +330,14 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   `GET /billing/trial` (alias `/billing/founding`) powers signup copy.
   Without Stripe keys, trials/quotas still apply; checkout returns a clear
   error.
+- **Profile presets (work-use % + default category).** Profile → Presets saves
+  `defaultWorkUsePercent` and `defaultCategory` on the account. These pre-fill
+  the general expense / scan-confirm forms (`public/enhancements.js`) and act
+  as server fallbacks (`lib/user-presets.js`) when a scan’s category is still
+  weak (`other_work`) after vendor/OCR enrichment — strong business-type /
+  line-item categories still win. Work-use % scales deductible totals on
+  expenses (not income). Car claim work-use still comes from the active
+  vehicle profile, not this preset.
 - **Version label** sits under the Support button (sidebar bottom-left) and on
  the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
  Bump `HAULAGE_PR_NUMBER` with each new PR. Display ladder: PR 1–50 →

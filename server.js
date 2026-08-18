@@ -23,6 +23,7 @@ const {
   applyIncomePrimaryToOcr,
 } = require("./lib/income-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
+const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
 const {
@@ -1536,6 +1537,10 @@ api.post("/expenses", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  if (req.user) {
+    const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+    applyExpensePresets(body, account);
+  }
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
   const entry = storage.addExpense(records, body);
@@ -1792,8 +1797,15 @@ api.post("/receipts/scan", async (req, res, next) => {
       records.vendors || [],
       purpose === "income" ? "income" : "expense"
     );
-    if (purpose !== "income" && ocrResult.suggestedCategory) {
-      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+    if (purpose !== "income") {
+      // Profile "Default expense category" when OCR/vendor left a weak guess.
+      if (req.user) {
+        const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+        applyOcrCategoryPreset(ocrResult, account);
+      }
+      if (ocrResult.suggestedCategory) {
+        ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+      }
     }
 
     // Enrich: typed component breakdown + ATO compliance assessment.
@@ -1968,6 +1980,10 @@ api.post("/receipts/manual", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
+  if (req.user) {
+    const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+    applyExpensePresets(body, account);
+  }
   const { expense, receipt } = storage.addManualReceipt(records, body);
   // Cash / no-receipt flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
@@ -2090,6 +2106,12 @@ api.post("/receipts/:id/confirm", (req, res) => {
   if (expensePayload.category) {
     expensePayload.category = normalizeExpenseCategoryId(expensePayload.category);
   }
+  if (req.user) {
+    const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+    applyExpensePresets(expensePayload, account);
+  }
+  applyActiveCarWorkUse(records, expensePayload);
+  delete expensePayload.workUseFromCarProfile;
   const entry = storage.addExpense(records, expensePayload);
   rememberVendor(records, {
     name: expensePayload.vendor || entry.vendor,
