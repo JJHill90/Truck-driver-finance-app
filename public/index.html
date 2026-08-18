@@ -547,6 +547,7 @@
               </div>
               <div class="form-grid profile-presets">
                 <h3 class="span-2 profile-section-title">Presets</h3>
+                <p class="muted span-2 profile-security-hint">Used when adding or approving expenses: work-use % pre-fills the expense forms (and scales deductible totals). Default category is used when a scan cannot detect a stronger category from the business or receipt — known stores (fuel, groceries, meals) still win.</p>
                 <label>Default work-use %<input id="preset-workuse" type="number" min="0" max="100" placeholder="100" /></label>
                 <label>Default expense category
                   <select id="preset-category" class="category-select" aria-label="Default expense category">
@@ -723,6 +724,6 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=plan-badge-billing-1"></script>
+    <script src="./enhancements.js?v=profile-presets-apply-1"></script>
   </body>
 </html>
