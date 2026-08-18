@@ -668,6 +668,8 @@
     if (nameEl) nameEl.textContent = username || "—";
     const hubMsg = byId("title-hub-message");
     if (hubMsg) hubMsg.textContent = "";
+    // Refresh plan badge on Driver Hub (Free / Pro / Pro+).
+    void refreshBillingPanel();
   }
 
   function openTaxationHub(user) {
@@ -1067,8 +1069,11 @@
     if (uploads) uploads.textContent = "";
     if (msg) msg.textContent = "";
     byId("billing-upgrade")?.classList.add("hidden");
+    byId("billing-cancel")?.classList.add("hidden");
+    byId("billing-resume")?.classList.add("hidden");
     byId("billing-manage")?.classList.add("hidden");
     byId("billing-price-hint")?.classList.add("hidden");
+    updatePlanBadges(null);
   }
 
   function setBillingMessage(text, isError) {
@@ -1091,18 +1096,76 @@
     }
   }
 
+  /** Free | Pro | Pro+ for hub badges. */
+  function planBadgeLabel(ent) {
+    if (!ent) return "";
+    if (ent.displayPlan) return String(ent.displayPlan);
+    if (ent.isAdmin) return "Pro";
+    if (ent.planGrant === "pro_plus" || ent.status === "pro_plus") return ent.trialLabel || "Pro+";
+    if (ent.status === "trialing") return ent.trialLabel || "Pro+";
+    if (ent.isPro) return "Pro";
+    return "Free";
+  }
+
+  function planBadgeClass(label) {
+    const t = String(label || "").toLowerCase().replace(/\+/g, "-plus").replace(/\s+/g, "-");
+    if (t === "pro-plus" || t === "pro+") return "plan-pro-plus";
+    if (t === "pro") return "plan-pro";
+    return "plan-free";
+  }
+
+  function setPlanBadgeEl(el, ent) {
+    if (!el) return;
+    const label = planBadgeLabel(ent);
+    if (!label) {
+      el.classList.add("hidden");
+      el.textContent = "";
+      el.classList.remove("plan-free", "plan-pro", "plan-pro-plus");
+      return;
+    }
+    el.textContent = label;
+    el.classList.remove("hidden", "plan-free", "plan-pro", "plan-pro-plus");
+    el.classList.add(planBadgeClass(label));
+    el.title = `Your account plan: ${label}`;
+  }
+
+  function updatePlanBadges(ent) {
+    setPlanBadgeEl(byId("sidebar-plan-badge"), ent);
+    setPlanBadgeEl(byId("title-hub-plan-badge"), ent);
+  }
+
+  function hasCancelablePaidSub(ent) {
+    if (!ent || ent.isAdmin) return false;
+    if (!ent.hasStripeSubscription && !ent.hasStripeCustomer) return false;
+    const st = String(ent.subscriptionStatus || "").toLowerCase();
+    if (!["active", "trialing", "past_due"].includes(st)) return false;
+    // Signup trial (no Stripe sub id) is not cancelable via Stripe.
+    if (ent.status === "trialing" && !ent.hasStripeSubscription) return false;
+    return !ent.cancelAtPeriodEnd;
+  }
+
+  function hasScheduledCancel(ent) {
+    if (!ent || ent.isAdmin) return false;
+    return Boolean(ent.cancelAtPeriodEnd && ent.hasStripeSubscription);
+  }
+
   function renderBillingPanel(ent, stripeConfigured) {
     cachedEntitlements = ent || null;
     const statusEl = byId("billing-status");
     const uploadsEl = byId("billing-uploads");
     const upgradeBtn = byId("billing-upgrade");
+    const cancelBtn = byId("billing-cancel");
+    const resumeBtn = byId("billing-resume");
     const manageBtn = byId("billing-manage");
     if (!statusEl) return;
 
     if (!ent) {
       statusEl.textContent = "Could not load plan details.";
+      updatePlanBadges(null);
       return;
     }
+
+    updatePlanBadges(ent);
 
     const price = ent.priceLabel || "$5/month";
     const trialLabel = ent.trialLabel || "Pro+";
@@ -1110,17 +1173,19 @@
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
     else if (ent.planGrant === "pro_plus" || ent.status === "pro_plus") {
       statusText = `${trialLabel} (admin grant)`;
-    } else if (ent.status === "trialing") {
+    } else if (ent.status === "trialing" && !ent.hasStripeSubscription) {
       statusText = `${trialLabel} trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
     } else if (ent.isPro) {
       statusText = `Pro (${price})`;
-      if (ent.currentPeriodEnd) {
+      if (ent.cancelAtPeriodEnd && ent.currentPeriodEnd) {
+        statusText += ` · cancels ${formatTrialEnd(ent.currentPeriodEnd)} (benefits stay until then)`;
+      } else if (ent.currentPeriodEnd) {
         statusText += ` · renews ${formatTrialEnd(ent.currentPeriodEnd)}`;
       }
     } else if (ent.planGrant === "free") {
       statusText = `Free plan (set by admin) · ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report`;
     } else if (ent.trialExpired) {
-      statusText = `Free plan · ${trialLabel} trial ended — ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report; update to Pro (${price}) for unlimited + PDF`;
+      statusText = `Free plan · ${trialLabel} trial ended — ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report; upgrade to Pro (${price}) for unlimited + PDF`;
     } else {
       statusText = `Free plan · ${ent.freeUploadsPerMonth || 15} uploads/month + ${ent.freeOnscreenReports || 1} on-screen report · Pro (${price}) unlocks unlimited + PDF & forecast`;
     }
@@ -1143,27 +1208,34 @@
     const priceHint = byId("billing-price-hint");
     const yearly = ent.priceYearlyLabel || "$60/year";
     if (priceHint) {
-      priceHint.textContent = `Pro is ${price} or ${yearly}.`;
+      priceHint.textContent = `Pro is ${price} or ${yearly} (same full access as ${trialLabel}).`;
       priceHint.classList.toggle(
         "hidden",
-        Boolean(ent.isAdmin || (ent.isPro && ent.status !== "trialing" && ent.planGrant !== "pro_plus"))
+        Boolean(ent.isAdmin || (ent.isPro && ent.status !== "trialing" && ent.planGrant !== "pro_plus" && !ent.cancelAtPeriodEnd))
       );
     }
 
     if (upgradeBtn) {
-      if (
-        ent.isAdmin ||
-        ent.planGrant === "pro_plus" ||
-        (ent.isPro && ent.status !== "trialing")
-      ) {
+      // Paid Pro checkout — available on Free and during Pro+ signup trial.
+      const paidLive =
+        ent.hasStripeSubscription &&
+        ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
+      const hideUpgrade = ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
+      if (hideUpgrade) {
         upgradeBtn.classList.add("hidden");
       } else {
         upgradeBtn.classList.remove("hidden");
-        // Day-1 subscribe remains available; soft prompt waits until halfway free uploads.
-        upgradeBtn.textContent =
-          ent.status === "trialing" ? "Choose Pro plan" : "Upgrade to Pro";
+        upgradeBtn.textContent = "Upgrade to Pro";
       }
     }
+
+    if (cancelBtn) {
+      cancelBtn.classList.toggle("hidden", !hasCancelablePaidSub(ent));
+    }
+    if (resumeBtn) {
+      resumeBtn.classList.toggle("hidden", !hasScheduledCancel(ent));
+    }
+
     if (manageBtn) {
       if (stripeConfigured === false && !ent.isPro) {
         setBillingMessage(
@@ -1171,10 +1243,10 @@
           false
         );
       }
-      const likelyCustomer = ["active", "past_due", "canceled"].includes(
-        String(ent.subscriptionStatus || "")
-      );
-      if (likelyCustomer && !ent.isAdmin) manageBtn.classList.remove("hidden");
+      const likelyCustomer =
+        ent.hasStripeCustomer ||
+        ["active", "past_due", "canceled", "trialing"].includes(String(ent.subscriptionStatus || ""));
+      if (likelyCustomer && !ent.isAdmin && ent.hasStripeCustomer) manageBtn.classList.remove("hidden");
       else manageBtn.classList.add("hidden");
     }
 
@@ -1230,7 +1302,7 @@
     }
   }
 
-  /** One Pro+ upgrade prompt per calendar month, only after halfway free uploads. */
+  /** One Pro upgrade prompt per calendar month, only after halfway free uploads. */
   function maybeSoftWarnUploads(ent) {
     if (!ent || ent.isPro || !ent.softWarning) return;
     if (hasShownSoftWarn(ent)) return;
@@ -1239,7 +1311,7 @@
     const used = ent.uploadsUsed;
     const limit = ent.freeUploadsPerMonth || 15;
     promptUpgrade({
-      error: `You’ve used ${used} of ${limit} free uploads this month (${left} left). Upgrade to Pro+ for unlimited scans, PDF export and forecast.`,
+      error: `You’ve used ${used} of ${limit} free uploads this month (${left} left). Upgrade to Pro for unlimited scans, PDF export and forecast.`,
       code: "SOFT_UPLOAD_WARN",
       entitlements: ent,
     });
@@ -1252,11 +1324,14 @@
       // Attach hasStripeCustomer from /auth/me if needed for manage button
       const me = await apiGet("/auth/me");
       if (me.user && me.user.username) window.__haulageUser = me.user;
+      if (me.entitlements) {
+        cachedEntitlements = { ...data.entitlements, ...me.entitlements };
+        updatePlanBadges(cachedEntitlements);
+      }
       const manageBtn = byId("billing-manage");
       if (manageBtn && me.user && me.user.hasStripeCustomer && !me.user.isAdmin) {
         manageBtn.classList.remove("hidden");
       }
-      if (me.entitlements) cachedEntitlements = me.entitlements;
     } catch {
       clearBillingPanel();
       const status = byId("billing-status");
@@ -1271,6 +1346,7 @@
     const ent = (data && data.entitlements) || cachedEntitlements || {};
     const price = ent.priceLabel || "$5/month";
     const yearly = ent.priceYearlyLabel || "$60/year";
+    const trialLabel = ent.trialLabel || "Pro+";
     const modal = document.createElement("div");
     modal.id = "enh-billing-modal";
     modal.className = "enh-dup-modal";
@@ -1280,9 +1356,9 @@
         <h3 id="enh-billing-title">Upgrade to Pro</h3>
         <p>${esc(
           (data && data.error) ||
-            `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly}.`
+            `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly} (same full access as ${trialLabel}).`
         )}</p>
-        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. PDF export stays with Pro.</p>
+        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. You’ll go to secure card payment to activate Pro.</p>
         <div class="enh-dup-actions enh-billing-plan-actions">
           <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
           <button type="button" class="btn secondary" data-billing-upgrade="month">Pro — ${esc(price)}</button>
@@ -1336,11 +1412,45 @@
     }
   }
 
+  async function cancelSubscription() {
+    const ent = cachedEntitlements || {};
+    const until = ent.currentPeriodEnd ? formatTrialEnd(ent.currentPeriodEnd) : "the end of your billing period";
+    const ok = window.confirm(
+      `Cancel Pro auto-renewal?\n\nYou’ll keep Pro benefits until ${until}. After that you’ll return to the Free plan. You can resume renewals any time before then.`
+    );
+    if (!ok) return;
+    setBillingMessage("Cancelling auto-renewal…");
+    try {
+      const data = await apiPost("/billing/cancel", {});
+      if (data.entitlements) renderBillingPanel(data.entitlements, true);
+      setBillingMessage(data.message || "Subscription will not renew.");
+      if (window.toast) window.toast(data.message || "Pro stays active until period end");
+    } catch (err) {
+      setBillingMessage(err.message || "Could not cancel subscription.", true);
+      if (window.toast) window.toast(err.message || "Cancel failed");
+    }
+  }
+
+  async function resumeSubscription() {
+    setBillingMessage("Resuming auto-renewal…");
+    try {
+      const data = await apiPost("/billing/resume", {});
+      if (data.entitlements) renderBillingPanel(data.entitlements, true);
+      setBillingMessage(data.message || "Auto-renewal is back on.");
+      if (window.toast) window.toast(data.message || "Pro will renew as usual");
+    } catch (err) {
+      setBillingMessage(err.message || "Could not resume subscription.", true);
+      if (window.toast) window.toast(err.message || "Resume failed");
+    }
+  }
+
   function wireBilling() {
     byId("billing-upgrade")?.addEventListener("click", () => {
       promptUpgrade({ entitlements: cachedEntitlements });
     });
     byId("billing-manage")?.addEventListener("click", () => void openBillingPortal());
+    byId("billing-cancel")?.addEventListener("click", () => void cancelSubscription());
+    byId("billing-resume")?.addEventListener("click", () => void resumeSubscription());
 
     // Soft-gate Forecast nav: intercept before app.js switches view when free.
     document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {

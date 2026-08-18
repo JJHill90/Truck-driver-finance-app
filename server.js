@@ -1509,6 +1509,66 @@ api.post("/billing/portal", async (req, res) => {
   }
 });
 
+/** Cancel Pro at period end — benefits stay until currentPeriodEnd. */
+api.post("/billing/cancel", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to cancel your subscription." });
+    return;
+  }
+  try {
+    const user = auth.getUserRecord(req.user);
+    const result = await billingStripe.cancelSubscriptionAtPeriodEnd({ user });
+    auth.updateBilling(req.user, {
+      cancelAtPeriodEnd: user.cancelAtPeriodEnd,
+      currentPeriodEnd: user.currentPeriodEnd,
+      subscriptionStatus: user.subscriptionStatus,
+      plan: user.plan,
+      planUpdatedAt: new Date().toISOString(),
+    });
+    res.json({
+      ...result,
+      entitlements: resolveReqEntitlements(req),
+      message: user.currentPeriodEnd
+        ? `Pro stays active until ${new Date(user.currentPeriodEnd).toLocaleDateString("en-AU")}. After that you’ll return to Free.`
+        : "Subscription will not renew. You’ll keep Pro until the end of the current billing period.",
+    });
+  } catch (err) {
+    const code = err && err.code;
+    const status =
+      code === "STRIPE_NOT_CONFIGURED" || code === "NO_SUBSCRIPTION" ? 400 : 400;
+    res.status(status).json({ error: err.message, code: code || "CANCEL_FAILED" });
+  }
+});
+
+/** Resume auto-renewal after a scheduled cancel. */
+api.post("/billing/resume", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to resume your subscription." });
+    return;
+  }
+  try {
+    const user = auth.getUserRecord(req.user);
+    const result = await billingStripe.resumeSubscription({ user });
+    auth.updateBilling(req.user, {
+      cancelAtPeriodEnd: user.cancelAtPeriodEnd,
+      currentPeriodEnd: user.currentPeriodEnd,
+      subscriptionStatus: user.subscriptionStatus,
+      plan: user.plan,
+      planUpdatedAt: new Date().toISOString(),
+    });
+    res.json({
+      ...result,
+      entitlements: resolveReqEntitlements(req),
+      message: "Auto-renewal is back on — your Pro plan will renew as usual.",
+    });
+  } catch (err) {
+    const code = err && err.code;
+    const status =
+      code === "STRIPE_NOT_CONFIGURED" || code === "NO_SUBSCRIPTION" ? 400 : 400;
+    res.status(status).json({ error: err.message, code: code || "RESUME_FAILED" });
+  }
+});
+
 // --- Expenses ------------------------------------------------------------
 api.post("/expenses/preview", (req, res) => {
   const records = getRecords(req);
