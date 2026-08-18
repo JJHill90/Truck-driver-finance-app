@@ -6157,14 +6157,14 @@
     wrap.appendChild(title);
 
     const line1 = document.createElement("p");
-    line1.textContent = `Your message has been sent to the developer (${supportEmail || "hilljj1990@gmail.com"}).`;
+    line1.textContent = `Your message has been sent to the developer (${supportEmail || "support@godriverhub.com"}).`;
     wrap.appendChild(line1);
 
     const line2 = document.createElement("p");
     if (confirmationSent) {
       line2.textContent = `A confirmation notice was also sent to ${userEmail}. Check your inbox (and spam) for “we received your support request”.`;
     } else {
-      line2.textContent = `We’ll reply to ${userEmail}. If you don’t hear back, follow up at ${supportEmail || "hilljj1990@gmail.com"}.`;
+      line2.textContent = `We’ll reply to ${userEmail}. If you don’t hear back, follow up at ${supportEmail || "support@godriverhub.com"}.`;
     }
     wrap.appendChild(line2);
 
@@ -6195,7 +6195,7 @@
     supportEmail,
     confirmationText,
   }) {
-    const inbox = supportEmail || "hilljj1990@gmail.com";
+    const inbox = supportEmail || "support@godriverhub.com";
     const endpoint = `https://formsubmit.co/ajax/${encodeURIComponent(inbox)}`;
     const res = await fetch(endpoint, {
       method: "POST",
@@ -6261,7 +6261,7 @@
 
       let emailed = Boolean(data.emailed);
       let confirmationSent = Boolean(data.confirmationSent);
-      const supportEmail = data.supportEmail || "hilljj1990@gmail.com";
+      const supportEmail = data.supportEmail || "support@godriverhub.com";
 
       // If the server could not reach an SMTP/Resend channel, deliver from the
       // browser so the developer inbox still receives the enquiry.
@@ -6337,7 +6337,7 @@
       }
       setStatus(wrap, { isError: true });
     } catch {
-      setStatus("Network error — please try again or email hilljj1990@gmail.com.", {
+      setStatus("Network error — please try again or email support@godriverhub.com.", {
         isError: true,
       });
     } finally {

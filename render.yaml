@@ -38,7 +38,7 @@ services:
       - key: CORS_ALLOW_CAPACITOR
         sync: false
       - key: SUPPORT_EMAIL
-        value: hilljj1990@gmail.com
+        value: support@godriverhub.com
       - key: MAIL_FROM
         sync: false
       - key: SMTP_HOST
