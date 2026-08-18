@@ -252,4 +252,40 @@ describe("entitlements", () => {
     expect(isPro(user, now)).toBe(false);
     expect(new Date(user.proTrialEndsAt).getTime()).toBeLessThanOrEqual(now.getTime());
   });
+
+  it("maps Free / Pro / Pro+ displayPlan for hub badges", () => {
+    const { displayPlanTier } = require("./lib/entitlements");
+    const now = new Date("2026-08-15T12:00:00Z");
+    expect(displayPlanTier({ plan: "free" }, now)).toBe("Free");
+    expect(displayPlanTier({ isAdmin: true }, now)).toBe("Pro");
+    expect(
+      displayPlanTier(
+        { subscriptionStatus: "active", currentPeriodEnd: "2026-09-15T00:00:00Z" },
+        now
+      )
+    ).toBe("Pro");
+    expect(
+      displayPlanTier({ planGrant: "pro_plus", plan: "pro" }, now)
+    ).toBe("Pro+");
+    expect(
+      displayPlanTier(
+        { proTrialEndsAt: addTrialEnd("2026-08-01T00:00:00Z") },
+        now
+      )
+    ).toBe("Pro+");
+
+    const paid = resolveEntitlements(
+      {
+        subscriptionStatus: "active",
+        stripeSubscriptionId: "sub_x",
+        currentPeriodEnd: "2026-09-15T00:00:00Z",
+        cancelAtPeriodEnd: true,
+      },
+      { receipts: [] },
+      now
+    );
+    expect(paid.displayPlan).toBe("Pro");
+    expect(paid.cancelAtPeriodEnd).toBe(true);
+    expect(paid.hasStripeSubscription).toBe(true);
+  });
 });

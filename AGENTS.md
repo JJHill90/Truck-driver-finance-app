@@ -315,7 +315,12 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   or admin-created; primary mod excluded) gets **3 months Pro+** at signup —
   same entitlements as Pro, assigned once via `proTrialEndsAt`, never
   backfilled on later login for existing accounts. Subscribe from day one
-  via Profile → Plan (Stripe Checkout: monthly or yearly). Free users get
+  via Profile → Plan → **Upgrade to Pro** (Stripe Checkout: monthly or
+  yearly). A **Free / Pro / Pro+** badge shows under Taxation Hub in the
+  sidebar and on the Driver Hub app picker. Paid Pro users can **Cancel
+  subscription** (`POST /billing/cancel`) to stop renewal while keeping Pro
+  until `currentPeriodEnd`, or **Keep Pro renewing** (`POST /billing/resume`);
+  Manage billing still opens the Stripe Customer Portal. Free users get
   **one** soft Pro upgrade prompt per calendar month after using **half**
   their free uploads (8 of 15); hard `402` still applies at the cap. After
   the trial ends, `/alerts` soft-notifies to update to a paid plan; the

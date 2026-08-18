@@ -572,6 +572,47 @@ button.title-hub-logout:hover {
 }
 .sidebar-brand img { width: 30px; height: 30px; }
 .brand-signed-in { flex-basis: 100%; font-style: italic; font-weight: 500; font-size: 0.72rem; color: var(--text-dim); margin-top: 2px; }
+.hub-plan-badge {
+  flex-basis: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--font-ui, inherit);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text-dim);
+}
+.hub-plan-badge.plan-free {
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.hub-plan-badge.plan-pro {
+  color: #1a1205;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.hub-plan-badge.plan-pro-plus {
+  color: #e8f0ff;
+  background: rgba(59, 130, 246, 0.28);
+  border-color: rgba(96, 165, 250, 0.55);
+}
+.title-hub-plan-row {
+  margin: 0 0 10px;
+  min-height: 1.4em;
+}
+.title-hub-plan-row .hub-plan-badge {
+  flex-basis: auto;
+  margin-top: 0;
+  font-size: 0.78rem;
+}
 .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-btn {
   text-align: left;

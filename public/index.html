@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=snapshot-pie-label-size-7" />
+    <link rel="stylesheet" href="./styles.css?v=plan-badge-billing-1" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or a coming-soon app -->
@@ -79,6 +79,9 @@
         </div>
         <div id="title-hub-picker" class="title-hub-picker hidden" aria-label="Choose an app">
           <h1 class="title-screen-headline">Welcome back</h1>
+          <p class="title-hub-plan-row">
+            <span id="title-hub-plan-badge" class="hub-plan-badge hidden" aria-live="polite"></span>
+          </p>
           <p class="title-screen-sub">
             Signed in as <strong id="title-hub-username">—</strong>. Open Taxation Hub now — more Driver Hub apps are on the way and will use this same login when ready.
           </p>
@@ -108,6 +111,7 @@
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
           <span>Taxation<span class="brand-hub">Hub</span></span>
+          <span id="sidebar-plan-badge" class="hub-plan-badge hidden" aria-live="polite"></span>
         </div>
         <nav class="sidebar-nav">
           <button class="nav-btn" data-view="profile">Profile</button>
@@ -511,10 +515,12 @@
                 <p id="billing-status" class="muted span-2">Loading plan…</p>
                 <p id="billing-uploads" class="muted span-2"></p>
                 <div class="span-2 form-actions" id="billing-actions">
-                  <button type="button" class="btn primary" id="billing-upgrade">Choose Pro plan</button>
+                  <button type="button" class="btn primary" id="billing-upgrade">Upgrade to Pro</button>
+                  <button type="button" class="btn secondary small hidden" id="billing-cancel">Cancel subscription</button>
+                  <button type="button" class="btn secondary small hidden" id="billing-resume">Keep Pro renewing</button>
                   <button type="button" class="btn secondary small hidden" id="billing-manage">Manage billing</button>
                 </div>
-                <p class="muted span-2" id="billing-price-hint">Pro is $5/month or $60/year.</p>
+                <p class="muted span-2" id="billing-price-hint">Pro is $5/month or $60/year (same full access as Pro+).</p>
                 <p id="billing-message" class="muted span-2" role="status"></p>
               </div>
               <div class="profile-security form-grid">
