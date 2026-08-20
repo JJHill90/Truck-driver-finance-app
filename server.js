@@ -57,6 +57,11 @@ const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
 const {
+  extractTravelAllowance,
+  applyTravelAllowanceToEntry,
+} = require("./lib/travel-allowance-extract");
+const { summariseOvernightDays } = require("./lib/overnight-days");
+const {
   extractReceiptData,
   mergeDetectedTotals,
   normalizeOcrResult,
@@ -106,6 +111,38 @@ function applyActiveCarWorkUse(records, body) {
   body.workUsePercent = pct;
   body.workUseFromCarProfile = true;
   return body;
+}
+
+/**
+ * Persist travel / overnight allowance from confirm payload or OCR snapshot
+ * onto an income entry (storage.addIncome is verbatim and ignores these fields).
+ */
+function attachTravelAllowanceToIncome(entry, payload = {}, receipt = null) {
+  if (!entry) return entry;
+  const payloadAmt = payload.travelAllowanceAmount;
+  const payloadDays = payload.overnightDays;
+  const hasPayloadAmt = payloadAmt != null && payloadAmt !== "" && Number(payloadAmt) > 0;
+  const hasPayloadDays = payloadDays != null && payloadDays !== "" && Number(payloadDays) > 0;
+  if (hasPayloadAmt || hasPayloadDays) {
+    applyTravelAllowanceToEntry(entry, {
+      travelAllowanceAmount: hasPayloadAmt ? payloadAmt : undefined,
+      overnightDays: hasPayloadDays ? payloadDays : undefined,
+      daysSource: payload.overnightDaysSource || "confirm",
+    });
+    return entry;
+  }
+  const ta =
+    (receipt && receipt.ocrResult && receipt.ocrResult.travelAllowance) ||
+    (payload && payload.travelAllowance) ||
+    null;
+  if (ta && (ta.detected || Number(ta.amount) > 0 || Number(ta.overnightDays) > 0)) {
+    applyTravelAllowanceToEntry(entry, {
+      amount: ta.amount,
+      overnightDays: ta.overnightDays,
+      daysSource: ta.daysSource || "ocr",
+    });
+  }
+  return entry;
 }
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -1437,7 +1474,20 @@ api.get("/forecast", (req, res) => {
     projectedIncome: req.query.projectedIncome,
     projectedDeductions: req.query.projectedDeductions,
   };
-  res.json(buildForecast(records, records.profile, manual));
+  const forecast = buildForecast(records, records.profile, manual);
+  const fy =
+    (req.query.fy && String(req.query.fy)) ||
+    (records.profile && records.profile.financialYear) ||
+    forecast.financialYear;
+  forecast.overnightDays = summariseOvernightDays(records, records.profile, fy);
+  res.json(forecast);
+});
+
+/** Overnight / travel-allowance days claimed vs FY length (planning snapshot). */
+api.get("/overnight-days", (req, res) => {
+  const records = getActiveRecords(req);
+  const fy = (req.query.fy && String(req.query.fy)) || undefined;
+  res.json(summariseOvernightDays(records, records.profile, fy));
 });
 
 // --- Billing / freemium -------------------------------------------------
@@ -1688,6 +1738,7 @@ api.post("/income", (req, res) => {
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
+  attachTravelAllowanceToIncome(entry, body, null);
   persist(req);
   res.json({ entry });
 });
@@ -1918,6 +1969,13 @@ api.post("/receipts/scan", async (req, res, next) => {
         ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
       }
       if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
+      // Snapshot Travel / Overnight / LAFHA from OCR text for overnight-days forecast.
+      ocrResult.travelAllowance = extractTravelAllowance(ocrResult, {
+        date: ocrResult.date,
+        financialYear:
+          (records.profile && records.profile.financialYear) ||
+          getFinancialYearForDate(ocrResult.date || new Date().toISOString().slice(0, 10)),
+      });
     } else if (ocrResult.suggestedCategory) {
       ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
     }
@@ -2096,6 +2154,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     if (existing && isDeleted(existing)) {
       restoreEntry(records, "income", existing.id, { username: sessionUsername(req) });
       existing = updateIncome(records, existing.id, { ...payload, receiptId: receipt.id }) || existing;
+      attachTravelAllowanceToIncome(existing, payload, receipt);
       rememberVendor(records, {
         name: payload.entity || payload.vendor || payload.payer || existing.entity,
         abn: payload.vendorAbn || payload.abn || existing.vendorAbn,
@@ -2121,6 +2180,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     }
     if (existing && !isDeleted(existing)) {
       const entry = updateIncome(records, existing.id, { ...payload, receiptId: receipt?.id || null }) || existing;
+      attachTravelAllowanceToIncome(entry, payload, receipt);
       if (receipt) {
         receipt.purpose = "income";
         receipt.linkedIncomeId = entry.id;
@@ -2142,6 +2202,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     }
 
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
+    attachTravelAllowanceToIncome(entry, payload, receipt);
     rememberVendor(records, {
       name: payload.entity || payload.vendor || payload.payer || entry.entity,
       abn: payload.vendorAbn || payload.abn || entry.vendorAbn,

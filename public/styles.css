@@ -850,6 +850,81 @@ table.income-ledger .tag.tag-reconciled {
   .lafha-box .lafha-hero { grid-template-columns: 1fr; }
 }
 
+.overnight-days-box { margin-top: 14px; }
+.overnight-days-box .overnight-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.overnight-days-box .overnight-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.overnight-days-box .overnight-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.overnight-days-box .overnight-ratio {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.overnight-days-box .overnight-ratio span {
+  font-size: 0.95rem;
+  font-weight: 550;
+  color: var(--text-dim);
+}
+.overnight-days-box .overnight-meta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+.overnight-days-box .overnight-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.overnight-days-box .overnight-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+  max-width: 100%;
+}
+.overnight-days-box .overnight-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.overnight-days-box .overnight-stat {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.overnight-days-box .overnight-stat strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.overnight-days-box .overnight-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+@media (max-width: 720px) {
+  .overnight-days-box .overnight-stats { grid-template-columns: 1fr; }
+}
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
