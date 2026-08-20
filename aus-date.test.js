@@ -146,4 +146,22 @@ APPROVED 00
     });
     expect(resolved).toBe("2026-08-20");
   });
+
+  it("repairs month-digit OCR slips on any same-day thermal receipt (not just BP)", () => {
+    const now = new Date(2026, 7, 20, 21, 0, 0);
+    const text = `
+United Crestmead
+TAX INVOICE
+Total $55.00
+20/06/26 20:40
+APPROVED
+`;
+    const resolved = resolveDocumentDate({
+      ocrDate: "2026-06-20",
+      rawText: text,
+      purpose: "expense",
+      now,
+    });
+    expect(resolved).toBe("2026-08-20");
+  });
 });
