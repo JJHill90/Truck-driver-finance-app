@@ -224,7 +224,7 @@ accounts across restarts.
 
 The server creates **full-store backups** (accounts, ledgers, receipt files,
 history) under `data/backups/` once a day at **5:00 pm Australia/Sydney**
-(`BACKUP_AT=17:00`, `BACKUP_TIMEZONE=Australia/Sydney`; keep 14). Primary mod
+(`BACKUP_AT=17:00`, `BACKUP_TIMEZONE=Australia/Sydney`; keep 5 on Render / default 7). Primary mod
 can also trigger, download or restore from **Profile → Primary mod → Data
 backups**. Keep that tab open around 5pm and today’s archive downloads to your
 computer automatically.
