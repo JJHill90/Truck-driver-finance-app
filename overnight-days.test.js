@@ -56,7 +56,7 @@ describe("summariseOvernightDays", () => {
     expect(summary.projectedYearEndDays).toBeGreaterThanOrEqual(7);
   });
 
-  it("estimates LAFHA income rows from amount ÷ meal rate", () => {
+  it("estimates dedicated allowance_travel rows from amount ÷ meal rate", () => {
     const summary = summariseOvernightDays(
       {
         income: [
@@ -75,5 +75,26 @@ describe("summariseOvernightDays", () => {
     );
     expect(summary.daysClaimed).toBeGreaterThan(0);
     expect(summary.entryCount).toBe(1);
+  });
+
+  it("does not treat salary payslips as full-gross travel from description alone", () => {
+    const summary = summariseOvernightDays(
+      {
+        income: [
+          {
+            id: "pay",
+            date: "2025-10-01",
+            type: "salary_wages",
+            amount: 1900,
+            grossTotal: 2540,
+            description: "Week 1 Travel Allowance mentioned",
+          },
+        ],
+      },
+      {},
+      "2025-26"
+    );
+    expect(summary.daysClaimed).toBe(0);
+    expect(summary.entryCount).toBe(0);
   });
 });

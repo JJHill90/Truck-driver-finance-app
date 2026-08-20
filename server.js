@@ -1738,6 +1738,7 @@ api.post("/income", (req, res) => {
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
+  attachTravelAllowanceToIncome(entry, body, null);
   persist(req);
   res.json({ entry });
 });
