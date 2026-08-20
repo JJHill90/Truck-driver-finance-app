@@ -278,6 +278,30 @@ describe("canonical vendor names from OCR junk", () => {
     expect(hit).toBeNull();
   });
 
+  it("keeps BP Archerfield site name from header / ABN", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "TAX INVOICE",
+      text: "BP Archerfield\nBoundary Rd, Rocklea\nABN 66 600 817 178\nTAX INVOICE\nTotal $16.90",
+      abn: "66600817178",
+    });
+    expect(hit.name).toBe("BP Archerfield");
+  });
+
+  it("does not let ABN memory overwrite BP Archerfield with an unrelated Pty Ltd name", () => {
+    const ocr = {
+      vendor: "TAX INVOICE",
+      vendorAbn: "66 600 817 178",
+      rawText:
+        "BP Archerfield\nBoundary Rd, Rocklea, QLD 4106\nRampage Retail Pty Ltd\nABN 66 600 817 178\nTAX INVOICE\nTotal $16.90\nDEBIT 16.90",
+    };
+    const vendors = [
+      { id: "v1", name: "Rampage Retail Pty Ltd", abn: "66600817178", defaultCategory: "meals" },
+    ];
+    enrichOcrFromVendors(ocr, vendors, "expense");
+    expect(ocr.vendor).toBe("BP Archerfield");
+    expect(ocr.vendorCanonical.name).toMatch(/^BP/);
+  });
+
   it("enrichOcrFromVendors rewrites junk vendor to 7-Eleven", () => {
     const ocr = {
       vendor: "TAX INVOICE",
