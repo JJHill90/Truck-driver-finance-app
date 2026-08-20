@@ -261,6 +261,8 @@
             breakdown: data.componentBreakdown || [],
             compliance: data.compliance || null,
             payPeriod: data.payPeriod || null,
+            travelAllowance:
+              (data.ocrResult && data.ocrResult.travelAllowance) || data.travelAllowance || null,
             vendorMatch: ocr.vendorMatch || null,
             categorySource: ocr.categorySource || null,
             suggestedCategory: ocr.suggestedCategory || null,
@@ -406,8 +408,29 @@
         </div>`;
     }
 
+    let travelHtml = "";
+    const ta = data.travelAllowance;
+    if (ta && (ta.detected || Number(ta.amount) > 0 || Number(ta.overnightDays) > 0)) {
+      const amt =
+        ta.amount != null
+          ? new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(ta.amount) || 0)
+          : "—";
+      const days = ta.overnightDays != null ? `${ta.overnightDays} night${Number(ta.overnightDays) === 1 ? "" : "s"}` : "—";
+      const src =
+        ta.daysSource === "payslip_days"
+          ? "from payslip day count"
+          : ta.daysSource === "amount_div_rate"
+            ? `estimated ÷ $${Number(ta.ratePerDay || 0).toFixed(2)}/day ATO meal rate`
+            : "";
+      travelHtml = `<div class="enh-section enh-travel-allowance">
+          <h4>Travel / overnight allowance</h4>
+          <p class="muted">${amt}${ta.overnightDays != null ? ` · ${esc(days)}` : ""}${src ? ` · ${esc(src)}` : ""}</p>
+          <p class="muted">Saved with this payslip for the overnight-days forecast (claimed nights vs FY length).</p>
+        </div>`;
+    }
+
     const enlargeLabel = data.isPdf ? "Open scanned document" : "Enlarge scanned image";
-    wrap.innerHTML = `${vendorHtml}${payPeriodHtml}${breakdownHtml}${complianceHtml}
+    wrap.innerHTML = `${vendorHtml}${payPeriodHtml}${travelHtml}${breakdownHtml}${complianceHtml}
       <button type="button" class="btn secondary enh-enlarge">${enlargeLabel}</button>`;
     return wrap;
   }
@@ -441,6 +464,35 @@
     }
   }
 
+  /** Travel / overnight allowance fields on income scan confirm. */
+  function ensureIncomeTravelFields(box) {
+    if (!box || latest?.purpose !== "income") return;
+    const form = box.querySelector(".scan-confirm-form");
+    if (!form) return;
+    let wrap = box.querySelector("#income-confirm-travel-wrap");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.id = "income-confirm-travel-wrap";
+      wrap.className = "span-2 enh-travel-fields";
+      wrap.innerHTML = `
+        <label>Travel / overnight allowance ($)
+          <input type="number" id="income-confirm-travel-amount" step="0.01" min="0" placeholder="e.g. 640.00" />
+        </label>
+        <label>Overnight days claimed
+          <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 5" />
+        </label>
+        <p class="muted" style="margin:0">Optional — pulled from the payslip when Travel/Overnight/LAFHA appears. Used in Forecast for nights claimed vs FY days.</p>`;
+      form.appendChild(wrap);
+    }
+    const ta = latest && latest.travelAllowance;
+    const amtEl = wrap.querySelector("#income-confirm-travel-amount");
+    const daysEl = wrap.querySelector("#income-confirm-overnight-days");
+    if (ta && amtEl && !amtEl.value && Number(ta.amount) > 0) amtEl.value = String(ta.amount);
+    if (ta && daysEl && !daysEl.value && Number(ta.overnightDays) > 0) {
+      daysEl.value = String(ta.overnightDays);
+    }
+  }
+
   /** Keep expense confirm vendor/ABN in sync with tighter ABN pairing. */
   function syncExpenseAbnFields(box) {
     if (!box || latest?.purpose !== "expense") return;
@@ -464,6 +516,7 @@
     if (!latest || !box) return;
     if (!box.querySelector(".scan-confirm")) return;
     ensureIncomeAbnField(box);
+    ensureIncomeTravelFields(box);
     syncExpenseAbnFields(box);
     if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
       window.haulageApplyProfilePresets({ forceWorkUse: false });
@@ -475,7 +528,7 @@
     box.appendChild(buildPanel(latest));
   }
 
-  // Fold income confirm ABN into the approve payload (app.js omits it).
+  // Fold income confirm ABN + travel allowance into the approve payload (app.js omits them).
   function patchIncomeConfirmPayload() {
     const orig = window.readIncomeScanConfirmPayload;
     if (typeof orig !== "function" || orig.__enhAbnPatched) return;
@@ -486,6 +539,29 @@
       if (abn) {
         payload.vendorAbn = abn;
         payload.abn = abn;
+      }
+      const travelAmtEl = document.getElementById("income-confirm-travel-amount");
+      const overnightEl = document.getElementById("income-confirm-overnight-days");
+      const travelAmt = travelAmtEl && travelAmtEl.value !== "" ? Number(travelAmtEl.value) : null;
+      const overnightDays = overnightEl && overnightEl.value !== "" ? Number(overnightEl.value) : null;
+      if (Number.isFinite(travelAmt) && travelAmt > 0) payload.travelAllowanceAmount = travelAmt;
+      if (Number.isFinite(overnightDays) && overnightDays > 0) {
+        payload.overnightDays = Math.round(overnightDays);
+        payload.overnightDaysSource = "confirm";
+      }
+      if (
+        !payload.travelAllowanceAmount &&
+        !payload.overnightDays &&
+        latest &&
+        latest.purpose === "income" &&
+        latest.travelAllowance
+      ) {
+        const ta = latest.travelAllowance;
+        if (Number(ta.amount) > 0) payload.travelAllowanceAmount = Number(ta.amount);
+        if (Number(ta.overnightDays) > 0) {
+          payload.overnightDays = Math.round(Number(ta.overnightDays));
+          payload.overnightDaysSource = ta.daysSource || "ocr";
+        }
       }
       return payload;
     }
@@ -5738,6 +5814,130 @@
   }
 })();
 
+/* --- Overnight / travel-allowance days vs FY (Forecast snapshot) -----------
+ * Accumulates nights from scanned payslips (Travel/Overnight/LAFHA $ ÷ rate
+ * or explicit day counts) and shows claimed vs days in the financial year.
+ */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+  }
+
+  function selectedFy() {
+    try {
+      const sel = document.getElementById("fy-select");
+      if (sel && sel.value) return sel.value;
+      if (typeof state !== "undefined" && state.financialYear) return state.financialYear;
+    } catch {
+      /* ignore */
+    }
+    return "";
+  }
+
+  function renderOvernightBox(data) {
+    const el = document.getElementById("forecast-overnight-box");
+    if (!el || !data) return;
+    const claimed = Number(data.daysClaimed) || 0;
+    const total = Number(data.daysInFy) || 365;
+    const elapsed = Number(data.daysElapsed) || 0;
+    const projected = Number(data.projectedYearEndDays) || claimed;
+    const pct = total > 0 ? Math.min(100, (claimed / total) * 100) : 0;
+    const barPct = Math.max(pct, claimed > 0 ? 2 : 0);
+
+    el.innerHTML = `
+      <div class="overnight-card">
+        <h3 class="overnight-title">Overnight / travel allowance days</h3>
+        <div class="overnight-hero">
+          <div class="overnight-ratio">${claimed} <span>of ${total} FY days</span></div>
+          <p class="overnight-meta">${esc(data.determination || "ATO")} · ${money(data.ratePerDay)}/day meal rate · FY ${esc(data.financialYear || "—")}</p>
+        </div>
+        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as overnight travel allowance">
+          <i style="width:${barPct.toFixed(2)}%"></i>
+        </div>
+        <div class="overnight-stats">
+          <div class="overnight-stat"><strong>${elapsed}</strong> FY days elapsed</div>
+          <div class="overnight-stat"><strong>${claimed}</strong> nights claimed YTD</div>
+          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY nights</div>
+        </div>
+        <p class="overnight-hint">${
+          data.entryCount
+            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with travel/overnight · ${money(data.amountPaid)} paid`
+            : "Scan payslips that list Travel, Overnight or LAFHA allowance — nights are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day count."
+        }</p>
+        <p class="overnight-hint">${esc(data.note || "")}</p>
+      </div>`;
+  }
+
+  async function refreshFromApi() {
+    const el = document.getElementById("forecast-overnight-box");
+    if (!el) return;
+    try {
+      const fy = selectedFy();
+      const q = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+      const res = await fetch(`${API}/overnight-days${q}`, { credentials: "same-origin" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not load overnight days");
+      renderOvernightBox(data);
+    } catch (err) {
+      el.innerHTML = `<p class="muted">${esc(err.message || "Could not load overnight days.")}</p>`;
+    }
+  }
+
+  function patchForecastFetch() {
+    const orig = window.fetch;
+    if (!orig || orig.__enhOvernightPatched) return;
+    function wrapped(...args) {
+      return orig.apply(this, args).then((res) => {
+        try {
+          const url = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url) || "";
+          if (/\/api\/haulage\/forecast\b/.test(String(url)) && res.ok) {
+            res
+              .clone()
+              .json()
+              .then((data) => {
+                if (data && data.overnightDays) renderOvernightBox(data.overnightDays);
+              })
+              .catch(() => {});
+          }
+        } catch {
+          /* ignore */
+        }
+        return res;
+      });
+    }
+    wrapped.__enhOvernightPatched = true;
+    window.fetch = wrapped;
+  }
+
+  function start() {
+    if (!document.getElementById("forecast-overnight-box")) return;
+    patchForecastFetch();
+    void refreshFromApi();
+    document.getElementById("fy-select")?.addEventListener("change", () => void refreshFromApi());
+    document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
+      btn.addEventListener("click", () => setTimeout(() => void refreshFromApi(), 200));
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
 /* --- Title-case a few dynamic headings rendered by app.js ------------------
  * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
  * section headings are corrected here after each render.
@@ -6079,7 +6279,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for overnight meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for overnight meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid. When a payslip lists Travel or Overnight allowance, that figure (and estimated nights) is saved with the income row for the Forecast overnight-days snapshot.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
@@ -6102,6 +6302,7 @@
       body: [
         "Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
         "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
+        "Overnight / travel allowance days are snapshotted from each payslip or remittance scan when Travel, Overnight or LAFHA appears. The bar shows nights claimed so far versus days in the financial year (for example 51 of 365) so you can plan EOFY travel claims with prior knowledge of how many nights you’ve already been paid for.",
       ],
     },
     profile: {
@@ -7506,6 +7707,12 @@
           )}" /></label>
           <label>GST ($)<input type="number" id="enh-await-gst" step="0.01" min="0" value="${esc(
             o.gstAmount ?? o.gst ?? 0
+          )}" /></label>
+          <label>Travel / overnight ($)<input type="number" id="enh-await-travel" step="0.01" min="0" value="${esc(
+            (o.travelAllowance && o.travelAllowance.amount) || ""
+          )}" /></label>
+          <label>Overnight days<input type="number" id="enh-await-overnight-days" step="1" min="0" max="31" value="${esc(
+            (o.travelAllowance && o.travelAllowance.overnightDays) || ""
           )}" /></label>`
         : `
           <label>Vendor<input type="text" id="enh-await-entity" value="${esc(entity)}" /></label>
@@ -7560,6 +7767,15 @@
                 netPay: amt,
                 type: o.suggestedIncomeType || o.type || "salary_wages",
                 description: document.getElementById("enh-await-desc")?.value || o.description || "",
+                travelAllowanceAmount: (() => {
+                  const n = Number(document.getElementById("enh-await-travel")?.value);
+                  return Number.isFinite(n) && n > 0 ? n : undefined;
+                })(),
+                overnightDays: (() => {
+                  const n = Number(document.getElementById("enh-await-overnight-days")?.value);
+                  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+                })(),
+                overnightDaysSource: "confirm",
               }
             : {
                 date: document.getElementById("enh-await-date")?.value || date,

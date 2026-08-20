@@ -850,6 +850,78 @@ table.income-ledger .tag.tag-reconciled {
   .lafha-box .lafha-hero { grid-template-columns: 1fr; }
 }
 
+.overnight-days-box { margin-top: 14px; }
+.overnight-days-box .overnight-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border, #d5dbe7);
+  border-radius: 8px;
+  background: linear-gradient(165deg, rgba(20, 48, 86, 0.04), rgba(212, 160, 23, 0.06));
+}
+.overnight-days-box .overnight-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--navy, #143056);
+}
+.overnight-days-box .overnight-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.overnight-days-box .overnight-ratio {
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--navy, #143056);
+}
+.overnight-days-box .overnight-ratio span {
+  font-size: 0.95rem;
+  font-weight: 550;
+  color: var(--muted, #5a6578);
+}
+.overnight-days-box .overnight-meta {
+  font-size: 0.78rem;
+  color: var(--muted, #5a6578);
+  margin: 0;
+}
+.overnight-days-box .overnight-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(20, 48, 86, 0.12);
+  overflow: hidden;
+}
+.overnight-days-box .overnight-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #143056, #d4a017);
+  max-width: 100%;
+}
+.overnight-days-box .overnight-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.overnight-days-box .overnight-stat {
+  font-size: 0.78rem;
+}
+.overnight-days-box .overnight-stat strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--navy, #143056);
+}
+.overnight-days-box .overnight-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted, #5a6578);
+}
+@media (max-width: 720px) {
+  .overnight-days-box .overnight-stats { grid-template-columns: 1fr; }
+}
+
 /* Views */
 .view { display: none; }
 .view.active { display: block; animation: fade 0.15s ease; }
