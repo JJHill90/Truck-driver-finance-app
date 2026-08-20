@@ -73,7 +73,9 @@ services:
       - key: BACKUP_TIMEZONE
         value: Australia/Sydney
       - key: BACKUP_KEEP
-        value: "14"
+        value: "5"
+      - key: BACKUP_MIN_KEEP
+        value: "2"
       - key: BACKUP_NOTIFY_EMAIL
         sync: false
       - key: BACKUP_OFFSITE_DIR

@@ -2274,7 +2274,7 @@
           ? "Scheduler off"
           : `Daily ${status.scheduleAt || "17:00"} ${status.timezone || "Australia/Sydney"}`,
         status.nextRunLabel ? `next: ${status.nextRunLabel}` : null,
-        `keep ${status.keep || 14}`,
+        `keep ${status.keep || 7}`,
         status.s3Bucket ? `S3: ${status.s3Bucket}` : "S3 not set",
         status.offsiteDir ? "off-site dir set" : null,
       ].filter(Boolean);

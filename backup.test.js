@@ -6,6 +6,9 @@ const {
   createBackup,
   listBackups,
   pruneLocalBackups,
+  cleanupStalePartials,
+  prepareBackupSpace,
+  getBackupDir,
   getBackupFile,
   restoreBackup,
   getStatus,
@@ -13,6 +16,7 @@ const {
   shouldRunScheduledBackup,
   zonedParts,
   stopBackupScheduler,
+  INCLUDE_ENTRIES,
 } = require("./lib/backup");
 
 describe("data backups", () => {
@@ -90,6 +94,29 @@ describe("data backups", () => {
     const removed = pruneLocalBackups(1);
     expect(removed.length).toBe(1);
     expect(listBackups().length).toBe(1);
+  });
+
+  it("removes stale .partial files before creating a backup", async () => {
+    const dir = getBackupDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const stale = path.join(dir, "haulage-backup-20990101T000000Z-dead00.tar.gz.partial");
+    fs.writeFileSync(stale, "incomplete");
+    expect(cleanupStalePartials()).toContain(path.basename(stale));
+    expect(fs.existsSync(stale)).toBe(false);
+    await createBackup({ reason: "after-partial" });
+    expect(listBackups().length).toBe(1);
+  });
+
+  it("prepareBackupSpace prunes to leave a free slot before writing", async () => {
+    process.env.BACKUP_KEEP = "2";
+    await createBackup({ reason: "a" });
+    await createBackup({ reason: "b" });
+    expect(listBackups().length).toBe(2);
+    const space = prepareBackupSpace(
+      INCLUDE_ENTRIES.filter((n) => fs.existsSync(path.join(tmp, n)))
+    );
+    expect(listBackups().length).toBe(1);
+    expect(space.prunedForKeep.length).toBeGreaterThanOrEqual(1);
   });
 
   it("restores records from a backup after live data changes", async () => {

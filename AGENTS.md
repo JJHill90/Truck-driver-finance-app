@@ -169,7 +169,7 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   laptop accounts do not appear on Render.
 - **Full-store backups.** `lib/backup.js` writes daily `.tar.gz` archives of
   accounts, per-user JSON, receipts, history and support messages to
-  `data/backups/` (keeps `BACKUP_KEEP`, default 14). Clock-aligned scheduler
+  `data/backups/` (keeps `BACKUP_KEEP`, default 7; Render uses 5). Prunes old archives and stale `.partial` files before each run; retries once on disk-full. Clock-aligned scheduler
   defaults to **17:00 Australia/Sydney** (`BACKUP_AT`, `BACKUP_TIMEZONE`); if
   the process was down at 5pm it catch-ups once later that day. Flushes the
   in-memory records cache before each run. Primary mod can list / download /
