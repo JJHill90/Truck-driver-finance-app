@@ -266,8 +266,8 @@ describe("canonical vendor names from OCR junk", () => {
       vendor: "XqR7m",
       text: "XqR7m\n7 EIEVEN STORE 2145\nDIESEL\nTOTAL 80.00",
     });
-    expect(hit.name).toBe("7-Eleven");
-    expect(hit.source).toBe("raw_text");
+    expect(hit.name).toBe("7-Eleven Store 2145");
+    expect(hit.source).toBe("raw_text_site");
   });
 
   it("does not replace a plausible independent vendor with a brand later on the docket", () => {
@@ -287,6 +287,22 @@ describe("canonical vendor names from OCR junk", () => {
     expect(hit.name).toBe("BP Archerfield");
   });
 
+  it("keeps United Crestmead site name from the receipt header", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "TAX INVOICE",
+      text: "United Crestmead\nTAX INVOICE\nABN 11 222 333 444\nTotal $55.00",
+    });
+    expect(hit.name).toBe("United Crestmead");
+  });
+
+  it("keeps Shell Springfield site name from the receipt", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "Shell",
+      text: "Shell Springfield\nDiesel\nTOTAL 90.00",
+    });
+    expect(hit.name).toBe("Shell Springfield");
+  });
+
   it("does not let ABN memory overwrite BP Archerfield with an unrelated Pty Ltd name", () => {
     const ocr = {
       vendor: "TAX INVOICE",
@@ -300,6 +316,45 @@ describe("canonical vendor names from OCR junk", () => {
     enrichOcrFromVendors(ocr, vendors, "expense");
     expect(ocr.vendor).toBe("BP Archerfield");
     expect(ocr.vendorCanonical.name).toMatch(/^BP/);
+  });
+
+  it("uses printed receipt business name and blocks conflicting ABN memory for any chain", () => {
+    const ocr = {
+      vendor: "TAX INVOICE",
+      vendorAbn: "98 765 432 109",
+      rawText:
+        "Shell Springfield Lakes\nShell Australia Pty Ltd\nABN 98 765 432 109\nTAX INVOICE\nTotal $40.00",
+    };
+    const vendors = [
+      {
+        id: "v2",
+        name: "Shell Australia Pty Ltd",
+        abn: "98765432109",
+        defaultCategory: "fuel",
+      },
+    ];
+    enrichOcrFromVendors(ocr, vendors, "expense");
+    expect(ocr.vendor).toBe("Shell Springfield Lakes");
+    expect(ocr.receiptBusinessName).toMatch(/Shell Springfield/i);
+  });
+
+  it("prefers header trading name over bare Pty Ltd when no known chain matches", () => {
+    const { extractReceiptBusinessName, looksLikeLegalEntityName } = require("./lib/vendor-enrichment");
+    const text =
+      "Joe's Roadhouse\nJoe Transport Pty Ltd\nABN 12 345 678 901\nTAX INVOICE\nTotal $22.00";
+    expect(extractReceiptBusinessName(text)).toBe("Joe's Roadhouse");
+    expect(looksLikeLegalEntityName("Joe Transport Pty Ltd")).toBe(true);
+
+    const ocr = {
+      vendor: "Joe Transport Pty Ltd",
+      vendorAbn: "12 345 678 901",
+      rawText: text,
+    };
+    const vendors = [
+      { id: "v3", name: "Joe Transport Pty Ltd", abn: "12345678901", defaultCategory: "meals" },
+    ];
+    enrichOcrFromVendors(ocr, vendors, "expense");
+    expect(ocr.vendor).toBe("Joe's Roadhouse");
   });
 
   it("enrichOcrFromVendors rewrites junk vendor to 7-Eleven", () => {

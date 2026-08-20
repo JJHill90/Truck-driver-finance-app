@@ -251,8 +251,12 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   **Canonical chain names:** after OCR, enrichment rewrites junk/boilerplate
   vendor strings (e.g. `TAX INVOICE`, `7 EIEVEN`, random letters) to clean names
   like `7-Eleven` when the brand appears in the vendor field or receipt header —
-  without editing the verbatim OCR modules. Plausible independent names are left
-  alone.
+  without editing the verbatim OCR modules. **Site / trading names** printed on
+  the receipt (e.g. `BP Archerfield`, `United Crestmead`, `7-Eleven Store 2145`)
+  are kept; conflicting ABN memory (often a Pty Ltd legal entity) must not
+  overwrite them. When no known chain matches, the header business name is still
+  preferred over a bare Pty Ltd line. Plausible independent trading names are
+  left alone.
 - **Expense period filter (no visual tag).** Rows outside the selected
   day/week/month/year still get `out-of-period` and stay out of period totals;
   `enhancements.js` removes the “outside period” label so the ledger stays clean.
