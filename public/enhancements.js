@@ -2012,7 +2012,7 @@
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
       <p class="muted">Username (tell the driver if forgotten): <strong>${esc(username)}</strong> · ${lockBadge}</p>
-      <p class="muted admin-override-hint">Primary mod assist: reset login, edit profile/ledger mistakes, unlock/reconcile rows, and restore earlier full-page snapshots.</p>
+      <p class="muted admin-override-hint">Primary mod assist: reset login, edit profile/ledger mistakes, unlock/reconcile rows, move entries between expenses and income, and restore earlier full-page snapshots.</p>
 
       <div class="admin-section admin-assist-section">
         <h4>Plan (Free / Pro+)</h4>
@@ -2104,6 +2104,7 @@
           <div class="admin-ledger-actions">
             <button type="button" class="btn secondary small" data-admin-action="reconcile" data-admin-kind="income">Reconcile selected</button>
             <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="income">Unlock selected</button>
+            <button type="button" class="btn secondary small" data-admin-action="move" data-admin-kind="income">Move to expenses</button>
             <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="income">Force remove</button>
           </div>
         </div>
@@ -2119,6 +2120,7 @@
           <div class="admin-ledger-actions">
             <button type="button" class="btn secondary small" data-admin-action="reconcile" data-admin-kind="expense">Reconcile selected</button>
             <button type="button" class="btn secondary small" data-admin-action="unreconcile" data-admin-kind="expense">Unlock selected</button>
+            <button type="button" class="btn secondary small" data-admin-action="move" data-admin-kind="expense">Move to income</button>
             <button type="button" class="btn danger small" data-admin-action="soft-delete" data-admin-kind="expense">Force remove</button>
           </div>
         </div>
@@ -2194,6 +2196,13 @@
           );
           if (!ok) return;
         }
+        if (action === "move") {
+          const dest = kind === "expense" ? "income" : "expenses";
+          const ok = window.confirm(
+            `Move ${ids.length} ${kind} entr${ids.length === 1 ? "y" : "ies"} to ${dest} for ${username}?\n\nThe original row is soft-deleted (restorable). Linked receipts switch purpose.`
+          );
+          if (!ok) return;
+        }
         const result = await adminLedgerAction(username, kind, action, ids);
         if (!result) return;
         if (window.toast) {
@@ -2205,6 +2214,10 @@
             window.toast(`Restored ${result.restored || 0} ${kind} entr${(result.restored || 0) === 1 ? "y" : "ies"}`);
           } else if (action === "soft-delete") {
             window.toast(`Removed ${result.deleted || 0} ${kind} entr${(result.deleted || 0) === 1 ? "y" : "ies"}`);
+          } else if (action === "move") {
+            const n = result.moved || 0;
+            const dest = result.toType === "income" ? "income" : "expenses";
+            window.toast(`Moved ${n} entr${n === 1 ? "y" : "ies"} to ${dest}`);
           }
         }
         await openAdminUser(username);

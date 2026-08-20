@@ -50,6 +50,7 @@ const {
 } = require("./lib/driver-role-defaults");
 const recordsHistory = require("./lib/records-history");
 const adminAssist = require("./lib/admin-assist");
+const { moveEntries } = require("./lib/ledger-move");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
@@ -938,6 +939,36 @@ api.post("/admin/users/:username/:type(expenses|income)/soft-delete", (req, res)
     persistTarget(loaded, { reason: "admin-soft-delete", actor: sessionUsername(req) });
   }
   res.json({ ok: true, deleted: deleted.length, entries: deleted, errors });
+});
+
+/** Admin: move selected expenses ↔ income (soft-delete source, create opposite row). */
+api.post("/admin/users/:username/:type(expenses|income)/move", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const fromType = req.params.type === "income" ? "income" : "expense";
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  if (!ids.length) {
+    res.status(400).json({ error: "Select one or more entries to move." });
+    return;
+  }
+  const result = moveEntries(loaded.records, fromType, ids, {
+    username: sessionUsername(req),
+  });
+  if (result.movedCount) {
+    persistTarget(loaded, { reason: "admin-move-entry", actor: sessionUsername(req) });
+  }
+  const toType = fromType === "expense" ? "income" : "expense";
+  res.json({
+    ok: true,
+    moved: result.movedCount,
+    toType,
+    entries: result.moved.map((m) => m.to),
+    errors: result.errors,
+  });
 });
 
 /** Admin: reconcile ledger rows on a driver's behalf. */
