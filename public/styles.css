@@ -855,15 +855,15 @@ table.income-ledger .tag.tag-reconciled {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid var(--border, #d5dbe7);
-  border-radius: 8px;
-  background: linear-gradient(165deg, rgba(20, 48, 86, 0.04), rgba(212, 160, 23, 0.06));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
 }
 .overnight-days-box .overnight-title {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 650;
-  color: var(--navy, #143056);
+  font-weight: 700;
+  color: var(--text);
 }
 .overnight-days-box .overnight-hero {
   display: flex;
@@ -873,31 +873,32 @@ table.income-ledger .tag.tag-reconciled {
 }
 .overnight-days-box .overnight-ratio {
   font-size: 1.55rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--navy, #143056);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .overnight-days-box .overnight-ratio span {
   font-size: 0.95rem;
   font-weight: 550;
-  color: var(--muted, #5a6578);
+  color: var(--text-dim);
 }
 .overnight-days-box .overnight-meta {
   font-size: 0.78rem;
-  color: var(--muted, #5a6578);
+  color: var(--text-dim);
   margin: 0;
 }
 .overnight-days-box .overnight-bar {
   height: 10px;
   border-radius: 999px;
-  background: rgba(20, 48, 86, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 .overnight-days-box .overnight-bar > i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #143056, #d4a017);
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
   max-width: 100%;
 }
 .overnight-days-box .overnight-stats {
@@ -907,16 +908,18 @@ table.income-ledger .tag.tag-reconciled {
 }
 .overnight-days-box .overnight-stat {
   font-size: 0.78rem;
+  color: var(--text-dim);
 }
 .overnight-days-box .overnight-stat strong {
   display: block;
   font-size: 1rem;
-  color: var(--navy, #143056);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .overnight-days-box .overnight-hint {
   margin: 0;
   font-size: 0.72rem;
-  color: var(--muted, #5a6578);
+  color: var(--text-dim);
 }
 @media (max-width: 720px) {
   .overnight-days-box .overnight-stats { grid-template-columns: 1fr; }
