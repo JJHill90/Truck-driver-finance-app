@@ -116,4 +116,34 @@ describe("extractBestDocumentDate / resolveDocumentDate", () => {
     expect(resolved).toBe("2026-07-20");
     expect(financialYearForAusDate(resolved, NOW)).toBe("2026-27");
   });
+
+  it("does not treat bare TAX INVOICE as a strong date label", () => {
+    const text = `
+TAX INVOICE
+BP Archerfield
+Total $16.90
+Invoice date 20/08/26
+`;
+    const best = extractBestDocumentDate(text, "expense", new Date(2026, 7, 20));
+    expect(best.date).toBe("2026-08-20");
+    expect(best.rank).toBeGreaterThanOrEqual(75);
+  });
+
+  it("repairs OCR month 06→08 on a same-day thermal EFTPOS timestamp", () => {
+    const now = new Date(2026, 7, 20, 21, 0, 0); // 20 Aug 2026
+    const text = `
+BP Archerfield
+Total $16.90
+DEBIT 16.90
+20/06/26 20:56
+APPROVED 00
+`;
+    const resolved = resolveDocumentDate({
+      ocrDate: "2026-06-20",
+      rawText: text,
+      purpose: "expense",
+      now,
+    });
+    expect(resolved).toBe("2026-08-20");
+  });
 });

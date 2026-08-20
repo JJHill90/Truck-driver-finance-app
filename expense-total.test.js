@@ -212,3 +212,44 @@ describe("breakdown + refine pipeline", () => {
     expect(primary.label).toMatch(/sale total/i);
   });
 });
+
+describe("BP Archerfield-style GST vs DEBIT totals", () => {
+  const BP_RECEIPT = `
+BP Archerfield
+Boundary Rd, Rocklea, QLD 4106
+Rampage Retail Pty Ltd
+ABN 66 600 817 178
+TAX INVOICE
+1 HH GRILL FISH & SALA 16.90
+Total $ 16.90
+BPrewards 0.00
+DEBIT 16.90
+GST Amount 1.54
+nab EFTPOS
+20/08/26 20:56
+APPROVED 00
+`;
+
+  it("prefers TOTAL $16.90 on a clean BP docket", () => {
+    const pick = pickBestExpenseTotal({ ocrAmount: 16.9, rawText: BP_RECEIPT });
+    expect(pick.amount).toBe(16.9);
+  });
+
+  it("repairs TOTAL misread as GST when DEBIT corroborates", () => {
+    const degraded = BP_RECEIPT.replace("Total $ 16.90", "Total $ 1.54");
+    const pick = pickBestExpenseTotal({ ocrAmount: 1.54, rawText: degraded });
+    expect(pick.amount).toBe(16.9);
+    expect(pick.source).toMatch(/repaired|tender/i);
+  });
+
+  it("prefers DEBIT when OCR amount is GST and TOTAL label is missing", () => {
+    const noTotal = `
+BP Archerfield
+HH GRILL FISH & SALA 16.90
+DEBIT 16.90
+GST Amount 1.54
+`;
+    const pick = pickBestExpenseTotal({ ocrAmount: 1.54, rawText: noTotal });
+    expect(pick.amount).toBe(16.9);
+  });
+});
