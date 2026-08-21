@@ -57,17 +57,17 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
 - **Recent activity (dashboard).** Capped at the **10** newest expense/income uploads (by `createdAt`, then date) via `enhancements.js`; the panel sits below Allowance caps and LAFHA on the dashboard.
 - **Living Away from Home (LAFHA) box.** Dashboard panel
   (`#dashboard-lafha-box`) via `GET /lafha?financialYear=`
-  / `lib/lafha.js`. Truck-driver overnight meal rates are **FY-aware** via
+  / `lib/lafha.js`. Truck-driver LAFHA / travel meal rates are **FY-aware** via
   `lib/historical-rates.js` (TD 2025/4 → **$128/day** for 2025–26; TD 2026/4 →
   **$132.50/day** for 2026–27+, reused until the next TD). Salary bands and
   overtime meal caps follow the same determination. ATO updates these
   annually (income year), not every Jan/Jul. Paid Travel/LAFHA lines are
   detected on income. Income menu includes “Living Away from Home / Travel
   allowance” (the LAFHA summary box lives on the dashboard only).
-  **Overnight / LAFHA day counters** come from payslip Travel lines
+  **LAFHA day counters** come from payslip Travel lines
   (`lib/travel-allowance-extract.js` — prefers HOURS/DAYS, not the $ amount;
   Betts-style `Travel Allowance 7.00 $56.28 $393.96` → 7 days). Confirm UI
-  keeps Gross Pay / GST / Net Pay plus the overnight-days field (taxable /
+  keeps Gross Pay / GST / Net Pay plus the LAFHA-days field (taxable /
   amount / period clutter removed via `enhancements.js`). Dashboard shows
   claimed days; Forecast `#forecast-overnight-box` shows claimed vs FY length.
   `GET /overnight-days` and forecast **backfill** missing counters from linked

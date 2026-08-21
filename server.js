@@ -117,7 +117,7 @@ function applyActiveCarWorkUse(records, body) {
 }
 
 /**
- * Persist travel / overnight allowance from confirm payload or OCR snapshot
+ * Persist travel / LAFHA allowance from confirm payload or OCR snapshot
  * onto an income entry (storage.addIncome is verbatim and ignores these fields).
  */
 function attachTravelAllowanceToIncome(entry, payload = {}, receipt = null) {
@@ -1521,7 +1521,7 @@ api.get("/forecast", (req, res) => {
   res.json(forecast);
 });
 
-/** Overnight / travel-allowance days claimed vs FY length (planning snapshot). */
+/** LAFHA / Travel allowance days claimed vs FY length (planning snapshot). */
 api.get("/overnight-days", (req, res) => {
   const records = getActiveRecords(req);
   const fy = (req.query.fy && String(req.query.fy)) || undefined;
@@ -2011,7 +2011,7 @@ api.post("/receipts/scan", async (req, res, next) => {
         ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
       }
       if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
-      // Snapshot Travel / Overnight / LAFHA from OCR text for overnight-days forecast.
+      // Snapshot Travel / LAFHA from OCR text for LAFHA-days forecast.
       ocrResult.travelAllowance = extractTravelAllowance(ocrResult, {
         date: ocrResult.date,
         financialYear:

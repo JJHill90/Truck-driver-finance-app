@@ -424,9 +424,9 @@
               ? `estimated ÷ $${Number(ta.ratePerDay || 0).toFixed(2)}/day ATO meal rate`
               : "";
       travelHtml = `<div class="enh-section enh-travel-allowance">
-          <h4>Total allowances / overnight (LAFHA)</h4>
+          <h4>Travel / LAFHA allowance</h4>
           <p class="muted"><strong>${esc(days)}</strong>${src ? ` · ${esc(src)}` : ""}</p>
-          <p class="muted">Counter only (hours/days on the Travel/LAFHA line) — used on Dashboard and Forecast for nights claimed vs FY length.</p>
+          <p class="muted">Counter only (hours/days on the Travel/LAFHA line) — used on Dashboard and Forecast for LAFHA days claimed vs FY length.</p>
         </div>`;
     }
 
@@ -465,7 +465,7 @@
     }
   }
 
-  /** Travel / overnight allowance fields on income scan confirm. */
+  /** Travel / LAFHA allowance day fields on income scan confirm. */
   function ensureIncomeTravelFields(box) {
     if (!box || latest?.purpose !== "income") return;
     const form = box.querySelector(".scan-confirm-form");
@@ -476,10 +476,10 @@
       wrap.id = "income-confirm-travel-wrap";
       wrap.className = "span-2 enh-travel-fields";
       wrap.innerHTML = `
-        <label>Total allowances / overnight days (LAFHA)
+        <label>Living Away from Home days (LAFHA)
           <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 7" />
         </label>
-        <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for nights claimed.</p>`;
+        <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for LAFHA days claimed.</p>`;
       form.appendChild(wrap);
     } else {
       // Migrate older confirm markup that still showed the $ travel field.
@@ -489,14 +489,25 @@
         if (lab) lab.remove();
       }
       const daysLab = wrap.querySelector("label");
-      if (daysLab && !/total allowances|overnight days|lafha/i.test(daysLab.textContent || "")) {
+      if (daysLab && !/living away|lafha|total allowances/i.test(daysLab.textContent || "")) {
         const input = wrap.querySelector("#income-confirm-overnight-days");
         const val = input ? input.value : "";
         wrap.innerHTML = `
-          <label>Total allowances / overnight days (LAFHA)
+          <label>Living Away from Home days (LAFHA)
             <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 7" value="${esc(val)}" />
           </label>
-          <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for nights claimed.</p>`;
+          <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for LAFHA days claimed.</p>`;
+      } else if (daysLab && /overnight/i.test(daysLab.textContent || "")) {
+        // Relabel legacy "overnight" wording without rebuilding the input.
+        const input = wrap.querySelector("#income-confirm-overnight-days");
+        if (input) {
+          const val = input.value || "";
+          wrap.innerHTML = `
+            <label>Living Away from Home days (LAFHA)
+              <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 7" value="${esc(val)}" />
+            </label>
+            <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for LAFHA days claimed.</p>`;
+        }
       }
     }
     const ta = latest && latest.travelAllowance;
@@ -507,8 +518,8 @@
   }
 
   /**
-   * Declutter income scan confirm: keep Gross Pay, GST, Net Pay + overnight
-   * days. Hide Taxable / Period clutter (and detected-total Taxable chips).
+   * Declutter income scan confirm: keep Gross Pay, GST, Net Pay + LAFHA days.
+   * Hide Taxable / Period clutter (and detected-total Taxable chips).
    */
   function declutterIncomeConfirm(box) {
     if (!box || latest?.purpose !== "income") return;
@@ -668,7 +679,7 @@
     window.readIncomeScanConfirmPayload = wrapped;
   }
 
-  /** Manual income form: Net Pay is primary; sync hidden amount/taxable + overnight days. */
+  /** Manual income form: Net Pay is primary; sync hidden amount/taxable + LAFHA days. */
   function patchManualIncomeForm() {
     const form = document.getElementById("income-form");
     if (!form || form.__enhManualIncomePatched) return;
@@ -5814,7 +5825,7 @@
 })();
 
 /* --- Living Away from Home allowance box (dashboard) ---------------------
- * Shows ATO truck-driver overnight meal rates for the selected financial year
+ * Shows ATO truck-driver meal rates for the selected financial year
  * (TD 2025/4 → $128/day; TD 2026/4 → ~$132.50/day), salary band, plus any
  * Travel / LAFHA amounts recorded on income / scanned payslips.
  */
@@ -5894,7 +5905,7 @@
           </div>
         </div>
         <div class="lafha-row">
-          <span>Overnight / LAFHA days claimed <small class="muted">(hours/days counters from payslips)</small></span>
+          <span>LAFHA days claimed <small class="muted">(hours/days counters from payslips)</small></span>
           <span><strong>${claimed}</strong>${fyDays != null ? ` <small class="muted">of ${fyDays} FY days</small>` : ""}</span>
         </div>
         <div class="lafha-row">
@@ -5965,9 +5976,9 @@
   }
 })();
 
-/* --- Overnight / travel-allowance days vs FY (Forecast snapshot) -----------
- * Accumulates nights from scanned payslips (Travel/Overnight/LAFHA $ ÷ rate
- * or explicit day counts) and shows claimed vs days in the financial year.
+/* --- LAFHA / Travel allowance days vs FY (Forecast snapshot) --------------
+ * Accumulates days from scanned payslips (Travel/LAFHA $ ÷ rate or explicit
+ * day/hour counts) and shows claimed vs days in the financial year.
  */
 (function () {
   "use strict";
@@ -6009,23 +6020,23 @@
 
     el.innerHTML = `
       <div class="overnight-card">
-        <h3 class="overnight-title">Overnight / travel allowance days</h3>
+        <h3 class="overnight-title">Living Away from Home (LAFHA) days</h3>
         <div class="overnight-hero">
           <div class="overnight-ratio">${claimed} <span>of ${total} FY days</span></div>
           <p class="overnight-meta">${esc(data.determination || "ATO")} · ${money(data.ratePerDay)}/day meal rate · FY ${esc(data.financialYear || "—")}</p>
         </div>
-        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as overnight travel allowance">
+        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as Living Away from Home (LAFHA) allowance">
           <i style="width:${barPct.toFixed(2)}%"></i>
         </div>
         <div class="overnight-stats">
           <div class="overnight-stat"><strong>${elapsed}</strong> FY days elapsed</div>
-          <div class="overnight-stat"><strong>${claimed}</strong> nights claimed YTD</div>
-          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY nights</div>
+          <div class="overnight-stat"><strong>${claimed}</strong> LAFHA days claimed YTD</div>
+          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY LAFHA days</div>
         </div>
         <p class="overnight-hint">${
           data.entryCount
-            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with travel/overnight · ${money(data.amountPaid)} paid`
-            : "Scan payslips that list Travel, Overnight or LAFHA allowance — nights are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day count."
+            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with Travel/LAFHA · ${money(data.amountPaid)} paid`
+            : "Scan payslips that list Travel or Living Away from Home (LAFHA) allowance — days are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day/hour count."
         }</p>
         <p class="overnight-hint">${esc(data.note || "")}</p>
       </div>`;
@@ -6039,10 +6050,10 @@
       const q = fy ? `?fy=${encodeURIComponent(fy)}` : "";
       const res = await fetch(`${API}/overnight-days${q}`, { credentials: "same-origin" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load overnight days");
+      if (!res.ok) throw new Error(data.error || "Could not load LAFHA days");
       renderOvernightBox(data);
     } catch (err) {
-      el.innerHTML = `<p class="muted">${esc(err.message || "Could not load overnight days.")}</p>`;
+      el.innerHTML = `<p class="muted">${esc(err.message || "Could not load LAFHA days.")}</p>`;
     }
   }
 
@@ -6416,7 +6427,7 @@
       body: [
         "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
-        "Living Away from Home (LAFHA) shows the ATO truck-driver overnight meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
+        "Living Away from Home (LAFHA) shows the ATO truck-driver meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
     expenses: {
@@ -6430,7 +6441,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for overnight meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid. When a payslip lists Travel or Overnight allowance, that figure (and estimated nights) is saved with the income row for the Forecast overnight-days snapshot.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid. When a payslip lists Travel or Living Away from Home (LAFHA) allowance, that day/hour counter is saved with the income row for the Forecast LAFHA-days snapshot.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
@@ -6453,7 +6464,7 @@
       body: [
         "Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
         "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
-        "Overnight / travel allowance days are snapshotted from each payslip or remittance scan when Travel, Overnight or LAFHA appears. The bar shows nights claimed so far versus days in the financial year (for example 51 of 365) so you can plan EOFY travel claims with prior knowledge of how many nights you’ve already been paid for.",
+        "Living Away from Home (LAFHA) days are snapshotted from each payslip or remittance scan when Travel or LAFHA appears. The bar shows days claimed so far versus days in the financial year (for example 51 of 365) so you can plan EOFY travel claims with prior knowledge of how many LAFHA days you’ve already been paid for.",
       ],
     },
     profile: {
@@ -7856,7 +7867,7 @@
           <label>GST ($)<input type="number" id="enh-await-gst" step="0.01" min="0" value="${esc(
             o.gstAmount ?? o.gst ?? 0
           )}" /></label>
-          <label>Total allowances / overnight days (LAFHA)<input type="number" id="enh-await-overnight-days" step="1" min="0" max="31" value="${esc(
+          <label>Living Away from Home days (LAFHA)<input type="number" id="enh-await-overnight-days" step="1" min="0" max="31" value="${esc(
             (o.travelAllowance && o.travelAllowance.overnightDays) || ""
           )}" /></label>`
         : `
