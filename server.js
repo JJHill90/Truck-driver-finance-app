@@ -63,6 +63,7 @@ const {
 } = require("./lib/travel-allowance-extract");
 const { summariseOvernightDays } = require("./lib/overnight-days");
 const { backfillOvernightDays } = require("./lib/overnight-days-backfill");
+const { backfillIncomeDescriptions } = require("./lib/income-description-backfill");
 const {
   extractReceiptData,
   mergeDetectedTotals,
@@ -1414,6 +1415,9 @@ api.get("/driver-role-defaults", (req, res) => {
 
 api.get("/records", (req, res) => {
   const full = getRecords(req);
+  const descBackfill = backfillIncomeDescriptions(full);
+  const overnightBackfill = backfillOvernightDays(full);
+  if (descBackfill.updated > 0 || overnightBackfill.updated > 0) persist(req);
   const records = withActiveLedger(full);
   const activeIncome = records.income || [];
   const activeExpenses = records.expenses || [];
