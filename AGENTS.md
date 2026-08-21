@@ -72,6 +72,10 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   claimed days; Forecast `#forecast-overnight-box` shows claimed vs FY length.
   `GET /overnight-days` and forecast **backfill** missing counters from linked
   receipt OCR (`lib/overnight-days-backfill.js`) for existing payslips.
+  **Income descriptions** use company + pay period
+  (`Betts Transport, pay period 03/06/2026 to 09/06/2026`) via
+  `lib/income-labels.js`, rejecting OCR clutter like “Payslip” / “Facsimile”;
+  `GET /records` backfills older rows from receipt OCR when needed.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default
