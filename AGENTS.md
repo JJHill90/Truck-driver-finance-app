@@ -64,6 +64,14 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   annually (income year), not every Jan/Jul. Paid Travel/LAFHA lines are
   detected on income. Income menu includes “Living Away from Home / Travel
   allowance” (the LAFHA summary box lives on the dashboard only).
+  **Overnight / LAFHA day counters** come from payslip Travel lines
+  (`lib/travel-allowance-extract.js` — prefers HOURS/DAYS, not the $ amount;
+  Betts-style `Travel Allowance 7.00 $56.28 $393.96` → 7 days). Confirm UI
+  keeps Gross Pay / GST / Net Pay plus the overnight-days field (taxable /
+  amount / period clutter removed via `enhancements.js`). Dashboard shows
+  claimed days; Forecast `#forecast-overnight-box` shows claimed vs FY length.
+  `GET /overnight-days` and forecast **backfill** missing counters from linked
+  receipt OCR (`lib/overnight-days-backfill.js`) for existing payslips.
 - The API is mounted at `/api/haulage/*`; `public/app.js` hardcodes that base as
   `${window.location.origin}/api/haulage`, so open the UI via the server (not a
   `file://`) on the same origin as the API. If `fetch` fails, app.js’s default

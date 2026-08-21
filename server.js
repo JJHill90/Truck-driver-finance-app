@@ -62,6 +62,7 @@ const {
   applyTravelAllowanceToEntry,
 } = require("./lib/travel-allowance-extract");
 const { summariseOvernightDays } = require("./lib/overnight-days");
+const { backfillOvernightDays } = require("./lib/overnight-days-backfill");
 const {
   extractReceiptData,
   mergeDetectedTotals,
@@ -1510,6 +1511,8 @@ api.get("/forecast", (req, res) => {
     (req.query.fy && String(req.query.fy)) ||
     (records.profile && records.profile.financialYear) ||
     forecast.financialYear;
+  const backfilled = backfillOvernightDays(records);
+  if (backfilled.updated > 0) persist(req);
   forecast.overnightDays = summariseOvernightDays(records, records.profile, fy);
   res.json(forecast);
 });
@@ -1518,7 +1521,11 @@ api.get("/forecast", (req, res) => {
 api.get("/overnight-days", (req, res) => {
   const records = getActiveRecords(req);
   const fy = (req.query.fy && String(req.query.fy)) || undefined;
-  res.json(summariseOvernightDays(records, records.profile, fy));
+  const backfilled = backfillOvernightDays(records);
+  if (backfilled.updated > 0) persist(req);
+  const summary = summariseOvernightDays(records, records.profile, fy);
+  summary.backfill = backfilled;
+  res.json(summary);
 });
 
 // --- Billing / freemium -------------------------------------------------
