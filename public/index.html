@@ -157,19 +157,14 @@
             </div>
           </div>
           <div class="panel">
+            <div id="dashboard-overnight-box" class="overnight-days-box" aria-live="polite"></div>
+          </div>
+          <div class="panel">
             <div class="panel-header"><h2>Allowance caps</h2></div>
             <div id="allowance-caps"></div>
           </div>
-          <div class="panel">
-            <div class="panel-header"><h2>Living Away from Home allowance</h2></div>
-            <div id="dashboard-lafha-box" class="lafha-box">
-              <p class="muted">Loading LAFHA rates…</p>
-            </div>
-          </div>
-          <div class="panel" id="recent-activity-panel">
-            <div class="panel-header"><h2>Recent activity</h2></div>
-            <div id="recent-activity"></div>
-          </div>
+          <!-- Hidden sink so verbatim app.js renderRecentActivity does not throw -->
+          <div id="recent-activity" class="hidden" hidden aria-hidden="true"></div>
         </section>
 
         <!-- Expenses (general work receipts — scan / manual / ledger) -->
@@ -455,7 +450,7 @@
         <section id="view-forecast" class="view">
           <div class="panel">
             <div class="panel-header">
-              <h2>Financial forecast</h2>
+              <h2>Financial Forecast</h2>
               <div class="toggle-group">
                 <button type="button" class="btn secondary active" data-forecast-mode="realtime">Real-time</button>
                 <button type="button" class="btn secondary" data-forecast-mode="manual">Manual</button>
