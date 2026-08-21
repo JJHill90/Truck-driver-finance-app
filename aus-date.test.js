@@ -164,4 +164,39 @@ APPROVED
     });
     expect(resolved).toBe("2026-08-20");
   });
+
+  it("repairs OCR year 2028→2026 on S24 Banana-style Date: line (6 misread as 8)", () => {
+    const now = new Date(2026, 7, 21, 10, 0, 0); // 21 Aug 2026
+    const text = `
+TAX INVOICE
+S24 Banana (Convenience)
+Cnr Bowen & Charles Streets
+BANANA QLD 4702
+AUS
+Trans ID: OTR456C-OTR456C00-1787056989621
+Date: 18/08/2028
+Time: 22:43
+Tel: +61730974456
+ABN: 19638356466
+Serve: SARAH
+Total $24.48
+EFTPOS 24.48
+`;
+    expect(toIsoAusDate("18/08/2028", now)).toBe("2026-08-18");
+    expect(toIsoAusDate("2028-08-18", now)).toBe("2026-08-18");
+
+    const resolved = resolveDocumentDate({
+      ocrDate: "2028-08-18", // local guessDate has no year clamp
+      rawText: text,
+      purpose: "expense",
+      now,
+    });
+    expect(resolved).toBe("2026-08-18");
+    expect(financialYearForAusDate(resolved, now)).toBe("2026-27");
+  });
+
+  it("repairs two-digit year 28→2026 when OCR last digit slips 6→8", () => {
+    const now = new Date(2026, 7, 21);
+    expect(toIsoAusDate("18/08/28", now)).toBe("2026-08-18");
+  });
 });

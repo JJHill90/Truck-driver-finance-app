@@ -282,7 +282,10 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   OCR often grabs first. Confirm/save payloads are coerced the same way.
   Document years are clamped to **today − 20 … today + 1**; two-digit years
   outside that window (e.g. OCR `70` → 2070) are rejected so far-future FYs
-  are not created — the confirm date then falls back empty/today.
+  are not created — the confirm date then falls back empty/today. **Year-digit
+  OCR slips** on thermal print (especially `6↔8`, e.g. `18/08/2026` read as
+  `18/08/2028`) are repaired to the nearest plausible year that keeps the same
+  day/month when the OCR year is out of window or more than a day in the future.
 - **FY picker window (6 past / 3 future).** Top-bar / Profile / ledger FY
   dropdowns show **6 past + current + 3 future** Australian financial years
   (`lib/fy-window.js`; `enhancements.js` overrides verbatim `app.js` which
