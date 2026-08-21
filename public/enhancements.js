@@ -411,21 +411,22 @@
     let travelHtml = "";
     const ta = data.travelAllowance;
     if (ta && (ta.detected || Number(ta.amount) > 0 || Number(ta.overnightDays) > 0)) {
-      const amt =
-        ta.amount != null
-          ? new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(ta.amount) || 0)
+      const days =
+        ta.overnightDays != null
+          ? `${ta.overnightDays} day${Number(ta.overnightDays) === 1 ? "" : "s"} / hours`
           : "—";
-      const days = ta.overnightDays != null ? `${ta.overnightDays} night${Number(ta.overnightDays) === 1 ? "" : "s"}` : "—";
       const src =
         ta.daysSource === "payslip_days"
           ? "from payslip day count"
-          : ta.daysSource === "amount_div_rate"
-            ? `estimated ÷ $${Number(ta.ratePerDay || 0).toFixed(2)}/day ATO meal rate`
-            : "";
+          : ta.daysSource === "payslip_hours"
+            ? "from payslip hours counter"
+            : ta.daysSource === "amount_div_rate"
+              ? `estimated ÷ $${Number(ta.ratePerDay || 0).toFixed(2)}/day ATO meal rate`
+              : "";
       travelHtml = `<div class="enh-section enh-travel-allowance">
-          <h4>Travel / overnight allowance</h4>
-          <p class="muted">${amt}${ta.overnightDays != null ? ` · ${esc(days)}` : ""}${src ? ` · ${esc(src)}` : ""}</p>
-          <p class="muted">Saved with this payslip for the overnight-days forecast (claimed nights vs FY length).</p>
+          <h4>Total allowances / overnight (LAFHA)</h4>
+          <p class="muted"><strong>${esc(days)}</strong>${src ? ` · ${esc(src)}` : ""}</p>
+          <p class="muted">Counter only (hours/days on the Travel/LAFHA line) — used on Dashboard and Forecast for nights claimed vs FY length.</p>
         </div>`;
     }
 
@@ -475,22 +476,110 @@
       wrap.id = "income-confirm-travel-wrap";
       wrap.className = "span-2 enh-travel-fields";
       wrap.innerHTML = `
-        <label>Travel / overnight allowance ($)
-          <input type="number" id="income-confirm-travel-amount" step="0.01" min="0" placeholder="e.g. 640.00" />
+        <label>Total allowances / overnight days (LAFHA)
+          <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 7" />
         </label>
-        <label>Overnight days claimed
-          <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 5" />
-        </label>
-        <p class="muted" style="margin:0">Optional — pulled from the payslip when Travel/Overnight/LAFHA appears. Used in Forecast for nights claimed vs FY days.</p>`;
+        <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for nights claimed.</p>`;
       form.appendChild(wrap);
+    } else {
+      // Migrate older confirm markup that still showed the $ travel field.
+      const amtEl = wrap.querySelector("#income-confirm-travel-amount");
+      if (amtEl) {
+        const lab = amtEl.closest("label");
+        if (lab) lab.remove();
+      }
+      const daysLab = wrap.querySelector("label");
+      if (daysLab && !/total allowances|overnight days|lafha/i.test(daysLab.textContent || "")) {
+        const input = wrap.querySelector("#income-confirm-overnight-days");
+        const val = input ? input.value : "";
+        wrap.innerHTML = `
+          <label>Total allowances / overnight days (LAFHA)
+            <input type="number" id="income-confirm-overnight-days" step="1" min="0" max="31" placeholder="e.g. 7" value="${esc(val)}" />
+          </label>
+          <p class="muted" style="margin:0">Hours or days on the payslip Travel/LAFHA line (counter only — not the $ paid). Used on Dashboard and Forecast for nights claimed.</p>`;
+      }
     }
     const ta = latest && latest.travelAllowance;
-    const amtEl = wrap.querySelector("#income-confirm-travel-amount");
     const daysEl = wrap.querySelector("#income-confirm-overnight-days");
-    if (ta && amtEl && !amtEl.value && Number(ta.amount) > 0) amtEl.value = String(ta.amount);
     if (ta && daysEl && !daysEl.value && Number(ta.overnightDays) > 0) {
       daysEl.value = String(ta.overnightDays);
     }
+  }
+
+  /**
+   * Declutter income scan confirm: keep Gross Pay, GST, Net Pay + overnight
+   * days. Hide Taxable / Period clutter (and detected-total Taxable chips).
+   */
+  function declutterIncomeConfirm(box) {
+    if (!box || latest?.purpose !== "income") return;
+
+    box.querySelectorAll(".income-mini-row").forEach((row) => {
+      const span = row.querySelector("span");
+      if (!span) return;
+      const t = (span.textContent || "").trim();
+      if (/^taxable/i.test(t) || /^period$/i.test(t)) {
+        row.remove();
+        return;
+      }
+      if (/^gross total$/i.test(t)) span.textContent = "Gross Pay";
+      if (/^net pay$/i.test(t)) span.textContent = "Net Pay";
+      if (/^gst$/i.test(t)) span.textContent = "GST";
+    });
+
+    const relabel = (inputId, text) => {
+      const input = box.querySelector(`#${inputId}`);
+      const label = input && input.closest("label");
+      if (!label || !input) return;
+      const nodes = Array.from(label.childNodes);
+      for (const n of nodes) {
+        if (n.nodeType === Node.TEXT_NODE && String(n.textContent || "").trim()) {
+          n.textContent = text;
+          return;
+        }
+      }
+      label.insertBefore(document.createTextNode(text), input);
+    };
+
+    const hideInput = (inputId) => {
+      const input = box.querySelector(`#${inputId}`);
+      const label = input && input.closest("label");
+      if (label) label.style.display = "none";
+    };
+
+    hideInput("income-confirm-taxable");
+    relabel("income-confirm-gross", "Gross Pay ($)");
+    relabel("income-confirm-gst", "GST ($)");
+    relabel("income-confirm-amount", "Net Pay ($)");
+
+    // Keep taxable in sync with gross for the approve payload (field is hidden).
+    const grossEl = box.querySelector("#income-confirm-gross");
+    const taxableEl = box.querySelector("#income-confirm-taxable");
+    if (grossEl && taxableEl) {
+      const syncTaxable = () => {
+        taxableEl.value = grossEl.value;
+      };
+      if (!grossEl.__enhTaxableSync) {
+        grossEl.addEventListener("input", syncTaxable);
+        grossEl.__enhTaxableSync = true;
+      }
+      syncTaxable();
+    }
+
+    box.querySelectorAll(".detected-total-btn").forEach((btn) => {
+      const label = (btn.querySelector("span") && btn.querySelector("span").textContent) || "";
+      if (/taxable/i.test(label) || /^amount$/i.test(label.trim())) {
+        const li = btn.closest("li");
+        if (li) li.remove();
+      }
+      if (/^gross/i.test(label.trim())) {
+        const span = btn.querySelector("span");
+        if (span) span.textContent = "Gross Pay";
+      }
+      if (/^net/i.test(label.trim())) {
+        const span = btn.querySelector("span");
+        if (span) span.textContent = "Net Pay";
+      }
+    });
   }
 
   /** Keep expense confirm vendor/ABN in sync with tighter ABN pairing. */
@@ -517,6 +606,7 @@
     if (!box.querySelector(".scan-confirm")) return;
     ensureIncomeAbnField(box);
     ensureIncomeTravelFields(box);
+    declutterIncomeConfirm(box);
     syncExpenseAbnFields(box);
     if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
       window.haulageApplyProfilePresets({ forceWorkUse: false });
@@ -549,6 +639,15 @@
         payload.overnightDays = Math.round(overnightDays);
         payload.overnightDaysSource = "confirm";
       }
+      // Hidden taxable mirrors gross pay for the approve payload.
+      const grossEl = document.getElementById("income-confirm-gross");
+      if (grossEl && grossEl.value !== "") {
+        const g = Number(grossEl.value);
+        if (Number.isFinite(g)) {
+          payload.grossTotal = g;
+          payload.taxableIncome = g;
+        }
+      }
       if (
         !payload.travelAllowanceAmount &&
         !payload.overnightDays &&
@@ -557,7 +656,7 @@
         latest.travelAllowance
       ) {
         const ta = latest.travelAllowance;
-        if (Number(ta.amount) > 0) payload.travelAllowanceAmount = Number(ta.amount);
+        if (Number(ta.amount) > 31) payload.travelAllowanceAmount = Number(ta.amount);
         if (Number(ta.overnightDays) > 0) {
           payload.overnightDays = Math.round(Number(ta.overnightDays));
           payload.overnightDaysSource = ta.daysSource || "ocr";
@@ -567,6 +666,32 @@
     }
     wrapped.__enhAbnPatched = true;
     window.readIncomeScanConfirmPayload = wrapped;
+  }
+
+  /** Manual income form: Net Pay is primary; sync hidden amount/taxable + overnight days. */
+  function patchManualIncomeForm() {
+    const form = document.getElementById("income-form");
+    if (!form || form.__enhManualIncomePatched) return;
+    form.__enhManualIncomePatched = true;
+    form.addEventListener(
+      "submit",
+      () => {
+        const net = form.elements.netPay;
+        const amount = form.elements.amount;
+        const gross = form.elements.grossTotal;
+        const taxable = form.elements.taxableIncome;
+        if (net && amount && String(net.value || "").trim() !== "") {
+          amount.value = net.value;
+        } else if (amount && gross && String(gross.value || "").trim() !== "") {
+          amount.value = gross.value;
+        }
+        if (taxable) {
+          taxable.value =
+            (gross && gross.value) || (net && net.value) || (amount && amount.value) || "";
+        }
+      },
+      true
+    );
   }
 
   function observe(boxId, purpose) {
@@ -649,6 +774,7 @@
 
   function init() {
     patchIncomeConfirmPayload();
+    patchManualIncomeForm();
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
@@ -5726,7 +5852,7 @@
     return "";
   }
 
-  function renderBox(el, data) {
+  function renderBox(el, data, overnight) {
     if (!el || !data) return;
     const b = data.reasonableBreakdown || {};
     const paid = data.paid || {};
@@ -5739,6 +5865,8 @@
           : "none recorded yet";
     const det = data.determination || "ATO TD";
     const fy = data.financialYear || "—";
+    const claimed = overnight && Number(overnight.daysClaimed) > 0 ? Number(overnight.daysClaimed) : 0;
+    const fyDays = overnight && overnight.daysInFy != null ? Number(overnight.daysInFy) : null;
 
     const paidRows = (paid.rows || [])
       .slice(0, 5)
@@ -5766,7 +5894,11 @@
           </div>
         </div>
         <div class="lafha-row">
-          <span>Paid on payslips / income <small class="muted">(Travel / LAFHA lines)</small></span>
+          <span>Overnight / LAFHA days claimed <small class="muted">(hours/days counters from payslips)</small></span>
+          <span><strong>${claimed}</strong>${fyDays != null ? ` <small class="muted">of ${fyDays} FY days</small>` : ""}</span>
+        </div>
+        <div class="lafha-row">
+          <span>Paid on payslips / income <small class="muted">(Travel / LAFHA $)</small></span>
           <span><strong>${money(paid.totalPaid || 0)}</strong> · ${esc(paidPerDay)}</span>
         </div>
         ${
@@ -5781,12 +5913,18 @@
 
   async function refresh() {
     let data = null;
+    let overnight = null;
     try {
       const fy = selectedFy();
       const q = fy ? `?financialYear=${encodeURIComponent(fy)}` : "";
-      const res = await fetch(`${API}/lafha${q}`, { credentials: "same-origin" });
-      data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load LAFHA");
+      const oq = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+      const [lafhaRes, overnightRes] = await Promise.all([
+        fetch(`${API}/lafha${q}`, { credentials: "same-origin" }),
+        fetch(`${API}/overnight-days${oq}`, { credentials: "same-origin" }),
+      ]);
+      data = await lafhaRes.json();
+      if (!lafhaRes.ok) throw new Error(data.error || "Could not load LAFHA");
+      if (overnightRes.ok) overnight = await overnightRes.json();
     } catch (err) {
       for (const id of BOX_IDS) {
         const el = document.getElementById(id);
@@ -5795,7 +5933,7 @@
       return;
     }
     for (const id of BOX_IDS) {
-      renderBox(document.getElementById(id), data);
+      renderBox(document.getElementById(id), data, overnight);
     }
   }
 
@@ -7712,19 +7850,13 @@
       purpose === "income"
         ? `
           <label>Entity / company<input type="text" id="enh-await-entity" value="${esc(entity)}" /></label>
-          <label>Gross ($)<input type="number" id="enh-await-gross" step="0.01" min="0" value="${esc(
+          <label>Gross Pay ($)<input type="number" id="enh-await-gross" step="0.01" min="0" value="${esc(
             o.grossTotal ?? amount
-          )}" /></label>
-          <label>Taxable ($)<input type="number" id="enh-await-taxable" step="0.01" min="0" value="${esc(
-            o.taxableIncome ?? o.grossTotal ?? amount
           )}" /></label>
           <label>GST ($)<input type="number" id="enh-await-gst" step="0.01" min="0" value="${esc(
             o.gstAmount ?? o.gst ?? 0
           )}" /></label>
-          <label>Travel / overnight ($)<input type="number" id="enh-await-travel" step="0.01" min="0" value="${esc(
-            (o.travelAllowance && o.travelAllowance.amount) || ""
-          )}" /></label>
-          <label>Overnight days<input type="number" id="enh-await-overnight-days" step="1" min="0" max="31" value="${esc(
+          <label>Total allowances / overnight days (LAFHA)<input type="number" id="enh-await-overnight-days" step="1" min="0" max="31" value="${esc(
             (o.travelAllowance && o.travelAllowance.overnightDays) || ""
           )}" /></label>`
         : `
@@ -7741,8 +7873,8 @@
         <div class="form-grid scan-confirm-form">
           <label>Date<input type="date" id="enh-await-date" value="${esc(date)}" /></label>
           ${incomeFields}
-          <label>Amount ($)<input type="number" id="enh-await-amount" step="0.01" min="0" value="${esc(
-            amount
+          <label>${purpose === "income" ? "Net Pay ($)" : "Amount ($)"}<input type="number" id="enh-await-amount" step="0.01" min="0" value="${esc(
+            purpose === "income" ? o.netPay ?? amount : amount
           )}" required /></label>
           <label class="span-2">Description<input type="text" id="enh-await-desc" value="${esc(
             o.description || ""
@@ -7767,6 +7899,7 @@
           document.getElementById("enh-await-amount")?.focus();
           return;
         }
+        const grossVal = Number(document.getElementById("enh-await-gross")?.value) || amt;
         const payload =
           purpose === "income"
             ? {
@@ -7774,15 +7907,15 @@
                 entity: document.getElementById("enh-await-entity")?.value || entity,
                 payer: document.getElementById("enh-await-entity")?.value || entity,
                 amount: amt,
-                grossTotal: Number(document.getElementById("enh-await-gross")?.value) || amt,
-                taxableIncome: Number(document.getElementById("enh-await-taxable")?.value) || amt,
+                grossTotal: grossVal,
+                taxableIncome: grossVal,
                 gstAmount: Number(document.getElementById("enh-await-gst")?.value) || 0,
                 netPay: amt,
                 type: o.suggestedIncomeType || o.type || "salary_wages",
                 description: document.getElementById("enh-await-desc")?.value || o.description || "",
                 travelAllowanceAmount: (() => {
-                  const n = Number(document.getElementById("enh-await-travel")?.value);
-                  return Number.isFinite(n) && n > 0 ? n : undefined;
+                  const taAmt = o.travelAllowance && Number(o.travelAllowance.amount);
+                  return Number.isFinite(taAmt) && taAmt > 31 ? taAmt : undefined;
                 })(),
                 overnightDays: (() => {
                   const n = Number(document.getElementById("enh-await-overnight-days")?.value);

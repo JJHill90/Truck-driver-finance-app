@@ -298,12 +298,12 @@
                 <label>Date<input type="date" name="date" required /></label>
                 <label>Type<select id="income-type" name="type"></select></label>
                 <label class="span-2">Payer / entity<input type="text" name="payer" placeholder="Employer or company" /></label>
-                <label>Gross ($)<input type="number" name="grossTotal" step="0.01" min="0" /></label>
-                <label>Taxable ($)<input type="number" name="taxableIncome" step="0.01" min="0" /></label>
+                <label>Gross Pay ($)<input type="number" name="grossTotal" step="0.01" min="0" /></label>
                 <label>GST ($)<input type="number" name="gstAmount" step="0.01" min="0" value="0" /></label>
-                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" required /></label>
-                <label>Net pay ($)<input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" /></label>
-                <label>Reference / period<input type="text" name="reference" placeholder="Pay period" /></label>
+                <label>Net Pay ($)<input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" required /></label>
+                <label>Total allowances / overnight days (LAFHA)<input type="number" name="overnightDays" step="1" min="0" max="31" placeholder="e.g. 7" /></label>
+                <input type="hidden" name="taxableIncome" value="" />
+                <input type="hidden" name="amount" value="" />
                 <label>Document kind
                   <select id="income-document-kind" name="documentKind">
                     <option value="">—</option>

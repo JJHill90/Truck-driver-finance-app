@@ -6,7 +6,7 @@ const {
 describe("extractTravelAllowance", () => {
   it("reads amount after Travel Allowance label", () => {
     const result = extractTravelAllowance({
-      rawText: "Wages 2,400.00\nTravel Allowance 640.00\nNet Pay 1,900.00",
+      rawText: "Wages 2,400.00\nTravel Allowance $640.00\nNet Pay 1,900.00",
       date: "2025-09-12",
     });
     expect(result.detected).toBe(true);
@@ -23,6 +23,22 @@ describe("extractTravelAllowance", () => {
     expect(result.detected).toBe(true);
     expect(result.overnightDays).toBe(4);
     expect(result.daysSource).toBe("payslip_days");
+  });
+
+  it("reads Betts-style tabular Travel Allowance hours (not $ as hours)", () => {
+    const result = extractTravelAllowance({
+      rawText: `
+DESCRIPTION HOURS CALC. RATE AMOUNT YTD TYPE
+Travel Allowance 7.00 $56.28 $393.96 $16,715.16 Wages
+GROSS PAY: $3,064.52
+NET PAY: $2,281.50
+`,
+      date: "2026-06-11",
+    });
+    expect(result.detected).toBe(true);
+    expect(result.overnightDays).toBe(7);
+    expect(result.daysSource).toBe("payslip_hours");
+    expect(result.amount).toBe(393.96);
   });
 
   it("ignores synthetic overnight_allowance breakdown with detected:false", () => {
