@@ -851,6 +851,7 @@ table.income-ledger .tag.tag-reconciled {
 }
 
 .overnight-days-box { margin-top: 14px; }
+.panel > .overnight-days-box { margin-top: 0; }
 .overnight-days-box .overnight-card {
   display: grid;
   gap: 10px;

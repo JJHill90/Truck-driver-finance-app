@@ -5824,166 +5824,16 @@
   }
 })();
 
-/* --- Living Away from Home allowance box (dashboard) ---------------------
- * Shows ATO truck-driver meal rates for the selected financial year
- * (TD 2025/4 → $128/day; TD 2026/4 → ~$132.50/day), salary band, plus any
- * Travel / LAFHA amounts recorded on income / scanned payslips.
- */
-(function () {
-  "use strict";
-
-  const API = `${window.location.origin}/api/haulage`;
-  const BOX_IDS = ["dashboard-lafha-box"];
-
-  const money = (n) =>
-    new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
-
-  function esc(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function salarySourceLabel(source) {
-    if (source === "profile") return "from profile annual salary";
-    if (source === "payslips") return "estimated from scanned / saved payslips";
-    return "add annual salary on Profile, or scan a payslip";
-  }
-
-  function selectedFy() {
-    try {
-      const sel = document.getElementById("fy-select");
-      if (sel && sel.value) return sel.value;
-      if (typeof state !== "undefined" && state.financialYear) return state.financialYear;
-    } catch {
-      /* ignore */
-    }
-    return "";
-  }
-
-  function renderBox(el, data, overnight) {
-    if (!el || !data) return;
-    const b = data.reasonableBreakdown || {};
-    const paid = data.paid || {};
-    const salaryAmt = data.salary && data.salary.amount ? money(data.salary.amount) : "—";
-    const paidPerDay =
-      paid.avgPerDay != null
-        ? `${money(paid.avgPerDay)}/day avg`
-        : paid.entryCount
-          ? "per-day unknown"
-          : "none recorded yet";
-    const det = data.determination || "ATO TD";
-    const fy = data.financialYear || "—";
-    const claimed = overnight && Number(overnight.daysClaimed) > 0 ? Number(overnight.daysClaimed) : 0;
-    const fyDays = overnight && overnight.daysInFy != null ? Number(overnight.daysInFy) : null;
-
-    const paidRows = (paid.rows || [])
-      .slice(0, 5)
-      .map(
-        (r) =>
-          `<li><span>${esc(r.date || "—")} · ${esc(r.label)}</span><span>${money(r.amount)}${
-            r.perDay != null ? ` <small class="muted">(${money(r.perDay)}/day)</small>` : ""
-          }</span></li>`
-      )
-      .join("");
-
-    el.innerHTML = `
-      <div class="lafha-card">
-        <div class="lafha-row lafha-hero">
-          <div>
-            <div class="lafha-label">ATO reasonable (per day)</div>
-            <div class="lafha-value">${money(data.reasonablePerDay)}</div>
-            <div class="muted lafha-sub">Truck driver meals · breakfast ${money(b.breakfast)} + lunch ${money(b.lunch)} + dinner ${money(b.dinner)}</div>
-            <div class="muted lafha-sub">${esc(det)} · FY ${esc(fy)}</div>
-          </div>
-          <div>
-            <div class="lafha-label">Your salary band</div>
-            <div class="lafha-value lafha-band">${esc((data.salaryBand || "band1").replace("band", "Band "))}</div>
-            <div class="muted lafha-sub">${esc(salaryAmt)} · ${esc(salarySourceLabel(data.salary && data.salary.source))}</div>
-          </div>
-        </div>
-        <div class="lafha-row">
-          <span>LAFHA days claimed <small class="muted">(hours/days counters from payslips)</small></span>
-          <span><strong>${claimed}</strong>${fyDays != null ? ` <small class="muted">of ${fyDays} FY days</small>` : ""}</span>
-        </div>
-        <div class="lafha-row">
-          <span>Paid on payslips / income <small class="muted">(Travel / LAFHA $)</small></span>
-          <span><strong>${money(paid.totalPaid || 0)}</strong> · ${esc(paidPerDay)}</span>
-        </div>
-        ${
-          paidRows
-            ? `<ul class="lafha-paid-list">${paidRows}</ul>`
-            : `<p class="muted lafha-empty">No Living Away from Home / Travel allowance lines found yet. Scan a payslip that lists Travel Allowance, or add income type “Living Away from Home / Travel allowance”.</p>`
-        }
-        <p class="muted lafha-hint">${esc(data.note || "")}</p>
-      </div>
-    `;
-  }
-
-  async function refresh() {
-    let data = null;
-    let overnight = null;
-    try {
-      const fy = selectedFy();
-      const q = fy ? `?financialYear=${encodeURIComponent(fy)}` : "";
-      const oq = fy ? `?fy=${encodeURIComponent(fy)}` : "";
-      const [lafhaRes, overnightRes] = await Promise.all([
-        fetch(`${API}/lafha${q}`, { credentials: "same-origin" }),
-        fetch(`${API}/overnight-days${oq}`, { credentials: "same-origin" }),
-      ]);
-      data = await lafhaRes.json();
-      if (!lafhaRes.ok) throw new Error(data.error || "Could not load LAFHA");
-      if (overnightRes.ok) overnight = await overnightRes.json();
-    } catch (err) {
-      for (const id of BOX_IDS) {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = `<p class="muted">${esc(err.message || "Could not load LAFHA rates.")}</p>`;
-      }
-      return;
-    }
-    for (const id of BOX_IDS) {
-      renderBox(document.getElementById(id), data, overnight);
-    }
-  }
-
-  function start() {
-    if (!BOX_IDS.some((id) => document.getElementById(id))) return;
-    void refresh();
-    let ticks = 0;
-    const iv = setInterval(() => {
-      ticks += 1;
-      void refresh();
-      if (ticks >= 8) clearInterval(iv);
-    }, 1500);
-    document.addEventListener("haulage:new-week", () => void refresh());
-    document.getElementById("fy-select")?.addEventListener("change", () => void refresh());
-    // After income saves, app.js reloads lists — poll lightly while on income/dashboard.
-    setInterval(() => {
-      const dash = document.getElementById("view-dashboard");
-      const inc = document.getElementById("view-income");
-      if ((dash && dash.classList.contains("active")) || (inc && inc.classList.contains("active"))) {
-        void refresh();
-      }
-    }, 8000);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start);
-  } else {
-    start();
-  }
-})();
-
-/* --- LAFHA / Travel allowance days vs FY (Forecast snapshot) --------------
+/* --- Travel allowance days vs FY (Dashboard + Forecast) --------------------
  * Accumulates days from scanned payslips (Travel/LAFHA $ ÷ rate or explicit
- * day/hour counts) and shows claimed vs days in the financial year.
+ * day/hour counts) and shows claimed vs days in the financial year. Rendered
+ * on both #dashboard-overnight-box and #forecast-overnight-box.
  */
 (function () {
   "use strict";
 
   const API = `${window.location.origin}/api/haulage`;
+  const BOX_IDS = ["dashboard-overnight-box", "forecast-overnight-box"];
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -6008,9 +5858,7 @@
     return "";
   }
 
-  function renderOvernightBox(data) {
-    const el = document.getElementById("forecast-overnight-box");
-    if (!el || !data) return;
+  function boxHtml(data) {
     const claimed = Number(data.daysClaimed) || 0;
     const total = Number(data.daysInFy) || 365;
     const elapsed = Number(data.daysElapsed) || 0;
@@ -6018,20 +5866,20 @@
     const pct = total > 0 ? Math.min(100, (claimed / total) * 100) : 0;
     const barPct = Math.max(pct, claimed > 0 ? 2 : 0);
 
-    el.innerHTML = `
+    return `
       <div class="overnight-card">
-        <h3 class="overnight-title">Living Away from Home (LAFHA) days</h3>
+        <h3 class="overnight-title">Travel allowance days</h3>
         <div class="overnight-hero">
           <div class="overnight-ratio">${claimed} <span>of ${total} FY days</span></div>
           <p class="overnight-meta">${esc(data.determination || "ATO")} · ${money(data.ratePerDay)}/day meal rate · FY ${esc(data.financialYear || "—")}</p>
         </div>
-        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as Living Away from Home (LAFHA) allowance">
+        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as Travel / Living Away from Home (LAFHA) allowance">
           <i style="width:${barPct.toFixed(2)}%"></i>
         </div>
         <div class="overnight-stats">
           <div class="overnight-stat"><strong>${elapsed}</strong> FY days elapsed</div>
-          <div class="overnight-stat"><strong>${claimed}</strong> LAFHA days claimed YTD</div>
-          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY LAFHA days</div>
+          <div class="overnight-stat"><strong>${claimed}</strong> Travel / LAFHA days claimed YTD</div>
+          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY Travel / LAFHA days</div>
         </div>
         <p class="overnight-hint">${
           data.entryCount
@@ -6042,18 +5890,34 @@
       </div>`;
   }
 
+  function renderOvernightBoxes(data) {
+    if (!data) return;
+    const html = boxHtml(data);
+    for (const id of BOX_IDS) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    }
+  }
+
+  function renderOvernightError(message) {
+    const html = `<p class="muted">${esc(message || "Could not load Travel allowance days.")}</p>`;
+    for (const id of BOX_IDS) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    }
+  }
+
   async function refreshFromApi() {
-    const el = document.getElementById("forecast-overnight-box");
-    if (!el) return;
+    if (!BOX_IDS.some((id) => document.getElementById(id))) return;
     try {
       const fy = selectedFy();
       const q = fy ? `?fy=${encodeURIComponent(fy)}` : "";
       const res = await fetch(`${API}/overnight-days${q}`, { credentials: "same-origin" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load LAFHA days");
-      renderOvernightBox(data);
+      if (!res.ok) throw new Error(data.error || "Could not load Travel allowance days");
+      renderOvernightBoxes(data);
     } catch (err) {
-      el.innerHTML = `<p class="muted">${esc(err.message || "Could not load LAFHA days.")}</p>`;
+      renderOvernightError(err.message || "Could not load Travel allowance days.");
     }
   }
 
@@ -6069,7 +5933,7 @@
               .clone()
               .json()
               .then((data) => {
-                if (data && data.overnightDays) renderOvernightBox(data.overnightDays);
+                if (data && data.overnightDays) renderOvernightBoxes(data.overnightDays);
               })
               .catch(() => {});
           }
@@ -6084,13 +5948,26 @@
   }
 
   function start() {
-    if (!document.getElementById("forecast-overnight-box")) return;
+    if (!BOX_IDS.some((id) => document.getElementById(id))) return;
     patchForecastFetch();
     void refreshFromApi();
     document.getElementById("fy-select")?.addEventListener("change", () => void refreshFromApi());
-    document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
+    document.querySelectorAll('.nav-btn[data-view="forecast"], .nav-btn[data-view="dashboard"]').forEach((btn) => {
       btn.addEventListener("click", () => setTimeout(() => void refreshFromApi(), 200));
     });
+    // After income saves, app.js reloads lists — poll lightly while on income/dashboard.
+    setInterval(() => {
+      const dash = document.getElementById("view-dashboard");
+      const inc = document.getElementById("view-income");
+      const forecast = document.getElementById("view-forecast");
+      if (
+        (dash && dash.classList.contains("active")) ||
+        (inc && inc.classList.contains("active")) ||
+        (forecast && forecast.classList.contains("active"))
+      ) {
+        void refreshFromApi();
+      }
+    }, 8000);
   }
 
   if (document.readyState === "loading") {
@@ -6110,6 +5987,7 @@
   const TITLE_MAP = {
     "Income & remittances": "Income & Remittances",
     "Driver profile": "Driver Profile",
+    "Financial forecast": "Financial Forecast",
     support: "Support",
     Support: "Support",
   };
@@ -6426,8 +6304,8 @@
       title: "Dashboard",
       body: [
         "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
-        "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY.",
-        "Living Away from Home (LAFHA) shows the ATO truck-driver meal reasonable amounts for the selected financial year (for example TD 2025/4 at $128/day, TD 2026/4 at about $132.50/day). It doesn’t lodge anything with the ATO — it helps you see the headroom you still have when you’re away for work. Change the financial year in the top bar and LAFHA plus allowance caps refresh for that year’s Taxation Determination.",
+        "Travel allowance days shows how many Travel / Living Away from Home (LAFHA) days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip Travel/LAFHA counters (or amount ÷ ATO meal rate).",
+        "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY. Change the financial year in the top bar and both the Travel allowance days card and allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
     expenses: {
@@ -6441,7 +6319,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. LAFHA guidance for meal rates sits on the Dashboard so you can cross-check living-away amounts against what you’ve been paid. When a payslip lists Travel or Living Away from Home (LAFHA) allowance, that day/hour counter is saved with the income row for the Forecast LAFHA-days snapshot.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. When a payslip lists Travel or Living Away from Home (LAFHA) allowance, that day/hour counter is saved with the income row for the Dashboard and Financial Forecast Travel allowance days snapshot.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
@@ -6460,11 +6338,11 @@
       ],
     },
     forecast: {
-      title: "Forecast",
+      title: "Financial Forecast",
       body: [
-        "Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
+        "Financial Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
         "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
-        "Living Away from Home (LAFHA) days are snapshotted from each payslip or remittance scan when Travel or LAFHA appears. The bar shows days claimed so far versus days in the financial year (for example 51 of 365) so you can plan EOFY travel claims with prior knowledge of how many LAFHA days you’ve already been paid for.",
+        "Travel allowance days are snapshotted from each payslip or remittance scan when Travel or LAFHA appears. The same card also appears on the Dashboard. The bar shows days claimed so far versus days in the financial year so you can plan EOFY travel claims with prior knowledge of how many Travel / LAFHA days you’ve already been paid for.",
       ],
     },
     profile: {
@@ -8579,119 +8457,28 @@
   }
 })();
 
-/* --- Dashboard recent activity: newest 10 only ---------------------------
- * app.js already slices, but it samples the first N expenses/income before
- * a global sort — older array order can leave the feed feeling stale/long.
- * Replace with a true newest-10 across all ledger rows (date, then createdAt).
+/* --- Recent activity removed from Dashboard --------------------------------
+ * Keep #recent-activity as a hidden sink in index.html so verbatim app.js
+ * renderRecentActivity() does not throw. No UI panel is shown.
  */
 (function () {
   "use strict";
-  /* global fmtDate, fmt */
 
-  const LIMIT = 10;
-
-  function moneyAbs(n) {
-    if (typeof fmt === "function") return fmt(Math.abs(Number(n) || 0));
-    return `$${Math.abs(Number(n) || 0).toFixed(2)}`;
-  }
-
-  function dateLabel(d) {
-    if (typeof fmtDate === "function") return fmtDate(d);
-    return String(d || "—");
-  }
-
-  function buildRows() {
-    const expenses = (state && state.records && state.records.expenses) || [];
-    const income = (state && state.records && state.records.income) || [];
-    const rows = [];
-    for (const e of expenses) {
-      if (!e || e.deletedAt) continue;
-      rows.push({
-        date: e.date || "",
-        createdAt: e.createdAt || e.updatedAt || "",
-        type: "Expense",
-        desc: e.description || e.vendor || e.category || "Expense",
-        amount: -(Number(e.amount) || 0),
-      });
-    }
-    for (const i of income) {
-      if (!i || i.deletedAt) continue;
-      rows.push({
-        date: i.date || "",
-        createdAt: i.createdAt || i.updatedAt || "",
-        type: "Income",
-        desc: i.description || i.entity || i.payer || i.type || "Income",
-        amount: Number(i.grossTotal ?? i.amount) || 0,
-      });
-    }
-    rows.sort((a, b) => {
-      const byCreated = String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
-      if (byCreated) return byCreated;
-      return String(b.date || "").localeCompare(String(a.date || ""));
-    });
-    return rows.slice(0, LIMIT);
-  }
-
-  function renderLimitedRecentActivity() {
+  function noopRecent() {
     const el = document.getElementById("recent-activity");
-    if (!el) return;
-    const rows = buildRows();
-    if (!rows.length) {
-      el.innerHTML =
-        `<p class="muted">No transactions yet — add an expense or scan a receipt.</p>`;
-      return;
-    }
-    el.innerHTML = `
-      <p class="muted recent-activity-note">Showing the ${rows.length} most recent upload${rows.length === 1 ? "" : "s"}.</p>
-      <table class="data recent-activity-table">
-        <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead>
-        <tbody>${rows
-          .map(
-            (r) =>
-              `<tr><td>${dateLabel(r.date)}</td><td><span class="tag ${
-                r.type === "Income" ? "green" : ""
-              }">${r.type}</span></td><td>${String(r.desc || "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")}</td><td class="amount">${moneyAbs(r.amount)}${
-                r.amount < 0 ? " DR" : " CR"
-              }</td></tr>`
-          )
-          .join("")}</tbody>
-      </table>`;
-  }
-
-  function patch() {
-    globalThis.renderRecentActivity = renderLimitedRecentActivity;
-    globalThis.renderRecentActivity.__haulageRecent10 = true;
+    if (el) el.innerHTML = "";
   }
 
   function start() {
-    patch();
-    setTimeout(patch, 0);
-    setTimeout(patch, 400);
-    // Keep the list capped if app.js re-renders the full table first.
-    const el = document.getElementById("recent-activity");
-    if (el) {
-      const mo = new MutationObserver(() => {
-        if (el.querySelectorAll("tbody tr").length > LIMIT) {
-          renderLimitedRecentActivity();
-        }
-      });
-      mo.observe(el, { childList: true, subtree: true });
-    }
-    if (typeof globalThis.refreshAll === "function" && !globalThis.refreshAll.__haulageRecent10) {
-      const prev = globalThis.refreshAll;
-      async function wrapped() {
-        const result = await prev.apply(this, arguments);
-        patch();
-        renderLimitedRecentActivity();
-        return result;
-      }
-      wrapped.__haulageRecent10 = true;
-      globalThis.refreshAll = wrapped;
-    }
-    renderLimitedRecentActivity();
+    globalThis.renderRecentActivity = noopRecent;
+    setTimeout(() => {
+      globalThis.renderRecentActivity = noopRecent;
+      noopRecent();
+    }, 0);
+    setTimeout(() => {
+      globalThis.renderRecentActivity = noopRecent;
+      noopRecent();
+    }, 400);
   }
 
   if (document.readyState === "loading") {
