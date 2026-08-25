@@ -112,6 +112,7 @@ const hubProfile = require("./lib/hub-profile");
 const fuelDashboard = require("./lib/fuel-dashboard");
 const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 const fuelForecast = require("./lib/fuel-forecast");
+const fuelReceipts = require("./lib/fuel-receipts");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -860,6 +861,7 @@ function fuelhubBootstrap(req) {
       }),
     }),
     forecast: fuelForecast.buildFuelForecast({ store, truck: store.truck }),
+    confirmMs: fuelReceipts.CONFIRM_MS,
   };
 }
 
@@ -1207,6 +1209,214 @@ api.delete("/fuelhub/track", (req, res) => {
   store.activeTrack = null;
   persist(req, { reason: "fuelhub-track-reset" });
   res.json({ ok: true });
+});
+
+function fuelReceiptPayload(store) {
+  return {
+    employerContacts: (store.employerContacts || []).map(fuelReceipts.presentContact),
+    fuelReceipts: (store.fuelReceipts || []).map(fuelReceipts.presentReceipt),
+    confirmMs: fuelReceipts.CONFIRM_MS,
+  };
+}
+
+api.post("/fuelhub/contacts", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save an employer contact." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const contact = fuelReceipts.upsertContact(store, req.body || {});
+    persist(req, { reason: "fuelhub-contact" });
+    res.json({ contact: fuelReceipts.presentContact(contact), ...fuelReceiptPayload(store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/contacts/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove an employer contact." });
+    return;
+  }
+  const { store } = fuelhubState(req);
+  const removed = fuelReceipts.removeContact(store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Contact not found." });
+    return;
+  }
+  persist(req, { reason: "fuelhub-contact-delete" });
+  res.json({ ok: true, ...fuelReceiptPayload(store) });
+});
+
+api.post("/fuelhub/receipts/scan", async (req, res) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Sign in to scan a fuel receipt." });
+      return;
+    }
+    if (!assertCanUpload(req, res)) return;
+    const { imageBase64, mimeType, filename } = req.body || {};
+    if (!imageBase64) {
+      res.status(400).json({ error: "Missing image data." });
+      return;
+    }
+    const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
+      purpose: "expense",
+    });
+    applyAbnEntityPairing(ocrResult, "expense");
+    applyResolvedDocumentDate(ocrResult, "expense", null);
+    const { store } = fuelhubState(req);
+    const receipt = fuelReceipts.createFromScan(store, {
+      ocr: ocrResult,
+      filename: filename || "fuel-receipt.jpg",
+      mimeType: mimeType || "image/jpeg",
+      dataUrl: imageBase64,
+    });
+    persist(req, { reason: "fuelhub-receipt-scan" });
+    res.json({
+      receipt: fuelReceipts.presentReceipt(receipt),
+      ocr: {
+        vendor: ocrResult.vendor || "",
+        entity: ocrResult.entity || "",
+        date: ocrResult.date || "",
+        amount: ocrResult.amount || null,
+        preview: String(ocrResult.rawTextPreview || ocrResult.rawText || "").slice(0, 400),
+      },
+      ...fuelReceiptPayload(store),
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || "Could not scan fuel receipt." });
+  }
+});
+
+api.post("/fuelhub/receipts/:id/confirm", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to confirm a fuel receipt." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const receipt = fuelReceipts.confirmDetails(store, req.params.id, req.body || {});
+    persist(req, { reason: "fuelhub-receipt-confirm" });
+    res.json({ receipt: fuelReceipts.presentReceipt(receipt), ...fuelReceiptPayload(store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/receipts/:id/nominate", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to nominate an employer." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const body = req.body || {};
+    let contactRaw = body;
+    if (body.contactId) {
+      const existing = (store.employerContacts || []).find((c) => c.id === body.contactId);
+      if (!existing) {
+        res.status(404).json({ error: "Saved contact not found." });
+        return;
+      }
+      contactRaw = existing;
+    }
+    const result = fuelReceipts.nominate(store, req.params.id, contactRaw);
+    persist(req, { reason: "fuelhub-receipt-nominate" });
+    res.json({
+      receipt: fuelReceipts.presentReceipt(result.receipt),
+      contact: fuelReceipts.presentContact(result.contact),
+      ...fuelReceiptPayload(store),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/receipts/:id/send", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to send a fuel receipt." });
+    return;
+  }
+  try {
+    const { store, hub } = fuelhubState(req);
+    const row = fuelReceipts.findReceipt(store, req.params.id);
+    fuelReceipts.assertSendable(row, { force: Boolean((req.body || {}).force) });
+    const contact =
+      (store.employerContacts || []).find((c) => c.id === row.contactId) || {
+        name: row.contactName,
+        email: row.contactEmail,
+        company: row.contactCompany,
+      };
+    const account = auth.getUser(req.user) || {};
+    const report = fuelReceipts.buildReport({
+      receipt: row,
+      contact,
+      hub,
+      username: req.user,
+    });
+    const attachments = [];
+    const abs = fuelReceipts.receiptImageAbsPath(row.imagePath);
+    if (abs && fs.existsSync(abs)) {
+      attachments.push({
+        filename: row.filename || path.basename(abs),
+        content: fs.readFileSync(abs),
+        contentType: row.mimeType || "image/jpeg",
+      });
+    }
+    let mailResult = await mail.sendMail({
+      to: row.contactEmail,
+      subject: report.subject,
+      text: report.text,
+      html: report.html,
+      replyTo: account.email || undefined,
+      attachments,
+    });
+    if (mailResult && mailResult.preview && !mailResult.sent) {
+      mailResult = { sent: true, channel: "dev", preview: true };
+    }
+    const receipt = fuelReceipts.markSent(store, row.id, mailResult);
+    persist(req, { reason: "fuelhub-receipt-send" });
+    res.json({
+      receipt: fuelReceipts.presentReceipt(receipt),
+      mail: receipt.mail,
+      ...fuelReceiptPayload(store),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message, remainingMs: err.remainingMs });
+  }
+});
+
+api.post("/fuelhub/receipts/:id/cancel", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to cancel a fuel receipt." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const receipt = fuelReceipts.cancelReceipt(store, req.params.id);
+    persist(req, { reason: "fuelhub-receipt-cancel" });
+    res.json({ receipt: fuelReceipts.presentReceipt(receipt), ...fuelReceiptPayload(store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.get("/fuelhub/receipts/:id/file", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view a fuel receipt." });
+    return;
+  }
+  const { store } = fuelhubState(req);
+  const row = fuelReceipts.findReceipt(store, req.params.id);
+  const abs = row && fuelReceipts.receiptImageAbsPath(row.imagePath);
+  if (!abs || !fs.existsSync(abs)) {
+    res.status(404).json({ error: "Receipt image not found." });
+    return;
+  }
+  res.setHeader("Content-Type", row.mimeType || "image/jpeg");
+  res.sendFile(abs);
 });
 
 // --- Primary-mod admin ---------------------------------------------------
