@@ -39,18 +39,24 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   returns to Driver Hub login. Brand wordmarks use Saira Condensed with a sky
   Hub accent (navy/amber UI palette).
 -   **Fuel Hub.** `GET/POST /api/haulage/fuelhub*` (`lib/fuel-*.js`, `lib/fuelhub-store.js`,
-  `lib/fuel-dashboard.js`, `public/fuelhub.js`). Sidebar: Profile (same Driver Hub
-  identity as Taxation Hub), Dashboard, Plan fills, GPS, Truck & load, cards and
+  `lib/fuel-dashboard.js`, `lib/fuel-forecast.js`, `public/fuelhub.js`). Sidebar: Profile (same Driver Hub
+  identity as Taxation Hub), Dashboard, Forecast, Plan fills, GPS, Truck & load, cards and
   prices. Dashboard summarises the current planned/GPS run, previous saved trips,
   and cheapest truck-access diesel in the current area from NHVR corridor sites
   plus ACCC / FuelWatch / FuelCheck-style public tables (cards come off after).
-  GPS, last planned corridor, or last trip picks the area; no GPS falls back to
-  gazetted sites that fit the work vehicle. Consumption uses combination, trailer
-  count, payload, GCM and diesel mass (~0.84 kg/L). Planner ranks BP / Mobil /
-  Shell / Ampol / Liberty / 7-Eleven / Pearl truck-access sites on NHVR corridors
-  (Hume, Pacific, Newell, Warrego, Stuart, Eyre, Great Western, Bruce), fills
-  before remote / out-west price step-ups, and suggests rest/refresh stops.
-  Apple/Google maps are not the routing source.
+  **Forecast** is the live-fueling counterpart of Taxation Hub Forecast:
+  Conservative / Baseline / Optimistic L/km from freight tonnes, diesel mass in
+  the tanks, and hours on the road (slower loaded running lifts litres). Averages
+  across saved trips and lists each run. `POST /fuelhub/plan` (and `GET /fuelhub/forecast`)
+  sizes a **minimum vs ideal fill** at a nominated town so a driver is not brim-filling
+  at inflated west-QLD diesel — e.g. St George → Longreach → Barcaldine (refuel) then
+  added freight Barcaldine → Emerald → Gracemere. GPS, last planned corridor, or last
+  trip picks the area; no GPS falls back to gazetted sites that fit the work vehicle.
+  Consumption uses combination, trailer count, payload, GCM and diesel mass (~0.84 kg/L).
+  Planner ranks BP / Mobil / Shell / Ampol / Liberty / 7-Eleven / Pearl truck-access
+  sites on NHVR corridors (Hume, Pacific, Newell, Warrego, Capricorn, Stuart, Eyre,
+  Great Western, Bruce), fills before remote / out-west price step-ups, and suggests
+  rest/refresh stops. Apple/Google maps are not the routing source.
   **Shared Driver Hub profile:** one login and `records.profile` (name, employer,
   licence class, driver type, salary, **work vehicle**, **registered fuel vehicles**)
   is used by Taxation Hub, Fuel Hub and later apps via `GET /hub/profile` /

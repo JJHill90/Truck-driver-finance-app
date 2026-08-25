@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=fuelhub-6" />
+    <link rel="stylesheet" href="./styles.css?v=fuelhub-8" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -786,6 +786,7 @@
         <nav class="sidebar-nav" aria-label="Fuel Hub">
           <button type="button" class="nav-btn" data-fuel-view="profile">Profile</button>
           <button type="button" class="nav-btn active" data-fuel-view="dashboard">Dashboard</button>
+          <button type="button" class="nav-btn" data-fuel-view="forecast">Forecast</button>
           <button type="button" class="nav-btn" data-fuel-view="plan">Plan fills</button>
           <button type="button" class="nav-btn" data-fuel-view="track">GPS track</button>
           <button type="button" class="nav-btn" data-fuel-view="truck">Truck &amp; load</button>
@@ -805,6 +806,7 @@
           <p class="fuelhub-tagline">NHVR freight corridors · diesel efficiency · cheapest truck-access fills</p>
         </header>
         <section id="fuel-view-dashboard" class="view active fuelhub-view"></section>
+        <section id="fuel-view-forecast" class="view fuelhub-view"></section>
         <section id="fuel-view-profile" class="view fuelhub-view"></section>
         <section id="fuel-view-plan" class="view fuelhub-view"></section>
         <section id="fuel-view-track" class="view fuelhub-view"></section>
@@ -834,7 +836,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fuelhub-6"></script>
-    <script src="./fuelhub.js?v=fuelhub-6"></script>
+    <script src="./enhancements.js?v=fuelhub-8"></script>
+    <script src="./fuelhub.js?v=fuelhub-8"></script>
   </body>
 </html>

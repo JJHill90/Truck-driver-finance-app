@@ -111,6 +111,7 @@ const fuelhubStore = require("./lib/fuelhub-store");
 const hubProfile = require("./lib/hub-profile");
 const fuelDashboard = require("./lib/fuel-dashboard");
 const fuelVehicleClass = require("./lib/fuel-vehicle-class");
+const fuelForecast = require("./lib/fuel-forecast");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -858,6 +859,7 @@ function fuelhubBootstrap(req) {
         driverType: hub.driverType,
       }),
     }),
+    forecast: fuelForecast.buildFuelForecast({ store, truck: store.truck }),
   };
 }
 
@@ -1055,24 +1057,103 @@ api.post("/fuelhub/prices/observed", (req, res) => {
   }
 });
 
+api.get("/fuelhub/forecast", (req, res) => {
+  const { store } = fuelhubState(req);
+  const q = req.query || {};
+  const hasRoute = Boolean(q.origin || q.destination);
+  const input = hasRoute
+    ? {
+        origin: q.origin,
+        destination: q.destination,
+        via: fuelForecast.splitVia(q.via),
+        refillAt: q.refillAt || q.refuelAt,
+        payloadT: q.payloadT,
+        addedPayloadT: q.addedPayloadT,
+        hours: q.hours,
+        currentFuelL: q.currentFuelL,
+      }
+    : undefined;
+  res.json(fuelForecast.buildFuelForecast({ store, truck: store.truck, input }));
+});
+
 api.post("/fuelhub/plan", (req, res) => {
   const { store, hub } = fuelhubState(req);
   const body = req.body || {};
+  const via = fuelForecast.splitVia(body.via);
+  const truck = {
+    ...(body.truck || store.truck || {}),
+    driverType: hub.driverType,
+  };
+  if (body.payloadT != null && body.payloadT !== "") truck.payloadT = body.payloadT;
+  if (body.currentFuelL != null && body.currentFuelL !== "") truck.currentFuelL = body.currentFuelL;
   const plan = planFuelStops({
     origin: body.origin,
     destination: body.destination,
-    via: body.via,
+    via,
     distanceKm: body.distanceKm,
-    truck: {
-      ...(body.truck || store.truck || {}),
-      driverType: hub.driverType,
-    },
+    truck,
     cards: body.cards || store.cards,
     observedPrices: store.observedPrices,
   });
-  fuelhubStore.saveLastPlan(store, fuelDashboard.summarisePlan(plan));
+  const forecast = fuelForecast.buildFuelForecast({
+    store,
+    truck,
+    input: {
+      origin: body.origin,
+      destination: body.destination,
+      via,
+      refillAt: body.refillAt || body.refuelAt,
+      payloadT: body.payloadT,
+      addedPayloadT: body.addedPayloadT,
+      hours: body.hours,
+      currentFuelL: body.currentFuelL != null ? body.currentFuelL : truck.currentFuelL,
+    },
+  });
+  plan.forecast = forecast.prediction;
+  fuelhubStore.saveLastPlan(store, {
+    ...fuelDashboard.summarisePlan(plan),
+    forecast: forecast.prediction
+      ? {
+          origin: forecast.prediction.origin,
+          destination: forecast.prediction.destination,
+          via: forecast.prediction.via,
+          refillAt: forecast.prediction.refillAt,
+          payloadT: forecast.prediction.payloadT,
+          addedPayloadT: forecast.prediction.addedPayloadT,
+          distanceKm: forecast.prediction.distanceKm,
+          hours: forecast.prediction.hours,
+          timeFactor: forecast.prediction.timeFactor,
+          litresPerKm: forecast.prediction.averageLitresPerKm,
+          litresPer100km: forecast.prediction.averageLitresPer100km,
+          note: forecast.prediction.note,
+          refillAdvice: forecast.prediction.refillAdvice,
+          hops: (forecast.prediction.hops || []).map((h) => ({
+            from: h.from,
+            to: h.to,
+            distanceKm: h.distanceKm,
+            hours: h.hours,
+            payloadT: h.payloadT,
+            litresPerKm: h.litresPerKm,
+            burnL: h.burnL,
+            fillL: h.fillL,
+            minFillL: h.minFillL,
+            idealFillL: h.idealFillL,
+            refillHere: h.refillHere,
+          })),
+          scenarios: (forecast.prediction.scenarios || []).map((s) => ({
+            id: s.id,
+            name: s.name,
+            note: s.note,
+            litresPerKm: s.litresPerKm,
+            litresPer100km: s.litresPer100km,
+            fillL: s.fillL,
+            costAud: s.costAud,
+          })),
+        }
+      : null,
+  });
   if (req.user) persist(req, { reason: "fuelhub-plan" });
-  res.json({ plan, lastPlan: store.lastPlan });
+  res.json({ plan, lastPlan: store.lastPlan, forecast });
 });
 
 api.post("/fuelhub/trips", (req, res) => {

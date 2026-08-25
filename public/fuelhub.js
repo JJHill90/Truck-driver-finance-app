@@ -8,6 +8,7 @@
   let state = null;
   let view = "dashboard";
   let lastPlan = null;
+  let lastPlanForm = null;
   let watchId = null;
   let gpsBusy = false;
 
@@ -75,6 +76,7 @@
     const titles = {
       dashboard: "Dashboard",
       profile: "Profile",
+      forecast: "Forecast",
       plan: "Plan fills",
       track: "GPS track",
       truck: "Truck & load",
@@ -128,6 +130,124 @@
     return d.toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
   }
 
+  function formVal(name, fallback) {
+    if (lastPlanForm && lastPlanForm[name] != null && lastPlanForm[name] !== "") return lastPlanForm[name];
+    return fallback == null ? "" : fallback;
+  }
+
+  function westQldExampleFields() {
+    const truck = (state && state.truck) || {};
+    return {
+      origin: "St George",
+      destination: "Gracemere",
+      via: "Longreach, Barcaldine, Emerald",
+      refillAt: "Barcaldine",
+      payloadT: "10",
+      addedPayloadT: "8",
+      hours: "18",
+      currentFuelL: String(truck.currentFuelL != null ? truck.currentFuelL : 260),
+      distanceKm: "",
+    };
+  }
+
+  function readPlanBody(form) {
+    const fd = new FormData(form);
+    lastPlanForm = Object.fromEntries(fd.entries());
+    const viaRaw = String(fd.get("via") || "").trim();
+    return {
+      origin: fd.get("origin"),
+      destination: fd.get("destination"),
+      via: viaRaw || undefined,
+      distanceKm: fd.get("distanceKm") || undefined,
+      refillAt: fd.get("refillAt") || undefined,
+      payloadT: fd.get("payloadT") || undefined,
+      addedPayloadT: fd.get("addedPayloadT") || undefined,
+      hours: fd.get("hours") || undefined,
+      currentFuelL: fd.get("currentFuelL") || undefined,
+    };
+  }
+
+  function scenarioPct(scenarios, valueKey, row) {
+    const max = Math.max(...(scenarios || []).map((s) => Number(s[valueKey]) || 0), 0.001);
+    return Math.round(((Number(row[valueKey]) || 0) / max) * 100);
+  }
+
+  function renderScenarioChart(scenarios, { showCost } = {}) {
+    const rows = scenarios || [];
+    if (!rows.length) return "";
+    return `<div class="fuelhub-scenarios">${rows
+      .map(
+        (s) => `
+        <article class="fuelhub-scenario fuelhub-scenario-${esc(s.id)}">
+          <div class="fuelhub-scenario-head">
+            <h3>${esc(s.name)}</h3>
+            <span>${esc(s.litresPerKm)} L/km · ${esc(s.litresPer100km)} L/100 km${
+              showCost && s.fillL != null
+                ? ` · ${esc(s.fillL)} L · ${money(s.costAud)}`
+                : ""
+            }</span>
+          </div>
+          <div class="fuelhub-scenario-bar" aria-hidden="true"><span style="width:${scenarioPct(rows, "litresPerKm", s)}%"></span></div>
+          <p class="fuelhub-muted">${esc(s.note || "")}</p>
+        </article>`
+      )
+      .join("")}</div>`;
+  }
+
+  function renderRefillAdvice(advice) {
+    if (!advice) return "";
+    return `<div class="fuelhub-refill">
+      <h3>Minimum fill at ${esc(advice.place)}</h3>
+      <p>${esc(advice.note || "")}</p>
+      <div class="fuelhub-stats">
+        <div class="fuelhub-stat"><strong>${esc(advice.minFillL)} L</strong><span>Minimum to the next planned town + reserve</span></div>
+        <div class="fuelhub-stat"><strong>${esc(advice.idealFillL)} L</strong><span>Ideal (baseline buffer)</span></div>
+        <div class="fuelhub-stat"><strong>${esc(advice.tankFillL)} L</strong><span>Fill the tank</span></div>
+        <div class="fuelhub-stat"><strong>${esc(advice.extraVsMinL)} L</strong><span>Extra litres if you brim it</span></div>
+      </div>
+      ${
+        advice.site
+          ? `<p class="fuelhub-muted">${esc(advice.site.name)} · ${esc(advice.site.band)} · ${esc(advice.site.effectiveCpl)} ¢/L after cards · ${esc(advice.remainingKm)} km still to run with the loaded freight.</p>`
+          : `<p class="fuelhub-muted">${esc(advice.remainingKm)} km still to run with the loaded freight.</p>`
+      }
+    </div>`;
+  }
+
+  function renderHopTable(hops) {
+    if (!hops || !hops.length) return "";
+    return `<table class="fuelhub-table"><thead><tr>
+      <th>Hop</th><th>Km</th><th>Hours</th><th>Freight t</th><th>L/km</th><th>Burn L</th><th>Fill L</th><th>Min / ideal</th>
+    </tr></thead><tbody>${hops
+      .map(
+        (h) => `<tr class="${h.refillHere ? "fuelhub-row-refill" : ""}">
+          <td>${esc(h.from)} → ${esc(h.to)}${h.refillHere ? " <span class='fuelhub-muted'>refuel</span>" : ""}</td>
+          <td>${esc(h.distanceKm)}</td>
+          <td>${esc(h.hours)}</td>
+          <td>${esc(h.payloadT)}</td>
+          <td>${esc(h.litresPerKm)}</td>
+          <td>${h.burnL != null ? esc(h.burnL) : "—"}</td>
+          <td>${h.fillL != null ? esc(h.fillL) : "—"}</td>
+          <td>${h.refillHere ? `${esc(h.minFillL)} / ${esc(h.idealFillL)}` : "—"}</td>
+        </tr>`
+      )
+      .join("")}</tbody></table>`;
+  }
+
+  function renderRouteFields() {
+    const truck = (state && state.truck) || {};
+    return `
+      <label>Origin<input name="origin" required placeholder="e.g. St George" value="${esc(formVal("origin"))}" /></label>
+      <label>Destination<input name="destination" required placeholder="e.g. Gracemere" value="${esc(formVal("destination"))}" /></label>
+      <label class="span-2">Via (comma or “to”)<input name="via" placeholder="e.g. Longreach, Barcaldine, Emerald" value="${esc(formVal("via"))}" /></label>
+      <label>Refuel at<input name="refillAt" placeholder="e.g. Barcaldine" value="${esc(formVal("refillAt"))}" /></label>
+      <label>Hours on the road<input name="hours" type="number" min="0.5" step="0.1" placeholder="Leave blank for 80 km/h" value="${esc(formVal("hours"))}" /></label>
+      <label>Freight / haulage (t)<input name="payloadT" type="number" min="0" step="0.1" value="${esc(formVal("payloadT", truck.payloadT))}" /></label>
+      <label>Added freight after refill (t)<input name="addedPayloadT" type="number" min="0" step="0.1" value="${esc(formVal("addedPayloadT", "0"))}" /></label>
+      <label>Fuel on board (L)<input name="currentFuelL" type="number" min="0" step="1" value="${esc(formVal("currentFuelL", truck.currentFuelL))}" /></label>
+      <label>Distance override (km)<input name="distanceKm" type="number" min="1" step="1" placeholder="Leave blank for hop distances" value="${esc(formVal("distanceKm"))}" /></label>
+    `;
+  }
+
   function dash() {
     return (state && state.dashboard) || {};
   }
@@ -145,6 +265,14 @@
     const area = d.areaDeals || {};
     const hub = (state && state.hubProfile) || {};
 
+    const forecastHint =
+      plan && plan.forecast && plan.forecast.refillAdvice
+        ? `<p class="fuelhub-muted">Forecast: ${esc(plan.forecast.refillAdvice.place)} min ${esc(
+            plan.forecast.refillAdvice.minFillL
+          )} L · ideal ${esc(plan.forecast.refillAdvice.idealFillL)} L · ${esc(
+            plan.forecast.litresPerKm
+          )} L/km.</p>`
+        : "";
     const journeyCard = plan
       ? `<p><strong>${esc(plan.origin)}</strong> → <strong>${esc(plan.destination)}</strong>
          · ${plan.distanceKm || "—"} km
@@ -155,8 +283,9 @@
            .slice(0, 3)
            .map((s) => `<p class="fuelhub-muted">${esc(s.name)} · ${s.fillL} L · ${s.effectiveCpl} ¢/L</p>`)
            .join("")}
+         ${forecastHint}
          <p class="fuelhub-muted">${plan.plannedAt ? `Planned ${esc(fmtWhen(plan.plannedAt))}` : "Latest planned run."}</p>`
-      : `<p class="fuelhub-muted">No planned run yet. Open Plan fills for a depot-to-gate corridor (NHVR, not Apple/Google).</p>`;
+      : `<p class="fuelhub-muted">No planned run yet. Open Plan fills or Forecast for a depot-to-gate corridor (NHVR, not Apple/Google).</p>`;
 
     const gpsCard = track
       ? `<p class="fuelhub-live">${track.km || 0} km</p>
@@ -165,12 +294,13 @@
       : `<p class="fuelhub-muted">GPS is idle. Start a track to score nearby diesel against your position.</p>`;
 
     const tripRows = trips.length
-      ? `<table class="fuelhub-table"><thead><tr><th>When</th><th>Run</th><th>Km</th><th>Fill</th><th>Cost</th></tr></thead><tbody>${trips
+      ? `<table class="fuelhub-table"><thead><tr><th>When</th><th>Run</th><th>Km</th><th>L/km</th><th>Fill</th><th>Cost</th></tr></thead><tbody>${trips
           .map(
             (t) => `<tr>
               <td>${esc(fmtWhen(t.createdAt))}</td>
               <td>${esc(t.origin)} → ${esc(t.destination)}${t.corridor ? ` <span class="fuelhub-muted">(${esc(t.corridor)})</span>` : ""}</td>
               <td>${t.distanceKm || "—"}</td>
+              <td>${t.litresPerKm != null ? t.litresPerKm : "—"}</td>
               <td>${t.fillL != null ? `${t.fillL} L` : "—"}</td>
               <td>${t.costAud != null ? money(t.costAud) : "—"}</td>
             </tr>`
@@ -216,6 +346,7 @@
           ${gpsCard}
           <div class="fuelhub-actions">
             <button type="button" class="btn primary" data-fuel-jump="plan">Plan fills</button>
+            <button type="button" class="btn secondary" data-fuel-jump="forecast">Forecast</button>
             <button type="button" class="btn secondary" data-fuel-jump="track">GPS track</button>
           </div>
         </div>
@@ -535,12 +666,91 @@
     setView("profile");
   }
 
+  function renderForecast() {
+    const el = byId("fuel-view-forecast");
+    if (!el) return;
+    const forecast = (state && state.forecast) || {};
+    const avg = forecast.average || {};
+    const prediction = forecast.prediction || (lastPlan && lastPlan.forecast) || null;
+    const trips = avg.trips || forecast.trips || [];
+    el.innerHTML = `
+      ${profileBanner()}
+      <p class="fuelhub-muted">Same idea as Taxation Hub Forecast — Conservative, Baseline and Optimistic. Litres/km move with freight tonnes, diesel already in the tanks, and hours on the road. Use this to size a minimum fill so you are not buying extra west-QLD diesel.</p>
+      <div class="fuelhub-stats">
+        <div class="fuelhub-stat"><strong>${avg.tripCount || 0}</strong><span>Saved trips in the average</span></div>
+        <div class="fuelhub-stat"><strong>${avg.totalKm || 0} km</strong><span>Sample distance</span></div>
+        <div class="fuelhub-stat"><strong>${avg.litresPerKm || "—"}</strong><span>Average L / km</span></div>
+        <div class="fuelhub-stat"><strong>${avg.litresPer100km || "—"}</strong><span>Average L / 100 km</span></div>
+        <div class="fuelhub-stat"><strong>${avg.avgPayloadT || "—"} t</strong><span>Km-weighted freight</span></div>
+        <div class="fuelhub-stat"><strong>${avg.avgSpeedKmh || "—"} km/h</strong><span>Average speed (time factor)</span></div>
+      </div>
+      <div class="fuelhub-card" style="margin-bottom:16px">
+        <h2>Usage scenarios</h2>
+        <p class="fuelhub-muted">From saved trips when you have history, otherwise from the current truck, fuel load and freight.</p>
+        ${renderScenarioChart(forecast.scenarios || [])}
+      </div>
+      <div class="fuelhub-grid">
+        <form id="fuel-forecast-form" class="fuelhub-card fuelhub-profile-form">
+          <h2 class="span-2">Predict a run</h2>
+          <p class="fuelhub-muted span-2">Example: St George → Longreach → Barcaldine (refuel) → Emerald → Gracemere. After Barcaldine you pick up extra freight — take only the litres needed to Gracemere instead of filling the tank at an inflated bowser.</p>
+          ${renderRouteFields()}
+          <div class="fuelhub-actions span-2">
+            <button type="submit" class="btn primary">Forecast fills</button>
+            <button type="button" class="btn secondary" id="fuel-forecast-example">West QLD example</button>
+            <button type="button" class="btn secondary" data-fuel-jump="plan">Open in Plan fills</button>
+          </div>
+        </form>
+        <div class="fuelhub-card">
+          <h2>This prediction</h2>
+          ${
+            prediction
+              ? `<p><strong>${esc(prediction.origin)}</strong> → <strong>${esc(prediction.destination)}</strong>
+                 · ${esc(prediction.distanceKm)} km · ${esc(prediction.hours)} h · time factor ${esc(prediction.timeFactor)}
+                 · freight ${esc(prediction.payloadT)} t${prediction.addedPayloadT ? ` + ${esc(prediction.addedPayloadT)} t after ${esc(prediction.refillAt || "refuel")}` : ""}</p>
+                 ${renderScenarioChart(prediction.scenarios || [], { showCost: true })}
+                 ${renderRefillAdvice(prediction.refillAdvice)}
+                 ${renderHopTable(prediction.hops)}
+                 <p class="fuelhub-muted">${esc(prediction.note || "")}</p>`
+              : `<p class="fuelhub-muted">Enter a corridor to see Conservative / Baseline / Optimistic L/km and a minimum fill at the refuel town.</p>`
+          }
+        </div>
+      </div>
+      <div class="fuelhub-card" style="margin-top:16px">
+        <h2>Per trip</h2>
+        ${
+          trips.length
+            ? `<table class="fuelhub-table"><thead><tr><th>When</th><th>Run</th><th>Km</th><th>Hours</th><th>Freight t</th><th>Fuel L</th><th>L/km</th><th>L/100</th></tr></thead><tbody>${trips
+                .map(
+                  (t) => `<tr>
+                    <td>${esc(fmtWhen(t.createdAt))}</td>
+                    <td>${esc(t.origin)} → ${esc(t.destination)}</td>
+                    <td>${esc(t.distanceKm)}</td>
+                    <td>${esc(t.hours)}</td>
+                    <td>${esc(t.payloadT)}</td>
+                    <td>${esc(t.fuelLoadL)}</td>
+                    <td>${esc(t.litresPerKm)}</td>
+                    <td>${esc(t.litresPer100km)}</td>
+                  </tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="fuelhub-muted">No saved trips yet. Plan a run and Save trip — each row’s L/km uses fill litres, freight and hours.</p>`
+        }
+      </div>
+    `;
+    el.querySelector("#fuel-forecast-form")?.addEventListener("submit", onPlan);
+    el.querySelector("#fuel-forecast-example")?.addEventListener("click", onWestQldExample);
+    el.querySelectorAll("[data-fuel-jump]").forEach((btn) => {
+      btn.addEventListener("click", () => setView(btn.getAttribute("data-fuel-jump")));
+    });
+  }
+
   function renderPlan() {
     const el = byId("fuel-view-plan");
     if (!el) return;
     const plan = lastPlan;
     const eff = (state && state.efficiency) || {};
     const hub = (state && state.hubProfile) || {};
+    const prediction = (plan && plan.forecast) || (state && state.forecast && state.forecast.prediction);
     el.innerHTML = `
       ${profileBanner()}
       <div class="fuelhub-stats">
@@ -557,15 +767,13 @@
           : " Add a registered fuel class on Profile to set tank litres instead of a generic rigid default."
       }</p>
       <div class="fuelhub-grid">
-        <form id="fuel-plan-form" class="fuelhub-card">
-          <h2>Route</h2>
-          <p class="fuelhub-muted">Type towns or a depot-to-gate run. Fuel Hub matches NHVR freight corridors (Hume, Pacific, Newell, Warrego, Stuart, Eyre…) instead of Apple/Google car shortcuts.</p>
-          <label>Origin<input name="origin" required placeholder="e.g. Sydney" /></label>
-          <label>Destination<input name="destination" required placeholder="e.g. Melbourne" /></label>
-          <label>Via (optional)<input name="via" placeholder="e.g. Dubbo" /></label>
-          <label>Distance override (km)<input name="distanceKm" type="number" min="1" step="1" placeholder="Leave blank to use corridor length" /></label>
-          <div class="fuelhub-actions">
+        <form id="fuel-plan-form" class="fuelhub-card fuelhub-profile-form">
+          <h2 class="span-2">Route</h2>
+          <p class="fuelhub-muted span-2">Type towns or a depot-to-gate run. Fuel Hub matches NHVR freight corridors (Hume, Pacific, Newell, Warrego, Capricorn, Stuart, Eyre…) instead of Apple/Google car shortcuts. Freight, hours and fuel on board change L/km; refuel-at sizes a minimum fill.</p>
+          ${renderRouteFields()}
+          <div class="fuelhub-actions span-2">
             <button type="submit" class="btn primary">Plan fuel stops</button>
+            <button type="button" class="btn secondary" id="fuel-plan-example">West QLD example</button>
             <button type="button" class="btn secondary" id="fuel-plan-save">Save trip</button>
           </div>
         </form>
@@ -578,9 +786,21 @@
           }
         </div>
       </div>
+      ${
+        prediction
+          ? `<div class="fuelhub-card" style="margin-top:16px">
+              <h2>Real-time fueling forecast</h2>
+              <p class="fuelhub-muted">Conservative / Baseline / Optimistic — same categories as Taxation Hub Forecast.</p>
+              ${renderScenarioChart(prediction.scenarios || [], { showCost: true })}
+              ${renderRefillAdvice(prediction.refillAdvice)}
+              ${renderHopTable(prediction.hops)}
+            </div>`
+          : ""
+      }
     `;
     el.querySelector("#fuel-plan-form")?.addEventListener("submit", onPlan);
     el.querySelector("#fuel-plan-save")?.addEventListener("click", onSaveTrip);
+    el.querySelector("#fuel-plan-example")?.addEventListener("click", onWestQldExample);
   }
 
   function renderPlanResult(plan) {
@@ -821,6 +1041,7 @@
   function render() {
     if (!state) return;
     if (view === "dashboard") renderDashboard();
+    else if (view === "forecast") renderForecast();
     else if (view === "profile") renderProfile();
     else if (view === "plan") renderPlan();
     else if (view === "track") renderTrack();
@@ -837,22 +1058,25 @@
 
   async function onPlan(e) {
     e.preventDefault();
-    const fd = new FormData(e.target);
-    const viaRaw = String(fd.get("via") || "").trim();
+    const body = readPlanBody(e.target);
     const data = await api("/fuelhub/plan", {
       method: "POST",
-      body: {
-        origin: fd.get("origin"),
-        destination: fd.get("destination"),
-        via: viaRaw ? [viaRaw] : [],
-        distanceKm: fd.get("distanceKm") || undefined,
-      },
+      body,
     });
     lastPlan = data.plan;
     if (data.lastPlan) state.lastPlan = data.lastPlan;
-    renderPlan();
+    if (data.forecast) state.forecast = data.forecast;
+    render();
     toast("Fuel plan ready");
     void refreshDashboard();
+  }
+
+  async function onWestQldExample() {
+    lastPlanForm = westQldExampleFields();
+    render();
+    const form = byId("fuel-plan-form") || byId("fuel-forecast-form");
+    if (form && typeof form.requestSubmit === "function") form.requestSubmit();
+    else if (form) form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   }
 
   async function onSaveTrip() {
@@ -860,23 +1084,36 @@
       toast("Plan a run first");
       return;
     }
+    const prediction = lastPlan.forecast || (state.forecast && state.forecast.prediction);
     const data = await api("/fuelhub/trips", {
       method: "POST",
       body: {
         origin: lastPlan.origin,
         destination: lastPlan.destination,
+        via: lastPlan.via || (prediction && prediction.via) || [],
         distanceKm: lastPlan.distanceKm,
         mode: "offline",
+        payloadT: prediction && prediction.payloadT,
+        fuelLoadL: (state.truck && state.truck.currentFuelL) || null,
+        hours: prediction && prediction.hours,
+        litresPerKm: prediction && prediction.averageLitresPerKm,
         planSummary: {
-          fillL: lastPlan.totals.fillL,
-          costAud: lastPlan.totals.costAud,
-          corridor: lastPlan.corridor.id,
+          fillL: lastPlan.totals && lastPlan.totals.fillL,
+          costAud: lastPlan.totals && lastPlan.totals.costAud,
+          corridor: lastPlan.corridor && lastPlan.corridor.id,
         },
       },
     });
     if (data.trips) state.trips = data.trips;
+    try {
+      const next = await api("/fuelhub/forecast");
+      state.forecast = next;
+    } catch {
+      /* keep last forecast */
+    }
     toast("Trip saved");
     void refreshDashboard();
+    if (view === "forecast") renderForecast();
   }
 
   async function onSaveTruck(e) {
@@ -1000,8 +1237,12 @@
           ? `?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`
           : "";
       const dash = await api(`/fuelhub/dashboard${qs}`);
-      if (state) state.dashboard = dash;
+      if (state) {
+        state.dashboard = dash;
+        if (dash.forecast) state.forecast = dash.forecast;
+      }
       if (view === "dashboard") renderDashboard();
+      else if (view === "forecast" && dash.forecast) renderForecast();
     } catch {
       /* keep last dashboard */
     }
