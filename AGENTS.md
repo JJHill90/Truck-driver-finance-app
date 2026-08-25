@@ -47,10 +47,15 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   ACCC / FuelWatch / FuelCheck public-chart structure; drivers overlay bowser
   prices and fuel-card cents-off. Apple/Google maps are not the routing source.
   **Shared Driver Hub profile:** one login and `records.profile` (name, employer,
-  licence class, driver type, salary) is used by Taxation Hub, Fuel Hub and later
-  apps via `GET /hub/profile` / `lib/hub-profile.js`. Fuel Hub seeds combination
-  from licence class until the driver saves a truck spec; tax ledger and fuel
-  trips stay in the same user file under different keys — no account copy.
+  licence class, driver type, salary, **work vehicle**) is used by Taxation Hub,
+  Fuel Hub and later apps via `GET /hub/profile` / `lib/hub-profile.js`. Profile
+  **driver type** (e.g. linehaul) plus **work vehicle** (rigid / semi / B-double /
+  road train) set Fuel Hub combination and duty-cycle L/100 km on planned
+  journeys (`lib/fuel-efficiency.js` `DRIVER_TYPE_FACTOR`). Fuel Hub re-seeds
+  the truck from that profile until the driver saves a Fuel Hub tank/load spec;
+  a saved spec keeps tanks but still uses Profile driver type for usage rates.
+  Tax ledger and fuel trips stay in the same user file under different keys — no
+  account copy.
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is

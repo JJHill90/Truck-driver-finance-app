@@ -2139,6 +2139,7 @@
         name: byId("admin-profile-name")?.value || "",
         employer: byId("admin-profile-employer")?.value || "",
         driverType: byId("admin-profile-driver-type")?.value || profile.driverType,
+        workCombination: byId("admin-profile-work-combination")?.value || profile.workCombination,
         annualSalary: byId("admin-profile-salary")?.value || "",
         licenceClass: byId("admin-profile-licence")?.value || "",
         financialYear: byId("admin-profile-fy")?.value || profile.financialYear,
@@ -2201,6 +2202,19 @@
     const receipts = data.receipts || [];
     const history = data.history || [];
     const username = data.user.username;
+    const licence = profile.licenceClass || "hc";
+    const duty = profile.driverType || "long_haul";
+    const workCombo =
+      profile.workCombination ||
+      (licence === "lr_mr" || licence === "hr"
+        ? "rigid"
+        : licence === "mc"
+          ? duty === "local"
+            ? "semi"
+            : "b_double"
+          : licence === "hc" && (duty === "long_haul" || duty === "owner_driver")
+            ? "b_double"
+            : "semi");
 
     const expenseRows = expenses.map((e) => adminLedgerRow(e, "expense")).join("");
     const incomeRows = income.map((i) => adminLedgerRow(i, "income")).join("");
@@ -2319,6 +2333,16 @@
               <option value="hr" ${profile.licenceClass === "hr" ? "selected" : ""}>HR</option>
               <option value="hc" ${profile.licenceClass === "hc" || !profile.licenceClass ? "selected" : ""}>HC</option>
               <option value="mc" ${profile.licenceClass === "mc" ? "selected" : ""}>MC</option>
+            </select>
+          </label>
+          <label>Work vehicle (Fuel Hub)
+            <select id="admin-profile-work-combination">
+              <option value="rigid" ${workCombo === "rigid" ? "selected" : ""}>Heavy rigid</option>
+              <option value="semi" ${workCombo === "semi" ? "selected" : ""}>Prime mover + semi</option>
+              <option value="b_double" ${workCombo === "b_double" ? "selected" : ""}>B-double</option>
+              <option value="b_triple" ${workCombo === "b_triple" ? "selected" : ""}>B-triple</option>
+              <option value="road_train_t1" ${workCombo === "road_train_t1" ? "selected" : ""}>Type 1 road train</option>
+              <option value="road_train_t2" ${workCombo === "road_train_t2" ? "selected" : ""}>Type 2 road train</option>
             </select>
           </label>
           <label>Financial year<input type="text" id="admin-profile-fy" value="${esc(
@@ -6305,6 +6329,41 @@
     setHint(next);
   }
 
+  function combinationFromProfile(licence, driverType) {
+    const duty = String(driverType || "long_haul");
+    if (licence === "lr_mr" || licence === "hr") return "rigid";
+    if (licence === "mc") return duty === "local" ? "semi" : "b_double";
+    if (licence === "hc" && (duty === "long_haul" || duty === "owner_driver")) return "b_double";
+    return "semi";
+  }
+
+  function syncWorkVehicleFromProfile() {
+    const combo = document.getElementById("profile-work-combination");
+    const typeSelect = document.getElementById("driver-type");
+    const licenceSelect = document.getElementById("profile-licence-class");
+    const hint = document.getElementById("work-combination-hint");
+    if (!combo) return;
+    if (combo.dataset.userSet === "1" && combo.value) {
+      if (hint) {
+        hint.textContent =
+          "Fuel Hub will use this vehicle type plus your driver type for diesel L/100 km on planned runs.";
+      }
+      return;
+    }
+    const next = combinationFromProfile(licenceSelect?.value, typeSelect?.value);
+    if (combo.value !== next) combo.value = next;
+    if (hint) {
+      const dutyLabel =
+        typeSelect?.value === "long_haul"
+          ? "linehaul highway running"
+          : typeSelect?.value === "local"
+            ? "local stop-start running"
+            : "your driver type";
+      const label = combo.options[combo.selectedIndex] ? combo.options[combo.selectedIndex].text : next;
+      hint.textContent = `Fuel Hub uses ${label} with ${dutyLabel} to set L/100 km. Save profile to apply.`;
+    }
+  }
+
   function start() {
     const salaryInput =
       document.getElementById("profile-annual-salary") ||
@@ -6316,10 +6375,41 @@
     // allowed, but typing a new salary re-applies the threshold rule.
     salaryInput.addEventListener("input", syncLicenceFromSalary);
     salaryInput.addEventListener("change", syncLicenceFromSalary);
-    select.addEventListener("change", () => setHint(select.value));
+    select.addEventListener("change", () => {
+      setHint(select.value);
+      syncWorkVehicleFromProfile();
+    });
+    document.getElementById("driver-type")?.addEventListener("change", syncWorkVehicleFromProfile);
+    document.getElementById("profile-work-combination")?.addEventListener("change", () => {
+      const el = document.getElementById("profile-work-combination");
+      if (el) el.dataset.userSet = "1";
+    });
+
+    async function hydrateWorkVehicleFromProfile() {
+      const combo = document.getElementById("profile-work-combination");
+      try {
+        const res = await fetch(`${window.location.origin}/api/haulage/records`, {
+          credentials: "same-origin",
+        });
+        const data = await res.json().catch(() => ({}));
+        const saved = data.profile && data.profile.workCombination;
+        if (combo && saved) {
+          combo.value = saved;
+          const suggested = combinationFromProfile(
+            data.profile.licenceClass,
+            data.profile.driverType
+          );
+          if (saved !== suggested) combo.dataset.userSet = "1";
+        }
+      } catch {
+        /* ignore */
+      }
+      syncWorkVehicleFromProfile();
+    }
 
     // After app.js populates the form from saved profile, align class to salary.
     syncLicenceFromSalary();
+    void hydrateWorkVehicleFromProfile();
     let ticks = 0;
     let lastSalary = salaryInput.value;
     const iv = setInterval(() => {
@@ -6328,6 +6418,7 @@
         lastSalary = salaryInput.value;
         syncLicenceFromSalary();
       }
+      if (ticks === 4 || ticks === 8) void hydrateWorkVehicleFromProfile();
       if (ticks >= 20) clearInterval(iv);
     }, 300);
   }
@@ -6392,7 +6483,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs — linehaul on a B-double is not the same as a local rigid. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
@@ -7427,9 +7518,10 @@
       form?.elements?.annualSalary;
     const licenceSelect = document.getElementById("profile-licence-class");
 
+    const comboSelect = document.getElementById("profile-work-combination");
+    if (comboSelect) comboSelect.dataset.userSet = "";
     if (typeSelect && role.driverType) {
       typeSelect.value = role.driverType;
-      typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
     }
     if (salaryInput && role.annualSalary != null) {
       salaryInput.value = String(role.annualSalary);
@@ -7438,8 +7530,9 @@
     }
     if (licenceSelect && role.licenceClass) {
       licenceSelect.value = role.licenceClass;
-      licenceSelect.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    typeSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    licenceSelect?.dispatchEvent(new Event("change", { bubbles: true }));
 
     const label = role.label || role.driverType;
     const money = Number(role.annualSalary).toLocaleString("en-AU");

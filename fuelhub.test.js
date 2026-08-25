@@ -54,6 +54,21 @@ describe("fuel efficiency", () => {
     expect(litresForDistance(100, base)).toBeGreaterThan(40);
   });
 
+  it("uses more fuel for local stop-start than linehaul on the same combination", () => {
+    const linehaul = consumptionLPer100km({ ...base, driverType: "long_haul" }, { band: "regional" });
+    const local = consumptionLPer100km({ ...base, driverType: "local" }, { band: "regional" });
+    expect(local).toBeGreaterThan(linehaul);
+  });
+
+  it("uses more fuel for a linehaul B-double than a linehaul rigid", () => {
+    const rigid = consumptionLPer100km(
+      { combinationId: "rigid", driverType: "long_haul", payloadT: 10, gcmT: 28, tareT: 12, tankCapacityL: 400, currentFuelL: 220 },
+      { band: "regional" }
+    );
+    const bdouble = consumptionLPer100km({ ...base, driverType: "long_haul" }, { band: "regional" });
+    expect(bdouble).toBeGreaterThan(rigid);
+  });
+
   it("normalises truck defaults from combination", () => {
     const truck = normalizeTruck({ combinationId: "road_train_t1" });
     expect(truck.tankCapacityL).toBeGreaterThanOrEqual(1400);
@@ -120,6 +135,20 @@ describe("fuel planner", () => {
     tankCapacityL: 1200,
     currentFuelL: 380,
   };
+
+  it("uses higher L/100 km on a planned run for local duty than linehaul", () => {
+    const linehaul = planFuelStops({
+      origin: "Sydney",
+      destination: "Melbourne",
+      truck: { ...truck, driverType: "long_haul" },
+    });
+    const local = planFuelStops({
+      origin: "Sydney",
+      destination: "Melbourne",
+      truck: { ...truck, driverType: "local" },
+    });
+    expect(local.consumptionLPer100km).toBeGreaterThan(linehaul.consumptionLPer100km);
+  });
 
   it("plans Hume fills at truck-access sites and skips car-only 7-Eleven", () => {
     const plan = planFuelStops({

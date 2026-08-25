@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=fuelhub-2" />
+    <link rel="stylesheet" href="./styles.css?v=fuelhub-3" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -623,6 +623,19 @@
               <p class="muted small span-2" id="licence-class-hint">
                 Licence class updates from annual salary (LR/MR → HR → HC → MC).
               </p>
+              <label>Work vehicle
+                <select name="workCombination" id="profile-work-combination" aria-label="Work vehicle for Fuel Hub">
+                  <option value="rigid">Heavy rigid</option>
+                  <option value="semi">Prime mover + semi</option>
+                  <option value="b_double">B-double</option>
+                  <option value="b_triple">B-triple</option>
+                  <option value="road_train_t1">Type 1 road train</option>
+                  <option value="road_train_t2">Type 2 road train</option>
+                </select>
+              </label>
+              <p class="muted small span-2" id="work-combination-hint">
+                Fuel Hub uses this vehicle plus your driver type (e.g. linehaul) to set diesel L/100 km on planned runs. Linehaul on HC/MC defaults to a B-double.
+              </p>
               <label>Financial year<select id="profile-financial-year" name="financialYear"></select></label>
               <label class="checkbox span-2"><input type="checkbox" name="tfnSupplied" /> TFN supplied to employer</label>
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
@@ -758,7 +771,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fuelhub-2"></script>
-    <script src="./fuelhub.js?v=fuelhub-2"></script>
+    <script src="./enhancements.js?v=fuelhub-3"></script>
+    <script src="./fuelhub.js?v=fuelhub-3"></script>
   </body>
 </html>

@@ -48,10 +48,16 @@
     if (!p || !p.linked) {
       return `<p class="fuelhub-profile-banner">Sign in on Driver Hub to use the same profile as Taxation Hub.</p>`;
     }
-    const bits = [p.displayName, p.employer, p.licenceLabel, p.driverTypeLabel].filter(Boolean);
+    const bits = [
+      p.displayName,
+      p.employer,
+      p.licenceLabel,
+      p.driverTypeLabel,
+      p.workCombinationLabel,
+    ].filter(Boolean);
     const seed = p.truckSeeded
-      ? " Combination is prefilled from your licence class — save Truck &amp; load to keep Fuel Hub tanks and payload."
-      : "";
+      ? ` Fuel Hub follows Profile work vehicle and ${esc(p.driverTypeLabel || "linehaul")} duty cycle for L/100 km — save Truck &amp; load only if you need different tanks or payload.`
+      : ` Tanks were saved in Fuel Hub; Profile driver type (${esc(p.driverTypeLabel || "linehaul")}) still scales planned L/100 km.`;
     return `<div class="fuelhub-profile-banner">Driver Hub profile · ${bits.map(esc).join(" · ")}.${seed}</div>`;
   }
 
@@ -108,6 +114,7 @@
     if (!el) return;
     const plan = lastPlan;
     const eff = (state && state.efficiency) || {};
+    const hub = (state && state.hubProfile) || {};
     el.innerHTML = `
       ${profileBanner()}
       <div class="fuelhub-stats">
@@ -116,6 +123,9 @@
         <div class="fuelhub-stat"><strong>${eff.rangeKm || "—"} km</strong><span>Range before reserve</span></div>
         <div class="fuelhub-stat"><strong>${eff.fuelMassKg || "—"} kg</strong><span>Diesel mass in tanks</span></div>
       </div>
+      <p class="fuelhub-muted">${esc(hub.workCombinationLabel || "Work vehicle")} · ${esc(
+        hub.driverTypeLabel || "linehaul"
+      )} duty cycle sets these rates. Change driver type or work vehicle on Taxation Hub Profile, then Save profile.</p>
       <div class="fuelhub-grid">
         <form id="fuel-plan-form" class="fuelhub-card">
           <h2>Route</h2>
@@ -227,8 +237,8 @@
           <h2>Combination &amp; tanks</h2>
           <p class="fuelhub-muted">${
             hub.linked
-              ? `Pulled from Taxation Hub: ${esc(hub.licenceLabel || hub.licenceClass)} · ${esc(hub.driverTypeLabel || "")}. Suggested combination is ${esc(hub.suggestedCombinationId || "semi")}. Work cars on Profile stay on Car Expenses — this spec is the heavy combination for diesel planning.`
-              : "Save a Driver Hub profile on Taxation Hub to prefill licence class and combination."
+              ? `Profile: ${esc(hub.licenceLabel || hub.licenceClass)} · ${esc(hub.driverTypeLabel || "")} · ${esc(hub.workCombinationLabel || hub.workCombination || "")}. Fuel Hub uses that work vehicle and driver type for L/100 km until you save this form (tanks / payload). Work cars on Profile stay on Car Expenses.`
+              : "Save a Driver Hub profile on Taxation Hub (driver type + work vehicle) to prefill combination and duty-cycle rates."
           }</p>
           <label>Combination<select name="combinationId">${comboOptions(t.combinationId)}</select></label>
           <label>Mass scheme<select name="massSchemeId">${schemeOptions(t.massSchemeId)}</select></label>

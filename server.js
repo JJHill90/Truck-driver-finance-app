@@ -842,7 +842,9 @@ function fuelhubBootstrap(req) {
     })),
     tables: fuelPrices.governmentTables(),
     stations: fuelStations.listStations({ observedPrices: store.observedPrices }),
-    efficiency: fuelEfficiency.describeEfficiency(store.truck),
+    efficiency: fuelEfficiency.describeEfficiency(store.truck, {
+      driverType: hub.driverType,
+    }),
   };
 }
 
@@ -876,13 +878,16 @@ api.put("/fuelhub/truck", (req, res) => {
     res.status(401).json({ error: "Sign in to save a Fuel Hub truck spec." });
     return;
   }
-  const { store } = fuelhubState(req);
-  const truck = fuelhubStore.saveTruck(store, req.body || {});
+  const { store, hub } = fuelhubState(req);
+  const truck = fuelhubStore.saveTruck(store, {
+    ...(req.body || {}),
+    driverType: hub.driverType,
+  });
   persist(req, { reason: "fuelhub-truck" });
   res.json({
     truck,
     truckSource: store.truckSource,
-    efficiency: fuelEfficiency.describeEfficiency(truck),
+    efficiency: fuelEfficiency.describeEfficiency(truck, { driverType: hub.driverType }),
   });
 });
 
@@ -937,14 +942,17 @@ api.post("/fuelhub/prices/observed", (req, res) => {
 });
 
 api.post("/fuelhub/plan", (req, res) => {
-  const { store } = fuelhubState(req);
+  const { store, hub } = fuelhubState(req);
   const body = req.body || {};
   const plan = planFuelStops({
     origin: body.origin,
     destination: body.destination,
     via: body.via,
     distanceKm: body.distanceKm,
-    truck: body.truck || store.truck,
+    truck: {
+      ...(body.truck || store.truck || {}),
+      driverType: hub.driverType,
+    },
     cards: body.cards || store.cards,
     observedPrices: store.observedPrices,
   });
@@ -1286,7 +1294,12 @@ api.put("/admin/users/:username/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
-  const profile = storage.updateProfile(loaded.records, body);
+  const profile = storage.updateProfile(
+    loaded.records,
+    hubProfile.applyProfileVehicleFields(body, loaded.records.profile || {})
+  );
+  const hub = hubProfile.presentHubProfile(auth.getUser(req.params.username), loaded.records);
+  fuelhubStore.ensureFuelhub(loaded.records, { hubProfile: hub });
   persistTarget(loaded, { reason: "admin-edit-profile", actor: sessionUsername(req) });
   res.json({ ok: true, profile });
 });
@@ -1584,6 +1597,7 @@ api.get("/standards", (_req, res) => {
     incomeTypes: listMenuIncomeTypes(),
     driverTypes: presentDriverTypes(),
     licenceClasses: listLicenceClasses(),
+    workCombinations: hubProfile.listWorkCombinations(),
     driverRoleDefaults: listDriverRoleDefaults(),
     financialYear: getCurrentFinancialYear(),
   });
@@ -1649,7 +1663,10 @@ api.put("/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
-  const profile = storage.updateProfile(records, body);
+  const merged = hubProfile.applyProfileVehicleFields(body, records.profile || {});
+  const profile = storage.updateProfile(records, merged);
+  const hub = hubProfile.presentHubProfile(req.user ? auth.getUser(req.user) : null, records);
+  fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
   persist(req);
   res.json({ profile });
 });
