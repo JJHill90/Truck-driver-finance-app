@@ -102,6 +102,12 @@ const {
   normalizeCars,
   primaryActiveWorkUsePercent,
 } = require("./lib/profile-cars");
+const fuelNhvr = require("./lib/fuel-nhvr");
+const fuelPrices = require("./lib/fuel-prices");
+const fuelStations = require("./lib/fuel-stations");
+const fuelEfficiency = require("./lib/fuel-efficiency");
+const { planFuelStops } = require("./lib/fuel-planner");
+const fuelhubStore = require("./lib/fuelhub-store");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -806,6 +812,174 @@ api.get("/version", (_req, res) => {
     prNumber: HAULAGE_PR_NUMBER,
     label: formatVersionLabel(HAULAGE_PR_NUMBER),
   });
+});
+
+function fuelhubState(req) {
+  return fuelhubStore.ensureFuelhub(getRecords(req));
+}
+
+function fuelhubBootstrap(req) {
+  const store = fuelhubState(req);
+  const snap = fuelhubStore.snapshot(store);
+  return {
+    ...snap,
+    retailers: fuelPrices.listRetailers(),
+    combinations: fuelNhvr.listCombinations(),
+    massSchemes: fuelNhvr.listMassSchemes(),
+    networks: fuelNhvr.listNetworks(),
+    corridors: fuelNhvr.listCorridors().map((c) => ({
+      id: c.id,
+      name: c.name,
+      distanceKm: c.distanceKm,
+      nhvrNetworks: c.nhvrNetworks,
+      westPremium: c.westPremium,
+    })),
+    tables: fuelPrices.governmentTables(),
+    stations: fuelStations.listStations({ observedPrices: store.observedPrices }),
+    efficiency: fuelEfficiency.describeEfficiency(store.truck),
+  };
+}
+
+api.get("/fuelhub", (req, res) => {
+  res.json(fuelhubBootstrap(req));
+});
+
+api.get("/fuelhub/stations", (req, res) => {
+  const store = fuelhubState(req);
+  res.json({
+    stations: fuelStations.listStations({
+      corridorId: req.query.corridor || undefined,
+      q: req.query.q || undefined,
+      observedPrices: store.observedPrices,
+    }),
+  });
+});
+
+api.put("/fuelhub/truck", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a Fuel Hub truck spec." });
+    return;
+  }
+  const store = fuelhubState(req);
+  store.truck = fuelEfficiency.normalizeTruck(req.body || {});
+  persist(req, { reason: "fuelhub-truck" });
+  res.json({ truck: store.truck, efficiency: fuelEfficiency.describeEfficiency(store.truck) });
+});
+
+api.post("/fuelhub/cards", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a fuel card." });
+    return;
+  }
+  try {
+    const store = fuelhubState(req);
+    const card = fuelhubStore.upsertCard(store, req.body || {});
+    persist(req, { reason: "fuelhub-card" });
+    res.json({ card, cards: store.cards });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/cards/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove a fuel card." });
+    return;
+  }
+  const store = fuelhubState(req);
+  const removed = fuelhubStore.removeCard(store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Fuel card not found." });
+    return;
+  }
+  persist(req, { reason: "fuelhub-card-delete" });
+  res.json({ ok: true, cards: store.cards });
+});
+
+api.post("/fuelhub/prices/observed", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to log a bowser price." });
+    return;
+  }
+  try {
+    const store = fuelhubState(req);
+    const row = fuelhubStore.recordObservedPrice(store, req.body || {});
+    persist(req, { reason: "fuelhub-price" });
+    res.json({
+      observed: row,
+      stations: fuelStations.listStations({ observedPrices: store.observedPrices }),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/plan", (req, res) => {
+  const store = fuelhubState(req);
+  const body = req.body || {};
+  const plan = planFuelStops({
+    origin: body.origin,
+    destination: body.destination,
+    via: body.via,
+    distanceKm: body.distanceKm,
+    truck: body.truck || store.truck,
+    cards: body.cards || store.cards,
+    observedPrices: store.observedPrices,
+  });
+  res.json({ plan });
+});
+
+api.post("/fuelhub/trips", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a Fuel Hub trip." });
+    return;
+  }
+  try {
+    const store = fuelhubState(req);
+    const trip = fuelhubStore.saveTrip(store, req.body || {});
+    persist(req, { reason: "fuelhub-trip" });
+    res.json({ trip, trips: fuelhubStore.snapshot(store).trips });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/track", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to record GPS points." });
+    return;
+  }
+  try {
+    const store = fuelhubState(req);
+    const track = fuelhubStore.appendTrack(store, req.body || {});
+    persist(req, { reason: "fuelhub-track" });
+    const efficiency = fuelEfficiency.describeEfficiency(store.truck);
+    const remainingKm = Math.max(0, efficiency.rangeKm - (track.km || 0));
+    res.json({
+      track: {
+        id: track.id,
+        km: track.km,
+        startedAt: track.startedAt,
+        updatedAt: track.updatedAt,
+        pointCount: (track.points || []).length,
+      },
+      remainingKm: Math.round(remainingKm * 10) / 10,
+      efficiency,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/track", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to reset GPS tracking." });
+    return;
+  }
+  const store = fuelhubState(req);
+  store.activeTrack = null;
+  persist(req, { reason: "fuelhub-track-reset" });
+  res.json({ ok: true });
 });
 
 // --- Primary-mod admin ---------------------------------------------------
@@ -2444,7 +2618,7 @@ app.use((err, _req, res, _next) => {
 if (process.env.NODE_ENV !== "test") {
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Driver Hub / Taxation Hub running at http://localhost:${PORT}/haulage/`);
+    console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     backup.startBackupScheduler({

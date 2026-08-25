@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>Driver Hub — Taxation Hub</title>
+    <title>Driver Hub — Taxation Hub &amp; Fuel Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=plan-badge-billing-1" />
+    <link rel="stylesheet" href="./styles.css?v=fuelhub-1" />
   </head>
   <body class="auth-locked">
-    <!-- Driver Hub gate: login, then choose Taxation Hub or a coming-soon app -->
+    <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
     <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky" aria-hidden="true"></div>
       <div class="title-screen-road" aria-hidden="true"></div>
@@ -26,7 +26,7 @@
             One login for every driver app.
           </h1>
           <p class="title-screen-sub">
-            Sign in with your Driver Hub account, then open Taxation Hub or another app from your hub.
+            Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.
           </p>
           <form id="title-auth-form" class="title-auth-form" autocomplete="on">
             <label>
@@ -83,7 +83,7 @@
             <span id="title-hub-plan-badge" class="hub-plan-badge hidden" aria-live="polite"></span>
           </p>
           <p class="title-screen-sub">
-            Signed in as <strong id="title-hub-username">—</strong>. Open Taxation Hub now — more Driver Hub apps are on the way and will use this same login when ready.
+            Signed in as <strong id="title-hub-username">—</strong>. Open Taxation Hub or Fuel Hub — both use this Driver Hub login.
           </p>
           <div class="title-hub-apps">
             <button type="button" class="title-hub-app" id="hub-open-taxationhub" data-hub-app="taxationhub">
@@ -91,11 +91,11 @@
               <span class="title-hub-app-desc">Tax services for drivers — consolidate expenses, remittances, receipt scans and EOFY estimates in one place.</span>
               <span class="title-hub-app-cta">Open Taxation Hub</span>
             </button>
-            <div class="title-hub-app title-hub-app-wip" id="hub-diaryhub-wip" aria-disabled="true">
-              <span class="title-hub-app-name">Work in Progress</span>
-              <span class="title-hub-app-desc">Another Driver Hub app is under construction. Not available with this Taxation Hub release — it will use this same login when we ship it later.</span>
-              <span class="title-hub-app-badge">Coming later</span>
-            </div>
+            <button type="button" class="title-hub-app" id="hub-open-fuelhub" data-hub-app="fuelhub">
+              <span class="title-hub-app-name">Fuel<span class="brand-hub">Hub</span></span>
+              <span class="title-hub-app-desc">Plan diesel fills on NHVR freight routes — load, trailers, tank, cards and cheapest truck-access stops. Not a car-nav shortcut.</span>
+              <span class="title-hub-app-cta">Open Fuel Hub</span>
+            </button>
           </div>
           <div class="title-hub-actions">
             <button type="button" class="btn title-hub-logout" id="title-hub-logout">Log out of DriverHub</button>
@@ -705,6 +705,39 @@
       </div>
     </div>
 
+    <div id="fuelhub-shell" class="fuelhub-shell" aria-label="Fuel Hub">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <img src="./truck.svg" alt="" />
+          <span>Fuel<span class="brand-hub">Hub</span></span>
+        </div>
+        <nav class="sidebar-nav" aria-label="Fuel Hub">
+          <button type="button" class="nav-btn active" data-fuel-view="plan">Plan fills</button>
+          <button type="button" class="nav-btn" data-fuel-view="track">GPS track</button>
+          <button type="button" class="nav-btn" data-fuel-view="truck">Truck &amp; load</button>
+          <button type="button" class="nav-btn" data-fuel-view="cards">Fuel cards</button>
+          <button type="button" class="nav-btn" data-fuel-view="prices">Prices &amp; tables</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
+            <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
+          </nav>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.15</p>
+        </div>
+      </aside>
+      <div class="main">
+        <header class="topbar">
+          <h1 id="fuelhub-page-title">Plan fills</h1>
+          <p class="fuelhub-tagline">NHVR freight corridors · diesel efficiency · cheapest truck-access fills</p>
+        </header>
+        <section id="fuel-view-plan" class="view active fuelhub-view"></section>
+        <section id="fuel-view-track" class="view fuelhub-view"></section>
+        <section id="fuel-view-truck" class="view fuelhub-view"></section>
+        <section id="fuel-view-cards" class="view fuelhub-view"></section>
+        <section id="fuel-view-prices" class="view fuelhub-view"></section>
+      </div>
+    </div>
+
     <!-- Receipt viewer modal -->
     <div id="receipt-viewer" class="modal hidden">
       <div class="modal-backdrop" data-close-viewer></div>
@@ -725,6 +758,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=backup-disk-space-1"></script>
+    <script src="./enhancements.js?v=fuelhub-1"></script>
+    <script src="./fuelhub.js?v=fuelhub-1"></script>
   </body>
 </html>

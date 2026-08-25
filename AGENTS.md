@@ -6,7 +6,10 @@
 The tax product inside it is **Taxation Hub** (formerly Finance Hub / Haulage
 Finance): consolidates tax services for drivers — work expenses,
 income/remittances, receipt/payslip OCR, a live EOFY report, tax estimate and
-forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
+forecast. **Fuel Hub** is the second picker app (replacing Work in Progress):
+diesel efficiency from load/trailers/tank, NHVR freight corridors, government-style
+price bands, fuel cards and GPS or offline route planning. Standard commands
+(`start`, `dev`, `lint`, `test`) are in `README.md`.
 
 - Frontend: framework-free SPA in `public/app.js` (provided verbatim). The
   backend + `public/index.html` exist to satisfy the exact DOM ids and API
@@ -28,13 +31,21 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   use `*` with cookies.
 - **Driver Hub gate.** `#title-screen` is the Driver Hub login. After `/auth/me`
   has a user, show the app picker (`#title-hub-picker`) unless
-  `localStorage.driverhub-selected-app === "taxationhub"` (legacy `financehub`
-  is migrated). Choosing Taxation Hub unlocks `.app-shell` (sidebar brand
-  **TaxationHub**). The second picker slot is labelled **Work in Progress**
-  (product name withheld until ready — not available at Taxation Hub release).
-  `body.auth-locked` hides the shell. Logout clears the selected app and
+  `localStorage.driverhub-selected-app` is `"taxationhub"` (legacy `financehub`
+  is migrated) or `"fuelhub"`. Choosing Taxation Hub unlocks `.app-shell`
+  (sidebar brand **TaxationHub**). Choosing Fuel Hub unlocks `#fuelhub-shell`
+  (`body.fuelhub-open`). The former Work in Progress tile is Fuel Hub.
+  `body.auth-locked` hides both shells. Logout clears the selected app and
   returns to Driver Hub login. Brand wordmarks use Saira Condensed with a sky
   Hub accent (navy/amber UI palette).
+- **Fuel Hub.** `GET/POST /api/haulage/fuelhub*` (`lib/fuel-*.js`, `lib/fuelhub-store.js`,
+  `public/fuelhub.js`). Consumption uses combination, trailer count, payload,
+  GCM and diesel mass (~0.84 kg/L). Planner ranks BP / Mobil / Shell / Ampol /
+  Liberty / 7-Eleven / Pearl truck-access sites on NHVR corridors (Hume, Pacific,
+  Newell, Warrego, Stuart, Eyre, Great Western, Bruce), fills before remote /
+  out-west price step-ups, and suggests rest/refresh stops. Price tables follow
+  ACCC / FuelWatch / FuelCheck public-chart structure; drivers overlay bowser
+  prices and fuel-card cents-off. Apple/Google maps are not the routing source.
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is

@@ -3,9 +3,11 @@
 **Driver Hub** is the login hub for driver apps. **Taxation Hub** (inside Driver Hub)
 consolidates tax services for Australian truck drivers — track work expenses and
 income/remittances, capture receipts, and produce a live EOFY performance
-statement, tax estimate and forecast. A second hub app slot is shown as
-**Work in Progress** (name withheld until ready) — not available at Taxation Hub
-release — and will use the same Driver Hub login when shipped.
+statement, tax estimate and forecast. **Fuel Hub** replaces the former Work in
+Progress slot: plan diesel fills from load, trailers, tank capacity and fuel
+mass, overlay government-style price bands plus fuel cards, and rank
+truck-access stops on NHVR freight corridors (not Apple/Google car shortcuts).
+GPS tracking or a driver-entered offline route both work from the same login.
 
 The frontend is a framework-free single-page app (`public/app.js`) served by a
 small **Node.js + Express** backend that stores data in a local JSON file
@@ -83,9 +85,18 @@ lib/                    Provided backend modules (verbatim):
   local-receipt-ocr.js  Tesseract.js money/text extraction
   income-document-ocr.js Payslip/remittance + PDF parsing
   receipt-ocr-money.js  Money parsing helpers
+lib/ (Fuel Hub, first-party):
+  fuel-nhvr.js          Heavy-vehicle combinations, mass schemes, freight corridors
+  fuel-prices.js        Government-style diesel bands + retailer cards
+  fuel-stations.js      Truck-access sites on NHVR corridors
+  fuel-efficiency.js    L/100 km from load, trailers, fuel mass
+  fuel-planner.js       Cheapest fills + rest/refresh
+  fuelhub-store.js      Per-user truck spec, cards, trips
 public/
   index.html            App shell / all DOM the frontend expects
   app.js                Frontend SPA (provided verbatim)
+  enhancements.js       Driver Hub picker, Taxation Hub layer
+  fuelhub.js            Fuel Hub UI
   styles.css            Styles
   truck.svg             Icon
 data/                   Runtime store + receipts (git-ignored)

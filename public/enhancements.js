@@ -917,6 +917,7 @@
   /** Show Driver Hub login forms (signed out). */
   function showDriverHubLogin() {
     lockApp();
+    document.body.classList.remove("fuelhub-open");
     byId("title-auth-panel")?.classList.remove("hidden");
     byId("title-hub-picker")?.classList.add("hidden");
     setSelectedHubApp("");
@@ -937,12 +938,34 @@
   }
 
   function openTaxationHub(user) {
+    document.body.classList.remove("fuelhub-open");
+    if (window.FuelHub && typeof window.FuelHub.close === "function") {
+      window.FuelHub.close();
+    }
     setSelectedHubApp("taxationhub");
     unlockApp();
     showAuthState(user || null);
   }
 
+  function openFuelHub() {
+    setSelectedHubApp("fuelhub");
+    unlockApp();
+    document.body.classList.add("fuelhub-open");
+    const tryOpen = () => {
+      if (window.FuelHub && typeof window.FuelHub.open === "function") {
+        void window.FuelHub.open();
+        return true;
+      }
+      return false;
+    };
+    if (!tryOpen()) setTimeout(tryOpen, 0);
+  }
+
   function returnToDriverHub(user) {
+    document.body.classList.remove("fuelhub-open");
+    if (window.FuelHub && typeof window.FuelHub.close === "function") {
+      window.FuelHub.close();
+    }
     setSelectedHubApp("");
     showDriverHubPicker(user && user.username ? user.username : byId("title-hub-username")?.textContent);
     if (typeof window.toast === "function") {
@@ -1020,8 +1043,8 @@
     }
     if (sub) {
       sub.textContent = isRegister
-        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub and future Driver Hub apps."
-        : "Sign in with your Driver Hub account, then open Taxation Hub or another app from your hub.";
+        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub, Fuel Hub and future Driver Hub apps."
+        : "Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.";
     }
     const form = byId("title-auth-form");
     if (form) form.classList.toggle("title-register-mode", Boolean(isRegister));
@@ -1178,6 +1201,24 @@
         const hubMsg = byId("title-hub-message");
         if (hubMsg) {
           hubMsg.textContent = err.message || "Could not open Taxation Hub.";
+          hubMsg.classList.add("is-error");
+        }
+      }
+    });
+
+    byId("hub-open-fuelhub")?.addEventListener("click", async () => {
+      try {
+        const me = await apiGet("/auth/me");
+        if (!(me.user && me.user.username)) {
+          showDriverHubLogin();
+          setTitleMessage("Sign in to Driver Hub first.", true);
+          return;
+        }
+        openFuelHub();
+      } catch (err) {
+        const hubMsg = byId("title-hub-message");
+        if (hubMsg) {
+          hubMsg.textContent = err.message || "Could not open Fuel Hub.";
           hubMsg.classList.add("is-error");
         }
       }
@@ -2951,8 +2992,9 @@
           cachedEntitlements = me.entitlements;
           applyProExportGates(me.entitlements);
         }
-        // Driver Hub: signed-in users pick an app unless Taxation Hub is already open.
-        if (getSelectedHubApp() === "taxationhub") {
+        // Driver Hub: signed-in users pick an app unless one is already open.
+        const selectedApp = getSelectedHubApp();
+        if (selectedApp === "taxationhub") {
           openTaxationHub(me.user);
           if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
@@ -2962,6 +3004,8 @@
             renderAlerts(alertData.alerts, alertData.user);
             markReviewShown();
           }
+        } else if (selectedApp === "fuelhub") {
+          openFuelHub();
         } else {
           showDriverHubPicker(me.user.username);
         }
@@ -6348,7 +6392,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
