@@ -684,14 +684,15 @@
         <div class="fuelhub-stat"><strong>${avg.avgPayloadT || "—"} t</strong><span>Km-weighted freight</span></div>
         <div class="fuelhub-stat"><strong>${avg.avgSpeedKmh || "—"} km/h</strong><span>Average speed (time factor)</span></div>
       </div>
-      <div class="fuelhub-card" style="margin-bottom:16px">
+      <div class="fuelhub-stack">
+      <div class="fuelhub-card">
         <h2>Usage scenarios</h2>
         <p class="fuelhub-muted">From saved trips when you have history, otherwise from the current truck, fuel load and freight.</p>
         ${renderScenarioChart(forecast.scenarios || [])}
       </div>
       <div class="fuelhub-grid">
         <form id="fuel-forecast-form" class="fuelhub-card fuelhub-profile-form">
-          <h2 class="span-2">Predict a run</h2>
+          <h2>Predict a run</h2>
           <p class="fuelhub-muted span-2">Example: St George → Longreach → Barcaldine (refuel) → Emerald → Gracemere. After Barcaldine you pick up extra freight — take only the litres needed to Gracemere instead of filling the tank at an inflated bowser.</p>
           ${renderRouteFields()}
           <div class="fuelhub-actions span-2">
@@ -715,7 +716,7 @@
           }
         </div>
       </div>
-      <div class="fuelhub-card" style="margin-top:16px">
+      <div class="fuelhub-card">
         <h2>Per trip</h2>
         ${
           trips.length
@@ -735,6 +736,7 @@
                 .join("")}</tbody></table>`
             : `<p class="fuelhub-muted">No saved trips yet. Plan a run and Save trip — each row’s L/km uses fill litres, freight and hours.</p>`
         }
+      </div>
       </div>
     `;
     el.querySelector("#fuel-forecast-form")?.addEventListener("submit", onPlan);
@@ -768,7 +770,7 @@
       }</p>
       <div class="fuelhub-grid">
         <form id="fuel-plan-form" class="fuelhub-card fuelhub-profile-form">
-          <h2 class="span-2">Route</h2>
+          <h2>Route</h2>
           <p class="fuelhub-muted span-2">Type towns or a depot-to-gate run. Fuel Hub matches NHVR freight corridors (Hume, Pacific, Newell, Warrego, Capricorn, Stuart, Eyre…) instead of Apple/Google car shortcuts. Freight, hours and fuel on board change L/km; refuel-at sizes a minimum fill.</p>
           ${renderRouteFields()}
           <div class="fuelhub-actions span-2">
@@ -788,7 +790,7 @@
       </div>
       ${
         prediction
-          ? `<div class="fuelhub-card" style="margin-top:16px">
+          ? `<div class="fuelhub-card">
               <h2>Real-time fueling forecast</h2>
               <p class="fuelhub-muted">Conservative / Baseline / Optimistic — same categories as Taxation Hub Forecast.</p>
               ${renderScenarioChart(prediction.scenarios || [], { showCost: true })}
@@ -883,7 +885,7 @@
     el.innerHTML = `
       ${profileBanner()}
       <div class="fuelhub-grid">
-        <form id="fuel-truck-form" class="fuelhub-card">
+        <form id="fuel-truck-form" class="fuelhub-card fuelhub-profile-form">
           <h2>Combination &amp; tanks</h2>
           <p class="fuelhub-muted">${
             hub.linked
@@ -906,7 +908,7 @@
           <label>Fuel on board (L)<input name="currentFuelL" type="number" min="0" step="1" value="${esc(t.currentFuelL)}" /></label>
           <label>Length (m)<input name="lengthM" type="number" min="4" step="0.1" value="${esc(t.lengthM)}" /></label>
           <label>Height (m)<input name="heightM" type="number" min="2" step="0.01" value="${esc(t.heightM)}" /></label>
-          <div class="fuelhub-actions">
+          <div class="fuelhub-actions span-2">
             <button type="submit" class="btn primary">Save truck spec</button>
           </div>
         </form>
@@ -929,7 +931,7 @@
     el.innerHTML = `
       ${profileBanner()}
       <div class="fuelhub-grid">
-        <form id="fuel-card-form" class="fuelhub-card">
+        <form id="fuel-card-form" class="fuelhub-card fuelhub-profile-form">
           <h2>Add fuel card / agreement</h2>
           <p class="fuelhub-muted">BP, Mobil, Shell, Ampol, Liberty, 7-Eleven and Pearl are the main barometers. Company cents-off stacks on top of the card.</p>
           <label>Name<input name="name" required placeholder="e.g. BP Plus" /></label>
@@ -938,7 +940,7 @@
           <label>Percent off<input name="percentOff" type="number" min="0" max="25" step="0.1" value="0" /></label>
           <label>Company / industry extra ¢/L<input name="companyCplOff" type="number" min="0" max="20" step="0.1" value="0" /></label>
           <label>Company name<input name="company" placeholder="Fleet or employer" value="${esc(hub.employer || "")}" /></label>
-          <div class="fuelhub-actions">
+          <div class="fuelhub-actions span-2">
             <button type="submit" class="btn primary">Save card</button>
           </div>
         </form>
@@ -979,7 +981,8 @@
       .slice(0, 12);
     el.innerHTML = `
       ${profileBanner()}
-      <div class="fuelhub-card" style="margin-bottom:16px">
+      <div class="fuelhub-stack">
+      <div class="fuelhub-card">
         <h2>Government-style diesel bands</h2>
         <p class="fuelhub-muted">${esc(tables.asOfNote || "")}</p>
         <table class="fuelhub-table">
@@ -1004,7 +1007,7 @@
         <p class="fuelhub-muted">Sources: ${(tables.sources || []).map((s) => esc(s.name)).join(" · ")}</p>
       </div>
       <div class="fuelhub-grid">
-        <form id="fuel-price-form" class="fuelhub-card">
+        <form id="fuel-price-form" class="fuelhub-card fuelhub-profile-form">
           <h2>Log a bowser price</h2>
           <label>Station
             <select name="stationId">
@@ -1033,6 +1036,7 @@
           </table>
           <p class="fuelhub-muted">* overlay from a driver-logged bowser. Out-west / remote sites sit higher on purpose.</p>
         </div>
+      </div>
       </div>
     `;
     el.querySelector("#fuel-price-form")?.addEventListener("submit", onSavePrice);

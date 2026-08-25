@@ -47,8 +47,11 @@ body.auth-locked .fuelhub-shell {
 }
 body.fuelhub-open:not(.auth-locked) .fuelhub-shell {
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-rows: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
+  align-items: start;
 }
 body.fuelhub-open:not(.auth-locked) .app-shell {
   display: none !important;
@@ -2058,16 +2061,15 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 
 @media (max-width: 900px) {
-  .app-shell,
-  .fuelhub-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
-  .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
-  .sidebar-bottom {
+  .app-shell { grid-template-columns: 1fr; }
+  .app-shell .sidebar { position: static; height: auto; }
+  .app-shell .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+  .app-shell .sidebar-bottom {
     margin-top: 8px;
     padding-top: 8px;
     width: 100%;
   }
-  .sidebar-nav-bottom {
+  .app-shell .sidebar-nav-bottom {
     margin-top: 0;
     padding-top: 0;
     width: 100%;
@@ -2086,86 +2088,212 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   color: var(--text);
   width: 100%;
 }
-.fuelhub-shell .sidebar,
+.fuelhub-shell .fuelhub-sidebar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-self: stretch;
+  position: relative;
+  top: auto;
+  height: 100%;
+  max-height: 100dvh;
+  min-height: 0;
+  padding: 14px 10px 10px;
+  overflow: hidden;
+}
+.fuelhub-shell .fuelhub-sidebar .sidebar-brand {
+  flex-shrink: 0;
+  padding: 2px 8px 12px;
+  font-size: 1.22rem;
+}
+.fuelhub-nav {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.fuelhub-nav-slot {
+  flex: 0 0 auto;
+  display: block;
+}
+.fuelhub-nav-slot .nav-btn {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 8px 10px;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fuelhub-shell .fuelhub-sidebar > .sidebar-bottom {
+  flex-shrink: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 10px;
+}
+.fuelhub-shell .sidebar-bottom .nav-btn {
+  white-space: normal;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
 .fuelhub-shell .main {
-  min-height: 100vh;
+  min-width: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 16px 20px 40px;
+  max-width: none;
+}
+.fuelhub-topbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.fuelhub-topbar h1 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+.fuelhub-tagline {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--text-dim);
 }
 .fuelhub-profile-banner {
-  margin: 0 0 14px;
-  padding: 10px 14px;
+  margin: 0;
+  padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: rgba(62, 176, 255, 0.1);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 .fuelhub-view {
   display: none;
-  padding: 8px 0 40px;
+  padding: 0 0 28px;
+  width: 100%;
+  max-width: 52rem;
 }
 .fuelhub-view.active {
   display: block;
 }
+.fuelhub-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .fuelhub-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) 1fr;
-  gap: 18px;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
 }
 .fuelhub-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 18px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-width: 0;
 }
-.fuelhub-card h2 {
-  margin: 0 0 10px;
-  font-size: 1.05rem;
+.fuelhub-card:has(table) {
+  overflow-x: auto;
+}
+.fuelhub-card > h2,
+.fuelhub-card-title {
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+.fuelhub-card > h2.span-2 {
+  margin-bottom: 8px;
+}
+.fuelhub-card > .fuelhub-muted:first-of-type {
+  margin: 0 0 12px;
 }
 .fuelhub-card label {
-  display: block;
-  margin: 0 0 10px;
-  font-size: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
+  min-width: 0;
 }
 .fuelhub-card input,
 .fuelhub-card select,
 .fuelhub-card textarea {
   width: 100%;
-  margin-top: 4px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text);
   font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.fuelhub-card input[type="number"] {
+  max-width: 11rem;
 }
 .fuelhub-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 .fuelhub-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  gap: 8px;
+  margin-bottom: 0;
+}
+.fuelhub-view > * + * {
+  margin-top: 14px;
+}
+.fuelhub-view > .fuelhub-muted {
+  margin-bottom: 0;
 }
 .fuelhub-stat {
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 0;
 }
 .fuelhub-stat strong {
   display: block;
-  font-size: 1.25rem;
+  font-size: 1.12rem;
+  line-height: 1.2;
   color: var(--accent);
+  overflow-wrap: anywhere;
 }
 .fuelhub-stat span {
+  display: block;
+  margin-top: 3px;
   color: var(--text-dim);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
 }
 .fuelhub-stop {
   border: 1px solid var(--border);
@@ -2189,22 +2317,29 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .fuelhub-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 .fuelhub-table th,
 .fuelhub-table td {
   text-align: left;
-  padding: 8px 6px;
+  padding: 7px 8px;
   border-bottom: 1px solid var(--border);
+  vertical-align: top;
 }
-.fuelhub-table th { color: var(--text-dim); font-weight: 600; }
+.fuelhub-table th { color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 .fuelhub-live {
-  font-size: 2rem;
+  font-size: 1.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--hub-accent);
 }
-.fuelhub-muted { color: var(--text-dim); font-size: 0.88rem; line-height: 1.45; }
+.fuelhub-muted {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 0 0 10px;
+  max-width: 42rem;
+}
 .fuelhub-card-row {
   display: flex;
   justify-content: space-between;
@@ -2215,13 +2350,13 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 .fuelhub-dash-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  margin-bottom: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 0;
 }
 .fuelhub-subhead {
-  margin: 16px 0 6px;
-  font-size: 0.92rem;
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
 }
 .fuelhub-deals { margin-top: 0; }
 .fuelhub-vehicle-list {
@@ -2252,43 +2387,58 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 .fuelhub-profile-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: start;
 }
+.fuelhub-profile-form > h2,
+.fuelhub-profile-form > p,
+.fuelhub-profile-form > .fuelhub-muted,
 .fuelhub-profile-form .span-2,
 .fuelhub-profile-form .fuelhub-actions {
   grid-column: 1 / -1;
 }
 .fuelhub-check {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
   color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 500;
 }
-.fuelhub-check input { width: auto; margin: 0; }
+.fuelhub-card label.fuelhub-check {
+  flex-direction: row;
+  align-items: center;
+}
+.fuelhub-check input { width: auto; margin: 0; flex: 0 0 auto; }
 .fuelhub-scenarios {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 8px 0 14px;
+  gap: 10px;
+  margin: 4px 0 12px;
 }
 .fuelhub-scenario-head {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
   flex-wrap: wrap;
 }
 .fuelhub-scenario-head h3 {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: 0.92rem;
+}
+.fuelhub-scenario-head span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
 }
 .fuelhub-scenario-bar {
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--border) 70%, transparent);
   overflow: hidden;
-  margin: 6px 0 4px;
+  margin: 5px 0 3px;
 }
 .fuelhub-scenario-bar span {
   display: block;
@@ -2306,10 +2456,69 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   margin: 12px 0;
   background: color-mix(in srgb, var(--accent) 8%, var(--panel-2, transparent));
 }
-.fuelhub-refill h3 { margin: 0 0 8px; font-size: 1rem; }
+.fuelhub-refill h3 { margin: 0 0 8px; font-size: 0.98rem; }
 .fuelhub-row-refill td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-@media (max-width: 900px) {
-  .fuelhub-grid { grid-template-columns: 1fr; }
+@media (max-width: 1100px) {
+  .fuelhub-grid,
   .fuelhub-dash-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  body.fuelhub-open:not(.auth-locked) .fuelhub-shell {
+    grid-template-columns: 132px minmax(0, 1fr);
+    grid-template-rows: 100dvh;
+  }
+  .fuelhub-shell .fuelhub-sidebar {
+    padding: 10px 6px 8px;
+  }
+  .fuelhub-shell .fuelhub-sidebar .sidebar-brand {
+    font-size: 1.02rem;
+    padding: 0 4px 8px;
+    gap: 6px;
+  }
+  .fuelhub-shell .fuelhub-sidebar .sidebar-brand img {
+    width: 22px;
+    height: 22px;
+  }
+  .fuelhub-nav {
+    gap: 2px;
+  }
+  .fuelhub-nav-slot .nav-btn {
+    font-size: 0.76rem;
+    padding: 7px 8px;
+    border-radius: 8px;
+  }
+  .fuelhub-shell .sidebar-bottom .nav-btn {
+    font-size: 0.72rem;
+    padding: 8px;
+  }
+  .fuelhub-shell .app-version-footer.sidebar-version {
+    padding: 4px 8px 2px;
+    font-size: 0.66rem;
+  }
+  .fuelhub-shell .main {
+    padding: 12px 12px 36px;
+  }
+  .fuelhub-topbar h1 { font-size: 1.18rem; }
+  .fuelhub-tagline { font-size: 0.8rem; }
   .fuelhub-profile-form { grid-template-columns: 1fr; }
+  .fuelhub-card input[type="number"] { max-width: 100%; }
+  .fuelhub-stats { grid-template-columns: 1fr 1fr; }
+  .fuelhub-vehicle {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 420px) {
+  body.fuelhub-open:not(.auth-locked) .fuelhub-shell {
+    grid-template-columns: 118px minmax(0, 1fr);
+    grid-template-rows: 100dvh;
+  }
+  .fuelhub-nav-slot .nav-btn,
+  .fuelhub-shell .sidebar-bottom .nav-btn {
+    font-size: 0.7rem;
+    padding: 6px 7px;
+  }
+  .fuelhub-shell .main { padding: 10px 8px 32px; }
+  .fuelhub-card { padding: 12px; }
+  .fuelhub-stats { grid-template-columns: 1fr; }
 }
