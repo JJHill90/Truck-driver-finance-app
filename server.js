@@ -109,6 +109,7 @@ const fuelEfficiency = require("./lib/fuel-efficiency");
 const { planFuelStops } = require("./lib/fuel-planner");
 const fuelhubStore = require("./lib/fuelhub-store");
 const hubProfile = require("./lib/hub-profile");
+const fuelDashboard = require("./lib/fuel-dashboard");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -845,6 +846,16 @@ function fuelhubBootstrap(req) {
     efficiency: fuelEfficiency.describeEfficiency(store.truck, {
       driverType: hub.driverType,
     }),
+    driverTypes: presentDriverTypes(),
+    licenceClasses: listLicenceClasses(),
+    workCombinations: hubProfile.listWorkCombinations(),
+    dashboard: fuelDashboard.buildDashboard({
+      store,
+      hub,
+      efficiency: fuelEfficiency.describeEfficiency(store.truck, {
+        driverType: hub.driverType,
+      }),
+    }),
   };
 }
 
@@ -860,6 +871,24 @@ api.get("/hub/profile", (req, res) => {
 
 api.get("/fuelhub", (req, res) => {
   res.json(fuelhubBootstrap(req));
+});
+
+api.get("/fuelhub/dashboard", (req, res) => {
+  const { store, hub } = fuelhubState(req);
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng != null ? req.query.lng : req.query.lon);
+  const point = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const efficiency = fuelEfficiency.describeEfficiency(store.truck, {
+    driverType: hub.driverType,
+  });
+  res.json(
+    fuelDashboard.buildDashboard({
+      store,
+      hub,
+      point,
+      efficiency,
+    })
+  );
 });
 
 api.get("/fuelhub/stations", (req, res) => {
@@ -956,7 +985,9 @@ api.post("/fuelhub/plan", (req, res) => {
     cards: body.cards || store.cards,
     observedPrices: store.observedPrices,
   });
-  res.json({ plan });
+  fuelhubStore.saveLastPlan(store, fuelDashboard.summarisePlan(plan));
+  if (req.user) persist(req, { reason: "fuelhub-plan" });
+  res.json({ plan, lastPlan: store.lastPlan });
 });
 
 api.post("/fuelhub/trips", (req, res) => {

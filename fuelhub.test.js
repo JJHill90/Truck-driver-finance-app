@@ -11,6 +11,7 @@ const { matchCorridor, accessWarnings, combinationAllowedOnCorridor } = require(
 const { effectiveCpl, bestDiscountForRetailer, tableDieselCpl, governmentTables } = require("./lib/fuel-prices");
 const { haversineKm, trackDistanceKm, stationsOnCorridor } = require("./lib/fuel-stations");
 const { upsertCard, ensureFuelhub, recordObservedPrice } = require("./lib/fuelhub-store");
+const { buildDashboard, areaDeals } = require("./lib/fuel-dashboard");
 
 describe("fuel efficiency", () => {
   const base = {
@@ -212,5 +213,75 @@ describe("GPS and store", () => {
     expect(price.cpl).toBe(179.9);
     const marulan = stationsOnCorridor("hume", store.observedPrices).find((s) => s.id === "bp-marulan");
     expect(marulan.pumpCpl).toBe(179.9);
+  });
+});
+
+describe("fuel hub dashboard", () => {
+  it("ranks GPS-area truck sites by effective ¢/L from government tables", () => {
+    const dash = buildDashboard({
+      store: {
+        truck: normalizeTruck({ combinationId: "b_double", driverType: "long_haul" }),
+        cards: [],
+        observedPrices: [],
+        trips: [],
+      },
+      hub: {
+        workCombination: "b_double",
+        driverType: "long_haul",
+        driverTypeLabel: "Linehaul driver",
+        workCombinationLabel: "B-double",
+      },
+      point: { lat: -34.711, lng: 150.005 },
+    });
+    expect(dash.areaDeals.areaKind).toBe("gps");
+    expect(dash.areaDeals.deals.length).toBeGreaterThan(0);
+    expect(dash.areaDeals.deals.every((d) => d.truckAccess)).toBe(true);
+    const first = dash.areaDeals.deals[0].effectiveCpl;
+    const last = dash.areaDeals.deals[dash.areaDeals.deals.length - 1].effectiveCpl;
+    expect(first).toBeLessThanOrEqual(last);
+    expect(dash.areaDeals.sources.some((s) => /accc/i.test(s.id) || /FuelWatch/i.test(s.name))).toBe(true);
+  });
+
+  it("summarises the current planned run and previous trips", () => {
+    const dash = buildDashboard({
+      store: {
+        truck: normalizeTruck({ combinationId: "b_double" }),
+        lastPlan: {
+          origin: "Sydney",
+          destination: "Melbourne",
+          distanceKm: 840,
+          corridor: { id: "hume", name: "Hume Highway" },
+          consumptionLPer100km: 54.5,
+          totals: { fillL: 659.5, costAud: 1286.03 },
+        },
+        trips: [
+          {
+            id: "1",
+            origin: "Brisbane",
+            destination: "Mount Isa",
+            distanceKm: 1820,
+            createdAt: "2026-08-01T00:00:00.000Z",
+            planSummary: { fillL: 900, costAud: 2100, corridor: "warrego" },
+          },
+        ],
+        cards: [],
+        observedPrices: [],
+      },
+      hub: { workCombination: "b_double", driverTypeLabel: "Linehaul driver" },
+    });
+    expect(dash.currentJourney.plan.origin).toBe("Sydney");
+    expect(dash.previousJourneys[0].destination).toBe("Mount Isa");
+    expect(dash.journeyStats.tripCount).toBe(1);
+    expect(dash.journeyStats.totalFillL).toBe(900);
+  });
+
+  it("does not list car-only 7-Eleven Craigieburn as a B-double deal", () => {
+    const deals = areaDeals({
+      store: { cards: [], observedPrices: [] },
+      hub: { workCombination: "b_double" },
+      truck: { combinationId: "b_double" },
+      point: { lat: -37.599, lng: 144.941 },
+    });
+    expect(deals.deals.some((d) => /craigieburn/i.test(d.name))).toBe(false);
   });
 });

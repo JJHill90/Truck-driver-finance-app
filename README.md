@@ -94,6 +94,7 @@ lib/ (Fuel Hub, first-party):
   fuel-stations.js      Truck-access sites on NHVR corridors
   fuel-efficiency.js    L/100 km from load, trailers, fuel mass, driver type
   fuel-planner.js       Cheapest fills + rest/refresh
+  fuel-dashboard.js     Current run, trip history, area diesel deals
   fuelhub-store.js      Per-user truck spec, cards, trips
   hub-profile.js        Shared Driver Hub identity + work vehicle for Fuel Hub
 public/

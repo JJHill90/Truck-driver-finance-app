@@ -6,7 +6,7 @@
 
   const API = `${window.location.origin}/api/haulage`;
   let state = null;
-  let view = "plan";
+  let view = "dashboard";
   let lastPlan = null;
   let watchId = null;
   let gpsBusy = false;
@@ -64,6 +64,8 @@
   function setView(next) {
     view = next;
     const titles = {
+      dashboard: "Dashboard",
+      profile: "Profile",
       plan: "Plan fills",
       track: "GPS track",
       truck: "Truck & load",
@@ -79,6 +81,7 @@
       el.classList.toggle("active", el.id === `fuel-view-${next}`);
     });
     render();
+    if (next === "dashboard") locateForDeals();
   }
 
   function comboOptions(selected) {
@@ -107,6 +110,246 @@
           `<option value="${esc(r.id)}" ${r.id === selected ? "selected" : ""}>${esc(r.name)}</option>`
       )
       .join("");
+  }
+
+  function fmtWhen(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+  }
+
+  function dash() {
+    return (state && state.dashboard) || {};
+  }
+
+  function renderDashboard() {
+    const el = byId("fuel-view-dashboard");
+    if (!el) return;
+    const d = dash();
+    const current = d.currentJourney || {};
+    const plan = current.plan || lastPlan;
+    const track = current.track || state.activeTrack;
+    const trips = d.previousJourneys || state.trips || [];
+    const stats = d.journeyStats || {};
+    const deals = (d.areaDeals && d.areaDeals.deals) || [];
+    const area = d.areaDeals || {};
+    const hub = (state && state.hubProfile) || {};
+
+    const journeyCard = plan
+      ? `<p><strong>${esc(plan.origin)}</strong> → <strong>${esc(plan.destination)}</strong>
+         · ${plan.distanceKm || "—"} km
+         ${plan.corridor && plan.corridor.name ? ` on ${esc(plan.corridor.name)}` : ""}</p>
+         <p>${plan.consumptionLPer100km || "—"} L/100 km
+         · ${money((plan.totals && plan.totals.costAud) || 0)} for ${(plan.totals && plan.totals.fillL) || 0} L</p>
+         ${(plan.stops || [])
+           .slice(0, 3)
+           .map((s) => `<p class="fuelhub-muted">${esc(s.name)} · ${s.fillL} L · ${s.effectiveCpl} ¢/L</p>`)
+           .join("")}
+         <p class="fuelhub-muted">${plan.plannedAt ? `Planned ${esc(fmtWhen(plan.plannedAt))}` : "Latest planned run."}</p>`
+      : `<p class="fuelhub-muted">No planned run yet. Open Plan fills for a depot-to-gate corridor (NHVR, not Apple/Google).</p>`;
+
+    const gpsCard = track
+      ? `<p class="fuelhub-live">${track.km || 0} km</p>
+         <p class="fuelhub-muted">${track.pointCount || 0} GPS points · about ${current.remainingKm || "—"} km of usable diesel left.
+         ${track.updatedAt ? `Updated ${esc(fmtWhen(track.updatedAt))}.` : ""}</p>`
+      : `<p class="fuelhub-muted">GPS is idle. Start a track to score nearby diesel against your position.</p>`;
+
+    const tripRows = trips.length
+      ? `<table class="fuelhub-table"><thead><tr><th>When</th><th>Run</th><th>Km</th><th>Fill</th><th>Cost</th></tr></thead><tbody>${trips
+          .map(
+            (t) => `<tr>
+              <td>${esc(fmtWhen(t.createdAt))}</td>
+              <td>${esc(t.origin)} → ${esc(t.destination)}${t.corridor ? ` <span class="fuelhub-muted">(${esc(t.corridor)})</span>` : ""}</td>
+              <td>${t.distanceKm || "—"}</td>
+              <td>${t.fillL != null ? `${t.fillL} L` : "—"}</td>
+              <td>${t.costAud != null ? money(t.costAud) : "—"}</td>
+            </tr>`
+          )
+          .join("")}</tbody></table>
+         <p class="fuelhub-muted">${stats.tripCount || trips.length} saved · ${stats.totalKm || 0} km · ${stats.totalFillL || 0} L · ${money(stats.totalCostAud || 0)}</p>`
+      : `<p class="fuelhub-muted">No saved trips yet. Plan a run, then Save trip to build this list.</p>`;
+
+    const dealRows = deals.length
+      ? `<table class="fuelhub-table"><thead><tr><th>Site</th><th>Band</th><th>¢/L</th><th>Km</th><th>Source</th></tr></thead><tbody>${deals
+          .map(
+            (s) => `<tr>
+              <td>${esc(s.name)}${s.truckAccess ? "" : " <span class='fuelhub-muted'>car</span>"}</td>
+              <td>${esc(s.band)}</td>
+              <td><strong>${s.effectiveCpl}</strong>${s.discount && s.discount.cardCplOff ? ` <span class="fuelhub-muted">(-${s.discount.cardCplOff}¢ card)</span>` : ""}</td>
+              <td>${s.distanceKm != null ? s.distanceKm : s.km != null ? `${s.km} along` : "—"}</td>
+              <td>${s.source === "bowser" ? "Bowser" : "Gov table"}</td>
+            </tr>`
+          )
+          .join("")}</tbody></table>`
+      : `<p class="fuelhub-muted">No truck-access sites matched this combination in the current area.</p>`;
+
+    el.innerHTML = `
+      ${profileBanner()}
+      <div class="fuelhub-stats">
+        <div class="fuelhub-stat"><strong>${current.consumptionLPer100km || "—"}</strong><span>L / 100 km now</span></div>
+        <div class="fuelhub-stat"><strong>${current.remainingKm || "—"} km</strong><span>Range before reserve</span></div>
+        <div class="fuelhub-stat"><strong>${esc(current.combinationLabel || hub.workCombinationLabel || "—")}</strong><span>${esc(current.driverTypeLabel || hub.driverTypeLabel || "Duty cycle")}</span></div>
+        <div class="fuelhub-stat"><strong>${deals[0] ? `${deals[0].effectiveCpl} ¢` : "—"}</strong><span>Best nearby diesel</span></div>
+      </div>
+      <div class="fuelhub-dash-grid">
+        <div class="fuelhub-card">
+          <h2>Current journey</h2>
+          ${journeyCard}
+          <h3 class="fuelhub-subhead">Live GPS</h3>
+          ${gpsCard}
+          <div class="fuelhub-actions">
+            <button type="button" class="btn primary" data-fuel-jump="plan">Plan fills</button>
+            <button type="button" class="btn secondary" data-fuel-jump="track">GPS track</button>
+          </div>
+        </div>
+        <div class="fuelhub-card">
+          <h2>Previous journeys</h2>
+          ${tripRows}
+        </div>
+      </div>
+      <div class="fuelhub-card fuelhub-deals">
+        <h2>Best fuel deals in this area</h2>
+        <p class="fuelhub-muted">${esc(area.areaLabel || "Government-style diesel on NHVR freight sites.")}</p>
+        ${dealRows}
+        <p class="fuelhub-muted">${esc(area.nhvrNote || "")}
+        ${area.nhvrPlannerUrl ? ` <a href="${esc(area.nhvrPlannerUrl)}" target="_blank" rel="noopener">NHVR Route Planner</a>.` : ""}
+        Sources: ${((area.sources || []).map((s) => s.name) || []).map(esc).join(" · ")}</p>
+      </div>
+    `;
+    el.querySelectorAll("[data-fuel-jump]").forEach((btn) => {
+      btn.addEventListener("click", () => setView(btn.getAttribute("data-fuel-jump")));
+    });
+  }
+
+  function driverTypeOptions(selected) {
+    const types = (state && state.driverTypes) || {};
+    return Object.entries(types)
+      .map(
+        ([id, meta]) =>
+          `<option value="${esc(id)}" ${id === selected ? "selected" : ""}>${esc((meta && meta.label) || id)}</option>`
+      )
+      .join("");
+  }
+
+  function licenceOptions(selected) {
+    return ((state && state.licenceClasses) || [])
+      .map(
+        (c) =>
+          `<option value="${esc(c.id)}" ${c.id === selected ? "selected" : ""}>${esc(c.label)} (${esc(c.typicalRange || "")})</option>`
+      )
+      .join("");
+  }
+
+  function workVehicleOptions(selected) {
+    const rows = (state && state.workCombinations) || state.combinations || [];
+    return rows
+      .map(
+        (c) =>
+          `<option value="${esc(c.id)}" ${c.id === selected ? "selected" : ""}>${esc(c.label)}</option>`
+      )
+      .join("");
+  }
+
+  function combinationFromProfile(licence, driverType) {
+    const duty = String(driverType || "long_haul");
+    if (licence === "lr_mr" || licence === "hr") return "rigid";
+    if (licence === "mc") return duty === "local" ? "semi" : "b_double";
+    if (licence === "hc" && (duty === "long_haul" || duty === "owner_driver")) return "b_double";
+    return "semi";
+  }
+
+  function licenceFromSalary(salary) {
+    const n = Number(salary);
+    const amount = Number.isFinite(n) && n > 0 ? n : 0;
+    if (amount >= 110000) return "mc";
+    if (amount >= 79000) return "hc";
+    if (amount >= 70000) return "hr";
+    return "lr_mr";
+  }
+
+  function renderProfile() {
+    const el = byId("fuel-view-profile");
+    if (!el) return;
+    const hub = (state && state.hubProfile) || {};
+    const recordsProfile = hub;
+    el.innerHTML = `
+      <div class="fuelhub-card fuelhub-profile-form-card">
+        <h2>Driver Hub profile</h2>
+        <p class="fuelhub-muted">Same login and profile as Taxation Hub — name, driver type and work vehicle set Fuel Hub L/100 km. Saving here updates both apps.</p>
+        <form id="fuelhub-profile-form" class="fuelhub-profile-form">
+          <label>Name<input name="name" value="${esc(recordsProfile.name || "")}" placeholder="Full name" /></label>
+          <label>Driver type<select name="driverType" id="fuel-profile-driver-type">${driverTypeOptions(hub.driverType || "long_haul")}</select></label>
+          <label>Employer<input name="employer" value="${esc(hub.employer || "")}" placeholder="Fleet or company" /></label>
+          <label>Annual salary ($)<input name="annualSalary" id="fuel-profile-salary" type="number" min="0" step="0.01" value="${esc(hub.annualSalary != null ? hub.annualSalary : "")}" /></label>
+          <label>Licence class<select name="licenceClass" id="fuel-profile-licence">${licenceOptions(hub.licenceClass || "hc")}</select></label>
+          <label>Work vehicle<select name="workCombination" id="fuel-profile-work-combination">${workVehicleOptions(hub.workCombination || "semi")}</select></label>
+          <p class="fuelhub-muted span-2" id="fuel-work-combination-hint">Fuel Hub uses this vehicle plus your driver type for diesel L/100 km on planned runs.</p>
+          <label>Financial year<input name="financialYear" value="${esc(hub.financialYear || "")}" placeholder="2025-26" /></label>
+          <label class="fuelhub-check"><input type="checkbox" name="tfnSupplied" ${hub.tfnSupplied ? "checked" : ""} /> TFN supplied to employer</label>
+          <div class="fuelhub-actions span-2">
+            <button type="submit" class="btn primary">Save profile</button>
+          </div>
+        </form>
+      </div>
+    `;
+    const form = el.querySelector("#fuelhub-profile-form");
+    const typeSelect = el.querySelector("#fuel-profile-driver-type");
+    const licenceSelect = el.querySelector("#fuel-profile-licence");
+    const comboSelect = el.querySelector("#fuel-profile-work-combination");
+    const salaryInput = el.querySelector("#fuel-profile-salary");
+    const hint = el.querySelector("#fuel-work-combination-hint");
+
+    function syncCombo() {
+      if (!comboSelect || comboSelect.dataset.userSet === "1") return;
+      const next = combinationFromProfile(licenceSelect && licenceSelect.value, typeSelect && typeSelect.value);
+      if (comboSelect.value !== next) comboSelect.value = next;
+      if (hint) {
+        const label = comboSelect.options[comboSelect.selectedIndex]
+          ? comboSelect.options[comboSelect.selectedIndex].text
+          : next;
+        hint.textContent = `Fuel Hub uses ${label} with your driver type to set L/100 km. Save to apply.`;
+      }
+    }
+    typeSelect?.addEventListener("change", syncCombo);
+    licenceSelect?.addEventListener("change", syncCombo);
+    comboSelect?.addEventListener("change", () => {
+      comboSelect.dataset.userSet = "1";
+    });
+    salaryInput?.addEventListener("input", () => {
+      if (!licenceSelect) return;
+      licenceSelect.value = licenceFromSalary(salaryInput.value);
+      syncCombo();
+    });
+    form?.addEventListener("submit", onSaveProfile);
+  }
+
+  async function onSaveProfile(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      name: fd.get("name"),
+      driverType: fd.get("driverType"),
+      employer: fd.get("employer"),
+      annualSalary: fd.get("annualSalary"),
+      licenceClass: fd.get("licenceClass"),
+      workCombination: fd.get("workCombination"),
+      financialYear: fd.get("financialYear"),
+      tfnSupplied: fd.get("tfnSupplied") === "on",
+    };
+    await api("/profile", { method: "PUT", body });
+    const taxForm = document.getElementById("profile-form");
+    if (taxForm) {
+      Object.entries(body).forEach(([k, v]) => {
+        const input = taxForm.elements[k];
+        if (!input) return;
+        if (input.type === "checkbox") input.checked = Boolean(v);
+        else input.value = v ?? "";
+      });
+    }
+    toast("Profile saved — Fuel Hub rates will follow this vehicle and driver type");
+    await load();
+    setView("profile");
   }
 
   function renderPlan() {
@@ -384,7 +627,9 @@
 
   function render() {
     if (!state) return;
-    if (view === "plan") renderPlan();
+    if (view === "dashboard") renderDashboard();
+    else if (view === "profile") renderProfile();
+    else if (view === "plan") renderPlan();
     else if (view === "track") renderTrack();
     else if (view === "truck") renderTruck();
     else if (view === "cards") renderCards();
@@ -393,6 +638,7 @@
 
   async function load() {
     state = await api("/fuelhub");
+    if (!lastPlan && state.lastPlan) lastPlan = state.lastPlan;
     render();
   }
 
@@ -410,8 +656,10 @@
       },
     });
     lastPlan = data.plan;
+    if (data.lastPlan) state.lastPlan = data.lastPlan;
     renderPlan();
     toast("Fuel plan ready");
+    void refreshDashboard();
   }
 
   async function onSaveTrip() {
@@ -419,7 +667,7 @@
       toast("Plan a run first");
       return;
     }
-    await api("/fuelhub/trips", {
+    const data = await api("/fuelhub/trips", {
       method: "POST",
       body: {
         origin: lastPlan.origin,
@@ -433,7 +681,9 @@
         },
       },
     });
+    if (data.trips) state.trips = data.trips;
     toast("Trip saved");
+    void refreshDashboard();
   }
 
   async function onSaveTruck(e) {
@@ -507,6 +757,7 @@
           state.activeTrack = data.track;
           state.efficiency = data.efficiency;
           if (view === "track") renderTrack();
+          if (view === "dashboard") void refreshDashboard();
           gpsMessage(`Range remaining ~${data.remainingKm} km after this track.`);
         } catch (err) {
           gpsMessage(err.message || "Could not save GPS point.");
@@ -549,10 +800,36 @@
     });
   }
 
+  async function refreshDashboard(point) {
+    try {
+      const qs =
+        point && Number.isFinite(point.lat)
+          ? `?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`
+          : "";
+      const dash = await api(`/fuelhub/dashboard${qs}`);
+      if (state) state.dashboard = dash;
+      if (view === "dashboard") renderDashboard();
+    } catch {
+      /* keep last dashboard */
+    }
+  }
+
+  function locateForDeals() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        void refreshDashboard({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: false, maximumAge: 120000, timeout: 8000 }
+    );
+  }
+
   async function open() {
     document.body.classList.add("fuelhub-open");
     try {
       await load();
+      setView("dashboard");
     } catch (err) {
       toast(err.message || "Could not open Fuel Hub.");
     }
