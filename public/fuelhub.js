@@ -43,6 +43,18 @@
     if (typeof window.toast === "function") window.toast(msg);
   }
 
+  function profileBanner() {
+    const p = state && state.hubProfile;
+    if (!p || !p.linked) {
+      return `<p class="fuelhub-profile-banner">Sign in on Driver Hub to use the same profile as Taxation Hub.</p>`;
+    }
+    const bits = [p.displayName, p.employer, p.licenceLabel, p.driverTypeLabel].filter(Boolean);
+    const seed = p.truckSeeded
+      ? " Combination is prefilled from your licence class — save Truck &amp; load to keep Fuel Hub tanks and payload."
+      : "";
+    return `<div class="fuelhub-profile-banner">Driver Hub profile · ${bits.map(esc).join(" · ")}.${seed}</div>`;
+  }
+
   function setView(next) {
     view = next;
     const titles = {
@@ -97,6 +109,7 @@
     const plan = lastPlan;
     const eff = (state && state.efficiency) || {};
     el.innerHTML = `
+      ${profileBanner()}
       <div class="fuelhub-stats">
         <div class="fuelhub-stat"><strong>${eff.consumptionLPer100km || "—"}</strong><span>L / 100 km</span></div>
         <div class="fuelhub-stat"><strong>${eff.litresPerKm || "—"}</strong><span>L / km</span></div>
@@ -166,6 +179,7 @@
     const eff = state.efficiency || {};
     const km = track ? track.km : 0;
     el.innerHTML = `
+      ${profileBanner()}
       <div class="fuelhub-card">
         <h2>Live GPS</h2>
         <p class="fuelhub-muted">Uses this device’s location to accumulate kilometres. Offline you can still type a route on Plan fills. Remaining range uses current tank, load and fuel mass.</p>
@@ -205,10 +219,17 @@
     if (!el) return;
     const t = (state && state.truck) || {};
     const eff = (state && state.efficiency) || {};
+    const hub = (state && state.hubProfile) || {};
     el.innerHTML = `
+      ${profileBanner()}
       <div class="fuelhub-grid">
         <form id="fuel-truck-form" class="fuelhub-card">
           <h2>Combination &amp; tanks</h2>
+          <p class="fuelhub-muted">${
+            hub.linked
+              ? `Pulled from Taxation Hub: ${esc(hub.licenceLabel || hub.licenceClass)} · ${esc(hub.driverTypeLabel || "")}. Suggested combination is ${esc(hub.suggestedCombinationId || "semi")}. Work cars on Profile stay on Car Expenses — this spec is the heavy combination for diesel planning.`
+              : "Save a Driver Hub profile on Taxation Hub to prefill licence class and combination."
+          }</p>
           <label>Combination<select name="combinationId">${comboOptions(t.combinationId)}</select></label>
           <label>Mass scheme<select name="massSchemeId">${schemeOptions(t.massSchemeId)}</select></label>
           <label>Trailers<input name="trailers" type="number" min="0" max="4" value="${esc(t.trailers)}" /></label>
@@ -238,7 +259,9 @@
     const el = byId("fuel-view-cards");
     if (!el) return;
     const cards = (state && state.cards) || [];
+    const hub = (state && state.hubProfile) || {};
     el.innerHTML = `
+      ${profileBanner()}
       <div class="fuelhub-grid">
         <form id="fuel-card-form" class="fuelhub-card">
           <h2>Add fuel card / agreement</h2>
@@ -248,7 +271,7 @@
           <label>Card cents off (¢/L)<input name="cplOff" type="number" min="0" max="40" step="0.1" value="6" /></label>
           <label>Percent off<input name="percentOff" type="number" min="0" max="25" step="0.1" value="0" /></label>
           <label>Company / industry extra ¢/L<input name="companyCplOff" type="number" min="0" max="20" step="0.1" value="0" /></label>
-          <label>Company name<input name="company" placeholder="Fleet or employer" /></label>
+          <label>Company name<input name="company" placeholder="Fleet or employer" value="${esc(hub.employer || "")}" /></label>
           <div class="fuelhub-actions">
             <button type="submit" class="btn primary">Save card</button>
           </div>
@@ -289,6 +312,7 @@
       .sort((a, b) => a.pumpCpl - b.pumpCpl)
       .slice(0, 12);
     el.innerHTML = `
+      ${profileBanner()}
       <div class="fuelhub-card" style="margin-bottom:16px">
         <h2>Government-style diesel bands</h2>
         <p class="fuelhub-muted">${esc(tables.asOfNote || "")}</p>

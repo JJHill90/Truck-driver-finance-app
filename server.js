@@ -108,6 +108,7 @@ const fuelStations = require("./lib/fuel-stations");
 const fuelEfficiency = require("./lib/fuel-efficiency");
 const { planFuelStops } = require("./lib/fuel-planner");
 const fuelhubStore = require("./lib/fuelhub-store");
+const hubProfile = require("./lib/hub-profile");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -815,14 +816,19 @@ api.get("/version", (_req, res) => {
 });
 
 function fuelhubState(req) {
-  return fuelhubStore.ensureFuelhub(getRecords(req));
+  const records = getRecords(req);
+  const account = req.user ? auth.getUser(req.user) : null;
+  const hub = hubProfile.presentHubProfile(account, records);
+  return { store: fuelhubStore.ensureFuelhub(records, { hubProfile: hub }), hub, records };
 }
 
 function fuelhubBootstrap(req) {
-  const store = fuelhubState(req);
+  const { store, hub } = fuelhubState(req);
   const snap = fuelhubStore.snapshot(store);
+  const seeded = !store.truckSavedAt;
   return {
     ...snap,
+    hubProfile: { ...hub, truckSeeded: seeded },
     retailers: fuelPrices.listRetailers(),
     combinations: fuelNhvr.listCombinations(),
     massSchemes: fuelNhvr.listMassSchemes(),
@@ -840,12 +846,22 @@ function fuelhubBootstrap(req) {
   };
 }
 
+api.get("/hub/profile", (req, res) => {
+  const records = getRecords(req);
+  const account = req.user ? auth.getUser(req.user) : null;
+  res.json({
+    hubProfile: hubProfile.presentHubProfile(account, records),
+    apps: ["taxationhub", "fuelhub"],
+    note: "One Driver Hub login and profile file is shared by every hub app. App-specific data (tax ledger, fuel truck spec) stays in the same records document under its own key.",
+  });
+});
+
 api.get("/fuelhub", (req, res) => {
   res.json(fuelhubBootstrap(req));
 });
 
 api.get("/fuelhub/stations", (req, res) => {
-  const store = fuelhubState(req);
+  const { store } = fuelhubState(req);
   res.json({
     stations: fuelStations.listStations({
       corridorId: req.query.corridor || undefined,
@@ -860,10 +876,14 @@ api.put("/fuelhub/truck", (req, res) => {
     res.status(401).json({ error: "Sign in to save a Fuel Hub truck spec." });
     return;
   }
-  const store = fuelhubState(req);
-  store.truck = fuelEfficiency.normalizeTruck(req.body || {});
+  const { store } = fuelhubState(req);
+  const truck = fuelhubStore.saveTruck(store, req.body || {});
   persist(req, { reason: "fuelhub-truck" });
-  res.json({ truck: store.truck, efficiency: fuelEfficiency.describeEfficiency(store.truck) });
+  res.json({
+    truck,
+    truckSource: store.truckSource,
+    efficiency: fuelEfficiency.describeEfficiency(truck),
+  });
 });
 
 api.post("/fuelhub/cards", (req, res) => {
@@ -872,8 +892,10 @@ api.post("/fuelhub/cards", (req, res) => {
     return;
   }
   try {
-    const store = fuelhubState(req);
-    const card = fuelhubStore.upsertCard(store, req.body || {});
+    const { store, hub } = fuelhubState(req);
+    const payload = { ...(req.body || {}) };
+    if (!payload.company && hub && hub.employer) payload.company = hub.employer;
+    const card = fuelhubStore.upsertCard(store, payload);
     persist(req, { reason: "fuelhub-card" });
     res.json({ card, cards: store.cards });
   } catch (err) {
@@ -886,7 +908,7 @@ api.delete("/fuelhub/cards/:id", (req, res) => {
     res.status(401).json({ error: "Sign in to remove a fuel card." });
     return;
   }
-  const store = fuelhubState(req);
+  const { store } = fuelhubState(req);
   const removed = fuelhubStore.removeCard(store, req.params.id);
   if (!removed) {
     res.status(404).json({ error: "Fuel card not found." });
@@ -902,7 +924,7 @@ api.post("/fuelhub/prices/observed", (req, res) => {
     return;
   }
   try {
-    const store = fuelhubState(req);
+    const { store } = fuelhubState(req);
     const row = fuelhubStore.recordObservedPrice(store, req.body || {});
     persist(req, { reason: "fuelhub-price" });
     res.json({
@@ -915,7 +937,7 @@ api.post("/fuelhub/prices/observed", (req, res) => {
 });
 
 api.post("/fuelhub/plan", (req, res) => {
-  const store = fuelhubState(req);
+  const { store } = fuelhubState(req);
   const body = req.body || {};
   const plan = planFuelStops({
     origin: body.origin,
@@ -935,7 +957,7 @@ api.post("/fuelhub/trips", (req, res) => {
     return;
   }
   try {
-    const store = fuelhubState(req);
+    const { store } = fuelhubState(req);
     const trip = fuelhubStore.saveTrip(store, req.body || {});
     persist(req, { reason: "fuelhub-trip" });
     res.json({ trip, trips: fuelhubStore.snapshot(store).trips });
@@ -950,7 +972,7 @@ api.post("/fuelhub/track", (req, res) => {
     return;
   }
   try {
-    const store = fuelhubState(req);
+    const { store } = fuelhubState(req);
     const track = fuelhubStore.appendTrack(store, req.body || {});
     persist(req, { reason: "fuelhub-track" });
     const efficiency = fuelEfficiency.describeEfficiency(store.truck);
@@ -976,7 +998,7 @@ api.delete("/fuelhub/track", (req, res) => {
     res.status(401).json({ error: "Sign in to reset GPS tracking." });
     return;
   }
-  const store = fuelhubState(req);
+  const { store } = fuelhubState(req);
   store.activeTrack = null;
   persist(req, { reason: "fuelhub-track-reset" });
   res.json({ ok: true });

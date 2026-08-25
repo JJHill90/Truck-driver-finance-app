@@ -2090,10 +2090,14 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .fuelhub-shell .main {
   min-height: 100vh;
 }
-.fuelhub-tagline {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 0.88rem;
+.fuelhub-profile-banner {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(62, 176, 255, 0.1);
+  color: var(--text);
+  font-size: 0.9rem;
 }
 .fuelhub-view {
   display: none;
