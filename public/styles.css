@@ -2109,19 +2109,25 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   display: grid;
   grid-template-rows: repeat(8, minmax(0, 1fr));
   align-content: stretch;
-  gap: 4px;
+  gap: 2px;
   min-height: 0;
   height: 100%;
   margin: 0;
   overflow: hidden;
 }
-.fuelhub-nav .nav-btn {
+.fuelhub-nav-slot {
   min-height: 0;
-  height: 100%;
+  display: flex;
+  align-items: stretch;
+}
+.fuelhub-nav-slot .nav-btn {
+  flex: 1 1 auto;
   width: 100%;
+  min-height: 0;
+  height: auto;
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 6px 12px;
   line-height: 1.2;
 }
 .fuelhub-shell .fuelhub-sidebar > .sidebar-bottom {
@@ -2449,9 +2455,9 @@ table.data tfoot td { border-top: 2px solid var(--border); }
     width: 22px;
     height: 22px;
   }
-  .fuelhub-nav .nav-btn {
+  .fuelhub-nav-slot .nav-btn {
     font-size: 0.78rem;
-    padding: 8px 8px;
+    padding: 6px 8px;
     border-radius: 8px;
   }
   .fuelhub-shell .sidebar-bottom .nav-btn {
@@ -2479,10 +2485,10 @@ table.data tfoot td { border-top: 2px solid var(--border); }
     grid-template-columns: 112px minmax(0, 1fr);
     grid-template-rows: 100dvh;
   }
-  .fuelhub-nav .nav-btn,
+  .fuelhub-nav-slot .nav-btn,
   .fuelhub-shell .sidebar-bottom .nav-btn {
     font-size: 0.7rem;
-    padding: 7px 6px;
+    padding: 6px;
   }
   .fuelhub-shell .main { padding: 10px 8px 32px; }
   .fuelhub-card { padding: 12px; }
