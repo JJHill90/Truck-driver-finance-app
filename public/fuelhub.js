@@ -13,6 +13,7 @@
   let gpsBusy = false;
   let receiptTimer = null;
   let currentReceiptId = null;
+  let receiptsHydrated = false;
 
   function byId(id) {
     return document.getElementById(id);
@@ -101,6 +102,7 @@
     if (next !== "receipts") stopReceiptTimer();
     render();
     if (next === "dashboard") locateForDeals();
+    if (next === "receipts") void refreshReceipts();
   }
 
   function comboOptions(selected) {
@@ -998,9 +1000,29 @@
     }
   }
 
+  async function refreshReceipts() {
+    try {
+      const data = await api("/fuelhub");
+      applyReceiptPayload(data);
+      if (!receiptsHydrated) {
+        receiptsHydrated = true;
+        if (!currentReceiptId) {
+          const open = ((data && data.fuelReceipts) || []).find((r) =>
+            ["scanned", "confirmed", "awaiting_send"].includes(r.status)
+          );
+          if (open) currentReceiptId = open.id;
+        }
+      }
+      if (view === "receipts") renderReceipts();
+    } catch {
+      /* keep last receipts */
+    }
+  }
+
   function currentReceipt() {
     const list = (state && state.fuelReceipts) || [];
-    return list.find((r) => r.id === currentReceiptId) || list[0] || null;
+    if (!currentReceiptId) return null;
+    return list.find((r) => r.id === currentReceiptId) || null;
   }
 
   function receiptStep(row) {
