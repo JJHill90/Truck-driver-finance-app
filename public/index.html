@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=fuelhub-8" />
+    <link rel="stylesheet" href="./styles.css?v=fuelhub-9" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -778,12 +778,12 @@
     </div>
 
     <div id="fuelhub-shell" class="fuelhub-shell" aria-label="Fuel Hub">
-      <aside class="sidebar">
+      <aside class="sidebar fuelhub-sidebar">
         <div class="sidebar-brand">
           <img src="./truck.svg" alt="" />
           <span>Fuel<span class="brand-hub">Hub</span></span>
         </div>
-        <nav class="sidebar-nav" aria-label="Fuel Hub">
+        <nav class="sidebar-nav fuelhub-nav" aria-label="Fuel Hub">
           <button type="button" class="nav-btn" data-fuel-view="profile">Profile</button>
           <button type="button" class="nav-btn active" data-fuel-view="dashboard">Dashboard</button>
           <button type="button" class="nav-btn" data-fuel-view="forecast">Forecast</button>
@@ -797,11 +797,11 @@
           <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
             <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
           </nav>
-          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.15</p>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.16</p>
         </div>
       </aside>
       <div class="main">
-        <header class="topbar">
+        <header class="topbar fuelhub-topbar">
           <h1 id="fuelhub-page-title">Dashboard</h1>
           <p class="fuelhub-tagline">NHVR freight corridors · diesel efficiency · cheapest truck-access fills</p>
         </header>
@@ -836,7 +836,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fuelhub-8"></script>
-    <script src="./fuelhub.js?v=fuelhub-8"></script>
+    <script src="./enhancements.js?v=fuelhub-9"></script>
+    <script src="./fuelhub.js?v=fuelhub-9"></script>
   </body>
 </html>
