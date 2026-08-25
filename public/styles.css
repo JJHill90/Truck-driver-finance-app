@@ -2087,10 +2087,13 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   width: 100%;
 }
 .fuelhub-shell .fuelhub-sidebar {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
   height: 100vh;
   height: 100dvh;
+  max-height: 100dvh;
   padding: 14px 10px 10px;
   overflow: hidden;
 }
@@ -2100,23 +2103,26 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   font-size: 1.22rem;
 }
 .fuelhub-nav {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  gap: 2px;
+  justify-content: stretch;
+  gap: 4px;
   min-height: 0;
   margin: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .fuelhub-nav .nav-btn {
+  flex: 1 1 0%;
   width: 100%;
-  padding: 10px 12px;
-  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  line-height: 1.2;
 }
-.fuelhub-shell .sidebar-bottom {
-  flex-shrink: 0;
-  margin-top: 0;
+.fuelhub-shell .fuelhub-sidebar > .sidebar-bottom {
+  flex: 0 0 auto;
+  margin-top: 8px;
   padding-top: 10px;
 }
 .fuelhub-shell .main {
@@ -2158,7 +2164,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .fuelhub-view {
   display: none;
   padding: 0 0 32px;
-  max-width: 980px;
+  max-width: 860px;
 }
 .fuelhub-view.active {
   display: block;
