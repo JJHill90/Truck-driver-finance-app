@@ -109,6 +109,7 @@ describe("fuel usage forecast", () => {
     expect(toBarcaldine.payloadT).toBe(10);
     const toLongreach = prediction.hops.find((h) => h.to.toLowerCase() === "longreach");
     expect(toLongreach.payloadT).toBe(10);
+    expect(toLongreach.hours).toBeGreaterThan(toBarcaldine.hours);
   });
 
   it("builds a Taxation Hub-style forecast snapshot from the store", () => {
