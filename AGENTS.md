@@ -6,7 +6,10 @@
 The tax product inside it is **Taxation Hub** (formerly Finance Hub / Haulage
 Finance): consolidates tax services for drivers — work expenses,
 income/remittances, receipt/payslip OCR, a live EOFY report, tax estimate and
-forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
+forecast. **Fuel Hub** is the second picker app (replacing Work in Progress):
+diesel efficiency from load/trailers/tank, NHVR freight corridors, government-style
+price bands, fuel cards and GPS or offline route planning. Standard commands
+(`start`, `dev`, `lint`, `test`) are in `README.md`.
 
 - Frontend: framework-free SPA in `public/app.js` (provided verbatim). The
   backend + `public/index.html` exist to satisfy the exact DOM ids and API
@@ -28,13 +31,47 @@ forecast. Standard commands (`start`, `dev`, `lint`, `test`) are in `README.md`.
   use `*` with cookies.
 - **Driver Hub gate.** `#title-screen` is the Driver Hub login. After `/auth/me`
   has a user, show the app picker (`#title-hub-picker`) unless
-  `localStorage.driverhub-selected-app === "taxationhub"` (legacy `financehub`
-  is migrated). Choosing Taxation Hub unlocks `.app-shell` (sidebar brand
-  **TaxationHub**). The second picker slot is labelled **Work in Progress**
-  (product name withheld until ready — not available at Taxation Hub release).
-  `body.auth-locked` hides the shell. Logout clears the selected app and
+  `localStorage.driverhub-selected-app` is `"taxationhub"` (legacy `financehub`
+  is migrated) or `"fuelhub"`. Choosing Taxation Hub unlocks `.app-shell`
+  (sidebar brand **TaxationHub**). Choosing Fuel Hub unlocks `#fuelhub-shell`
+  (`body.fuelhub-open`). The former Work in Progress tile is Fuel Hub.
+  `body.auth-locked` hides both shells. Logout clears the selected app and
   returns to Driver Hub login. Brand wordmarks use Saira Condensed with a sky
   Hub accent (navy/amber UI palette).
+-   **Fuel Hub.** `GET/POST /api/haulage/fuelhub*` (`lib/fuel-*.js`, `lib/fuelhub-store.js`,
+  `lib/fuel-dashboard.js`, `lib/fuel-forecast.js`, `public/fuelhub.js`). Sidebar: Profile (same Driver Hub
+  identity as Taxation Hub), Dashboard, Forecast, Plan fills, GPS, Truck & load, cards and
+  prices. Dashboard summarises the current planned/GPS run, previous saved trips,
+  and cheapest truck-access diesel in the current area from NHVR corridor sites
+  plus ACCC / FuelWatch / FuelCheck-style public tables (cards come off after).
+  **Forecast** is the live-fueling counterpart of Taxation Hub Forecast:
+  Conservative / Baseline / Optimistic L/km from freight tonnes, diesel mass in
+  the tanks, and hours on the road (slower loaded running lifts litres). Averages
+  across saved trips and lists each run. `POST /fuelhub/plan` (and `GET /fuelhub/forecast`)
+  sizes a **minimum vs ideal fill** at a nominated town so a driver is not brim-filling
+  at inflated west-QLD diesel — e.g. St George → Longreach → Barcaldine (refuel) then
+  added freight Barcaldine → Emerald → Gracemere. GPS, last planned corridor, or last
+  trip picks the area; no GPS falls back to gazetted sites that fit the work vehicle.
+  Consumption uses combination, trailer count, payload, GCM and diesel mass (~0.84 kg/L).
+  Planner ranks BP / Mobil / Shell / Ampol / Liberty / 7-Eleven / Pearl truck-access
+  sites on NHVR corridors (Hume, Pacific, Newell, Warrego, Capricorn, Stuart, Eyre,
+  Great Western, Bruce), fills before remote / out-west price step-ups, and suggests
+  rest/refresh stops. Apple/Google maps are not the routing source.
+  **Shared Driver Hub profile:** one login and `records.profile` (name, employer,
+  licence class, driver type, salary, **work vehicle**, **registered fuel vehicles**)
+  is used by Taxation Hub, Fuel Hub and later apps via `GET /hub/profile` /
+  `lib/hub-profile.js`. Profile **driver type** (e.g. linehaul) plus **work vehicle**
+  (rigid / semi / B-double / road train) set Fuel Hub combination and duty-cycle
+  L/100 km on planned journeys (`lib/fuel-efficiency.js` `DRIVER_TYPE_FACTOR`).
+  **Registered fuel classes** on `profile.fuelVehicles[]` (`lib/fuel-vehicle-class.js`)
+  are a manual, per-truck overlay unique vs a generic heavy rigid: sample codes
+  **XN93DX** (380 L compact), **YN16BQ** (520 L standard), **YN17BQ** (680 L long-range)
+  plus custom codes. The active vehicle’s tank (and a small class factor) drives
+  Fuel Hub range and fill spacing; ATO work cars stay on `profile.cars`. Fuel Hub
+  re-seeds the truck from that profile until the driver saves a Fuel Hub payload
+  spec; a saved spec keeps payload but still uses Profile driver type and the
+  active class tank. Tax ledger and fuel trips stay in the same user file under
+  different keys — no account copy.
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is

@@ -917,6 +917,7 @@
   /** Show Driver Hub login forms (signed out). */
   function showDriverHubLogin() {
     lockApp();
+    document.body.classList.remove("fuelhub-open");
     byId("title-auth-panel")?.classList.remove("hidden");
     byId("title-hub-picker")?.classList.add("hidden");
     setSelectedHubApp("");
@@ -937,12 +938,34 @@
   }
 
   function openTaxationHub(user) {
+    document.body.classList.remove("fuelhub-open");
+    if (window.FuelHub && typeof window.FuelHub.close === "function") {
+      window.FuelHub.close();
+    }
     setSelectedHubApp("taxationhub");
     unlockApp();
     showAuthState(user || null);
   }
 
+  function openFuelHub() {
+    setSelectedHubApp("fuelhub");
+    unlockApp();
+    document.body.classList.add("fuelhub-open");
+    const tryOpen = () => {
+      if (window.FuelHub && typeof window.FuelHub.open === "function") {
+        void window.FuelHub.open();
+        return true;
+      }
+      return false;
+    };
+    if (!tryOpen()) setTimeout(tryOpen, 0);
+  }
+
   function returnToDriverHub(user) {
+    document.body.classList.remove("fuelhub-open");
+    if (window.FuelHub && typeof window.FuelHub.close === "function") {
+      window.FuelHub.close();
+    }
     setSelectedHubApp("");
     showDriverHubPicker(user && user.username ? user.username : byId("title-hub-username")?.textContent);
     if (typeof window.toast === "function") {
@@ -1020,8 +1043,8 @@
     }
     if (sub) {
       sub.textContent = isRegister
-        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub and future Driver Hub apps."
-        : "Sign in with your Driver Hub account, then open Taxation Hub or another app from your hub.";
+        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub, Fuel Hub and future Driver Hub apps."
+        : "Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.";
     }
     const form = byId("title-auth-form");
     if (form) form.classList.toggle("title-register-mode", Boolean(isRegister));
@@ -1178,6 +1201,24 @@
         const hubMsg = byId("title-hub-message");
         if (hubMsg) {
           hubMsg.textContent = err.message || "Could not open Taxation Hub.";
+          hubMsg.classList.add("is-error");
+        }
+      }
+    });
+
+    byId("hub-open-fuelhub")?.addEventListener("click", async () => {
+      try {
+        const me = await apiGet("/auth/me");
+        if (!(me.user && me.user.username)) {
+          showDriverHubLogin();
+          setTitleMessage("Sign in to Driver Hub first.", true);
+          return;
+        }
+        openFuelHub();
+      } catch (err) {
+        const hubMsg = byId("title-hub-message");
+        if (hubMsg) {
+          hubMsg.textContent = err.message || "Could not open Fuel Hub.";
           hubMsg.classList.add("is-error");
         }
       }
@@ -2098,6 +2139,7 @@
         name: byId("admin-profile-name")?.value || "",
         employer: byId("admin-profile-employer")?.value || "",
         driverType: byId("admin-profile-driver-type")?.value || profile.driverType,
+        workCombination: byId("admin-profile-work-combination")?.value || profile.workCombination,
         annualSalary: byId("admin-profile-salary")?.value || "",
         licenceClass: byId("admin-profile-licence")?.value || "",
         financialYear: byId("admin-profile-fy")?.value || profile.financialYear,
@@ -2160,6 +2202,19 @@
     const receipts = data.receipts || [];
     const history = data.history || [];
     const username = data.user.username;
+    const licence = profile.licenceClass || "hc";
+    const duty = profile.driverType || "long_haul";
+    const workCombo =
+      profile.workCombination ||
+      (licence === "lr_mr" || licence === "hr"
+        ? "rigid"
+        : licence === "mc"
+          ? duty === "local"
+            ? "semi"
+            : "b_double"
+          : licence === "hc" && (duty === "long_haul" || duty === "owner_driver")
+            ? "b_double"
+            : "semi");
 
     const expenseRows = expenses.map((e) => adminLedgerRow(e, "expense")).join("");
     const incomeRows = income.map((i) => adminLedgerRow(i, "income")).join("");
@@ -2278,6 +2333,16 @@
               <option value="hr" ${profile.licenceClass === "hr" ? "selected" : ""}>HR</option>
               <option value="hc" ${profile.licenceClass === "hc" || !profile.licenceClass ? "selected" : ""}>HC</option>
               <option value="mc" ${profile.licenceClass === "mc" ? "selected" : ""}>MC</option>
+            </select>
+          </label>
+          <label>Work vehicle (Fuel Hub)
+            <select id="admin-profile-work-combination">
+              <option value="rigid" ${workCombo === "rigid" ? "selected" : ""}>Heavy rigid</option>
+              <option value="semi" ${workCombo === "semi" ? "selected" : ""}>Prime mover + semi</option>
+              <option value="b_double" ${workCombo === "b_double" ? "selected" : ""}>B-double</option>
+              <option value="b_triple" ${workCombo === "b_triple" ? "selected" : ""}>B-triple</option>
+              <option value="road_train_t1" ${workCombo === "road_train_t1" ? "selected" : ""}>Type 1 road train</option>
+              <option value="road_train_t2" ${workCombo === "road_train_t2" ? "selected" : ""}>Type 2 road train</option>
             </select>
           </label>
           <label>Financial year<input type="text" id="admin-profile-fy" value="${esc(
@@ -2951,8 +3016,9 @@
           cachedEntitlements = me.entitlements;
           applyProExportGates(me.entitlements);
         }
-        // Driver Hub: signed-in users pick an app unless Taxation Hub is already open.
-        if (getSelectedHubApp() === "taxationhub") {
+        // Driver Hub: signed-in users pick an app unless one is already open.
+        const selectedApp = getSelectedHubApp();
+        if (selectedApp === "taxationhub") {
           openTaxationHub(me.user);
           if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
@@ -2962,6 +3028,8 @@
             renderAlerts(alertData.alerts, alertData.user);
             markReviewShown();
           }
+        } else if (selectedApp === "fuelhub") {
+          openFuelHub();
         } else {
           showDriverHubPicker(me.user.username);
         }
@@ -6261,6 +6329,41 @@
     setHint(next);
   }
 
+  function combinationFromProfile(licence, driverType) {
+    const duty = String(driverType || "long_haul");
+    if (licence === "lr_mr" || licence === "hr") return "rigid";
+    if (licence === "mc") return duty === "local" ? "semi" : "b_double";
+    if (licence === "hc" && (duty === "long_haul" || duty === "owner_driver")) return "b_double";
+    return "semi";
+  }
+
+  function syncWorkVehicleFromProfile() {
+    const combo = document.getElementById("profile-work-combination");
+    const typeSelect = document.getElementById("driver-type");
+    const licenceSelect = document.getElementById("profile-licence-class");
+    const hint = document.getElementById("work-combination-hint");
+    if (!combo) return;
+    if (combo.dataset.userSet === "1" && combo.value) {
+      if (hint) {
+        hint.textContent =
+          "Fuel Hub will use this vehicle type plus your driver type for diesel L/100 km on planned runs.";
+      }
+      return;
+    }
+    const next = combinationFromProfile(licenceSelect?.value, typeSelect?.value);
+    if (combo.value !== next) combo.value = next;
+    if (hint) {
+      const dutyLabel =
+        typeSelect?.value === "long_haul"
+          ? "linehaul highway running"
+          : typeSelect?.value === "local"
+            ? "local stop-start running"
+            : "your driver type";
+      const label = combo.options[combo.selectedIndex] ? combo.options[combo.selectedIndex].text : next;
+      hint.textContent = `Fuel Hub uses ${label} with ${dutyLabel} to set L/100 km. Save profile to apply.`;
+    }
+  }
+
   function start() {
     const salaryInput =
       document.getElementById("profile-annual-salary") ||
@@ -6272,10 +6375,41 @@
     // allowed, but typing a new salary re-applies the threshold rule.
     salaryInput.addEventListener("input", syncLicenceFromSalary);
     salaryInput.addEventListener("change", syncLicenceFromSalary);
-    select.addEventListener("change", () => setHint(select.value));
+    select.addEventListener("change", () => {
+      setHint(select.value);
+      syncWorkVehicleFromProfile();
+    });
+    document.getElementById("driver-type")?.addEventListener("change", syncWorkVehicleFromProfile);
+    document.getElementById("profile-work-combination")?.addEventListener("change", () => {
+      const el = document.getElementById("profile-work-combination");
+      if (el) el.dataset.userSet = "1";
+    });
+
+    async function hydrateWorkVehicleFromProfile() {
+      const combo = document.getElementById("profile-work-combination");
+      try {
+        const res = await fetch(`${window.location.origin}/api/haulage/records`, {
+          credentials: "same-origin",
+        });
+        const data = await res.json().catch(() => ({}));
+        const saved = data.profile && data.profile.workCombination;
+        if (combo && saved) {
+          combo.value = saved;
+          const suggested = combinationFromProfile(
+            data.profile.licenceClass,
+            data.profile.driverType
+          );
+          if (saved !== suggested) combo.dataset.userSet = "1";
+        }
+      } catch {
+        /* ignore */
+      }
+      syncWorkVehicleFromProfile();
+    }
 
     // After app.js populates the form from saved profile, align class to salary.
     syncLicenceFromSalary();
+    void hydrateWorkVehicleFromProfile();
     let ticks = 0;
     let lastSalary = salaryInput.value;
     const iv = setInterval(() => {
@@ -6284,6 +6418,7 @@
         lastSalary = salaryInput.value;
         syncLicenceFromSalary();
       }
+      if (ticks === 4 || ticks === 8) void hydrateWorkVehicleFromProfile();
       if (ticks >= 20) clearInterval(iv);
     }, 300);
   }
@@ -6348,7 +6483,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Taxation Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class and financial year, and tick whether your TFN is with your employer. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary and licence class you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Under Registered fuel vehicles you can add a class code for the individual truck (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor — that tank drives fill spacing instead of a generic heavy rigid. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
@@ -7060,6 +7195,404 @@
   }
 })();
 
+/* --- Profile: registered fuel-class vehicles (Fuel Hub tanks) ------------ */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  const CATALOG = {
+    XN93DX: {
+      tank: 380,
+      hint: "XN93DX compact rigid — 380 L tank. More fills than a generic heavy rigid on the same run.",
+    },
+    YN16BQ: {
+      tank: 520,
+      hint: "YN16BQ standard rigid — 520 L tank. Typical heavy-rigid carrying capacity.",
+    },
+    YN17BQ: {
+      tank: 680,
+      hint: "YN17BQ long-range / dual-tank rigid — 680 L. Fewer fills, more diesel mass.",
+    },
+  };
+  let vehicles = [];
+  let editingId = null;
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function setMessage(msg, isError) {
+    const el = byId("fuel-vehicles-message");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.dataset.error = isError ? "1" : "0";
+  }
+
+  function catalogTank(code) {
+    const row = CATALOG[String(code || "").toUpperCase()];
+    return row ? row.tank : 400;
+  }
+
+  function selectedClassCode() {
+    const select = byId("fuel-vehicle-class");
+    const custom = byId("fuel-vehicle-custom-class");
+    const value = select ? select.value : "YN16BQ";
+    if (value === "custom") {
+      return String(custom && custom.value ? custom.value : "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+    }
+    return value;
+  }
+
+  function syncClassUi() {
+    const select = byId("fuel-vehicle-class");
+    const wrap = byId("fuel-vehicle-custom-wrap");
+    const hint = byId("fuel-vehicle-class-hint");
+    const tank = byId("fuel-vehicle-tank");
+    const fuel = byId("fuel-vehicle-fuel");
+    if (!select) return;
+    const isCustom = select.value === "custom";
+    if (wrap) wrap.hidden = !isCustom;
+    const code = selectedClassCode();
+    const meta = CATALOG[code];
+    if (hint) {
+      hint.textContent = meta
+        ? meta.hint
+        : "Custom class — type the code printed for this truck and the tank litres you monitor.";
+    }
+    if (tank && tank.dataset.userSet !== "1" && meta) {
+      tank.value = String(meta.tank);
+      if (fuel && fuel.dataset.userSet !== "1") {
+        fuel.value = String(Math.round(meta.tank * 0.55));
+      }
+    }
+  }
+
+  function compileActiveText(list) {
+    const active = (list || []).find((v) => v.active);
+    if (!active) {
+      return "No active registered fuel vehicle. Add a class code (XN93DX, YN16BQ, YN17BQ, or custom) and mark it Active — Fuel Hub uses that tank for fill routes instead of a generic heavy rigid.";
+    }
+    const bits = [
+      active.nickname,
+      active.registration ? `Rego ${active.registration}` : "",
+      active.classCode,
+      active.classLabel && active.classLabel !== active.classCode ? active.classLabel : "",
+      active.tankCapacityL != null ? `${active.tankCapacityL} L tank` : "",
+      active.currentFuelL != null ? `${active.currentFuelL} L on board` : "",
+    ].filter(Boolean);
+    return `Active registered fuel vehicle: ${bits.join(" · ")}`;
+  }
+
+  function writeToState(next) {
+    vehicles = (next || []).map((v) => ({ ...v }));
+    if (window.HaulageState && window.HaulageState.records && window.HaulageState.records.profile) {
+      window.HaulageState.records.profile.fuelVehicles = vehicles.map((v) => ({ ...v }));
+    }
+  }
+
+  function readFromState() {
+    const state = window.HaulageState;
+    if (state && state.records && state.records.profile && Array.isArray(state.records.profile.fuelVehicles)) {
+      return state.records.profile.fuelVehicles.map((v) => ({ ...v }));
+    }
+    return vehicles.slice();
+  }
+
+  function render() {
+    const listEl = byId("fuel-vehicles-list");
+    const compiled = byId("fuel-vehicles-compiled");
+    const status = byId("fuel-vehicles-status");
+    if (!listEl) return;
+    const list = vehicles;
+    const activeCount = list.filter((v) => v.active).length;
+    if (compiled) compiled.value = compileActiveText(list);
+    if (status) {
+      if (!list.length) {
+        status.textContent = "No vehicles saved";
+        status.classList.remove("has-active");
+      } else if (activeCount) {
+        status.textContent = `${activeCount} active · ${list.length} on file`;
+        status.classList.add("has-active");
+      } else {
+        status.textContent = `${list.length} on file · none active`;
+        status.classList.remove("has-active");
+      }
+    }
+    if (!list.length) {
+      listEl.innerHTML =
+        `<p class="muted small">No registered fuel vehicles yet — add a class (XN93DX, YN16BQ, YN17BQ) and tank litres below.</p>`;
+      return;
+    }
+    listEl.innerHTML = list
+      .map((v) => {
+        const title = v.nickname || v.registration || v.classCode || "Fuel vehicle";
+        const detail = [
+          v.registration ? `Rego ${esc(v.registration)}` : "",
+          v.classCode ? esc(v.classCode) : "",
+          v.classLabel && v.classLabel !== v.classCode ? esc(v.classLabel) : "",
+          v.tankCapacityL != null ? `${esc(v.tankCapacityL)} L tank` : "",
+          v.currentFuelL != null ? `${esc(v.currentFuelL)} L on board` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const activeClass = v.active ? " is-active" : "";
+        const badge = v.active ? `<span class="car-vehicle-badge">Active</span>` : "";
+        return `<article class="car-vehicle-card${activeClass}" data-fuel-vehicle-id="${esc(v.id)}">
+          <span class="car-vehicle-light" aria-hidden="true"></span>
+          <div class="car-vehicle-meta">
+            <strong>${esc(title)}</strong>
+            <p class="muted">${detail || "—"}</p>
+            ${badge}
+          </div>
+          <div class="car-vehicle-actions">
+            <button type="button" class="btn secondary small" data-fuel-vehicle-toggle="${esc(v.id)}">${
+              v.active ? "Deactivate" : "Activate"
+            }</button>
+            <button type="button" class="btn secondary small" data-fuel-vehicle-edit="${esc(v.id)}">Edit</button>
+            <button type="button" class="btn danger small" data-fuel-vehicle-remove="${esc(v.id)}">Remove</button>
+          </div>
+        </article>`;
+      })
+      .join("");
+  }
+
+  function resetForm() {
+    editingId = null;
+    const form = byId("fuel-vehicle-form");
+    if (form) form.reset();
+    if (byId("fuel-vehicle-id")) byId("fuel-vehicle-id").value = "";
+    if (byId("fuel-vehicle-class")) byId("fuel-vehicle-class").value = "YN16BQ";
+    if (byId("fuel-vehicle-active")) byId("fuel-vehicle-active").checked = true;
+    const tank = byId("fuel-vehicle-tank");
+    const fuel = byId("fuel-vehicle-fuel");
+    if (tank) {
+      tank.dataset.userSet = "";
+      tank.value = "520";
+    }
+    if (fuel) {
+      fuel.dataset.userSet = "";
+      fuel.value = "286";
+    }
+    const cancel = byId("fuel-vehicle-cancel");
+    if (cancel) cancel.hidden = true;
+    const save = byId("fuel-vehicle-save");
+    if (save) save.textContent = "Save vehicle to profile";
+    syncClassUi();
+  }
+
+  function fillForm(row) {
+    editingId = row.id;
+    byId("fuel-vehicle-id").value = row.id || "";
+    byId("fuel-vehicle-nickname").value = row.nickname || "";
+    byId("fuel-vehicle-rego").value = row.registration || "";
+    const known = Boolean(CATALOG[row.classCode]);
+    byId("fuel-vehicle-class").value = known ? row.classCode : "custom";
+    if (byId("fuel-vehicle-custom-class")) {
+      byId("fuel-vehicle-custom-class").value = known ? "" : row.classCode || "";
+    }
+    const tank = byId("fuel-vehicle-tank");
+    const fuel = byId("fuel-vehicle-fuel");
+    if (tank) {
+      tank.value = String(row.tankCapacityL != null ? row.tankCapacityL : catalogTank(row.classCode));
+      tank.dataset.userSet = "1";
+    }
+    if (fuel) {
+      fuel.value = String(row.currentFuelL != null ? row.currentFuelL : "");
+      fuel.dataset.userSet = "1";
+    }
+    byId("fuel-vehicle-active").checked = Boolean(row.active);
+    const cancel = byId("fuel-vehicle-cancel");
+    if (cancel) cancel.hidden = false;
+    const save = byId("fuel-vehicle-save");
+    if (save) save.textContent = "Update vehicle";
+    syncClassUi();
+  }
+
+  async function persist(next, okMsg) {
+    const res = await fetch(`${API}/profile`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fuelVehicles: next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not save fuel vehicles.");
+    writeToState(
+      Array.isArray(data.profile && data.profile.fuelVehicles) ? data.profile.fuelVehicles : next
+    );
+    render();
+    setMessage(okMsg || "Fuel vehicles saved to your profile.");
+    if (typeof window.toast === "function") window.toast(okMsg || "Fuel vehicles saved");
+    if (window.FuelHub && typeof window.FuelHub.refresh === "function") {
+      try {
+        await window.FuelHub.refresh();
+      } catch {
+        /* Fuel Hub may be closed */
+      }
+    }
+  }
+
+  function wire() {
+    const box = byId("fuel-vehicles-box");
+    if (!box || box.dataset.wired) return;
+    box.dataset.wired = "1";
+    byId("fuel-vehicle-class")?.addEventListener("change", () => {
+      const tank = byId("fuel-vehicle-tank");
+      const fuel = byId("fuel-vehicle-fuel");
+      if (tank) tank.dataset.userSet = "";
+      if (fuel) fuel.dataset.userSet = "";
+      syncClassUi();
+    });
+    byId("fuel-vehicle-custom-class")?.addEventListener("input", syncClassUi);
+    byId("fuel-vehicle-tank")?.addEventListener("input", () => {
+      const tank = byId("fuel-vehicle-tank");
+      if (tank) tank.dataset.userSet = "1";
+    });
+    byId("fuel-vehicle-fuel")?.addEventListener("input", () => {
+      const fuel = byId("fuel-vehicle-fuel");
+      if (fuel) fuel.dataset.userSet = "1";
+    });
+    byId("fuel-vehicle-form")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const classCode = selectedClassCode();
+      if (!classCode) {
+        setMessage("Enter a fuel class code (e.g. XN93DX).", true);
+        return;
+      }
+      const now = new Date().toISOString();
+      const id = editingId || (byId("fuel-vehicle-id")?.value || "") || null;
+      const patch = {
+        nickname: (byId("fuel-vehicle-nickname")?.value || "").trim(),
+        registration: (byId("fuel-vehicle-rego")?.value || "").trim(),
+        classCode,
+        tankCapacityL: Number(byId("fuel-vehicle-tank")?.value),
+        currentFuelL: Number(byId("fuel-vehicle-fuel")?.value),
+        active: Boolean(byId("fuel-vehicle-active")?.checked),
+        updatedAt: now,
+      };
+      let next = vehicles.map((v) => ({ ...v }));
+      if (id && next.some((v) => v.id === id)) {
+        next = next.map((v) => (v.id === id ? { ...v, ...patch } : v));
+      } else {
+        if (next.length >= 8) {
+          setMessage("You can save up to 8 registered fuel vehicles.", true);
+          return;
+        }
+        next.push({
+          id:
+            (typeof crypto !== "undefined" && crypto.randomUUID && crypto.randomUUID()) ||
+            `fuelv-${Date.now()}`,
+          ...patch,
+          createdAt: now,
+        });
+      }
+      if (patch.active) {
+        const keepId = id || next[next.length - 1].id;
+        next = next.map((v) => ({ ...v, active: v.id === keepId }));
+      }
+      setMessage("Saving…");
+      try {
+        await persist(next, patch.active ? "Vehicle saved and marked Active for Fuel Hub" : "Vehicle saved");
+        resetForm();
+      } catch (err) {
+        setMessage(err.message || "Save failed — sign in on Profile first.", true);
+      }
+    });
+    byId("fuel-vehicle-cancel")?.addEventListener("click", () => {
+      resetForm();
+      setMessage("");
+    });
+    box.addEventListener("click", async (e) => {
+      const toggle = e.target.closest("[data-fuel-vehicle-toggle]");
+      const edit = e.target.closest("[data-fuel-vehicle-edit]");
+      const remove = e.target.closest("[data-fuel-vehicle-remove]");
+      if (toggle) {
+        const id = toggle.getAttribute("data-fuel-vehicle-toggle");
+        const row = vehicles.find((v) => v.id === id);
+        if (!row) return;
+        const next = vehicles.map((v) => ({
+          ...v,
+          active: row.active ? false : v.id === id,
+        }));
+        try {
+          await persist(next, row.active ? "Vehicle deactivated" : "Vehicle activated for Fuel Hub routes");
+        } catch (err) {
+          setMessage(err.message || "Could not update vehicle.", true);
+        }
+      }
+      if (edit) {
+        const id = edit.getAttribute("data-fuel-vehicle-edit");
+        const row = vehicles.find((v) => v.id === id);
+        if (row) fillForm(row);
+      }
+      if (remove) {
+        const id = remove.getAttribute("data-fuel-vehicle-remove");
+        const next = vehicles.filter((v) => v.id !== id);
+        try {
+          await persist(next, "Vehicle removed");
+          if (editingId === id) resetForm();
+        } catch (err) {
+          setMessage(err.message || "Could not remove vehicle.", true);
+        }
+      }
+    });
+  }
+
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const res = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      if (url && /\/(records(\?|$)|profile(\?|$)|fuelhub(\/|\?|$))/.test(String(url))) {
+        res
+          .clone()
+          .json()
+          .then((data) => {
+            if (!data) return;
+            let list = null;
+            if (data.profile && Array.isArray(data.profile.fuelVehicles)) list = data.profile.fuelVehicles;
+            else if (Array.isArray(data.fuelVehicles)) list = data.fuelVehicles;
+            else if (data.hubProfile && Array.isArray(data.hubProfile.fuelVehicles)) {
+              list = data.hubProfile.fuelVehicles;
+            }
+            if (list) {
+              writeToState(list);
+              render();
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+    return res;
+  };
+
+  function start() {
+    wire();
+    writeToState(readFromState());
+    render();
+    syncClassUi();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
 /* --- Car Expenses sidebar view (under Income) ----------------------------
  * Formerly an Expenses sub-tab. Own nav item + #view-car-expenses; setView
  * title + work-use prefill live here. Car claim saves return to this view.
@@ -7383,9 +7916,10 @@
       form?.elements?.annualSalary;
     const licenceSelect = document.getElementById("profile-licence-class");
 
+    const comboSelect = document.getElementById("profile-work-combination");
+    if (comboSelect) comboSelect.dataset.userSet = "";
     if (typeSelect && role.driverType) {
       typeSelect.value = role.driverType;
-      typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
     }
     if (salaryInput && role.annualSalary != null) {
       salaryInput.value = String(role.annualSalary);
@@ -7394,8 +7928,9 @@
     }
     if (licenceSelect && role.licenceClass) {
       licenceSelect.value = role.licenceClass;
-      licenceSelect.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    typeSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    licenceSelect?.dispatchEvent(new Event("change", { bubbles: true }));
 
     const label = role.label || role.driverType;
     const money = Number(role.annualSalary).toLocaleString("en-AU");

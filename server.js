@@ -102,6 +102,16 @@ const {
   normalizeCars,
   primaryActiveWorkUsePercent,
 } = require("./lib/profile-cars");
+const fuelNhvr = require("./lib/fuel-nhvr");
+const fuelPrices = require("./lib/fuel-prices");
+const fuelStations = require("./lib/fuel-stations");
+const fuelEfficiency = require("./lib/fuel-efficiency");
+const { planFuelStops } = require("./lib/fuel-planner");
+const fuelhubStore = require("./lib/fuelhub-store");
+const hubProfile = require("./lib/hub-profile");
+const fuelDashboard = require("./lib/fuel-dashboard");
+const fuelVehicleClass = require("./lib/fuel-vehicle-class");
+const fuelForecast = require("./lib/fuel-forecast");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -808,6 +818,397 @@ api.get("/version", (_req, res) => {
   });
 });
 
+function fuelhubState(req) {
+  const records = getRecords(req);
+  const account = req.user ? auth.getUser(req.user) : null;
+  const hub = hubProfile.presentHubProfile(account, records);
+  return { store: fuelhubStore.ensureFuelhub(records, { hubProfile: hub }), hub, records };
+}
+
+function fuelhubBootstrap(req) {
+  const { store, hub } = fuelhubState(req);
+  const snap = fuelhubStore.snapshot(store);
+  const seeded = !store.truckSavedAt;
+  return {
+    ...snap,
+    hubProfile: { ...hub, truckSeeded: seeded },
+    retailers: fuelPrices.listRetailers(),
+    combinations: fuelNhvr.listCombinations(),
+    massSchemes: fuelNhvr.listMassSchemes(),
+    networks: fuelNhvr.listNetworks(),
+    corridors: fuelNhvr.listCorridors().map((c) => ({
+      id: c.id,
+      name: c.name,
+      distanceKm: c.distanceKm,
+      nhvrNetworks: c.nhvrNetworks,
+      westPremium: c.westPremium,
+    })),
+    tables: fuelPrices.governmentTables(),
+    stations: fuelStations.listStations({ observedPrices: store.observedPrices }),
+    efficiency: fuelEfficiency.describeEfficiency(store.truck, {
+      driverType: hub.driverType,
+    }),
+    driverTypes: presentDriverTypes(),
+    licenceClasses: listLicenceClasses(),
+    workCombinations: hubProfile.listWorkCombinations(),
+    fuelClasses: fuelVehicleClass.listFuelClasses(),
+    dashboard: fuelDashboard.buildDashboard({
+      store,
+      hub,
+      efficiency: fuelEfficiency.describeEfficiency(store.truck, {
+        driverType: hub.driverType,
+      }),
+    }),
+    forecast: fuelForecast.buildFuelForecast({ store, truck: store.truck }),
+  };
+}
+
+api.get("/hub/profile", (req, res) => {
+  const records = getRecords(req);
+  const account = req.user ? auth.getUser(req.user) : null;
+  res.json({
+    hubProfile: hubProfile.presentHubProfile(account, records),
+    apps: ["taxationhub", "fuelhub"],
+    note: "One Driver Hub login and profile file is shared by every hub app. App-specific data (tax ledger, fuel truck spec) stays in the same records document under its own key.",
+  });
+});
+
+api.get("/fuelhub", (req, res) => {
+  res.json(fuelhubBootstrap(req));
+});
+
+api.get("/fuelhub/dashboard", (req, res) => {
+  const { store, hub } = fuelhubState(req);
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng != null ? req.query.lng : req.query.lon);
+  const point = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const efficiency = fuelEfficiency.describeEfficiency(store.truck, {
+    driverType: hub.driverType,
+  });
+  res.json(
+    fuelDashboard.buildDashboard({
+      store,
+      hub,
+      point,
+      efficiency,
+    })
+  );
+});
+
+api.get("/fuelhub/stations", (req, res) => {
+  const { store } = fuelhubState(req);
+  res.json({
+    stations: fuelStations.listStations({
+      corridorId: req.query.corridor || undefined,
+      q: req.query.q || undefined,
+      observedPrices: store.observedPrices,
+    }),
+  });
+});
+
+api.put("/fuelhub/truck", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a Fuel Hub truck spec." });
+    return;
+  }
+  const { store, hub } = fuelhubState(req);
+  const truck = fuelhubStore.saveTruck(
+    store,
+    {
+      ...(req.body || {}),
+      driverType: hub.driverType,
+    },
+    { hubProfile: hub }
+  );
+  persist(req, { reason: "fuelhub-truck" });
+  res.json({
+    truck,
+    truckSource: store.truckSource,
+    efficiency: fuelEfficiency.describeEfficiency(truck, { driverType: hub.driverType }),
+  });
+});
+
+function persistFuelVehicles(req, vehicles) {
+  const records = getRecords(req);
+  records.profile = records.profile || {};
+  records.profile.fuelVehicles = fuelVehicleClass.normalizeFuelVehicles(vehicles);
+  const hub = hubProfile.presentHubProfile(req.user ? auth.getUser(req.user) : null, records);
+  const store = fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
+  persist(req, { reason: "fuelhub-vehicles" });
+  return {
+    fuelVehicles: hub.fuelVehicles,
+    activeFuelVehicle: hub.activeFuelVehicle,
+    hubProfile: hub,
+    truck: store.truck,
+    efficiency: fuelEfficiency.describeEfficiency(store.truck, { driverType: hub.driverType }),
+  };
+}
+
+api.post("/fuelhub/vehicles", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.upsertFuelVehicle((records.profile && records.profile.fuelVehicles) || [], req.body || {});
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.put("/fuelhub/vehicles/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to update a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.upsertFuelVehicle((records.profile && records.profile.fuelVehicles) || [], {
+      ...(req.body || {}),
+      id: req.params.id,
+    });
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/vehicles/:id/activate", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to activate a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.activateFuelVehicle(
+      (records.profile && records.profile.fuelVehicles) || [],
+      req.params.id
+    );
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/vehicles/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove a registered fuel vehicle." });
+    return;
+  }
+  const records = getRecords(req);
+  const before = (records.profile && records.profile.fuelVehicles) || [];
+  const next = fuelVehicleClass.removeFuelVehicle(before, req.params.id);
+  if (next.length === before.length) {
+    res.status(404).json({ error: "Registered fuel vehicle not found." });
+    return;
+  }
+  res.json(persistFuelVehicles(req, next));
+});
+
+api.post("/fuelhub/cards", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a fuel card." });
+    return;
+  }
+  try {
+    const { store, hub } = fuelhubState(req);
+    const payload = { ...(req.body || {}) };
+    if (!payload.company && hub && hub.employer) payload.company = hub.employer;
+    const card = fuelhubStore.upsertCard(store, payload);
+    persist(req, { reason: "fuelhub-card" });
+    res.json({ card, cards: store.cards });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/cards/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove a fuel card." });
+    return;
+  }
+  const { store } = fuelhubState(req);
+  const removed = fuelhubStore.removeCard(store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Fuel card not found." });
+    return;
+  }
+  persist(req, { reason: "fuelhub-card-delete" });
+  res.json({ ok: true, cards: store.cards });
+});
+
+api.post("/fuelhub/prices/observed", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to log a bowser price." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const row = fuelhubStore.recordObservedPrice(store, req.body || {});
+    persist(req, { reason: "fuelhub-price" });
+    res.json({
+      observed: row,
+      stations: fuelStations.listStations({ observedPrices: store.observedPrices }),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.get("/fuelhub/forecast", (req, res) => {
+  const { store } = fuelhubState(req);
+  const q = req.query || {};
+  const hasRoute = Boolean(q.origin || q.destination);
+  const input = hasRoute
+    ? {
+        origin: q.origin,
+        destination: q.destination,
+        via: fuelForecast.splitVia(q.via),
+        refillAt: q.refillAt || q.refuelAt,
+        payloadT: q.payloadT,
+        addedPayloadT: q.addedPayloadT,
+        hours: q.hours,
+        currentFuelL: q.currentFuelL,
+      }
+    : undefined;
+  res.json(fuelForecast.buildFuelForecast({ store, truck: store.truck, input }));
+});
+
+api.post("/fuelhub/plan", (req, res) => {
+  const { store, hub } = fuelhubState(req);
+  const body = req.body || {};
+  const via = fuelForecast.splitVia(body.via);
+  const truck = {
+    ...(body.truck || store.truck || {}),
+    driverType: hub.driverType,
+  };
+  if (body.payloadT != null && body.payloadT !== "") truck.payloadT = body.payloadT;
+  if (body.currentFuelL != null && body.currentFuelL !== "") truck.currentFuelL = body.currentFuelL;
+  const plan = planFuelStops({
+    origin: body.origin,
+    destination: body.destination,
+    via,
+    distanceKm: body.distanceKm,
+    truck,
+    cards: body.cards || store.cards,
+    observedPrices: store.observedPrices,
+  });
+  const forecast = fuelForecast.buildFuelForecast({
+    store,
+    truck,
+    input: {
+      origin: body.origin,
+      destination: body.destination,
+      via,
+      refillAt: body.refillAt || body.refuelAt,
+      payloadT: body.payloadT,
+      addedPayloadT: body.addedPayloadT,
+      hours: body.hours,
+      currentFuelL: body.currentFuelL != null ? body.currentFuelL : truck.currentFuelL,
+    },
+  });
+  plan.forecast = forecast.prediction;
+  fuelhubStore.saveLastPlan(store, {
+    ...fuelDashboard.summarisePlan(plan),
+    forecast: forecast.prediction
+      ? {
+          origin: forecast.prediction.origin,
+          destination: forecast.prediction.destination,
+          via: forecast.prediction.via,
+          refillAt: forecast.prediction.refillAt,
+          payloadT: forecast.prediction.payloadT,
+          addedPayloadT: forecast.prediction.addedPayloadT,
+          distanceKm: forecast.prediction.distanceKm,
+          hours: forecast.prediction.hours,
+          timeFactor: forecast.prediction.timeFactor,
+          litresPerKm: forecast.prediction.averageLitresPerKm,
+          litresPer100km: forecast.prediction.averageLitresPer100km,
+          note: forecast.prediction.note,
+          refillAdvice: forecast.prediction.refillAdvice,
+          hops: (forecast.prediction.hops || []).map((h) => ({
+            from: h.from,
+            to: h.to,
+            distanceKm: h.distanceKm,
+            hours: h.hours,
+            payloadT: h.payloadT,
+            litresPerKm: h.litresPerKm,
+            burnL: h.burnL,
+            fillL: h.fillL,
+            minFillL: h.minFillL,
+            idealFillL: h.idealFillL,
+            refillHere: h.refillHere,
+          })),
+          scenarios: (forecast.prediction.scenarios || []).map((s) => ({
+            id: s.id,
+            name: s.name,
+            note: s.note,
+            litresPerKm: s.litresPerKm,
+            litresPer100km: s.litresPer100km,
+            fillL: s.fillL,
+            costAud: s.costAud,
+          })),
+        }
+      : null,
+  });
+  if (req.user) persist(req, { reason: "fuelhub-plan" });
+  res.json({ plan, lastPlan: store.lastPlan, forecast });
+});
+
+api.post("/fuelhub/trips", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a Fuel Hub trip." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const trip = fuelhubStore.saveTrip(store, req.body || {});
+    persist(req, { reason: "fuelhub-trip" });
+    res.json({ trip, trips: fuelhubStore.snapshot(store).trips });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/track", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to record GPS points." });
+    return;
+  }
+  try {
+    const { store } = fuelhubState(req);
+    const track = fuelhubStore.appendTrack(store, req.body || {});
+    persist(req, { reason: "fuelhub-track" });
+    const efficiency = fuelEfficiency.describeEfficiency(store.truck);
+    const remainingKm = Math.max(0, efficiency.rangeKm - (track.km || 0));
+    res.json({
+      track: {
+        id: track.id,
+        km: track.km,
+        startedAt: track.startedAt,
+        updatedAt: track.updatedAt,
+        pointCount: (track.points || []).length,
+      },
+      remainingKm: Math.round(remainingKm * 10) / 10,
+      efficiency,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/track", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to reset GPS tracking." });
+    return;
+  }
+  const { store } = fuelhubState(req);
+  store.activeTrack = null;
+  persist(req, { reason: "fuelhub-track-reset" });
+  res.json({ ok: true });
+});
+
 // --- Primary-mod admin ---------------------------------------------------
 function requireAdmin(req, res) {
   if (!req.user) {
@@ -1090,7 +1491,12 @@ api.put("/admin/users/:username/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
-  const profile = storage.updateProfile(loaded.records, body);
+  const profile = storage.updateProfile(
+    loaded.records,
+    hubProfile.applyProfileVehicleFields(body, loaded.records.profile || {})
+  );
+  const hub = hubProfile.presentHubProfile(auth.getUser(req.params.username), loaded.records);
+  fuelhubStore.ensureFuelhub(loaded.records, { hubProfile: hub });
   persistTarget(loaded, { reason: "admin-edit-profile", actor: sessionUsername(req) });
   res.json({ ok: true, profile });
 });
@@ -1388,6 +1794,7 @@ api.get("/standards", (_req, res) => {
     incomeTypes: listMenuIncomeTypes(),
     driverTypes: presentDriverTypes(),
     licenceClasses: listLicenceClasses(),
+    workCombinations: hubProfile.listWorkCombinations(),
     driverRoleDefaults: listDriverRoleDefaults(),
     financialYear: getCurrentFinancialYear(),
   });
@@ -1453,9 +1860,16 @@ api.put("/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
-  const profile = storage.updateProfile(records, body);
+  // Registered fuel-class vehicles (Fuel Hub) — not ATO work cars.
+  if (Object.prototype.hasOwnProperty.call(body, "fuelVehicles")) {
+    body.fuelVehicles = fuelVehicleClass.normalizeFuelVehicles(body.fuelVehicles);
+  }
+  const merged = hubProfile.applyProfileVehicleFields(body, records.profile || {});
+  const profile = storage.updateProfile(records, merged);
+  const hub = hubProfile.presentHubProfile(req.user ? auth.getUser(req.user) : null, records);
+  fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
   persist(req);
-  res.json({ profile });
+  res.json({ profile, hubProfile: hub });
 });
 
 // --- Summary / report / forecast ----------------------------------------
@@ -2444,7 +2858,7 @@ app.use((err, _req, res, _next) => {
 if (process.env.NODE_ENV !== "test") {
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Driver Hub / Taxation Hub running at http://localhost:${PORT}/haulage/`);
+    console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     backup.startBackupScheduler({
