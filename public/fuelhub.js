@@ -11,6 +11,9 @@
   let lastPlanForm = null;
   let watchId = null;
   let gpsBusy = false;
+  let receiptTimer = null;
+  let currentReceiptId = null;
+  let receiptsHydrated = false;
 
   function byId(id) {
     return document.getElementById(id);
@@ -36,7 +39,11 @@
       body: opts.body != null ? JSON.stringify(opts.body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || res.statusText || "Request failed");
+    if (!res.ok) {
+      const err = new Error(data.error || res.statusText || "Request failed");
+      if (data.remainingMs != null) err.remainingMs = data.remainingMs;
+      throw err;
+    }
     return data;
   }
 
@@ -78,9 +85,10 @@
       profile: "Profile",
       forecast: "Forecast",
       plan: "Plan fills",
-      track: "GPS track",
+      track: "GPS",
       truck: "Truck & load",
       cards: "Fuel cards",
+      receipts: "Fuel receipts",
       prices: "Prices & tables",
     };
     const title = byId("fuelhub-page-title");
@@ -91,8 +99,10 @@
     document.querySelectorAll("#fuelhub-shell .fuelhub-view").forEach((el) => {
       el.classList.toggle("active", el.id === `fuel-view-${next}`);
     });
+    if (next !== "receipts") stopReceiptTimer();
     render();
     if (next === "dashboard") locateForDeals();
+    if (next === "receipts") void refreshReceipts();
   }
 
   function comboOptions(selected) {
@@ -347,7 +357,7 @@
           <div class="fuelhub-actions">
             <button type="button" class="btn primary" data-fuel-jump="plan">Plan fills</button>
             <button type="button" class="btn secondary" data-fuel-jump="forecast">Forecast</button>
-            <button type="button" class="btn secondary" data-fuel-jump="track">GPS track</button>
+            <button type="button" class="btn secondary" data-fuel-jump="track">GPS</button>
           </div>
         </div>
         <div class="fuelhub-card">
@@ -971,6 +981,422 @@
     });
   }
 
+  function stopReceiptTimer() {
+    if (receiptTimer) {
+      clearInterval(receiptTimer);
+      receiptTimer = null;
+    }
+  }
+
+  function applyReceiptPayload(data) {
+    if (!state || !data) return;
+    if (data.employerContacts) state.employerContacts = data.employerContacts;
+    if (data.fuelReceipts) state.fuelReceipts = data.fuelReceipts;
+    if (data.confirmMs) state.confirmMs = data.confirmMs;
+    if (data.receipt) {
+      currentReceiptId = data.receipt.id;
+      const rest = (state.fuelReceipts || []).filter((r) => r.id !== data.receipt.id);
+      state.fuelReceipts = [data.receipt, ...rest];
+    }
+  }
+
+  async function refreshReceipts() {
+    try {
+      const data = await api("/fuelhub");
+      applyReceiptPayload(data);
+      if (!receiptsHydrated) {
+        receiptsHydrated = true;
+        if (!currentReceiptId) {
+          const open = ((data && data.fuelReceipts) || []).find((r) =>
+            ["scanned", "confirmed", "awaiting_send"].includes(r.status)
+          );
+          if (open) currentReceiptId = open.id;
+        }
+      }
+      if (view === "receipts") renderReceipts();
+    } catch {
+      /* keep last receipts */
+    }
+  }
+
+  function currentReceipt() {
+    const list = (state && state.fuelReceipts) || [];
+    if (!currentReceiptId) return null;
+    return list.find((r) => r.id === currentReceiptId) || null;
+  }
+
+  function receiptStep(row) {
+    if (!row || row.status === "cancelled") return 1;
+    if (row.status === "scanned") return 2;
+    if (row.status === "confirmed") return 3;
+    if (row.status === "awaiting_send") return 4;
+    if (row.status === "sent" || row.status === "failed") return 4;
+    return 1;
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Could not read that file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderReceipts() {
+    const el = byId("fuel-view-receipts");
+    if (!el) return;
+    const row = currentReceipt();
+    const step = receiptStep(row);
+    const contacts = (state && state.employerContacts) || [];
+    const receipts = (state && state.fuelReceipts) || [];
+    const hub = (state && state.hubProfile) || {};
+    const remaining = row && row.status === "awaiting_send" ? Math.ceil((row.remainingMs || 0) / 1000) : 0;
+
+    const steps = ["Scan", "Confirm", "Nominate", "Send"]
+      .map(
+        (label, i) =>
+          `<span class="fuelhub-step ${step === i + 1 ? "is-active" : ""} ${step > i + 1 ? "is-done" : ""}">${i + 1}. ${label}</span>`
+      )
+      .join("");
+
+    const contactOptions = contacts.length
+      ? contacts
+          .map(
+            (c) => `<option value="${esc(c.id)}">${esc(c.name)} — ${esc(c.email)}${c.company ? ` (${esc(c.company)})` : ""}</option>`
+          )
+          .join("")
+      : `<option value="">No saved contacts yet</option>`;
+
+    let panel = "";
+    if (step === 1) {
+      panel = `
+        <form id="fuel-receipt-scan-card" class="fuelhub-card">
+          <h2>Step 1 — Submit a fuel receipt</h2>
+          <p class="fuelhub-muted">Scan a bowser docket or upload a photo/PDF. Fuel Hub reads vendor, date, dollars and litres so you can send it to a nominated employer — this does not go on the Taxation Hub ledger.</p>
+          <input id="fuel-receipt-file" type="file" accept="image/*,application/pdf" hidden />
+          <input id="fuel-receipt-camera" type="file" accept="image/*" capture="environment" hidden />
+          <div class="fuelhub-actions">
+            <button type="button" class="btn primary" id="fuel-receipt-scan-btn">Scan with camera</button>
+            <button type="button" class="btn secondary" id="fuel-receipt-upload-btn">Upload file</button>
+          </div>
+          <p id="fuel-receipt-scan-msg" class="fuelhub-muted"></p>
+        </form>`;
+    } else if (step === 2) {
+      panel = `
+        <form id="fuel-receipt-confirm-form" class="fuelhub-card fuelhub-profile-form">
+          <h2>Step 2 — Confirm the docket</h2>
+          <p class="fuelhub-muted span-2">Check this matches the slip. You can correct OCR before it is sent.</p>
+          ${
+            row.hasImage
+              ? `<p class="span-2"><img class="fuelhub-receipt-preview" alt="Scanned receipt" src="${API}/fuelhub/receipts/${esc(row.id)}/file" /></p>`
+              : ""
+          }
+          <label>Vendor<input name="vendor" value="${esc(row.vendor || "")}" required /></label>
+          <label>Date<input name="date" value="${esc(row.date || "")}" placeholder="YYYY-MM-DD" /></label>
+          <label>Amount (AUD)<input name="amount" type="number" min="0" step="0.01" value="${esc(row.amount != null ? row.amount : "")}" required /></label>
+          <label>Litres<input name="litres" type="number" min="0" step="0.01" value="${esc(row.litres != null ? row.litres : "")}" /></label>
+          <label class="span-2">Site / location<input name="site" value="${esc(row.site || "")}" /></label>
+          <label class="span-2">Notes<textarea name="notes" rows="2">${esc(row.notes || "")}</textarea></label>
+          ${row.ocrPreview ? `<p class="fuelhub-muted span-2">OCR: ${esc(row.ocrPreview)}</p>` : ""}
+          <div class="fuelhub-actions span-2">
+            <button type="submit" class="btn primary">Details are correct</button>
+            <button type="button" class="btn secondary" id="fuel-receipt-restart">Scan a different slip</button>
+          </div>
+        </form>`;
+    } else if (step === 3) {
+      panel = `
+        <form id="fuel-receipt-nominate-form" class="fuelhub-card fuelhub-profile-form">
+          <h2>Step 3 — Nominate who receives it</h2>
+          <p class="fuelhub-muted span-2">Pick a saved employer contact or add one. Fuel Hub remembers emails and contact details you use regularly.</p>
+          <label class="span-2">Saved contacts
+            <select name="contactId" id="fuel-receipt-contact-select">
+              <option value="">Add a new contact…</option>
+              ${contactOptions}
+            </select>
+          </label>
+          <label>Name<input name="name" id="fuel-receipt-contact-name" value="${esc((contacts[0] && contacts[0].name) || hub.displayName || "")}" /></label>
+          <label>Email<input name="email" id="fuel-receipt-contact-email" type="email" required placeholder="accounts@employer.com" value="${esc((contacts[0] && contacts[0].email) || "")}" /></label>
+          <label>Company<input name="company" id="fuel-receipt-contact-company" value="${esc((contacts[0] && contacts[0].company) || hub.employer || "")}" /></label>
+          <label>Role<input name="role" id="fuel-receipt-contact-role" placeholder="e.g. Fleet pay desk" value="${esc((contacts[0] && contacts[0].role) || "")}" /></label>
+          <div class="fuelhub-actions span-2">
+            <button type="submit" class="btn primary">Start 30s confirmation</button>
+            <button type="button" class="btn secondary" id="fuel-receipt-back-confirm">Back to details</button>
+          </div>
+        </form>`;
+    } else {
+      const sent = row.status === "sent";
+      const failed = row.status === "failed";
+      panel = `
+        <div class="fuelhub-card">
+          <h2>Step 4 — ${sent ? "Report sent" : failed ? "Send failed" : "Connecting &amp; sending"}</h2>
+          ${
+            sent
+              ? `<p>Sent <strong>${esc(row.vendor || "receipt")}</strong> to <strong>${esc(row.contactEmail)}</strong>${
+                  row.mail && row.mail.channel === "dev" ? " (saved locally — email is not configured on this server)" : ""
+                }.</p>`
+              : failed
+                ? `<p class="fuelhub-warn">${esc((row.mail && row.mail.error) || "Could not send.")}</p>`
+                : `<p class="fuelhub-muted">Sending <strong>${esc(row.vendor || "this docket")}</strong> (${esc(
+                    row.amount != null ? money(row.amount) : "—"
+                  )}) to <strong>${esc(row.contactName || row.contactEmail)}</strong> at ${esc(row.contactEmail)} after a 30 second confirmation window. Cancel if anything is wrong.</p>
+                   <p class="fuelhub-countdown" id="fuel-receipt-countdown">${remaining}</p>
+                   <p class="fuelhub-muted">seconds remaining</p>`
+          }
+          <div class="fuelhub-actions">
+            ${
+              sent || failed
+                ? `<button type="button" class="btn primary" id="fuel-receipt-another">Scan another receipt</button>`
+                : `<button type="button" class="btn primary" id="fuel-receipt-send-now">Send now</button>
+                   <button type="button" class="btn danger" id="fuel-receipt-cancel">Cancel</button>`
+            }
+          </div>
+        </div>`;
+    }
+
+    const saved = contacts.length
+      ? contacts
+          .map(
+            (c) => `<div class="fuelhub-card-row">
+              <div>
+                <strong>${esc(c.name)}</strong>
+                <div class="fuelhub-muted">${esc(c.email)}${c.company ? ` · ${esc(c.company)}` : ""}${c.role ? ` · ${esc(c.role)}` : ""}</div>
+              </div>
+              <button type="button" class="btn danger" data-del-contact="${esc(c.id)}">Remove</button>
+            </div>`
+          )
+          .join("")
+      : `<p class="fuelhub-muted">No saved contacts yet. Nominating an email on a scan stores it here for next time.</p>`;
+
+    const history = receipts.length
+      ? `<table class="fuelhub-table"><thead><tr><th>When</th><th>Vendor</th><th>To</th><th>Status</th></tr></thead><tbody>${receipts
+          .slice(0, 12)
+          .map(
+            (r) => `<tr data-open-receipt="${esc(r.id)}" class="${r.id === (row && row.id) ? "fuelhub-row-refill" : ""}">
+              <td>${esc(fmtWhen(r.createdAt))}</td>
+              <td>${esc(r.vendor || "—")} ${r.amount != null ? money(r.amount) : ""}</td>
+              <td>${esc(r.contactEmail || "—")}</td>
+              <td>${esc(r.status.replace("_", " "))}</td>
+            </tr>`
+          )
+          .join("")}</tbody></table>`
+      : `<p class="fuelhub-muted">Sent reports will appear here.</p>`;
+
+    el.innerHTML = `
+      ${profileBanner()}
+      <p class="fuelhub-muted">Scan a fuel docket, confirm the figures, nominate an employer email, then Fuel Hub sends the report after a 30 second confirmation period.</p>
+      <div class="fuelhub-steps">${steps}</div>
+      <div class="fuelhub-stack">
+        ${panel}
+        <div class="fuelhub-grid">
+          <div class="fuelhub-card">
+            <h2>Saved employer contacts</h2>
+            ${saved}
+          </div>
+          <div class="fuelhub-card">
+            <h2>Recent submissions</h2>
+            ${history}
+          </div>
+        </div>
+      </div>
+    `;
+
+    el.querySelector("#fuel-receipt-scan-btn")?.addEventListener("click", () => {
+      byId("fuel-receipt-camera")?.click();
+    });
+    el.querySelector("#fuel-receipt-upload-btn")?.addEventListener("click", () => {
+      byId("fuel-receipt-file")?.click();
+    });
+    el.querySelector("#fuel-receipt-file")?.addEventListener("change", onReceiptFile);
+    el.querySelector("#fuel-receipt-camera")?.addEventListener("change", onReceiptFile);
+    el.querySelector("#fuel-receipt-confirm-form")?.addEventListener("submit", onConfirmReceipt);
+    el.querySelector("#fuel-receipt-nominate-form")?.addEventListener("submit", onNominateReceipt);
+    el.querySelector("#fuel-receipt-restart")?.addEventListener("click", () => {
+      currentReceiptId = null;
+      renderReceipts();
+    });
+    el.querySelector("#fuel-receipt-another")?.addEventListener("click", () => {
+      currentReceiptId = null;
+      renderReceipts();
+    });
+    el.querySelector("#fuel-receipt-back-confirm")?.addEventListener("click", async () => {
+      if (!row) return;
+      try {
+        const data = await api(`/fuelhub/receipts/${row.id}/confirm`, {
+          method: "POST",
+          body: { vendor: row.vendor, date: row.date, amount: row.amount, litres: row.litres, site: row.site, notes: row.notes },
+        });
+        applyReceiptPayload(data);
+        renderReceipts();
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+    el.querySelector("#fuel-receipt-send-now")?.addEventListener("click", () => sendReceipt(true));
+    el.querySelector("#fuel-receipt-cancel")?.addEventListener("click", onCancelReceipt);
+    el.querySelector("#fuel-receipt-contact-select")?.addEventListener("change", onPickSavedContact);
+    el.querySelectorAll("[data-del-contact]").forEach((btn) => {
+      btn.addEventListener("click", () => onDeleteContact(btn.getAttribute("data-del-contact")));
+    });
+    el.querySelectorAll("[data-open-receipt]").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        currentReceiptId = tr.getAttribute("data-open-receipt");
+        renderReceipts();
+      });
+    });
+
+    if (row && row.status === "awaiting_send") startReceiptCountdown(row);
+  }
+
+  function onPickSavedContact(e) {
+    const id = e.target.value;
+    const c = ((state && state.employerContacts) || []).find((row) => row.id === id);
+    if (!c) return;
+    const name = byId("fuel-receipt-contact-name");
+    const email = byId("fuel-receipt-contact-email");
+    const company = byId("fuel-receipt-contact-company");
+    const role = byId("fuel-receipt-contact-role");
+    if (name) name.value = c.name || "";
+    if (email) email.value = c.email || "";
+    if (company) company.value = c.company || "";
+    if (role) role.value = c.role || "";
+  }
+
+  async function onReceiptFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const msg = byId("fuel-receipt-scan-msg");
+    if (msg) msg.textContent = "Reading receipt…";
+    try {
+      const imageBase64 = await fileToDataUrl(file);
+      const data = await api("/fuelhub/receipts/scan", {
+        method: "POST",
+        body: { imageBase64, mimeType: file.type || "image/jpeg", filename: file.name },
+      });
+      applyReceiptPayload(data);
+      toast("Receipt scanned — confirm the details");
+      renderReceipts();
+    } catch (err) {
+      if (msg) msg.textContent = err.message || "Scan failed";
+      toast(err.message || "Scan failed");
+    }
+  }
+
+  async function onConfirmReceipt(e) {
+    e.preventDefault();
+    const row = currentReceipt();
+    if (!row) return;
+    const fd = new FormData(e.target);
+    try {
+      const data = await api(`/fuelhub/receipts/${row.id}/confirm`, {
+        method: "POST",
+        body: {
+          vendor: fd.get("vendor"),
+          date: fd.get("date"),
+          amount: fd.get("amount"),
+          litres: fd.get("litres"),
+          site: fd.get("site"),
+          notes: fd.get("notes"),
+        },
+      });
+      applyReceiptPayload(data);
+      toast("Details confirmed — nominate an employer");
+      renderReceipts();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function onNominateReceipt(e) {
+    e.preventDefault();
+    const row = currentReceipt();
+    if (!row) return;
+    const fd = new FormData(e.target);
+    const contactId = fd.get("contactId");
+    const body = contactId
+      ? { contactId }
+      : {
+          name: fd.get("name"),
+          email: fd.get("email"),
+          company: fd.get("company"),
+          role: fd.get("role"),
+        };
+    try {
+      const data = await api(`/fuelhub/receipts/${row.id}/nominate`, { method: "POST", body });
+      applyReceiptPayload(data);
+      toast("30 second confirmation started");
+      renderReceipts();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function startReceiptCountdown(row) {
+    stopReceiptTimer();
+    const tick = () => {
+      const live = currentReceipt();
+      if (!live || live.id !== row.id || live.status !== "awaiting_send") {
+        stopReceiptTimer();
+        return;
+      }
+      const left = Math.max(0, Math.ceil((live.remainingMs || 0) / 1000));
+      const clock = byId("fuel-receipt-countdown");
+      if (clock) clock.textContent = String(left);
+      live.remainingMs = Math.max(0, (live.remainingMs || 0) - 250);
+      if (left <= 0) {
+        stopReceiptTimer();
+        void sendReceipt(false);
+      }
+    };
+    receiptTimer = setInterval(tick, 250);
+    tick();
+  }
+
+  async function sendReceipt(force) {
+    const row = currentReceipt();
+    if (!row) return;
+    try {
+      const data = await api(`/fuelhub/receipts/${row.id}/send`, {
+        method: "POST",
+        body: { force: Boolean(force) },
+      });
+      applyReceiptPayload(data);
+      stopReceiptTimer();
+      toast(data.mail && data.mail.channel === "dev" ? "Report saved (email not configured)" : "Fuel receipt sent");
+      renderReceipts();
+    } catch (err) {
+      if (err.message && /Confirmation period/.test(err.message)) return;
+      toast(err.message);
+    }
+  }
+
+  async function onCancelReceipt() {
+    const row = currentReceipt();
+    if (!row) return;
+    try {
+      const data = await api(`/fuelhub/receipts/${row.id}/cancel`, { method: "POST", body: {} });
+      applyReceiptPayload(data);
+      stopReceiptTimer();
+      currentReceiptId = null;
+      toast("Send cancelled");
+      renderReceipts();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function onDeleteContact(id) {
+    try {
+      const data = await api(`/fuelhub/contacts/${id}`, { method: "DELETE" });
+      applyReceiptPayload(data);
+      renderReceipts();
+      toast("Contact removed");
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
   function renderPrices() {
     const el = byId("fuel-view-prices");
     if (!el) return;
@@ -1051,6 +1477,7 @@
     else if (view === "track") renderTrack();
     else if (view === "truck") renderTruck();
     else if (view === "cards") renderCards();
+    else if (view === "receipts") renderReceipts();
     else renderPrices();
   }
 
@@ -1275,6 +1702,7 @@
 
   function close() {
     stopGps();
+    stopReceiptTimer();
     document.body.classList.remove("fuelhub-open");
   }
 

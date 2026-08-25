@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=fuelhub-14" />
+    <link rel="stylesheet" href="./styles.css?v=fuelhub-19" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -784,20 +784,21 @@
           <span>Fuel<span class="brand-hub">Hub</span></span>
         </div>
         <nav class="sidebar-nav fuelhub-nav" aria-label="Fuel Hub">
-          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="profile">Profile</button></div>
           <div class="fuelhub-nav-slot"><button type="button" class="nav-btn active" data-fuel-view="dashboard">Dashboard</button></div>
-          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="forecast">Forecast</button></div>
           <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="plan">Plan fills</button></div>
-          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="track">GPS track</button></div>
           <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="truck">Truck &amp; load</button></div>
+          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="track">GPS</button></div>
+          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="forecast">Forecast</button></div>
           <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="cards">Fuel cards</button></div>
+          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="receipts">Fuel receipts</button></div>
           <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="prices">Prices &amp; tables</button></div>
+          <div class="fuelhub-nav-slot"><button type="button" class="nav-btn" data-fuel-view="profile">Profile</button></div>
         </nav>
         <div class="sidebar-bottom">
           <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
             <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
           </nav>
-          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.16</p>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.17</p>
         </div>
       </aside>
       <div class="main">
@@ -812,6 +813,7 @@
         <section id="fuel-view-track" class="view fuelhub-view"></section>
         <section id="fuel-view-truck" class="view fuelhub-view"></section>
         <section id="fuel-view-cards" class="view fuelhub-view"></section>
+        <section id="fuel-view-receipts" class="view fuelhub-view"></section>
         <section id="fuel-view-prices" class="view fuelhub-view"></section>
       </div>
     </div>
@@ -836,7 +838,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fuelhub-14"></script>
-    <script src="./fuelhub.js?v=fuelhub-14"></script>
+    <script src="./enhancements.js?v=fuelhub-19"></script>
+    <script src="./fuelhub.js?v=fuelhub-19"></script>
   </body>
 </html>

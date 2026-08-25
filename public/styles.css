@@ -2108,7 +2108,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 .fuelhub-nav {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 4px;
   min-height: 0;
   height: 100%;
@@ -2125,7 +2125,7 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   width: 100%;
   height: auto;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 10px 12px;
   line-height: 1.25;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -2458,6 +2458,48 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 }
 .fuelhub-refill h3 { margin: 0 0 8px; font-size: 0.98rem; }
 .fuelhub-row-refill td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.fuelhub-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.fuelhub-step {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.fuelhub-step.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1205;
+}
+.fuelhub-step.is-done {
+  border-color: color-mix(in srgb, var(--green) 50%, var(--border));
+  color: var(--green);
+}
+.fuelhub-countdown {
+  margin: 8px 0 0;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  line-height: 1;
+}
+.fuelhub-receipt-preview {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  max-height: 16rem;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+.fuelhub-card [data-open-receipt] { cursor: pointer; }
 @media (max-width: 1100px) {
   .fuelhub-grid,
   .fuelhub-dash-grid { grid-template-columns: 1fr; }
@@ -2479,12 +2521,9 @@ table.data tfoot td { border-top: 2px solid var(--border); }
     width: 22px;
     height: 22px;
   }
-  .fuelhub-nav {
-    gap: 2px;
-  }
   .fuelhub-nav-slot .nav-btn {
     font-size: 0.76rem;
-    padding: 7px 8px;
+    padding: 8px 10px;
     border-radius: 8px;
   }
   .fuelhub-shell .sidebar-bottom .nav-btn {
