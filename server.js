@@ -110,6 +110,7 @@ const { planFuelStops } = require("./lib/fuel-planner");
 const fuelhubStore = require("./lib/fuelhub-store");
 const hubProfile = require("./lib/hub-profile");
 const fuelDashboard = require("./lib/fuel-dashboard");
+const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -849,6 +850,7 @@ function fuelhubBootstrap(req) {
     driverTypes: presentDriverTypes(),
     licenceClasses: listLicenceClasses(),
     workCombinations: hubProfile.listWorkCombinations(),
+    fuelClasses: fuelVehicleClass.listFuelClasses(),
     dashboard: fuelDashboard.buildDashboard({
       store,
       hub,
@@ -908,16 +910,99 @@ api.put("/fuelhub/truck", (req, res) => {
     return;
   }
   const { store, hub } = fuelhubState(req);
-  const truck = fuelhubStore.saveTruck(store, {
-    ...(req.body || {}),
-    driverType: hub.driverType,
-  });
+  const truck = fuelhubStore.saveTruck(
+    store,
+    {
+      ...(req.body || {}),
+      driverType: hub.driverType,
+    },
+    { hubProfile: hub }
+  );
   persist(req, { reason: "fuelhub-truck" });
   res.json({
     truck,
     truckSource: store.truckSource,
     efficiency: fuelEfficiency.describeEfficiency(truck, { driverType: hub.driverType }),
   });
+});
+
+function persistFuelVehicles(req, vehicles) {
+  const records = getRecords(req);
+  records.profile = records.profile || {};
+  records.profile.fuelVehicles = fuelVehicleClass.normalizeFuelVehicles(vehicles);
+  const hub = hubProfile.presentHubProfile(req.user ? auth.getUser(req.user) : null, records);
+  const store = fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
+  persist(req, { reason: "fuelhub-vehicles" });
+  return {
+    fuelVehicles: hub.fuelVehicles,
+    activeFuelVehicle: hub.activeFuelVehicle,
+    hubProfile: hub,
+    truck: store.truck,
+    efficiency: fuelEfficiency.describeEfficiency(store.truck, { driverType: hub.driverType }),
+  };
+}
+
+api.post("/fuelhub/vehicles", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to save a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.upsertFuelVehicle((records.profile && records.profile.fuelVehicles) || [], req.body || {});
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.put("/fuelhub/vehicles/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to update a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.upsertFuelVehicle((records.profile && records.profile.fuelVehicles) || [], {
+      ...(req.body || {}),
+      id: req.params.id,
+    });
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/fuelhub/vehicles/:id/activate", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to activate a registered fuel vehicle." });
+    return;
+  }
+  try {
+    const records = getRecords(req);
+    const next = fuelVehicleClass.activateFuelVehicle(
+      (records.profile && records.profile.fuelVehicles) || [],
+      req.params.id
+    );
+    res.json(persistFuelVehicles(req, next));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/fuelhub/vehicles/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove a registered fuel vehicle." });
+    return;
+  }
+  const records = getRecords(req);
+  const before = (records.profile && records.profile.fuelVehicles) || [];
+  const next = fuelVehicleClass.removeFuelVehicle(before, req.params.id);
+  if (next.length === before.length) {
+    res.status(404).json({ error: "Registered fuel vehicle not found." });
+    return;
+  }
+  res.json(persistFuelVehicles(req, next));
 });
 
 api.post("/fuelhub/cards", (req, res) => {
@@ -1694,12 +1779,16 @@ api.put("/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
+  // Registered fuel-class vehicles (Fuel Hub) — not ATO work cars.
+  if (Object.prototype.hasOwnProperty.call(body, "fuelVehicles")) {
+    body.fuelVehicles = fuelVehicleClass.normalizeFuelVehicles(body.fuelVehicles);
+  }
   const merged = hubProfile.applyProfileVehicleFields(body, records.profile || {});
   const profile = storage.updateProfile(records, merged);
   const hub = hubProfile.presentHubProfile(req.user ? auth.getUser(req.user) : null, records);
   fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
   persist(req);
-  res.json({ profile });
+  res.json({ profile, hubProfile: hub });
 });
 
 // --- Summary / report / forecast ----------------------------------------

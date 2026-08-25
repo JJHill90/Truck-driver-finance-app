@@ -8,9 +8,10 @@ Progress slot: plan diesel fills from load, trailers, tank capacity and fuel
 mass, overlay government-style price bands plus fuel cards, and rank
 truck-access stops on NHVR freight corridors (not Apple/Google car shortcuts).
 GPS tracking or a driver-entered offline route both work from the same login.
-Taxation Hub profiles (name, employer, licence class, driver type, work vehicle)
-are the same Driver Hub identity — Fuel Hub reads them for combination and
-duty-cycle L/100 km on planned journeys; they are not copied.
+Taxation Hub profiles (name, employer, licence class, driver type, work vehicle,
+and registered fuel-class vehicles) are the same Driver Hub identity — Fuel Hub
+reads them for combination, duty-cycle L/100 km, and per-truck tank litres
+(XN93DX / YN16BQ / YN17BQ or a custom class); they are not copied.
 
 The frontend is a framework-free single-page app (`public/app.js`) served by a
 small **Node.js + Express** backend that stores data in a local JSON file
@@ -95,6 +96,7 @@ lib/ (Fuel Hub, first-party):
   fuel-efficiency.js    L/100 km from load, trailers, fuel mass, driver type
   fuel-planner.js       Cheapest fills + rest/refresh
   fuel-dashboard.js     Current run, trip history, area diesel deals
+  fuel-vehicle-class.js Registered fuel-capacity classes (XN93DX / YN16BQ / YN17BQ)
   fuelhub-store.js      Per-user truck spec, cards, trips
   hub-profile.js        Shared Driver Hub identity + work vehicle for Fuel Hub
 public/

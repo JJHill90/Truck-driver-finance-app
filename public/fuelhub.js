@@ -54,10 +54,19 @@
       p.licenceLabel,
       p.driverTypeLabel,
       p.workCombinationLabel,
+      p.activeFuelVehicle && p.activeFuelVehicle.classCode,
     ].filter(Boolean);
     const seed = p.truckSeeded
-      ? ` Fuel Hub follows Profile work vehicle and ${esc(p.driverTypeLabel || "linehaul")} duty cycle for L/100 km — save Truck &amp; load only if you need different tanks or payload.`
-      : ` Tanks were saved in Fuel Hub; Profile driver type (${esc(p.driverTypeLabel || "linehaul")}) still scales planned L/100 km.`;
+      ? ` Fuel Hub follows Profile work vehicle${
+          p.activeFuelVehicle
+            ? ` and registered class ${esc(p.activeFuelVehicle.classCode)} (${esc(p.activeFuelVehicle.tankCapacityL)} L)`
+            : ""
+        } and ${esc(p.driverTypeLabel || "linehaul")} duty cycle for L/100 km — save Truck &amp; load only if you need different payload.`
+      : ` Payload was saved in Fuel Hub; Profile driver type (${esc(p.driverTypeLabel || "linehaul")}) still scales planned L/100 km.${
+          p.activeFuelVehicle
+            ? ` Tank litres follow registered class ${esc(p.activeFuelVehicle.classCode)}.`
+            : ""
+        }`;
     return `<div class="fuelhub-profile-banner">Driver Hub profile · ${bits.map(esc).join(" · ")}.${seed}</div>`;
   }
 
@@ -190,6 +199,13 @@
         <div class="fuelhub-stat"><strong>${current.consumptionLPer100km || "—"}</strong><span>L / 100 km now</span></div>
         <div class="fuelhub-stat"><strong>${current.remainingKm || "—"} km</strong><span>Range before reserve</span></div>
         <div class="fuelhub-stat"><strong>${esc(current.combinationLabel || hub.workCombinationLabel || "—")}</strong><span>${esc(current.driverTypeLabel || hub.driverTypeLabel || "Duty cycle")}</span></div>
+        <div class="fuelhub-stat"><strong>${
+          current.fuelClassCode || (hub.activeFuelVehicle && hub.activeFuelVehicle.classCode) || "—"
+        }</strong><span>${
+          current.tankCapacityL
+            ? `${current.tankCapacityL} L tank · ${current.currentFuelL != null ? `${current.currentFuelL} L on board` : "class"}`
+            : "Registered fuel class"
+        }</span></div>
         <div class="fuelhub-stat"><strong>${deals[0] ? `${deals[0].effectiveCpl} ¢` : "—"}</strong><span>Best nearby diesel</span></div>
       </div>
       <div class="fuelhub-dash-grid">
@@ -251,6 +267,80 @@
       .join("");
   }
 
+  function classOptions(selected) {
+    const rows = (state && state.fuelClasses) || [];
+    const known = rows.some((c) => c.id === selected);
+    const opts = rows
+      .map(
+        (c) =>
+          `<option value="${esc(c.id)}" ${c.id === selected ? "selected" : ""}>${esc(c.id)} — ${esc(c.label)} (${esc(c.tankCapacityL)} L)</option>`
+      )
+      .join("");
+    return `${opts}<option value="custom" ${selected && !known ? "selected" : ""}>Custom class code…</option>`;
+  }
+
+  function catalogFor(code) {
+    const rows = (state && state.fuelClasses) || [];
+    return rows.find((c) => c.id === code) || null;
+  }
+
+  function renderFuelVehiclesCard() {
+    const hub = (state && state.hubProfile) || {};
+    const list = Array.isArray(hub.fuelVehicles) ? hub.fuelVehicles : [];
+    const active = hub.activeFuelVehicle;
+    const rows = list.length
+      ? list
+          .map((v) => {
+            const title = v.nickname || v.registration || v.classCode;
+            const detail = [
+              v.registration ? `Rego ${v.registration}` : "",
+              v.classCode,
+              v.classLabel && v.classLabel !== v.classCode ? v.classLabel : "",
+              `${v.tankCapacityL} L tank`,
+              v.currentFuelL != null ? `${v.currentFuelL} L on board` : "",
+              v.rangeKm != null ? `~${v.rangeKm} km range` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return `<article class="fuelhub-vehicle ${v.active ? "is-active" : ""}">
+              <div>
+                <strong>${esc(title)}</strong>
+                <p class="fuelhub-muted">${esc(detail)}</p>
+              </div>
+              <div class="fuelhub-actions">
+                <button type="button" class="btn secondary" data-fuel-vehicle-activate="${esc(v.id)}" ${v.active ? "disabled" : ""}>${v.active ? "Active" : "Activate"}</button>
+                <button type="button" class="btn danger" data-fuel-vehicle-remove="${esc(v.id)}">Remove</button>
+              </div>
+            </article>`;
+          })
+          .join("")
+      : `<p class="fuelhub-muted">No registered fuel vehicles yet. These class codes are unique to the truck on this profile — not the general heavy rigid work vehicle.</p>`;
+    const monitor = active
+      ? `<p class="fuelhub-muted">Monitoring <strong>${esc(active.classCode)}</strong> · ${esc(active.tankCapacityL)} L tank · ${esc(active.currentFuelL)} L on board${active.rangeKm != null ? ` · ~${esc(active.rangeKm)} km before reserve` : ""}.</p>`
+      : `<p class="fuelhub-muted">Mark a vehicle Active to drive Fuel Hub fill routes from that tank instead of a generic rigid default.</p>`;
+    return `
+      <div class="fuelhub-card fuelhub-profile-form-card">
+        <h2>Registered fuel vehicles</h2>
+        <p class="fuelhub-muted">Manual class codes for fuel carrying capacity on the individual vehicle (samples: XN93DX, YN16BQ, YN17BQ). Finer than work vehicle “heavy rigid”. Saving here updates the shared Driver Hub profile.</p>
+        ${monitor}
+        <div class="fuelhub-vehicle-list">${rows}</div>
+        <form id="fuelhub-vehicle-form" class="fuelhub-profile-form">
+          <label>Nickname<input name="nickname" placeholder="e.g. Local HR" /></label>
+          <label>Registration<input name="registration" placeholder="e.g. ABC123" /></label>
+          <label>Fuel class<select name="classCode" id="fuelhub-vehicle-class">${classOptions("YN16BQ")}</select></label>
+          <label id="fuelhub-vehicle-custom-wrap" hidden>Custom class<input name="customClassCode" id="fuelhub-vehicle-custom" placeholder="e.g. AB12CD" maxlength="12" /></label>
+          <label>Tank capacity (L)<input name="tankCapacityL" id="fuelhub-vehicle-tank" type="number" min="80" max="4000" step="1" value="520" /></label>
+          <label>Fuel on board (L)<input name="currentFuelL" id="fuelhub-vehicle-fuel" type="number" min="0" max="4000" step="1" value="286" /></label>
+          <p class="fuelhub-muted span-2" id="fuelhub-vehicle-hint">YN16BQ is a standard heavy-rigid tank. Compact XN93DX fills more often; long-range YN17BQ carries more diesel.</p>
+          <label class="fuelhub-check span-2"><input type="checkbox" name="active" checked /> Active for Fuel Hub routes</label>
+          <div class="fuelhub-actions span-2">
+            <button type="submit" class="btn primary">Save vehicle to profile</button>
+          </div>
+        </form>
+      </div>
+    `;
+  }
+
   function combinationFromProfile(licence, driverType) {
     const duty = String(driverType || "long_haul");
     if (licence === "lr_mr" || licence === "hr") return "rigid";
@@ -292,6 +382,7 @@
           </div>
         </form>
       </div>
+      ${renderFuelVehiclesCard()}
     `;
     const form = el.querySelector("#fuelhub-profile-form");
     const typeSelect = el.querySelector("#fuel-profile-driver-type");
@@ -322,6 +413,98 @@
       syncCombo();
     });
     form?.addEventListener("submit", onSaveProfile);
+    wireFuelVehicles(el);
+  }
+
+  function wireFuelVehicles(root) {
+    const classSelect = root.querySelector("#fuelhub-vehicle-class");
+    const customWrap = root.querySelector("#fuelhub-vehicle-custom-wrap");
+    const customInput = root.querySelector("#fuelhub-vehicle-custom");
+    const tankInput = root.querySelector("#fuelhub-vehicle-tank");
+    const fuelInput = root.querySelector("#fuelhub-vehicle-fuel");
+    const hint = root.querySelector("#fuelhub-vehicle-hint");
+    function syncClass() {
+      const value = classSelect && classSelect.value;
+      const isCustom = value === "custom";
+      if (customWrap) customWrap.hidden = !isCustom;
+      const code = isCustom
+        ? String(customInput && customInput.value ? customInput.value : "")
+            .trim()
+            .toUpperCase()
+        : value;
+      const meta = catalogFor(code);
+      if (hint) {
+        hint.textContent = meta
+          ? `${meta.id} · ${meta.label} · ${meta.tankCapacityL} L. ${meta.notes || ""}`
+          : "Custom class — type the code for this truck and the tank litres you monitor.";
+      }
+      if (meta && tankInput && tankInput.dataset.userSet !== "1") {
+        tankInput.value = String(meta.tankCapacityL);
+        if (fuelInput && fuelInput.dataset.userSet !== "1") {
+          fuelInput.value = String(Math.round(meta.tankCapacityL * 0.55));
+        }
+      }
+    }
+    classSelect?.addEventListener("change", () => {
+      if (tankInput) tankInput.dataset.userSet = "";
+      if (fuelInput) fuelInput.dataset.userSet = "";
+      syncClass();
+    });
+    customInput?.addEventListener("input", syncClass);
+    tankInput?.addEventListener("input", () => {
+      if (tankInput) tankInput.dataset.userSet = "1";
+    });
+    fuelInput?.addEventListener("input", () => {
+      if (fuelInput) fuelInput.dataset.userSet = "1";
+    });
+    syncClass();
+    root.querySelector("#fuelhub-vehicle-form")?.addEventListener("submit", onSaveFuelVehicle);
+    root.querySelectorAll("[data-fuel-vehicle-activate]").forEach((btn) => {
+      btn.addEventListener("click", () => onActivateFuelVehicle(btn.getAttribute("data-fuel-vehicle-activate")));
+    });
+    root.querySelectorAll("[data-fuel-vehicle-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => onRemoveFuelVehicle(btn.getAttribute("data-fuel-vehicle-remove")));
+    });
+  }
+
+  async function onSaveFuelVehicle(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    let classCode = String(fd.get("classCode") || "");
+    if (classCode === "custom") classCode = String(fd.get("customClassCode") || "");
+    const data = await api("/fuelhub/vehicles", {
+      method: "POST",
+      body: {
+        nickname: fd.get("nickname"),
+        registration: fd.get("registration"),
+        classCode,
+        tankCapacityL: fd.get("tankCapacityL"),
+        currentFuelL: fd.get("currentFuelL"),
+        active: fd.get("active") === "on",
+      },
+    });
+    if (state) {
+      if (data.hubProfile) state.hubProfile = data.hubProfile;
+      if (data.truck) state.truck = data.truck;
+      if (data.efficiency) state.efficiency = data.efficiency;
+    }
+    toast("Registered fuel vehicle saved");
+    await load();
+    setView("profile");
+  }
+
+  async function onActivateFuelVehicle(id) {
+    await api(`/fuelhub/vehicles/${encodeURIComponent(id)}/activate`, { method: "POST" });
+    toast("Active fuel class applied to Fuel Hub routes");
+    await load();
+    setView("profile");
+  }
+
+  async function onRemoveFuelVehicle(id) {
+    await api(`/fuelhub/vehicles/${encodeURIComponent(id)}`, { method: "DELETE" });
+    toast("Registered fuel vehicle removed");
+    await load();
+    setView("profile");
   }
 
   async function onSaveProfile(e) {
@@ -368,7 +551,11 @@
       </div>
       <p class="fuelhub-muted">${esc(hub.workCombinationLabel || "Work vehicle")} · ${esc(
         hub.driverTypeLabel || "linehaul"
-      )} duty cycle sets these rates. Change driver type or work vehicle on Taxation Hub Profile, then Save profile.</p>
+      )} duty cycle sets L/100 km.${
+        hub.activeFuelVehicle
+          ? ` Registered class ${esc(hub.activeFuelVehicle.classCode)} (${esc(hub.activeFuelVehicle.tankCapacityL)} L) sets tank and fill spacing.`
+          : " Add a registered fuel class on Profile to set tank litres instead of a generic rigid default."
+      }</p>
       <div class="fuelhub-grid">
         <form id="fuel-plan-form" class="fuelhub-card">
           <h2>Route</h2>
@@ -480,8 +667,12 @@
           <h2>Combination &amp; tanks</h2>
           <p class="fuelhub-muted">${
             hub.linked
-              ? `Profile: ${esc(hub.licenceLabel || hub.licenceClass)} · ${esc(hub.driverTypeLabel || "")} · ${esc(hub.workCombinationLabel || hub.workCombination || "")}. Fuel Hub uses that work vehicle and driver type for L/100 km until you save this form (tanks / payload). Work cars on Profile stay on Car Expenses.`
-              : "Save a Driver Hub profile on Taxation Hub (driver type + work vehicle) to prefill combination and duty-cycle rates."
+              ? `Profile: ${esc(hub.licenceLabel || hub.licenceClass)} · ${esc(hub.driverTypeLabel || "")} · ${esc(hub.workCombinationLabel || hub.workCombination || "")}${
+                  hub.activeFuelVehicle
+                    ? ` · class ${esc(hub.activeFuelVehicle.classCode)} (${esc(hub.activeFuelVehicle.tankCapacityL)} L tank)`
+                    : ""
+                }. Work vehicle + driver type set L/100 km. Registered fuel class sets tank litres for fill routes. Work cars on Car Expenses stay separate.`
+              : "Save a Driver Hub profile (driver type + work vehicle + optional fuel class) to prefill combination, duty-cycle rates and tank."
           }</p>
           <label>Combination<select name="combinationId">${comboOptions(t.combinationId)}</select></label>
           <label>Mass scheme<select name="massSchemeId">${schemeOptions(t.massSchemeId)}</select></label>
@@ -489,7 +680,9 @@
           <label>Payload / load (t)<input name="payloadT" type="number" min="0" step="0.1" value="${esc(t.payloadT)}" /></label>
           <label>GCM (t)<input name="gcmT" type="number" min="4" step="0.1" value="${esc(t.gcmT)}" /></label>
           <label>Tare (t)<input name="tareT" type="number" min="2" step="0.1" value="${esc(t.tareT)}" /></label>
-          <label>Total tank capacity (L)<input name="tankCapacityL" type="number" min="80" step="1" value="${esc(t.tankCapacityL)}" /></label>
+          <label>Total tank capacity (L)<input name="tankCapacityL" type="number" min="80" step="1" value="${esc(t.tankCapacityL)}" ${
+            hub.activeFuelVehicle ? "readonly" : ""
+          } /></label>
           <label>Fuel on board (L)<input name="currentFuelL" type="number" min="0" step="1" value="${esc(t.currentFuelL)}" /></label>
           <label>Length (m)<input name="lengthM" type="number" min="4" step="0.1" value="${esc(t.lengthM)}" /></label>
           <label>Height (m)<input name="heightM" type="number" min="2" step="0.01" value="${esc(t.heightM)}" /></label>

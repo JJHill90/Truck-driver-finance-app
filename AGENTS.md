@@ -52,15 +52,20 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   before remote / out-west price step-ups, and suggests rest/refresh stops.
   Apple/Google maps are not the routing source.
   **Shared Driver Hub profile:** one login and `records.profile` (name, employer,
-  licence class, driver type, salary, **work vehicle**) is used by Taxation Hub,
-  Fuel Hub and later apps via `GET /hub/profile` / `lib/hub-profile.js`. Profile
-  **driver type** (e.g. linehaul) plus **work vehicle** (rigid / semi / B-double /
-  road train) set Fuel Hub combination and duty-cycle L/100 km on planned
-  journeys (`lib/fuel-efficiency.js` `DRIVER_TYPE_FACTOR`). Fuel Hub re-seeds
-  the truck from that profile until the driver saves a Fuel Hub tank/load spec;
-  a saved spec keeps tanks but still uses Profile driver type for usage rates.
-  Tax ledger and fuel trips stay in the same user file under different keys — no
-  account copy.
+  licence class, driver type, salary, **work vehicle**, **registered fuel vehicles**)
+  is used by Taxation Hub, Fuel Hub and later apps via `GET /hub/profile` /
+  `lib/hub-profile.js`. Profile **driver type** (e.g. linehaul) plus **work vehicle**
+  (rigid / semi / B-double / road train) set Fuel Hub combination and duty-cycle
+  L/100 km on planned journeys (`lib/fuel-efficiency.js` `DRIVER_TYPE_FACTOR`).
+  **Registered fuel classes** on `profile.fuelVehicles[]` (`lib/fuel-vehicle-class.js`)
+  are a manual, per-truck overlay unique vs a generic heavy rigid: sample codes
+  **XN93DX** (380 L compact), **YN16BQ** (520 L standard), **YN17BQ** (680 L long-range)
+  plus custom codes. The active vehicle’s tank (and a small class factor) drives
+  Fuel Hub range and fill spacing; ATO work cars stay on `profile.cars`. Fuel Hub
+  re-seeds the truck from that profile until the driver saves a Fuel Hub payload
+  spec; a saved spec keeps payload but still uses Profile driver type and the
+  active class tank. Tax ledger and fuel trips stay in the same user file under
+  different keys — no account copy.
 - **Profile licence class.** Profile “Licence class” is LR/MR → HR → HC → MC
   from annual salary (`lib/licence-class.js`: ≥$70k HR, ≥$79k HC, ≥$110k MC).
   Auto-updates as salary is typed; saved as `profile.licenceClass`. This is
