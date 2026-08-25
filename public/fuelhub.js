@@ -78,7 +78,7 @@
       profile: "Profile",
       forecast: "Forecast",
       plan: "Plan fills",
-      track: "GPS track",
+      track: "GPS",
       truck: "Truck & load",
       cards: "Fuel cards",
       prices: "Prices & tables",
@@ -347,7 +347,7 @@
           <div class="fuelhub-actions">
             <button type="button" class="btn primary" data-fuel-jump="plan">Plan fills</button>
             <button type="button" class="btn secondary" data-fuel-jump="forecast">Forecast</button>
-            <button type="button" class="btn secondary" data-fuel-jump="track">GPS track</button>
+            <button type="button" class="btn secondary" data-fuel-jump="track">GPS</button>
           </div>
         </div>
         <div class="fuelhub-card">
