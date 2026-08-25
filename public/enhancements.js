@@ -7554,13 +7554,20 @@
     const res = await origFetch.apply(this, args);
     try {
       const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
-      if (url && /\/records(\?|$)/.test(String(url))) {
+      if (url && /\/(records(\?|$)|profile(\?|$)|fuelhub(\/|\?|$))/.test(String(url))) {
         res
           .clone()
           .json()
           .then((data) => {
-            if (data && data.profile) {
-              writeToState(Array.isArray(data.profile.fuelVehicles) ? data.profile.fuelVehicles : []);
+            if (!data) return;
+            let list = null;
+            if (data.profile && Array.isArray(data.profile.fuelVehicles)) list = data.profile.fuelVehicles;
+            else if (Array.isArray(data.fuelVehicles)) list = data.fuelVehicles;
+            else if (data.hubProfile && Array.isArray(data.hubProfile.fuelVehicles)) {
+              list = data.hubProfile.fuelVehicles;
+            }
+            if (list) {
+              writeToState(list);
               render();
             }
           })
