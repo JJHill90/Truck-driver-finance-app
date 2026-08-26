@@ -119,10 +119,12 @@
   function updateOcrProgressButtons(copy, elapsedLabel) {
     const pickId = ocrProgress.purpose === "income" ? "pick-income" : "pick-receipt";
     const pick = document.getElementById(pickId);
-    if (pick && pick.disabled) {
-      const next = `${copy.button} ${elapsedLabel}`;
-      if (pick.textContent !== next) pick.textContent = next;
-    }
+    if (!pick) return;
+    // Keep the label in sync for the whole OCR session, not only while disabled
+    // (some paths briefly clear disabled before our finally runs).
+    if (!ocrProgress.startedAt && !pick.disabled) return;
+    const next = `${copy.button} ${elapsedLabel}`;
+    if (pick.textContent !== next) pick.textContent = next;
   }
 
   function paintOcrProgress() {
@@ -412,6 +414,15 @@
           }
 
           if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
+            // Release the first response body so the connection is free for the
+            // forceDuplicate re-read (clone() alone can leave the tee unread).
+            try {
+              if (res.body && typeof res.body.cancel === "function") {
+                await res.body.cancel();
+              }
+            } catch {
+              /* ignore */
+            }
             setOcrProgressPhase("awaiting-duplicate");
             const proceed = await promptDuplicateContinue(data);
             if (!proceed) {
