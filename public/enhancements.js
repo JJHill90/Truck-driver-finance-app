@@ -120,7 +120,8 @@
     const pickId = ocrProgress.purpose === "income" ? "pick-income" : "pick-receipt";
     const pick = document.getElementById(pickId);
     if (pick && pick.disabled) {
-      pick.textContent = `${copy.button} ${elapsedLabel}`;
+      const next = `${copy.button} ${elapsedLabel}`;
+      if (pick.textContent !== next) pick.textContent = next;
     }
   }
 
@@ -134,15 +135,16 @@
     const phase = el.querySelector(".ocr-progress-phase");
     const elapsedEl = el.querySelector(".ocr-progress-elapsed");
     const hint = el.querySelector(".ocr-progress-hint");
-    if (title) title.textContent = copy.title;
-    if (phase) phase.textContent = copy.phase;
+    if (title && title.textContent !== copy.title) title.textContent = copy.title;
+    if (phase && phase.textContent !== copy.phase) phase.textContent = copy.phase;
     if (elapsedEl) {
-      elapsedEl.innerHTML =
+      const nextHtml =
         ocrProgress.phase === "rereading"
           ? `Elapsed <strong>${elapsed}</strong> <span class="muted">(this pass ${passElapsed})</span>`
           : `Elapsed <strong>${elapsed}</strong>`;
+      if (elapsedEl.innerHTML !== nextHtml) elapsedEl.innerHTML = nextHtml;
     }
-    if (hint) hint.textContent = copy.hint;
+    if (hint && hint.textContent !== copy.hint) hint.textContent = copy.hint;
     el.classList.remove("hidden");
     el.classList.toggle("ocr-progress-wait", ocrProgress.phase === "awaiting-duplicate");
     updateOcrProgressButtons(copy, elapsed);
@@ -161,7 +163,7 @@
     ensureOcrProgressEl(ocrProgress.purpose);
     paintOcrProgress();
     if (ocrProgress.timer) clearInterval(ocrProgress.timer);
-    ocrProgress.timer = setInterval(paintOcrProgress, 250);
+    ocrProgress.timer = setInterval(paintOcrProgress, 500);
   }
 
   function setOcrProgressPhase(phase) {
@@ -423,13 +425,17 @@
             }
             bodyObj.forceDuplicate = true;
             setOcrProgressPhase("rereading");
+            // Do not reuse apiWithTimeout's AbortSignal — time spent on the
+            // duplicate modal would otherwise abort this second OCR pass.
+            const retryOpts = { ...(options || {}) };
+            delete retryOpts.signal;
             res = await origFetch(url, {
-              ...options,
-              method: options.method || "POST",
-              credentials: options.credentials || "same-origin",
+              ...retryOpts,
+              method: retryOpts.method || "POST",
+              credentials: retryOpts.credentials || "same-origin",
               headers: {
                 "Content-Type": "application/json",
-                ...(options.headers || {}),
+                ...(retryOpts.headers || {}),
               },
               body: JSON.stringify(bodyObj),
             });
