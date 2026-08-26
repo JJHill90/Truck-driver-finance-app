@@ -10,6 +10,7 @@ const {
   assertSendable,
   markSent,
   cancelReceipt,
+  removeReceipt,
   buildReport,
   CONFIRM_MS,
   fieldsFromOcr,
@@ -107,5 +108,14 @@ describe("fuel receipts", () => {
     expect(report.text).toMatch(/210/);
     expect(report.text).toMatch(/95 L/);
     expect(report.html).toMatch(/Jamie/);
+  });
+
+  it("removes a receipt row so admin can delete Fuel Hub scans", () => {
+    const s = store();
+    const row = createFromScan(s, { ocr: { vendor: "United", amount: 88 } });
+    expect(s.fuelReceipts).toHaveLength(1);
+    expect(removeReceipt(s, row.id)).toBe(true);
+    expect(s.fuelReceipts).toHaveLength(0);
+    expect(removeReceipt(s, row.id)).toBe(false);
   });
 });

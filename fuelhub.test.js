@@ -10,7 +10,7 @@ const { planFuelStops } = require("./lib/fuel-planner");
 const { matchCorridor, accessWarnings, combinationAllowedOnCorridor } = require("./lib/fuel-nhvr");
 const { effectiveCpl, bestDiscountForRetailer, tableDieselCpl, governmentTables } = require("./lib/fuel-prices");
 const { haversineKm, trackDistanceKm, stationsOnCorridor } = require("./lib/fuel-stations");
-const { upsertCard, ensureFuelhub, recordObservedPrice } = require("./lib/fuelhub-store");
+const { upsertCard, ensureFuelhub, recordObservedPrice, saveTrip, removeTrip, removeCard, removeObservedPrice } = require("./lib/fuelhub-store");
 const { buildDashboard, areaDeals } = require("./lib/fuel-dashboard");
 
 describe("fuel efficiency", () => {
@@ -283,5 +283,26 @@ describe("fuel hub dashboard", () => {
       point: { lat: -37.599, lng: 144.941 },
     });
     expect(deals.deals.some((d) => /craigieburn/i.test(d.name))).toBe(false);
+  });
+});
+
+describe("Fuel Hub admin add/remove/save helpers", () => {
+  it("adds and removes cards, trips and observed prices", () => {
+    const records = { profile: {} };
+    const store = ensureFuelhub(records);
+    const card = upsertCard(store, { name: "BP Plus", retailerId: "bp", cplOff: 6 });
+    expect(store.cards).toHaveLength(1);
+    expect(removeCard(store, card.id)).toBe(true);
+    expect(store.cards).toHaveLength(0);
+
+    const trip = saveTrip(store, { origin: "St George", destination: "Gracemere", distanceKm: 670 });
+    expect(store.trips[0].id).toBe(trip.id);
+    expect(removeTrip(store, trip.id)).toBe(true);
+    expect(store.trips).toHaveLength(0);
+
+    recordObservedPrice(store, { stationId: "site-1", cpl: 189.5 });
+    expect(store.observedPrices).toHaveLength(1);
+    expect(removeObservedPrice(store, "site-1")).toBe(true);
+    expect(store.observedPrices).toHaveLength(0);
   });
 });

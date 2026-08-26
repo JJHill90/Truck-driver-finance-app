@@ -391,6 +391,23 @@ function persistTarget(loaded, meta = {}) {
   });
 }
 
+function adminTargetFuelhub(req, res) {
+  if (!requireAdmin(req, res)) return null;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return null;
+  }
+  const account = auth.getUser(loaded.user.username);
+  const hub = hubProfile.presentHubProfile(account, loaded.records);
+  const store = fuelhubStore.ensureFuelhub(loaded.records, { hubProfile: hub });
+  return { loaded, store, hub };
+}
+
+function adminFuelhubPayload(store) {
+  return fuelhubStore.snapshot(store);
+}
+
 /** Prefer labeled invoice/payment dates so FY placement follows the document day. */
 function applyResolvedDocumentDate(ocrResult, purpose, payPeriod) {
   if (!ocrResult || typeof ocrResult !== "object") return null;
@@ -1449,6 +1466,11 @@ function userRecordsSummary(username) {
       expenses: (records.expenses || []).length,
       income: (records.income || []).length,
       receipts: (records.receipts || []).length,
+      fuelCards: Array.isArray(records.fuelhub?.cards) ? records.fuelhub.cards.length : 0,
+      fuelTrips: Array.isArray(records.fuelhub?.trips) ? records.fuelhub.trips.length : 0,
+      fuelReceipts: Array.isArray(records.fuelhub?.fuelReceipts)
+        ? records.fuelhub.fuelReceipts.length
+        : 0,
     },
     totals: {
       financialYear: fy,
@@ -1508,6 +1530,8 @@ api.get("/admin/users/:username", (req, res) => {
   const deletedIncome = (records.income || []).filter((i) => isDeleted(i));
 
   const targetRecord = auth.getUserRecord(target.username);
+  const hub = hubProfile.presentHubProfile(target, records);
+  const fuelStore = fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
   res.json({
     user: target,
     account: adminAssist.adminAccountStatus(target.username),
@@ -1518,6 +1542,7 @@ api.get("/admin/users/:username", (req, res) => {
     deletedExpenses,
     deletedIncome,
     receipts,
+    fuelhub: fuelhubStore.snapshot(fuelStore),
     vendors: storage.listVendors(records),
     history: recordsHistory.listSnapshots(target.username, { limit: 20 }),
     summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
@@ -1674,6 +1699,34 @@ api.put("/admin/users/:username/:type(expenses|income)/:id", (req, res) => {
   updated.adminEditedBy = sessionUsername(req);
   persistTarget(loaded, { reason: "admin-edit-entry", actor: sessionUsername(req) });
   res.json({ ok: true, entry: updated });
+});
+
+/** Admin: add a new expense or income row on a driver's ledger. */
+api.post("/admin/users/:username/:type(expenses|income)", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const isIncome = req.params.type === "income";
+  const body = normalizePayloadDate({ ...(req.body || {}) });
+  if (!isIncome && body.category) body.category = normalizeExpenseCategoryId(body.category);
+  if (isIncome && body.type) body.type = normalizeIncomeTypeId(body.type) || body.type;
+  const entry = isIncome
+    ? storage.addIncome(loaded.records, body)
+    : storage.addExpense(loaded.records, body);
+  entry.adminCreatedAt = new Date().toISOString();
+  entry.adminCreatedBy = sessionUsername(req);
+  if (!isIncome) {
+    rememberVendor(loaded.records, {
+      name: body.vendor || entry.vendor,
+      abn: body.vendorAbn || entry.vendorAbn,
+      category: body.category || entry.category,
+    });
+  }
+  persistTarget(loaded, { reason: "admin-add-entry", actor: sessionUsername(req) });
+  res.status(201).json({ ok: true, entry });
 });
 
 /** Admin: override driver profile fields. */
@@ -1887,6 +1940,171 @@ api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
   }
   res.sendFile(info.filePath);
+});
+
+api.delete("/admin/users/:username/receipts/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const receipts = loaded.records.receipts || [];
+  const idx = receipts.findIndex((r) => r.id === req.params.id);
+  if (idx < 0) {
+    res.status(404).json({ error: "Receipt not found." });
+    return;
+  }
+  const receipt = receipts[idx];
+  if (receipt.imagePath) storage.deleteReceiptFile(receipt.imagePath);
+  receipts.splice(idx, 1);
+  persistTarget(loaded, { reason: "admin-delete-receipt", actor: sessionUsername(req) });
+  res.json({ ok: true, id: req.params.id });
+});
+
+api.put("/admin/users/:username/fuelhub/truck", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const truck = fuelhubStore.saveTruck(
+      ctx.store,
+      { ...(req.body || {}), driverType: ctx.hub.driverType },
+      { hubProfile: ctx.hub }
+    );
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-truck", actor: sessionUsername(req) });
+    res.json({ ok: true, truck, fuelhub: adminFuelhubPayload(ctx.store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.post("/admin/users/:username/fuelhub/cards", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const card = fuelhubStore.upsertCard(ctx.store, req.body || {});
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-card", actor: sessionUsername(req) });
+    res.json({ ok: true, card, fuelhub: adminFuelhubPayload(ctx.store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/admin/users/:username/fuelhub/cards/:id", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const removed = fuelhubStore.removeCard(ctx.store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Fuel card not found." });
+    return;
+  }
+  persistTarget(ctx.loaded, { reason: "admin-fuelhub-card-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
+});
+
+api.post("/admin/users/:username/fuelhub/trips", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const trip = fuelhubStore.saveTrip(ctx.store, req.body || {});
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-trip", actor: sessionUsername(req) });
+    res.json({ ok: true, trip, fuelhub: adminFuelhubPayload(ctx.store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/admin/users/:username/fuelhub/trips/:id", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const removed = fuelhubStore.removeTrip(ctx.store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Trip not found." });
+    return;
+  }
+  persistTarget(ctx.loaded, { reason: "admin-fuelhub-trip-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
+});
+
+api.post("/admin/users/:username/fuelhub/contacts", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const contact = fuelReceipts.upsertContact(ctx.store, req.body || {});
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-contact", actor: sessionUsername(req) });
+    res.json({
+      ok: true,
+      contact: fuelReceipts.presentContact(contact),
+      fuelhub: adminFuelhubPayload(ctx.store),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/admin/users/:username/fuelhub/contacts/:id", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const removed = fuelReceipts.removeContact(ctx.store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Contact not found." });
+    return;
+  }
+  persistTarget(ctx.loaded, { reason: "admin-fuelhub-contact-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
+});
+
+api.delete("/admin/users/:username/fuelhub/receipts/:id", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const removed = fuelReceipts.removeReceipt(ctx.store, req.params.id);
+  if (!removed) {
+    res.status(404).json({ error: "Fuel receipt not found." });
+    return;
+  }
+  persistTarget(ctx.loaded, { reason: "admin-fuelhub-receipt-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
+});
+
+api.get("/admin/users/:username/fuelhub/receipts/:id/file", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const row = fuelReceipts.findReceipt(ctx.store, req.params.id);
+  const abs = row && fuelReceipts.receiptImageAbsPath(row.imagePath);
+  if (!abs || !fs.existsSync(abs)) {
+    res.status(404).json({ error: "Fuel receipt file not found." });
+    return;
+  }
+  res.setHeader("Content-Type", row.mimeType || "application/octet-stream");
+  if (req.query.download) {
+    const downloadName = String(row.filename || "fuel-receipt").replace(/"/g, "");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  }
+  res.sendFile(path.resolve(abs));
+});
+
+api.post("/admin/users/:username/fuelhub/prices", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const row = fuelhubStore.recordObservedPrice(ctx.store, req.body || {});
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-price", actor: sessionUsername(req) });
+    res.json({ ok: true, price: row, fuelhub: adminFuelhubPayload(ctx.store) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+api.delete("/admin/users/:username/fuelhub/prices/:stationId", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  const removed = fuelhubStore.removeObservedPrice(ctx.store, req.params.stationId);
+  if (!removed) {
+    res.status(404).json({ error: "Observed price not found." });
+    return;
+  }
+  persistTarget(ctx.loaded, { reason: "admin-fuelhub-price-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
 });
 
 api.post("/admin/users", (req, res) => {
