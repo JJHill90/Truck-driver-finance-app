@@ -684,6 +684,16 @@
     const form = document.getElementById("income-form");
     if (!form || form.__enhManualIncomePatched) return;
     form.__enhManualIncomePatched = true;
+    // Ensure fields verbatim app.js prefillIncomeForm writes still exist.
+    for (const name of ["taxableIncome", "amount", "reference"]) {
+      if (!form.elements[name]) {
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = name;
+        hidden.value = "";
+        form.appendChild(hidden);
+      }
+    }
     form.addEventListener(
       "submit",
       () => {
@@ -703,6 +713,29 @@
       },
       true
     );
+  }
+
+  /**
+   * Guard app.js prefillIncomeForm: simplified income form dropped visible
+   * Reference / period, but app.js still assigns form.elements.reference.value
+   * when OCR returns a pay period.
+   */
+  function patchPrefillIncomeForm() {
+    const orig = globalThis.prefillIncomeForm;
+    if (typeof orig !== "function" || orig.__enhRefSafe) return;
+    function wrapped(ocr, overrides) {
+      const form = document.getElementById("income-form");
+      if (form && !form.elements.reference) {
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "reference";
+        hidden.value = "";
+        form.appendChild(hidden);
+      }
+      return orig(ocr, overrides);
+    }
+    wrapped.__enhRefSafe = true;
+    globalThis.prefillIncomeForm = wrapped;
   }
 
   function observe(boxId, purpose) {
@@ -786,6 +819,7 @@
   function init() {
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
+    patchPrefillIncomeForm();
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }

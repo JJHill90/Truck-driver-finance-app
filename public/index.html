@@ -299,6 +299,8 @@
                 <label>Living Away from Home days (LAFHA)<input type="number" name="overnightDays" step="1" min="0" max="31" placeholder="e.g. 7" /></label>
                 <input type="hidden" name="taxableIncome" value="" />
                 <input type="hidden" name="amount" value="" />
+                <!-- Kept for verbatim app.js prefillIncomeForm (pay period → reference) -->
+                <input type="hidden" name="reference" value="" />
                 <label>Document kind
                   <select id="income-document-kind" name="documentKind">
                     <option value="">—</option>
