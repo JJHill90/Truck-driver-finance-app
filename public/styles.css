@@ -2062,17 +2062,76 @@ table.data tfoot td { border-top: 2px solid var(--border); }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
-  .app-shell .sidebar { position: static; height: auto; }
-  .app-shell .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
+  .app-shell .sidebar {
+    position: static;
+    height: auto;
+    padding: max(6px, env(safe-area-inset-top, 0px)) 10px 6px;
+    gap: 4px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-shell .sidebar-brand {
+    padding: 0 2px 2px;
+    font-size: 1.12rem;
+    gap: 6px 8px;
+    align-items: center;
+  }
+  .app-shell .sidebar-brand img { width: 22px; height: 22px; }
+  .app-shell .hub-plan-badge {
+    flex-basis: auto;
+    margin-top: 0;
+    padding: 2px 8px;
+    font-size: 0.66rem;
+  }
+  .app-shell .brand-signed-in {
+    margin-top: 0;
+    line-height: 1.2;
+  }
+  .app-shell .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .app-shell .nav-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    line-height: 1.2;
+  }
   .app-shell .sidebar-bottom {
-    margin-top: 8px;
-    padding-top: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 4px;
+    padding-top: 4px;
     width: 100%;
   }
   .app-shell .sidebar-nav-bottom {
+    flex-direction: row;
+    flex-wrap: wrap;
     margin-top: 0;
     padding-top: 0;
-    width: 100%;
+    width: auto;
+    flex: 1 1 auto;
+  }
+  .app-shell .app-version-footer.sidebar-version {
+    padding: 0 4px;
+    font-size: 0.66rem;
+  }
+  .app-shell .main {
+    padding: 8px 12px 28px;
+  }
+  .app-shell .topbar {
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    gap: 6px 10px;
+    align-items: center;
+  }
+  .app-shell .topbar h1 {
+    font-size: 1.22rem;
+    min-width: 8rem;
+    flex: 1 1 auto;
   }
   .grid-2, .form-grid, .expense-totals-grid { grid-template-columns: 1fr; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
@@ -2505,37 +2564,87 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   .fuelhub-dash-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
+  /* Match Taxation Hub: wrap tabs across the top so the rail does not steal page width. */
   body.fuelhub-open:not(.auth-locked) .fuelhub-shell {
-    grid-template-columns: 132px minmax(0, 1fr);
-    grid-template-rows: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+    min-height: 100dvh;
+    max-height: none;
+    overflow: visible;
   }
   .fuelhub-shell .fuelhub-sidebar {
-    padding: 10px 6px 8px;
+    display: flex;
+    flex-direction: column;
+    position: static;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    padding: max(6px, env(safe-area-inset-top, 0px)) 10px 6px;
+    gap: 4px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
   .fuelhub-shell .fuelhub-sidebar .sidebar-brand {
-    font-size: 1.02rem;
-    padding: 0 4px 8px;
+    font-size: 1.12rem;
+    padding: 0 2px 2px;
     gap: 6px;
   }
   .fuelhub-shell .fuelhub-sidebar .sidebar-brand img {
     width: 22px;
     height: 22px;
   }
+  .fuelhub-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .fuelhub-nav-slot {
+    flex: 0 0 auto;
+  }
   .fuelhub-nav-slot .nav-btn {
-    font-size: 0.76rem;
-    padding: 8px 10px;
+    width: auto;
+    font-size: 0.78rem;
+    padding: 6px 10px;
     border-radius: 8px;
   }
+  .fuelhub-shell .fuelhub-sidebar > .sidebar-bottom {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 2px;
+    padding-top: 4px;
+  }
+  .fuelhub-shell .sidebar-nav-bottom {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
   .fuelhub-shell .sidebar-bottom .nav-btn {
+    width: auto;
     font-size: 0.72rem;
-    padding: 8px;
+    padding: 6px 10px;
   }
   .fuelhub-shell .app-version-footer.sidebar-version {
-    padding: 4px 8px 2px;
+    padding: 0 4px;
     font-size: 0.66rem;
   }
   .fuelhub-shell .main {
-    padding: 12px 12px 36px;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    padding: 8px 12px 28px;
+  }
+  .fuelhub-topbar {
+    margin-bottom: 6px;
+    gap: 2px;
   }
   .fuelhub-topbar h1 { font-size: 1.18rem; }
   .fuelhub-tagline { font-size: 0.8rem; }
@@ -2548,16 +2657,12 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   }
 }
 @media (max-width: 420px) {
-  body.fuelhub-open:not(.auth-locked) .fuelhub-shell {
-    grid-template-columns: 118px minmax(0, 1fr);
-    grid-template-rows: 100dvh;
-  }
   .fuelhub-nav-slot .nav-btn,
   .fuelhub-shell .sidebar-bottom .nav-btn {
-    font-size: 0.7rem;
-    padding: 6px 7px;
+    font-size: 0.74rem;
+    padding: 5px 8px;
   }
-  .fuelhub-shell .main { padding: 10px 8px 32px; }
+  .fuelhub-shell .main { padding: 8px 10px 24px; }
   .fuelhub-card { padding: 12px; }
   .fuelhub-stats { grid-template-columns: 1fr; }
 }
