@@ -218,7 +218,13 @@
   function promptDuplicateContinue(data) {
     return new Promise((resolve) => {
       const existing = document.getElementById("enh-dup-modal");
-      if (existing) existing.remove();
+      if (existing) {
+        // A newer scan replaced this prompt — unblock any waiter.
+        if (typeof existing.__dupResolve === "function") {
+          existing.__dupResolve(false);
+        }
+        existing.remove();
+      }
 
       const matches = (data && data.matches) || [];
       const o = (data && data.ocrResult) || {};
@@ -233,6 +239,7 @@
       const modal = document.createElement("div");
       modal.id = "enh-dup-modal";
       modal.className = "enh-dup-modal";
+      modal.__dupResolve = resolve;
       modal.innerHTML = `
         <div class="enh-dup-backdrop" data-dup-cancel></div>
         <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-dup-title">
@@ -249,6 +256,8 @@
       document.body.appendChild(modal);
 
       const finish = (value) => {
+        if (modal.__dupResolve !== resolve) return;
+        modal.__dupResolve = null;
         modal.remove();
         resolve(value);
       };
@@ -405,24 +414,21 @@
 
         try {
           let res = await origFetch.apply(this, args);
+          let status = res.status;
           let data = null;
           try {
-            data = await res.clone().json();
+            // Fully consume the body (no clone/tee) so a duplicate re-POST is
+            // never blocked on an unread response stream.
+            data = await res.json();
           } catch {
             stopOcrProgress();
-            return res;
+            return new Response("{}", {
+              status,
+              headers: { "Content-Type": "application/json" },
+            });
           }
 
           if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
-            // Release the first response body so the connection is free for the
-            // forceDuplicate re-read (clone() alone can leave the tee unread).
-            try {
-              if (res.body && typeof res.body.cancel === "function") {
-                await res.body.cancel();
-              }
-            } catch {
-              /* ignore */
-            }
             setOcrProgressPhase("awaiting-duplicate");
             const proceed = await promptDuplicateContinue(data);
             if (!proceed) {
@@ -450,8 +456,9 @@
               },
               body: JSON.stringify(bodyObj),
             });
+            status = res.status;
             try {
-              data = await res.clone().json();
+              data = await res.json();
             } catch {
               data = null;
             }
@@ -483,7 +490,7 @@
           }
 
           // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
-          if (res.status === 402 && data && data.code === "UPLOAD_LIMIT") {
+          if (status === 402 && data && data.code === "UPLOAD_LIMIT") {
             const rem =
               data.entitlements && data.entitlements.uploadsRemaining != null
                 ? data.entitlements.uploadsRemaining
@@ -496,7 +503,10 @@
               window.haulagePromptUpgrade(data);
             }
           }
-          return res;
+          return new Response(JSON.stringify(data == null ? {} : data), {
+            status,
+            headers: { "Content-Type": "application/json" },
+          });
         } finally {
           stopOcrProgress();
         }
