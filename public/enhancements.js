@@ -31,6 +31,185 @@
     }
   }
 
+  /* --- OCR in-progress timing (income + expense scans) --------------------
+   * Scanned PDFs and duplicate "Continue upload" re-reads can take a while.
+   * Show a clear elapsed timer so the wait does not feel like a hang.
+   */
+  const ocrProgress = {
+    el: null,
+    timer: null,
+    hideTimer: null,
+    generation: 0,
+    startedAt: 0,
+    purpose: "expense",
+    phase: "reading",
+    passStartedAt: 0,
+  };
+
+  function formatElapsed(ms) {
+    const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function ocrPhaseCopy(phase, purpose) {
+    const income = purpose === "income";
+    if (phase === "awaiting-duplicate") {
+      return {
+        title: "Possible duplicate",
+        phase: "Waiting for your choice…",
+        button: income ? "Waiting…" : "Waiting…",
+        hint: "If you continue, the document is read again so it can be saved.",
+      };
+    }
+    if (phase === "rereading") {
+      return {
+        title: "OCR in progress",
+        phase: "Re-reading document (duplicate confirmed)…",
+        button: income ? "Re-scanning remittance / payslip…" : "Re-scanning dollar totals…",
+        hint: "Second pass — same OCR as the first read. Elapsed time keeps running.",
+      };
+    }
+    return {
+      title: "OCR in progress",
+      phase: income ? "Reading remittance / payslip…" : "Reading receipt totals…",
+      button: income ? "Scanning remittance / payslip…" : "Scanning dollar totals…",
+      hint: "Scanned PDFs and first-time OCR can take longer. Please keep this tab open.",
+    };
+  }
+
+  function ensureOcrProgressEl(purpose) {
+    let el = document.getElementById("ocr-progress");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "ocr-progress";
+      el.className = "ocr-progress hidden";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      el.innerHTML = `
+        <div class="ocr-progress-card">
+          <div class="ocr-progress-spinner" aria-hidden="true"></div>
+          <div class="ocr-progress-copy">
+            <h3 class="ocr-progress-title">OCR in progress</h3>
+            <p class="ocr-progress-phase"></p>
+            <p class="ocr-progress-elapsed">Elapsed <strong>0:00</strong></p>
+            <p class="ocr-progress-hint muted"></p>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    const anchor =
+      purpose === "income"
+        ? document.getElementById("income-scan-result") ||
+          document.getElementById("income-preview") ||
+          document.getElementById("pick-income")
+        : document.getElementById("scan-result") ||
+          document.getElementById("receipt-preview") ||
+          document.getElementById("pick-receipt");
+    if (anchor && anchor.parentNode) {
+      if (el.parentNode !== anchor.parentNode || el.nextSibling !== anchor) {
+        anchor.parentNode.insertBefore(el, anchor);
+      }
+    }
+    ocrProgress.el = el;
+    return el;
+  }
+
+  function updateOcrProgressButtons(copy, elapsedLabel) {
+    const pickId = ocrProgress.purpose === "income" ? "pick-income" : "pick-receipt";
+    const pick = document.getElementById(pickId);
+    if (pick && pick.disabled) {
+      pick.textContent = `${copy.button} ${elapsedLabel}`;
+    }
+  }
+
+  function paintOcrProgress() {
+    const el = ocrProgress.el || ensureOcrProgressEl(ocrProgress.purpose);
+    if (!el) return;
+    const copy = ocrPhaseCopy(ocrProgress.phase, ocrProgress.purpose);
+    const elapsed = formatElapsed(Date.now() - ocrProgress.startedAt);
+    const passElapsed = formatElapsed(Date.now() - (ocrProgress.passStartedAt || ocrProgress.startedAt));
+    const title = el.querySelector(".ocr-progress-title");
+    const phase = el.querySelector(".ocr-progress-phase");
+    const elapsedEl = el.querySelector(".ocr-progress-elapsed");
+    const hint = el.querySelector(".ocr-progress-hint");
+    if (title) title.textContent = copy.title;
+    if (phase) phase.textContent = copy.phase;
+    if (elapsedEl) {
+      elapsedEl.innerHTML =
+        ocrProgress.phase === "rereading"
+          ? `Elapsed <strong>${elapsed}</strong> <span class="muted">(this pass ${passElapsed})</span>`
+          : `Elapsed <strong>${elapsed}</strong>`;
+    }
+    if (hint) hint.textContent = copy.hint;
+    el.classList.remove("hidden");
+    el.classList.toggle("ocr-progress-wait", ocrProgress.phase === "awaiting-duplicate");
+    updateOcrProgressButtons(copy, elapsed);
+  }
+
+  function startOcrProgress(purpose, phase = "reading") {
+    if (ocrProgress.hideTimer) {
+      clearTimeout(ocrProgress.hideTimer);
+      ocrProgress.hideTimer = null;
+    }
+    ocrProgress.generation += 1;
+    ocrProgress.purpose = purpose === "income" ? "income" : "expense";
+    ocrProgress.phase = phase;
+    if (!ocrProgress.startedAt) ocrProgress.startedAt = Date.now();
+    ocrProgress.passStartedAt = Date.now();
+    ensureOcrProgressEl(ocrProgress.purpose);
+    paintOcrProgress();
+    if (ocrProgress.timer) clearInterval(ocrProgress.timer);
+    ocrProgress.timer = setInterval(paintOcrProgress, 250);
+  }
+
+  function setOcrProgressPhase(phase) {
+    if (!ocrProgress.startedAt) {
+      startOcrProgress(ocrProgress.purpose || "expense", phase);
+      return;
+    }
+    ocrProgress.phase = phase;
+    ocrProgress.passStartedAt = Date.now();
+    paintOcrProgress();
+  }
+
+  function stopOcrProgress(opts = {}) {
+    if (ocrProgress.timer) {
+      clearInterval(ocrProgress.timer);
+      ocrProgress.timer = null;
+    }
+    if (ocrProgress.hideTimer) {
+      clearTimeout(ocrProgress.hideTimer);
+      ocrProgress.hideTimer = null;
+    }
+    const elapsedMs = ocrProgress.startedAt ? Date.now() - ocrProgress.startedAt : 0;
+    const el = ocrProgress.el || document.getElementById("ocr-progress");
+    const silent = Boolean(opts.silent);
+    const gen = ocrProgress.generation;
+    if (el && elapsedMs > 0 && !silent) {
+      const title = el.querySelector(".ocr-progress-title");
+      const phase = el.querySelector(".ocr-progress-phase");
+      const elapsedEl = el.querySelector(".ocr-progress-elapsed");
+      const hint = el.querySelector(".ocr-progress-hint");
+      if (title) title.textContent = "OCR finished";
+      if (phase) phase.textContent = "Totals are ready to review.";
+      if (elapsedEl) elapsedEl.innerHTML = `Took <strong>${formatElapsed(elapsedMs)}</strong>`;
+      if (hint) hint.textContent = "";
+      el.classList.remove("ocr-progress-wait");
+      el.classList.remove("hidden");
+      ocrProgress.hideTimer = setTimeout(() => {
+        if (ocrProgress.generation === gen) el.classList.add("hidden");
+        ocrProgress.hideTimer = null;
+      }, 1600);
+    } else if (el) {
+      el.classList.add("hidden");
+    }
+    ocrProgress.startedAt = 0;
+    ocrProgress.passStartedAt = 0;
+    ocrProgress.phase = "reading";
+  }
+
   /** Modal: possible duplicate detected — Continue or Cancel. */
   function promptDuplicateContinue(data) {
     return new Promise((resolve) => {
@@ -217,83 +396,93 @@
           /* ignore */
         }
         const purpose = bodyObj.purpose === "income" ? "income" : "expense";
+        const initialPhase = bodyObj.forceDuplicate ? "rereading" : "reading";
+        startOcrProgress(purpose, initialPhase);
 
-        let res = await origFetch.apply(this, args);
-        let data = null;
         try {
-          data = await res.clone().json();
-        } catch {
-          return res;
-        }
-
-        if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
-          const proceed = await promptDuplicateContinue(data);
-          if (!proceed) {
-            return new Response(
-              JSON.stringify({
-                error: "Upload cancelled — possible duplicate detected.",
-              }),
-              { status: 409, headers: { "Content-Type": "application/json" } }
-            );
-          }
-          bodyObj.forceDuplicate = true;
-          res = await origFetch(url, {
-            ...options,
-            method: options.method || "POST",
-            credentials: options.credentials || "same-origin",
-            headers: {
-              "Content-Type": "application/json",
-              ...(options.headers || {}),
-            },
-            body: JSON.stringify(bodyObj),
-          });
+          let res = await origFetch.apply(this, args);
+          let data = null;
           try {
             data = await res.clone().json();
           } catch {
-            data = null;
+            stopOcrProgress();
+            return res;
           }
-        }
 
-        if (data && data.receipt) {
-          const mimeType = (data.receipt && data.receipt.mimeType) || "";
-          const ocr = data.ocrResult || {};
-          latest = {
-            breakdown: data.componentBreakdown || [],
-            compliance: data.compliance || null,
-            payPeriod: data.payPeriod || null,
-            travelAllowance:
-              (data.ocrResult && data.ocrResult.travelAllowance) || data.travelAllowance || null,
-            vendorMatch: ocr.vendorMatch || null,
-            categorySource: ocr.categorySource || null,
-            suggestedCategory: ocr.suggestedCategory || null,
-            vendorAbn: ocr.vendorAbn || null,
-            vendor: ocr.vendor || ocr.entity || null,
-            purpose,
-            receiptId: data.receipt && data.receipt.id,
-            isPdf: /pdf/i.test(mimeType),
-            token: `${Date.now()}-${Math.random()}`,
-          };
-          // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
-          if (typeof window.haulageRefreshBilling === "function") {
-            void window.haulageRefreshBilling();
+          if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
+            setOcrProgressPhase("awaiting-duplicate");
+            const proceed = await promptDuplicateContinue(data);
+            if (!proceed) {
+              stopOcrProgress({ silent: true });
+              return new Response(
+                JSON.stringify({
+                  error: "Upload cancelled — possible duplicate detected.",
+                }),
+                { status: 409, headers: { "Content-Type": "application/json" } }
+              );
+            }
+            bodyObj.forceDuplicate = true;
+            setOcrProgressPhase("rereading");
+            res = await origFetch(url, {
+              ...options,
+              method: options.method || "POST",
+              credentials: options.credentials || "same-origin",
+              headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+              },
+              body: JSON.stringify(bodyObj),
+            });
+            try {
+              data = await res.clone().json();
+            } catch {
+              data = null;
+            }
           }
-        }
 
-        // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
-        if (res.status === 402 && data && data.code === "UPLOAD_LIMIT") {
-          const rem =
-            data.entitlements && data.entitlements.uploadsRemaining != null
-              ? data.entitlements.uploadsRemaining
-              : 0;
-          const msg =
-            data.error ||
-            `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month or $60/year) for unlimited scans.`;
-          if (typeof window.toast === "function") window.toast(msg);
-          if (typeof window.haulagePromptUpgrade === "function") {
-            window.haulagePromptUpgrade(data);
+          if (data && data.receipt) {
+            const mimeType = (data.receipt && data.receipt.mimeType) || "";
+            const ocr = data.ocrResult || {};
+            latest = {
+              breakdown: data.componentBreakdown || [],
+              compliance: data.compliance || null,
+              payPeriod: data.payPeriod || null,
+              travelAllowance:
+                (data.ocrResult && data.ocrResult.travelAllowance) || data.travelAllowance || null,
+              vendorMatch: ocr.vendorMatch || null,
+              categorySource: ocr.categorySource || null,
+              suggestedCategory: ocr.suggestedCategory || null,
+              vendorAbn: ocr.vendorAbn || null,
+              vendor: ocr.vendor || ocr.entity || null,
+              purpose,
+              receiptId: data.receipt && data.receipt.id,
+              isPdf: /pdf/i.test(mimeType),
+              token: `${Date.now()}-${Math.random()}`,
+            };
+            // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
+            if (typeof window.haulageRefreshBilling === "function") {
+              void window.haulageRefreshBilling();
+            }
           }
+
+          // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
+          if (res.status === 402 && data && data.code === "UPLOAD_LIMIT") {
+            const rem =
+              data.entitlements && data.entitlements.uploadsRemaining != null
+                ? data.entitlements.uploadsRemaining
+                : 0;
+            const msg =
+              data.error ||
+              `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month or $60/year) for unlimited scans.`;
+            if (typeof window.toast === "function") window.toast(msg);
+            if (typeof window.haulagePromptUpgrade === "function") {
+              window.haulagePromptUpgrade(data);
+            }
+          }
+          return res;
+        } finally {
+          stopOcrProgress();
         }
-        return res;
       }
 
       // Soft gate for manual uploads and other haulage POSTs that return 402.
