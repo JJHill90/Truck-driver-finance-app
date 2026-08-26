@@ -2054,6 +2054,45 @@ api.delete("/admin/users/:username/fuelhub/contacts/:id", (req, res) => {
   res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
 });
 
+api.post("/admin/users/:username/fuelhub/receipts", (req, res) => {
+  const ctx = adminTargetFuelhub(req, res);
+  if (!ctx) return;
+  try {
+    const body = req.body || {};
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: "Fuel receipt needs a dollar amount." });
+      return;
+    }
+    const row = fuelReceipts.createFromScan(ctx.store, {
+      ocr: {
+        vendor: body.vendor,
+        date: body.date,
+        amount,
+        notes: body.notes,
+        rawText: body.litres ? `${body.litres} L` : "",
+      },
+      filename: body.filename || "admin-fuel-receipt",
+    });
+    const confirmed = fuelReceipts.confirmDetails(ctx.store, row.id, {
+      vendor: body.vendor,
+      date: body.date,
+      amount,
+      litres: body.litres,
+      site: body.site || body.vendor,
+      notes: body.notes,
+    });
+    persistTarget(ctx.loaded, { reason: "admin-fuelhub-receipt", actor: sessionUsername(req) });
+    res.status(201).json({
+      ok: true,
+      receipt: fuelReceipts.presentReceipt(confirmed),
+      fuelhub: adminFuelhubPayload(ctx.store),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
 api.delete("/admin/users/:username/fuelhub/receipts/:id", (req, res) => {
   const ctx = adminTargetFuelhub(req, res);
   if (!ctx) return;

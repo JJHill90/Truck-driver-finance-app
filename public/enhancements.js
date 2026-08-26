@@ -2635,6 +2635,16 @@
             : `<p class="admin-empty">No observed prices.</p>`
         }</div>
         <h5 class="admin-subhead">Fuel receipts (${(fuelhub.fuelReceipts || []).length})</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Vendor<input type="text" id="admin-fh-rx-vendor" placeholder="BP Archerfield" /></label>
+          <label>Date<input type="date" id="admin-fh-rx-date" /></label>
+          <label>Amount ($)<input type="number" id="admin-fh-rx-amount" step="0.01" min="0" /></label>
+          <label>Litres<input type="number" id="admin-fh-rx-litres" step="0.1" min="0" /></label>
+          <label class="span-2">Notes<input type="text" id="admin-fh-rx-notes" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-receipt">Save fuel receipt</button>
+          </div>
+        </div>
         <div class="admin-table-wrap">${
           fuelReceiptRows
             ? `<table class="admin-table"><thead><tr><th>Vendor</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${fuelReceiptRows}</tbody></table>`
@@ -2900,6 +2910,22 @@
         await openAdminUser(username);
       } catch (err) {
         if (window.toast) window.toast(err.message || "Could not save price");
+      }
+    });
+
+    byId("admin-fh-save-receipt")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/receipts`, {
+          vendor: byId("admin-fh-rx-vendor")?.value,
+          date: byId("admin-fh-rx-date")?.value,
+          amount: byId("admin-fh-rx-amount")?.value,
+          litres: byId("admin-fh-rx-litres")?.value,
+          notes: byId("admin-fh-rx-notes")?.value,
+        });
+        if (window.toast) window.toast("Fuel receipt saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save fuel receipt");
       }
     });
 
