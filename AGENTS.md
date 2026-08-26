@@ -166,14 +166,15 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
   (wipe account + records + receipt files; cannot delete primary mod),
   `GET /admin/users/:username` (`?includeDeleted=1` for soft-deleted ledger
-  rows), `GET /admin/users/:username/receipts/:id/file`, plus ledger overrides
+  rows plus Fuel Hub snapshot), `POST`/`PUT` `/admin/users/:username/{expenses|income}` to add or save ledger rows, Fuel Hub CRUD under `/admin/users/:username/fuelhub/*`, `GET /admin/users/:username/receipts/:id/file`, plus ledger overrides
   `POST /admin/users/:username/{expenses|income}/unreconcile|restore|soft-delete`,
   and `POST /admin/users/:username/plan` with `{ plan: "pro_plus" | "free" }`
   to grant complimentary **Pro+** or force **Free** at any time (`planGrant`
   on the user record). Profile tab shows the admin panel via `enhancements.js`
-  when `user.isAdmin`. Opening another user is read-only and does not switch
-  your signed-in session; the detail view can unlock reconciliations, restore
-  accidental deletes, and upgrade/downgrade plans.
+  when `user.isAdmin`. Opening another user does not switch your signed-in
+  session; the detail view can add, edit and remove that driver’s Taxation Hub
+  ledger and Fuel Hub data, unlock reconciliations, restore accidental deletes,
+  and upgrade/downgrade plans for both apps.
 - **Ledger reconcile.** Expense and income ledgers get a select-all column and
   per-row checkboxes. When any open row is ticked, **Reconcile entries** appears
   in the ledger header — `POST /expenses/reconcile` or `POST /income/reconcile`

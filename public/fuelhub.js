@@ -502,6 +502,9 @@
   function renderProfile() {
     const el = byId("fuel-view-profile");
     if (!el) return;
+    const parked = document.getElementById("admin-panel");
+    const home = document.getElementById("admin-panel-home");
+    if (parked && el.contains(parked) && home) home.appendChild(parked);
     const hub = (state && state.hubProfile) || {};
     const recordsProfile = hub;
     el.innerHTML = `
@@ -524,7 +527,11 @@
         </form>
       </div>
       ${renderFuelVehiclesCard()}
+      <div id="fuelhub-admin-slot"></div>
     `;
+    if (typeof window.__haulagePlaceAdminPanel === "function") {
+      window.__haulagePlaceAdminPanel();
+    }
     const form = el.querySelector("#fuelhub-profile-form");
     const typeSelect = el.querySelector("#fuel-profile-driver-type");
     const licenceSelect = el.querySelector("#fuel-profile-licence");
@@ -1704,6 +1711,9 @@
     stopGps();
     stopReceiptTimer();
     document.body.classList.remove("fuelhub-open");
+    const panel = document.getElementById("admin-panel");
+    const home = document.getElementById("admin-panel-home");
+    if (panel && home) home.appendChild(panel);
   }
 
   if (document.readyState === "loading") {

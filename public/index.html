@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=fuelhub-20" />
+    <link rel="stylesheet" href="./styles.css?v=admin-both-2" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -558,12 +558,13 @@
               </div>
             </div>
           </div>
+          <div id="admin-panel-home">
           <div class="panel hidden" id="admin-panel">
             <div class="panel-header">
-              <h2>Primary mod — user profiles</h2>
+              <h2>Primary mod — Taxation Hub &amp; Fuel Hub</h2>
               <button type="button" class="btn success" id="admin-refresh">Refresh</button>
             </div>
-            <p class="muted">Create profiles for drivers who request access. Open any profile to assist them: reset login details, override mistaken ledger/profile edits, and restore earlier data snapshots. The primary mod account cannot be deleted.</p>
+            <p class="muted">Create driver profiles, upgrade or downgrade their plan for both apps, and add, edit or remove Taxation Hub ledger rows and Fuel Hub data. Opening a driver does not switch your signed-in session. The primary mod account cannot be deleted.</p>
             <form id="admin-create-user-form" class="form-grid admin-create-form">
               <label>Username<input type="text" id="admin-new-username" name="username" autocomplete="off" placeholder="e.g. james.smith" required /></label>
               <label>Email (optional)<input type="email" id="admin-new-email" name="email" autocomplete="off" placeholder="driver@example.com" /></label>
@@ -592,6 +593,7 @@
               <div id="admin-backup-list" class="admin-backup-list"></div>
               <p class="muted" id="admin-backup-message"></p>
             </div>
+          </div>
           </div>
           <div class="panel">
             <div class="panel-header"><h2>Driver Profile</h2></div>
@@ -800,7 +802,7 @@
           <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
             <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
           </nav>
-          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.18</p>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 2.20</p>
         </div>
       </aside>
       <div class="main">
@@ -840,7 +842,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=fuelhub-20"></script>
-    <script src="./fuelhub.js?v=fuelhub-20"></script>
+    <script src="./enhancements.js?v=admin-both-2"></script>
+    <script src="./fuelhub.js?v=admin-both-2"></script>
   </body>
 </html>

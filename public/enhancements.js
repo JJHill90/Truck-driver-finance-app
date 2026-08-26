@@ -1393,8 +1393,12 @@
     }
     const adminPanel = byId("admin-panel");
     if (adminPanel) {
-      if (user && user.isAdmin) adminPanel.classList.remove("hidden");
-      else adminPanel.classList.add("hidden");
+      if (user && user.isAdmin) {
+        adminPanel.classList.remove("hidden");
+        placeAdminPanel();
+      } else {
+        adminPanel.classList.add("hidden");
+      }
     }
   }
 
@@ -1939,6 +1943,54 @@
 
   let adminSelected = null;
 
+  function placeAdminPanel() {
+    const panel = byId("admin-panel");
+    if (!panel) return;
+    if (!placeAdminPanel.home) {
+      placeAdminPanel.home = byId("admin-panel-home") || panel.parentElement;
+    }
+    const fuelSlot = byId("fuelhub-admin-slot");
+    if (document.body.classList.contains("fuelhub-open") && fuelSlot) {
+      fuelSlot.appendChild(panel);
+    } else if (placeAdminPanel.home && panel.parentElement !== placeAdminPanel.home) {
+      placeAdminPanel.home.appendChild(panel);
+    }
+  }
+  window.__haulagePlaceAdminPanel = placeAdminPanel;
+
+  function cloneSelectHtml(sourceId, selected) {
+    const src = byId(sourceId);
+    const options = src ? [...src.options] : [];
+    if (!options.length) {
+      const fallback =
+        sourceId === "income-type"
+          ? [
+              ["salary_wages", "Salary & wages"],
+              ["remittance_owner", "Owner-driver remittance"],
+              ["allowance_travel", "Travel allowance"],
+            ]
+          : [
+              ["other_work", "Other work-related expense"],
+              ["fuel", "Fuel"],
+              ["meals_dinner", "Meals – dinner"],
+              ["accommodation", "Accommodation"],
+              ["groceries_travel", "Groceries & travel food"],
+            ];
+      return fallback
+        .map(([value, label]) => {
+          const isSel = String(value) === String(selected || "") ? " selected" : "";
+          return `<option value="${esc(value)}"${isSel}>${esc(label)}</option>`;
+        })
+        .join("");
+    }
+    return options
+      .map((opt) => {
+        const isSel = String(opt.value) === String(selected || "") ? " selected" : "";
+        return `<option value="${esc(opt.value)}"${isSel}>${esc(opt.textContent)}</option>`;
+      })
+      .join("");
+  }
+
   function setAdminCreateMessage(msg, isError) {
     const el = byId("admin-create-message");
     if (!el) return;
@@ -1982,8 +2034,8 @@
     }
 
     if (note) {
-      note.textContent = others.length
-        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · open a row to assist (login recovery, overrides, history restore).`
+        note.textContent = others.length
+        ? `${others.length} driver profile${others.length === 1 ? "" : "s"} · open a row to add/remove/save Taxation Hub and Fuel Hub data, and to upgrade or downgrade their plan.`
         : "No other driver profiles yet. Create one above when someone requests access.";
     }
 
@@ -2007,7 +2059,7 @@
           <button type="button" class="admin-user-row-main" data-admin-user="${esc(u.username)}">
             <div>
               <div class="admin-user-name">${esc(u.username)}${badge}${planBadge}</div>
-              <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${esc(u.email || "no email")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · joined ${fmtDate(u.createdAt)}</div>
+              <div class="admin-user-meta">${esc(u.profileName || "No driver name")} · ${esc(u.email || "no email")} · ${counts.expenses || 0} expenses · ${counts.income || 0} income · ${counts.receipts || 0} receipts · ${counts.fuelCards || 0} fuel cards · ${counts.fuelTrips || 0} trips · joined ${fmtDate(u.createdAt)}</div>
             </div>
             <div class="admin-user-totals">
               <div>Gross ${fmt(totals.grossIncome)}</div>
@@ -2054,7 +2106,7 @@
       <td>${label}</td>
       <td>${meta}</td>
       <td class="amount">${fmt(amount)}</td>
-      <td>${status}</td>
+      <td>${status} <button type="button" class="btn secondary small" data-admin-fill="${esc(entry.id)}" data-admin-kind="${esc(kind)}">Edit</button></td>
     </tr>`;
   }
 
@@ -2235,6 +2287,7 @@
     const deletedIncome = (data.deletedIncome || []).slice(0, 40);
     const receipts = data.receipts || [];
     const history = data.history || [];
+    const fuelhub = data.fuelhub || {};
     const username = data.user.username;
     const licence = profile.licenceClass || "hc";
     const duty = profile.driverType || "long_haul";
@@ -2259,7 +2312,7 @@
         const link = r.hasImage
           ? `<a href="${API}/admin/users/${encodeURIComponent(username)}/receipts/${r.id}/file?download=1" target="_blank" rel="noopener">Download</a>`
           : "—";
-        return `<tr><td>${esc(r.filename || r.id)}</td><td>${esc(r.mimeType || "")}</td><td>${esc(fmtDate(r.createdAt))}</td><td>${link}</td></tr>`;
+        return `<tr><td>${esc(r.filename || r.id)}</td><td>${esc(r.mimeType || "")}</td><td>${esc(fmtDate(r.createdAt))}</td><td>${link} <button type="button" class="btn danger small" data-admin-del-receipt="${esc(r.id)}">Remove</button></td></tr>`;
       })
       .join("");
 
@@ -2276,6 +2329,62 @@
           )}" data-history-when="${esc(fmtDateTime(h.savedAt))}">Restore</button></td>
         </tr>`;
       })
+      .join("");
+
+    const truck = fuelhub.truck || {};
+    const fuelCardRows = (fuelhub.cards || [])
+      .map(
+        (c) => `<tr>
+          <td>${esc(c.name || "—")}</td>
+          <td>${esc(c.retailerId || "")}</td>
+          <td>${esc(c.cplOff || 0)}¢ / ${esc(c.percentOff || 0)}%</td>
+          <td><button type="button" class="btn danger small" data-admin-fh-del="cards" data-id="${esc(c.id)}">Remove</button></td>
+        </tr>`
+      )
+      .join("");
+    const fuelTripRows = (fuelhub.trips || [])
+      .map(
+        (t) => `<tr>
+          <td>${esc(t.origin || "")} → ${esc(t.destination || "")}</td>
+          <td>${esc(t.distanceKm || 0)} km</td>
+          <td>${esc(fmtDate(t.createdAt))}</td>
+          <td><button type="button" class="btn danger small" data-admin-fh-del="trips" data-id="${esc(t.id)}">Remove</button></td>
+        </tr>`
+      )
+      .join("");
+    const fuelContactRows = (fuelhub.employerContacts || [])
+      .map(
+        (c) => `<tr>
+          <td>${esc(c.name || "—")}</td>
+          <td>${esc(c.email || "")}</td>
+          <td>${esc(c.company || "")}</td>
+          <td><button type="button" class="btn danger small" data-admin-fh-del="contacts" data-id="${esc(c.id)}">Remove</button></td>
+        </tr>`
+      )
+      .join("");
+    const fuelReceiptRows = (fuelhub.fuelReceipts || [])
+      .map((r) => {
+        const link = r.hasImage
+          ? `<a href="${API}/admin/users/${encodeURIComponent(username)}/fuelhub/receipts/${r.id}/file?download=1" target="_blank" rel="noopener">Download</a>`
+          : "—";
+        return `<tr>
+          <td>${esc(r.vendor || r.filename || r.id)}</td>
+          <td>${esc(r.date || "")}</td>
+          <td>${fmt(r.amount)}</td>
+          <td>${esc(r.status || "")}</td>
+          <td>${link} <button type="button" class="btn danger small" data-admin-fh-del="receipts" data-id="${esc(r.id)}">Remove</button></td>
+        </tr>`;
+      })
+      .join("");
+    const fuelPriceRows = (fuelhub.observedPrices || [])
+      .map(
+        (p) => `<tr>
+          <td>${esc(p.stationId || "")}</td>
+          <td>${esc(p.cpl || "")} ¢</td>
+          <td>${esc(fmtDateTime(p.at))}</td>
+          <td><button type="button" class="btn danger small" data-admin-fh-del="prices" data-id="${esc(p.stationId)}">Remove</button></td>
+        </tr>`
+      )
       .join("");
 
     const lockBadge = account.needsRecovery
@@ -2303,7 +2412,7 @@
               planGrant === "free" && !ent.isPro ? " disabled" : ""
             }>Downgrade to Free</button>
           </div>
-          <p class="muted span-2">Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast). Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
+          <p class="muted span-2">Plan is the Driver Hub account plan — it applies to both Taxation Hub and Fuel Hub. Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast). Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
 
     detail.classList.remove("hidden");
     detail.innerHTML = `
@@ -2314,7 +2423,7 @@
       </div>
       <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
       <p class="muted">Username (tell the driver if forgotten): <strong>${esc(username)}</strong> · ${lockBadge}</p>
-      <p class="muted admin-override-hint">Primary mod assist: reset login, edit profile/ledger mistakes, unlock/reconcile rows, move entries between expenses and income, and restore earlier full-page snapshots.</p>
+      <p class="muted admin-override-hint">Primary mod: add, edit and remove data in Taxation Hub and Fuel Hub for this driver, reset login, upgrade or downgrade their plan for both apps, and restore earlier snapshots. Your own session stays signed in as primary mod.</p>
 
       <div class="admin-section admin-assist-section">
         <h4>Plan (Free / Pro+)</h4>
@@ -2410,6 +2519,31 @@
         }</div>
       </div>
 
+      <div class="admin-section admin-assist-section">
+        <h4>Add or save Taxation Hub ledger</h4>
+        <p class="muted small">Add a new row, or click Edit on a row to load it, change fields, then Save. Reconciled rows are unlocked automatically when you save.</p>
+        <div class="form-grid admin-assist-form">
+          <label>Kind
+            <select id="admin-ledger-kind">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </label>
+          <label>Entry id (blank = add new)<input type="text" id="admin-ledger-id" placeholder="Leave blank to add" autocomplete="off" /></label>
+          <label>Date<input type="date" id="admin-ledger-date" /></label>
+          <label>Amount ($)<input type="number" id="admin-ledger-amount" step="0.01" min="0" /></label>
+          <label>Vendor / entity<input type="text" id="admin-ledger-party" placeholder="BP / employer" /></label>
+          <label>Category / type
+            <select id="admin-ledger-meta">${cloneSelectHtml("manual-receipt-category", "other_work")}</select>
+          </label>
+          <label class="span-2">Description<input type="text" id="admin-ledger-description" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-ledger-save">Save ledger row</button>
+            <button type="button" class="btn secondary" id="admin-ledger-clear">Clear form</button>
+          </div>
+        </div>
+      </div>
+
       <div class="admin-section" data-admin-ledger="income">
         <div class="admin-section-head">
           <h4>Income (${income.length}${activeIncome.length > income.length ? "+" : ""})</h4>
@@ -2457,11 +2591,98 @@
         }</div>
       </div>
       <div class="admin-section">
-        <h4>Receipts (${receipts.length})</h4>
+        <h4>Taxation Hub receipts (${receipts.length})</h4>
         <div class="admin-table-wrap">${
           receiptRows
             ? `<table class="admin-table"><thead><tr><th>File</th><th>Type</th><th>Added</th><th></th></tr></thead><tbody>${receiptRows}</tbody></table>`
             : `<p class="admin-empty">No scanned files.</p>`
+        }</div>
+      </div>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Fuel Hub data</h4>
+        <p class="muted small">Add, save or remove this driver’s Fuel Hub truck spec, cards, trips, employer contacts, bowser prices and fuel receipts. Does not change your own Fuel Hub session.</p>
+        <h5 class="admin-subhead">Truck spec</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Payload (t)<input type="number" id="admin-fh-payload" step="0.1" min="0" value="${esc(truck.payloadT ?? "")}" /></label>
+          <label>Tank (L)<input type="number" id="admin-fh-tank" step="1" min="0" value="${esc(truck.tankCapacityL ?? "")}" /></label>
+          <label>Fuel on board (L)<input type="number" id="admin-fh-fuel" step="1" min="0" value="${esc(truck.currentFuelL ?? "")}" /></label>
+          <label>Combination id<input type="text" id="admin-fh-combo" value="${esc(truck.combinationId || workCombo || "")}" placeholder="semi / b_double / rigid" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-truck">Save truck spec</button>
+          </div>
+        </div>
+        <h5 class="admin-subhead">Fuel card</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Name<input type="text" id="admin-fh-card-name" placeholder="Fleet card" /></label>
+          <label>Retailer id<input type="text" id="admin-fh-card-retailer" placeholder="bp / shell / any" /></label>
+          <label>¢/L off<input type="number" id="admin-fh-card-cpl" step="0.1" min="0" /></label>
+          <label>% off<input type="number" id="admin-fh-card-pct" step="0.1" min="0" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-card">Save fuel card</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          fuelCardRows
+            ? `<table class="admin-table"><thead><tr><th>Card</th><th>Retailer</th><th>Discount</th><th></th></tr></thead><tbody>${fuelCardRows}</tbody></table>`
+            : `<p class="admin-empty">No fuel cards.</p>`
+        }</div>
+        <h5 class="admin-subhead">Trip</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Origin<input type="text" id="admin-fh-trip-origin" /></label>
+          <label>Destination<input type="text" id="admin-fh-trip-dest" /></label>
+          <label>Distance (km)<input type="number" id="admin-fh-trip-km" step="1" min="0" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-trip">Save trip</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          fuelTripRows
+            ? `<table class="admin-table"><thead><tr><th>Run</th><th>Km</th><th>When</th><th></th></tr></thead><tbody>${fuelTripRows}</tbody></table>`
+            : `<p class="admin-empty">No saved trips.</p>`
+        }</div>
+        <h5 class="admin-subhead">Employer contact</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Name<input type="text" id="admin-fh-contact-name" /></label>
+          <label>Email<input type="email" id="admin-fh-contact-email" /></label>
+          <label>Company<input type="text" id="admin-fh-contact-company" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-contact">Save contact</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          fuelContactRows
+            ? `<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Company</th><th></th></tr></thead><tbody>${fuelContactRows}</tbody></table>`
+            : `<p class="admin-empty">No employer contacts.</p>`
+        }</div>
+        <h5 class="admin-subhead">Bowser price</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Station id<input type="text" id="admin-fh-price-station" /></label>
+          <label>¢/L<input type="number" id="admin-fh-price-cpl" step="0.1" min="80" max="400" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-price">Save price</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          fuelPriceRows
+            ? `<table class="admin-table"><thead><tr><th>Station</th><th>¢/L</th><th>When</th><th></th></tr></thead><tbody>${fuelPriceRows}</tbody></table>`
+            : `<p class="admin-empty">No observed prices.</p>`
+        }</div>
+        <h5 class="admin-subhead">Fuel receipts (${(fuelhub.fuelReceipts || []).length})</h5>
+        <div class="form-grid admin-assist-form">
+          <label>Vendor<input type="text" id="admin-fh-rx-vendor" placeholder="BP Archerfield" /></label>
+          <label>Date<input type="date" id="admin-fh-rx-date" /></label>
+          <label>Amount ($)<input type="number" id="admin-fh-rx-amount" step="0.01" min="0" /></label>
+          <label>Litres<input type="number" id="admin-fh-rx-litres" step="0.1" min="0" /></label>
+          <label class="span-2">Notes<input type="text" id="admin-fh-rx-notes" /></label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn primary" id="admin-fh-save-receipt">Save fuel receipt</button>
+          </div>
+        </div>
+        <div class="admin-table-wrap">${
+          fuelReceiptRows
+            ? `<table class="admin-table"><thead><tr><th>Vendor</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${fuelReceiptRows}</tbody></table>`
+            : `<p class="admin-empty">No Fuel Hub receipts.</p>`
         }</div>
       </div>`;
 
@@ -2496,6 +2717,7 @@
     byId("admin-plan-free")?.addEventListener("click", () => void setAdminPlan("free"));
 
     wireAdminAssistForms(detail, username, data);
+    wireAdminDataForms(detail, username, data);
 
     detail.querySelectorAll("[data-admin-action]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -2533,6 +2755,229 @@
           }
         }
         await openAdminUser(username);
+      });
+    });
+  }
+
+  function fillAdminLedgerForm(kind, entry) {
+    const kindEl = byId("admin-ledger-kind");
+    const idEl = byId("admin-ledger-id");
+    const dateEl = byId("admin-ledger-date");
+    const amountEl = byId("admin-ledger-amount");
+    const partyEl = byId("admin-ledger-party");
+    const metaEl = byId("admin-ledger-meta");
+    const descEl = byId("admin-ledger-description");
+    if (!kindEl || !entry) return;
+    kindEl.value = kind === "income" ? "income" : "expense";
+    syncAdminLedgerMetaSelect();
+    if (idEl) idEl.value = entry.id || "";
+    if (dateEl) dateEl.value = String(entry.date || "").slice(0, 10);
+    const amount = kind === "income" ? entry.grossTotal ?? entry.amount : entry.amount;
+    if (amountEl) amountEl.value = amount != null ? amount : "";
+    if (partyEl) partyEl.value = kind === "income" ? entry.entity || entry.payer || "" : entry.vendor || "";
+    if (metaEl) metaEl.value = kind === "income" ? entry.type || "" : entry.category || "";
+    if (descEl) descEl.value = entry.description || "";
+  }
+
+  function syncAdminLedgerMetaSelect() {
+    const kindEl = byId("admin-ledger-kind");
+    const metaEl = byId("admin-ledger-meta");
+    if (!kindEl || !metaEl) return;
+    const selected = metaEl.value;
+    const sourceId = kindEl.value === "income" ? "income-type" : "manual-receipt-category";
+    metaEl.innerHTML = cloneSelectHtml(sourceId, selected);
+    if (selected && ![...metaEl.options].some((o) => o.value === selected)) {
+      const opt = document.createElement("option");
+      opt.value = selected;
+      opt.textContent = selected;
+      opt.selected = true;
+      metaEl.appendChild(opt);
+    }
+  }
+
+  function clearAdminLedgerForm() {
+    ["admin-ledger-id", "admin-ledger-date", "admin-ledger-amount", "admin-ledger-party", "admin-ledger-description"].forEach(
+      (id) => {
+        const el = byId(id);
+        if (el) el.value = "";
+      }
+    );
+  }
+
+  function wireAdminDataForms(detail, username, data) {
+    const expenses = data.expenses || [];
+    const income = data.income || [];
+    syncAdminLedgerMetaSelect();
+    byId("admin-ledger-kind")?.addEventListener("change", syncAdminLedgerMetaSelect);
+    byId("admin-ledger-clear")?.addEventListener("click", clearAdminLedgerForm);
+
+    byId("admin-ledger-save")?.addEventListener("click", async () => {
+      const kind = byId("admin-ledger-kind")?.value === "income" ? "income" : "expense";
+      const id = String(byId("admin-ledger-id")?.value || "").trim();
+      const party = byId("admin-ledger-party")?.value || "";
+      const body = {
+        date: byId("admin-ledger-date")?.value || "",
+        description: byId("admin-ledger-description")?.value || "",
+      };
+      if (kind === "income") {
+        body.entity = party;
+        body.payer = party;
+        body.type = byId("admin-ledger-meta")?.value || "salary_wages";
+        body.grossTotal = byId("admin-ledger-amount")?.value;
+        body.amount = body.grossTotal;
+        body.netPay = byId("admin-ledger-amount")?.value;
+      } else {
+        body.vendor = party;
+        body.category = byId("admin-ledger-meta")?.value || "other_work";
+        body.amount = byId("admin-ledger-amount")?.value;
+      }
+      try {
+        const type = kind === "income" ? "income" : "expenses";
+        if (id) {
+          await apiPut(`/admin/users/${encodeURIComponent(username)}/${type}/${encodeURIComponent(id)}`, body);
+          if (window.toast) window.toast(`Saved ${kind} row`);
+        } else {
+          await apiPost(`/admin/users/${encodeURIComponent(username)}/${type}`, body);
+          if (window.toast) window.toast(`Added ${kind} row`);
+        }
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save ledger row");
+      }
+    });
+
+    detail.querySelectorAll("[data-admin-fill]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const kind = btn.getAttribute("data-admin-kind");
+        const id = btn.getAttribute("data-admin-fill");
+        const list = kind === "income" ? income : expenses;
+        const entry = list.find((row) => row.id === id);
+        if (!entry) {
+          if (window.toast) window.toast("Entry not found on this list");
+          return;
+        }
+        fillAdminLedgerForm(kind, entry);
+        byId("admin-ledger-save")?.scrollIntoView({ block: "nearest" });
+      });
+    });
+
+    detail.querySelectorAll("[data-admin-del-receipt]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-admin-del-receipt");
+        const ok = window.confirm(`Remove Taxation Hub receipt ${id} for ${username}?`);
+        if (!ok) return;
+        try {
+          await apiDelete(`/admin/users/${encodeURIComponent(username)}/receipts/${encodeURIComponent(id)}`);
+          if (window.toast) window.toast("Receipt removed");
+          await openAdminUser(username);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Could not remove receipt");
+        }
+      });
+    });
+
+    byId("admin-fh-save-truck")?.addEventListener("click", async () => {
+      try {
+        await apiPut(`/admin/users/${encodeURIComponent(username)}/fuelhub/truck`, {
+          payloadT: byId("admin-fh-payload")?.value,
+          tankCapacityL: byId("admin-fh-tank")?.value,
+          currentFuelL: byId("admin-fh-fuel")?.value,
+          combinationId: byId("admin-fh-combo")?.value,
+        });
+        if (window.toast) window.toast(`Saved Fuel Hub truck for ${username}`);
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save truck spec");
+      }
+    });
+
+    byId("admin-fh-save-card")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/cards`, {
+          name: byId("admin-fh-card-name")?.value,
+          retailerId: byId("admin-fh-card-retailer")?.value,
+          cplOff: byId("admin-fh-card-cpl")?.value,
+          percentOff: byId("admin-fh-card-pct")?.value,
+        });
+        if (window.toast) window.toast("Fuel card saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save fuel card");
+      }
+    });
+
+    byId("admin-fh-save-trip")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/trips`, {
+          origin: byId("admin-fh-trip-origin")?.value,
+          destination: byId("admin-fh-trip-dest")?.value,
+          distanceKm: byId("admin-fh-trip-km")?.value,
+        });
+        if (window.toast) window.toast("Trip saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save trip");
+      }
+    });
+
+    byId("admin-fh-save-contact")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/contacts`, {
+          name: byId("admin-fh-contact-name")?.value,
+          email: byId("admin-fh-contact-email")?.value,
+          company: byId("admin-fh-contact-company")?.value,
+        });
+        if (window.toast) window.toast("Contact saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save contact");
+      }
+    });
+
+    byId("admin-fh-save-price")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/prices`, {
+          stationId: byId("admin-fh-price-station")?.value,
+          cpl: byId("admin-fh-price-cpl")?.value,
+        });
+        if (window.toast) window.toast("Bowser price saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save price");
+      }
+    });
+
+    byId("admin-fh-save-receipt")?.addEventListener("click", async () => {
+      try {
+        await apiPost(`/admin/users/${encodeURIComponent(username)}/fuelhub/receipts`, {
+          vendor: byId("admin-fh-rx-vendor")?.value,
+          date: byId("admin-fh-rx-date")?.value,
+          amount: byId("admin-fh-rx-amount")?.value,
+          litres: byId("admin-fh-rx-litres")?.value,
+          notes: byId("admin-fh-rx-notes")?.value,
+        });
+        if (window.toast) window.toast("Fuel receipt saved");
+        await openAdminUser(username);
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save fuel receipt");
+      }
+    });
+
+    detail.querySelectorAll("[data-admin-fh-del]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const kind = btn.getAttribute("data-admin-fh-del");
+        const id = btn.getAttribute("data-id");
+        const ok = window.confirm(`Remove this Fuel Hub ${kind.replace(/s$/, "")} for ${username}?`);
+        if (!ok) return;
+        try {
+          await apiDelete(
+            `/admin/users/${encodeURIComponent(username)}/fuelhub/${kind}/${encodeURIComponent(id)}`
+          );
+          if (window.toast) window.toast("Removed");
+          await openAdminUser(username);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Could not remove");
+        }
       });
     });
   }
@@ -6519,7 +6964,7 @@
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Under Registered fuel vehicles you can add a class code for the individual truck (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor — that tank drives fill spacing instead of a generic heavy rigid. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
-        "Primary mod (Haulage_Admin) can open any driver to reset passwords, set email, clear login lockouts, upgrade/downgrade Free ↔ Pro+ at any time, override profile/ledger mistakes, and restore earlier data snapshots. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
+        "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },
   };
