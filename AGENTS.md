@@ -64,7 +64,8 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   (rigid / semi / B-double / road train) set Fuel Hub combination and duty-cycle
   L/100 km on planned journeys (`lib/fuel-efficiency.js` `DRIVER_TYPE_FACTOR`).
   **Registered fuel classes** on `profile.fuelVehicles[]` (`lib/fuel-vehicle-class.js`)
-  are a manual, per-truck overlay unique vs a generic heavy rigid: sample codes
+  are edited on **Fuel Hub → Profile** (not Taxation Hub Profile): a manual, per-truck
+  overlay unique vs a generic heavy rigid: sample codes
   **XN93DX** (380 L compact), **YN16BQ** (520 L standard), **YN17BQ** (680 L long-range)
   plus custom codes. The active vehicle’s tank (and a small class factor) drives
   Fuel Hub range and fill spacing; ATO work cars stay on `profile.cars`. Fuel Hub

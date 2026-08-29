@@ -69,8 +69,8 @@
           p.activeFuelVehicle
             ? ` and registered class ${esc(p.activeFuelVehicle.classCode)} (${esc(p.activeFuelVehicle.tankCapacityL)} L)`
             : ""
-        } and ${esc(p.driverTypeLabel || "linehaul")} duty cycle for L/100 km — save Truck &amp; load only if you need different payload.`
-      : ` Payload was saved in Fuel Hub; Profile driver type (${esc(p.driverTypeLabel || "linehaul")}) still scales planned L/100 km.${
+        } and ${esc(p.driverTypeLabel || "Linehaul driver")} duty cycle for L/100 km — save Truck &amp; load only if you need different payload.`
+      : ` Payload was saved in Fuel Hub; Profile driver type (${esc(p.driverTypeLabel || "Linehaul driver")}) still scales planned L/100 km.${
           p.activeFuelVehicle
             ? ` Tank litres follow registered class ${esc(p.activeFuelVehicle.classCode)}.`
             : ""
@@ -779,7 +779,7 @@
         <div class="fuelhub-stat"><strong>${eff.fuelMassKg || "—"} kg</strong><span>Diesel mass in tanks</span></div>
       </div>
       <p class="fuelhub-muted">${esc(hub.workCombinationLabel || "Work vehicle")} · ${esc(
-        hub.driverTypeLabel || "linehaul"
+        hub.driverTypeLabel || "Linehaul driver"
       )} duty cycle sets L/100 km.${
         hub.activeFuelVehicle
           ? ` Registered class ${esc(hub.activeFuelVehicle.classCode)} (${esc(hub.activeFuelVehicle.tankCapacityL)} L) sets tank and fill spacing.`
