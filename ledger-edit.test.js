@@ -92,4 +92,27 @@ describe("updateIncome", () => {
     expect(updated.payPeriod).toBe("01/02/2026 – 14/02/2026");
     expect(updated.summaryNotes).toBe("corrected");
   });
+
+  it("updates Living Away from Home / Travel allowance days", () => {
+    const records = {
+      income: [
+        {
+          id: "i2",
+          date: "2026-03-01",
+          type: "salary_wages",
+          amount: 2000,
+          overnightDays: 0,
+          travelAllowanceAmount: null,
+        },
+      ],
+    };
+    const updated = updateIncome(records, "i2", {
+      overnightDays: 3,
+      overnightDaysSource: "manual_edit",
+      travelAllowanceAmount: 168.84,
+    });
+    expect(updated.overnightDays).toBe(3);
+    expect(updated.overnightDaysSource).toBe("manual_edit");
+    expect(updated.travelAllowanceAmount).toBe(168.84);
+  });
 });

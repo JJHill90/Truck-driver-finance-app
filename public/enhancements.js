@@ -5649,6 +5649,8 @@
         <label>GST<input name="gstAmount" type="number" step="0.01" min="0" value="${esc(entry.gstAmount ?? 0)}"></label>
         <label>Net pay<input name="netPay" type="number" step="0.01" min="0" value="${esc(entry.netPay ?? "")}"></label>
         <label>Pay period<input name="payPeriod" type="text" value="${esc(entry.payPeriod || "")}"></label>
+        <label>Living Away from Home days (LAFHA)<input name="overnightDays" type="number" step="1" min="0" max="31" value="${esc(entry.overnightDays ?? "")}" placeholder="e.g. 3"></label>
+        <label>Travel / LAFHA amount (AUD)<input name="travelAllowanceAmount" type="number" step="0.01" min="0" value="${esc(entry.travelAllowanceAmount ?? "")}" placeholder="optional"></label>
         <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
         <label>Notes<textarea name="summaryNotes" rows="2">${esc(entry.summaryNotes || "")}</textarea></label>
       `;
@@ -5695,6 +5697,17 @@
         payload.gstAmount = payload.gstAmount === "" ? 0 : Number(payload.gstAmount);
         payload.netPay = payload.netPay === "" ? null : Number(payload.netPay);
         payload.payer = payload.entity;
+        if (payload.overnightDays === "" || payload.overnightDays == null) {
+          payload.overnightDays = null;
+        } else {
+          payload.overnightDays = Math.round(Number(payload.overnightDays));
+          payload.overnightDaysSource = "manual_edit";
+        }
+        if (payload.travelAllowanceAmount === "" || payload.travelAllowanceAmount == null) {
+          payload.travelAllowanceAmount = null;
+        } else {
+          payload.travelAllowanceAmount = Number(payload.travelAllowanceAmount);
+        }
       }
 
       const submitBtn = form.querySelector('button[type="submit"]');
@@ -5715,6 +5728,9 @@
         closeEditModal();
         if (typeof toast === "function") toast(isExpense ? "Expense updated" : "Income updated");
         if (typeof refreshAll === "function") await refreshAll();
+        if (typeof window.haulageRefreshOvernightDays === "function") {
+          void window.haulageRefreshOvernightDays();
+        }
       } catch (err) {
         if (errEl) {
           errEl.textContent = err.message || "Save failed.";
@@ -6628,6 +6644,29 @@
     const projected = Number(data.projectedYearEndDays) || claimed;
     const pct = total > 0 ? Math.min(100, (claimed / total) * 100) : 0;
     const barPct = Math.max(pct, claimed > 0 ? 2 : 0);
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    const entryRows = entries
+      .slice()
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+      .map((e) => {
+        const days = Number(e.days) || 0;
+        const amt = e.amount != null ? money(e.amount) : "—";
+        const when = e.date
+          ? new Date(`${e.date}T00:00:00`).toLocaleDateString("en-AU")
+          : "—";
+        return `<li class="overnight-entry">
+          <div class="overnight-entry-copy">
+            <strong>${esc(e.label || "Payslip")}</strong>
+            <span class="muted">${esc(when)} · ${days} day${days === 1 ? "" : "s"}${e.amount != null ? ` · ${amt}` : ""}</span>
+          </div>
+          ${
+            e.id
+              ? `<button type="button" class="btn secondary overnight-edit-btn" data-edit-income="${esc(e.id)}">Edit LAFHA</button>`
+              : ""
+          }
+        </li>`;
+      })
+      .join("");
 
     return `
       <div class="overnight-card">
@@ -6649,6 +6688,14 @@
             ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with Travel/LAFHA · ${money(data.amountPaid)} paid`
             : "Scan payslips that list Travel or Living Away from Home (LAFHA) allowance — days are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day/hour count."
         }</p>
+        ${
+          entryRows
+            ? `<details class="overnight-entries">
+                <summary>Payslips counted (${entries.length}) — edit LAFHA days if OCR missed a slip</summary>
+                <ul class="overnight-entry-list">${entryRows}</ul>
+              </details>`
+            : `<p class="overnight-hint muted">No Travel/LAFHA days on income yet. After upload, set Living Away from Home days on Approve, or Edit an income row.</p>`
+        }
         <p class="overnight-hint">${esc(data.note || "")}</p>
       </div>`;
   }
@@ -6713,6 +6760,7 @@
   function start() {
     if (!BOX_IDS.some((id) => document.getElementById(id))) return;
     patchForecastFetch();
+    window.haulageRefreshOvernightDays = refreshFromApi;
     void refreshFromApi();
     document.getElementById("fy-select")?.addEventListener("change", () => void refreshFromApi());
     document.querySelectorAll('.nav-btn[data-view="forecast"], .nav-btn[data-view="dashboard"]').forEach((btn) => {
@@ -7134,7 +7182,7 @@
       title: "Dashboard",
       body: [
         "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
-        "Travel allowance days shows how many Travel / Living Away from Home (LAFHA) days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip Travel/LAFHA counters (or amount ÷ ATO meal rate).",
+        "Travel allowance days shows how many Travel / Living Away from Home (LAFHA) days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip Travel/LAFHA counters (or amount ÷ rate). Open the payslip list on the card and use Edit LAFHA if OCR missed days on a slip.",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY. Change the financial year in the top bar and both the Travel allowance days card and allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
@@ -7149,7 +7197,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. When a payslip lists Travel or Living Away from Home (LAFHA) allowance, that day/hour counter is saved with the income row for the Dashboard and Financial Forecast Travel allowance days snapshot.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
