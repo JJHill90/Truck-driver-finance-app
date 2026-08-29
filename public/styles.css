@@ -940,6 +940,54 @@ table.income-ledger .tag.tag-reconciled {
   font-size: 0.72rem;
   color: var(--text-dim);
 }
+.overnight-days-box .overnight-entries {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 8px 10px;
+}
+.overnight-days-box .overnight-entries summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.overnight-days-box .overnight-entry-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overnight-days-box .overnight-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.overnight-days-box .overnight-entry-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+.overnight-days-box .overnight-entry-copy strong {
+  font-size: 0.88rem;
+}
+.overnight-days-box .overnight-entry-copy .muted {
+  font-size: 0.75rem;
+}
+.overnight-days-box .overnight-edit-btn {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
 @media (max-width: 720px) {
   .overnight-days-box .overnight-stats { grid-template-columns: 1fr; }
 }
