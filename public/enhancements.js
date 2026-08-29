@@ -6765,7 +6765,6 @@
  */
 (function () {
   "use strict";
-  /* global state, categoryLabel */
 
   const TITLE_MAP = {
     "Income & remittances": "Income & Remittances",
