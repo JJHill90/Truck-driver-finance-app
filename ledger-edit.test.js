@@ -29,6 +29,7 @@ describe("updateExpense", () => {
       workUsePercent: 80,
       cashTransaction: true,
       noReceipt: true,
+      vendingMachine: true,
     });
     expect(updated.id).toBe("e1");
     expect(updated.receiptId).toBe("r1");
@@ -42,6 +43,7 @@ describe("updateExpense", () => {
     expect(updated.workUsePercent).toBe(80);
     expect(updated.cashTransaction).toBe(true);
     expect(updated.noReceipt).toBe(true);
+    expect(updated.vendingMachine).toBe(true);
     expect(updated.updatedAt).toBeTruthy();
   });
 

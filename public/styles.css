@@ -1336,6 +1336,20 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   background: #ffedd5;
   border-color: #fdba74;
 }
+/* Soft slate-teal — noticeable but not bright; used for vending-machine claims */
+tr.vending-machine-row {
+  background: rgba(107, 138, 143, 0.2);
+  box-shadow: inset 3px 0 0 #6b8a8f;
+}
+.tag.tag-vending {
+  color: #2a4045;
+  background: #c5d4d8;
+  border-color: #8aa3a9;
+}
+#report-content tr.vending-machine-row,
+.report-expense-ledger tr.vending-machine-row {
+  background: rgba(107, 138, 143, 0.22);
+}
 @media (max-width: 640px) {
   .form-grid .checkbox-row {
     grid-template-columns: 1fr;
