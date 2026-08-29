@@ -59,6 +59,38 @@ describe("sgRateForYear", () => {
 });
 
 describe("travelRatesForYear", () => {
+  it("returns TD 2021/6 truck meals for 2021-22 and earlier", () => {
+    const r = travelRatesForYear("2021-22");
+    expect(r.determination).toBe("TD 2021/6");
+    expect(r.truckDriverMealsDailyTotal).toBe(107.5);
+    expect(r.overtimeMealCap).toBe(32.5);
+    expect(travelRatesForYear("2020-21").determination).toBe("TD 2021/6");
+  });
+
+  it("returns TD 2022/10 truck meals for 2022-23", () => {
+    const r = travelRatesForYear("2022-23");
+    expect(r.determination).toBe("TD 2022/10");
+    expect(r.truckDriverMealsDailyTotal).toBe(110.15);
+    expect(r.overtimeMealCap).toBe(33.25);
+  });
+
+  it("returns TD 2023/3 truck meals for 2023-24", () => {
+    const r = travelRatesForYear("2023-24");
+    expect(r.determination).toBe("TD 2023/3");
+    expect(r.truckDriverMealsDailyTotal).toBe(118.15);
+    expect(r.overtimeMealCap).toBe(35.65);
+  });
+
+  it("returns TD 2024/3 truck meals for 2024-25", () => {
+    const r = travelRatesForYear("2024-25");
+    expect(r.determination).toBe("TD 2024/3");
+    expect(r.truckDriverMealsDailyTotal).toBe(124.75);
+    expect(r.overtimeMealCap).toBe(37.65);
+    expect(r.truckDriverMeals.breakfast.cap).toBe(30.35);
+    expect(getSalaryBandForYear(143650, "2024-25")).toBe("band1");
+    expect(getSalaryBandForYear(143651, "2024-25")).toBe("band2");
+  });
+
   it("returns TD 2025/4 truck meals for 2025-26", () => {
     const r = travelRatesForYear("2025-26");
     expect(r.determination).toBe("TD 2025/4");

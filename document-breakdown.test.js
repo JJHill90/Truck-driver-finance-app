@@ -285,9 +285,33 @@ describe("analyzeScan", () => {
     const r = analyzeScan(ocr, "income", { financialYear: "2025-26", driverType: "long_haul" });
     const ov = r.componentBreakdown.find((c) => c.type === "overnight_allowance");
     expect(ov).toBeTruthy();
-    expect(ov.amount).toBe(7 * DAILY_OVERNIGHT_ALLOWANCE); // 7-day Wed–Tue period
+    expect(ov.amount).toBe(7 * DAILY_OVERNIGHT_ALLOWANCE); // 7-day Wed–Tue period (TD 2025/4)
     expect(ov.detected).toBe(false);
     expect(r.overnightAllowance.days).toBe(7);
+    expect(r.overnightAllowance.determination).toBe("TD 2025/4");
+  });
+
+  it("uses the document FY meal rate when the payslip crosses into a later TD", () => {
+    const ocr = {
+      documentType: "income",
+      grossTotal: 3000,
+      rawText: "Pay Period From: 1/7/2026 To: 7/7/2026\nPayment Date: 9/7/2026",
+    };
+    const r = analyzeScan(ocr, "income", { financialYear: "2025-26", driverType: "long_haul" });
+    expect(r.overnightAllowance.perDay).toBe(132.5);
+    expect(r.overnightAllowance.determination).toBe("TD 2026/4");
+    expect(r.overnightAllowance.amount).toBe(7 * 132.5);
+  });
+
+  it("uses TD 2024/3 rates for a 2024-25 payslip", () => {
+    const ocr = {
+      documentType: "income",
+      grossTotal: 3000,
+      rawText: "Pay Period From: 10/8/2024 To: 16/8/2024\nPayment Date: 18/8/2024",
+    };
+    const r = analyzeScan(ocr, "income", { financialYear: "2024-25", driverType: "long_haul" });
+    expect(r.overnightAllowance.perDay).toBe(124.75);
+    expect(r.overnightAllowance.determination).toBe("TD 2024/3");
   });
 
   it("omits the overnight allowance for local drivers", () => {

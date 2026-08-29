@@ -347,9 +347,13 @@
           const noReceiptEl = document.querySelector(
             "#manual-receipt-form [name=noReceipt], #manual-no-receipt"
           );
+          const vendingEl = document.querySelector(
+            "#manual-receipt-form [name=vendingMachine], #manual-vending-machine"
+          );
           if (/\/receipts\/manual(\?|$)/.test(url)) {
             if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
             if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
+            if (vendingEl) bodyObj.vendingMachine = Boolean(vendingEl.checked);
           }
 
           const presets = (window.__haulageUser && window.__haulageUser.presets) || {};
@@ -2900,6 +2904,35 @@
             ? `<table class="admin-table"><thead><tr><th>Vendor</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${fuelReceiptRows}</tbody></table>`
             : `<p class="admin-empty">No Fuel Hub receipts.</p>`
         }</div>
+        <h5 class="admin-subhead">Car trips (ATO D1) (${(data.carTrips || []).length})</h5>
+        <div class="admin-table-wrap">${
+          (data.carTrips || []).length
+            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Method</th><th>Route</th><th>Km</th><th>Status</th><th></th></tr></thead><tbody>${(
+                data.carTrips || []
+              )
+                .map((t) => {
+                  const route =
+                    t.method === "logbook" && Array.isArray(t.destinations) && t.destinations.length
+                      ? t.destinations.map((d) => d.name).filter(Boolean).join(" → ")
+                      : `${t.origin || "—"} → ${t.destination || "—"}`;
+                  const deleted = t.deletedAt
+                    ? `<button type="button" class="btn secondary small" data-admin-car-trip="restore" data-id="${esc(t.id)}">Restore</button>`
+                    : `<button type="button" class="btn danger small" data-admin-car-trip="delete" data-id="${esc(t.id)}">Delete</button>`;
+                  const unlock = t.reconciled
+                    ? `<button type="button" class="btn secondary small" data-admin-car-trip="unreconcile" data-id="${esc(t.id)}">Unlock</button>`
+                    : "";
+                  return `<tr class="${t.deletedAt ? "admin-deleted-row" : ""} ${t.reconciled ? "admin-reconciled-row" : ""}">
+                    <td>${esc(t.date || "")}</td>
+                    <td>${esc(t.method || "")}</td>
+                    <td>${esc(route)}</td>
+                    <td>${t.kilometres != null ? esc(t.kilometres) : "—"}</td>
+                    <td>${esc(t.status || "")}${t.reconciled ? " · reconciled" : ""}${t.deletedAt ? " · deleted" : ""}</td>
+                    <td>${unlock} ${deleted}</td>
+                  </tr>`;
+                })
+                .join("")}</tbody></table>`
+            : `<p class="admin-empty">No car trips.</p>`
+        }</div>
       </div>`;
 
     byId("admin-detail-close")?.addEventListener("click", () => {
@@ -3193,6 +3226,38 @@
           await openAdminUser(username);
         } catch (err) {
           if (window.toast) window.toast(err.message || "Could not remove");
+        }
+      });
+    });
+
+    detail.querySelectorAll("[data-admin-car-trip]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-admin-car-trip");
+        const id = btn.getAttribute("data-id");
+        try {
+          if (action === "delete") {
+            const ok = window.confirm(`Soft-delete car trip for ${username}?`);
+            if (!ok) return;
+            await apiPost(
+              `/admin/users/${encodeURIComponent(username)}/car-trips/${encodeURIComponent(id)}/soft-delete`,
+              {}
+            );
+            if (window.toast) window.toast("Car trip deleted");
+          } else if (action === "restore") {
+            await apiPost(
+              `/admin/users/${encodeURIComponent(username)}/car-trips/${encodeURIComponent(id)}/restore`,
+              {}
+            );
+            if (window.toast) window.toast("Car trip restored");
+          } else if (action === "unreconcile") {
+            await apiPost(`/admin/users/${encodeURIComponent(username)}/car-trips/unreconcile`, {
+              ids: [id],
+            });
+            if (window.toast) window.toast("Car trip unlocked");
+          }
+          await openAdminUser(username);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Car trip action failed");
         }
       });
     });
@@ -5280,7 +5345,7 @@
     });
   }
 
-  /** Show Cash / No receipt tags on expense ledger rows. */
+  /** Show Cash / No receipt / Vending machine tags on expense ledger rows. */
   function injectCashTags(cfg) {
     if (cfg.type !== "expense") return;
     const list = document.getElementById(cfg.listId);
@@ -5294,6 +5359,7 @@
       if (!entry) return;
       const detailCell = tr.querySelector("td:nth-child(3)");
       if (!detailCell) return;
+      tr.classList.toggle("vending-machine-row", Boolean(entry.vendingMachine));
       if (entry.cashTransaction && !detailCell.querySelector(".tag-cash")) {
         const tag = document.createElement("span");
         tag.className = "tag tag-cash";
@@ -5307,6 +5373,14 @@
         tag.className = "tag tag-no-receipt";
         tag.textContent = "No receipt";
         tag.title = "No receipt kept for this expense";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
+      if (entry.vendingMachine && !detailCell.querySelector(".tag-vending")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-vending";
+        tag.textContent = "Vending";
+        tag.title = "Vending machine purchase (often no printed receipt)";
         detailCell.appendChild(document.createTextNode(" "));
         detailCell.appendChild(tag);
       }
@@ -5332,6 +5406,128 @@
       const del = actions.querySelector(`[data-del-${cfg.type}]`);
       if (del) actions.insertBefore(btn, del);
       else actions.appendChild(btn);
+    });
+  }
+
+  function receiptHasImage(receiptId) {
+    if (!receiptId) return false;
+    const receipts =
+      (typeof state !== "undefined" && state.records && state.records.receipts) || [];
+    const r = receipts.find((x) => x && x.id === receiptId);
+    return Boolean(r && (r.imagePath || r.hasImage));
+  }
+
+  /**
+   * Unreconciled rows without a real photo get "Add receipt" so drivers can
+   * attach evidence later (e.g. after finding a vending / lost slip).
+   */
+  function injectAttachReceiptButtons(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const attr = `data-attach-${cfg.type}`;
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      const id = tr.getAttribute(cfg.idAttr);
+      if (!id || id === "__draft__" || tr.classList.contains("draft-row")) return;
+      const entry = findEntry(cfg.type, id);
+      if (!entry || entry.reconciled) {
+        tr.querySelector(`[${attr}]`)?.remove();
+        return;
+      }
+      const hasPhoto = receiptHasImage(entry.receiptId);
+      const photoBtn = tr.querySelector("[data-view-receipt]");
+      if (hasPhoto) {
+        tr.querySelector(`[${attr}]`)?.remove();
+        return;
+      }
+      // Photo on a stub receipt is useless — swap for Add receipt.
+      if (photoBtn) photoBtn.remove();
+
+      const actions = tr.querySelector(".row-actions");
+      if (!actions) return;
+      if (actions.querySelector(`[${attr}]`)) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn secondary small";
+      btn.textContent = "Add receipt";
+      btn.setAttribute(attr, id);
+      btn.title =
+        cfg.type === "income"
+          ? "Attach a payslip or income document photo"
+          : "Attach a receipt photo (e.g. if you found one later)";
+      const edit = actions.querySelector(`[data-edit-${cfg.type}]`);
+      const del = actions.querySelector(`[data-del-${cfg.type}]`);
+      if (edit) actions.insertBefore(btn, edit);
+      else if (del) actions.insertBefore(btn, del);
+      else actions.appendChild(btn);
+    });
+  }
+
+  async function attachReceiptFile(cfg, entryId, file) {
+    if (!file) return;
+    const prepare = globalThis.prepareImageForUpload;
+    if (typeof prepare !== "function") {
+      if (typeof toast === "function") toast("Upload helper unavailable — refresh the page.");
+      return;
+    }
+    let prepared;
+    try {
+      prepared = await prepare(file);
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message || "Could not read that file.");
+      return;
+    }
+    const path =
+      cfg.type === "income"
+        ? `/income/${encodeURIComponent(entryId)}/attach-receipt`
+        : `/expenses/${encodeURIComponent(entryId)}/attach-receipt`;
+    try {
+      const res = await fetch(`${apiBase()}${path}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: prepared.dataUrl || prepared.imageBase64,
+          mimeType: prepared.mimeType || file.type,
+          filename: prepared.filename || file.name,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not attach receipt.");
+      if (typeof toast === "function") toast("Receipt attached");
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message || "Attach failed");
+    }
+  }
+
+  function bindAttachReceiptClicks(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list || list.dataset.attachBound === "1") return;
+    list.dataset.attachBound = "1";
+    list.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(`[data-attach-${cfg.type}]`);
+      if (!btn || btn.disabled) return;
+      ev.preventDefault();
+      const entryId = btn.getAttribute(`data-attach-${cfg.type}`);
+      if (!entryId) return;
+      let input = document.getElementById("enh-attach-receipt-input");
+      if (!input) {
+        input = document.createElement("input");
+        input.type = "file";
+        input.id = "enh-attach-receipt-input";
+        input.accept = "image/*,application/pdf,.pdf";
+        input.className = "hidden";
+        input.setAttribute("aria-hidden", "true");
+        document.body.appendChild(input);
+      }
+      input.value = "";
+      input.onchange = () => {
+        const file = input.files && input.files[0];
+        input.onchange = null;
+        void attachReceiptFile(cfg, entryId, file);
+      };
+      input.click();
     });
   }
 
@@ -5535,7 +5731,11 @@
 
       const actions = tr.querySelector(".row-actions");
       if (actions) {
-        actions.querySelectorAll(`[data-del-${cfg.type}], [data-edit-${cfg.type}]`).forEach((btn) => {
+        actions
+          .querySelectorAll(
+            `[data-del-${cfg.type}], [data-edit-${cfg.type}], [data-attach-${cfg.type}]`
+          )
+          .forEach((btn) => {
           btn.disabled = true;
           btn.setAttribute("aria-disabled", "true");
           btn.classList.add("is-locked");
@@ -5637,6 +5837,7 @@
         <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
         <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (Paid cash check for claim)</label>
         <label class="enh-edit-check"><input name="noReceipt" type="checkbox"${entry.noReceipt ? " checked" : ""}> No receipt</label>
+        <label class="enh-edit-check"><input name="vendingMachine" type="checkbox"${entry.vendingMachine ? " checked" : ""}> Vending machine</label>
         <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
       `
       : `
@@ -5649,6 +5850,8 @@
         <label>GST<input name="gstAmount" type="number" step="0.01" min="0" value="${esc(entry.gstAmount ?? 0)}"></label>
         <label>Net pay<input name="netPay" type="number" step="0.01" min="0" value="${esc(entry.netPay ?? "")}"></label>
         <label>Pay period<input name="payPeriod" type="text" value="${esc(entry.payPeriod || "")}"></label>
+        <label>Living Away from Home days (LAFHA)<input name="overnightDays" type="number" step="1" min="0" max="31" value="${esc(entry.overnightDays ?? "")}" placeholder="e.g. 3"></label>
+        <label>Travel / LAFHA amount (AUD)<input name="travelAllowanceAmount" type="number" step="0.01" min="0" value="${esc(entry.travelAllowanceAmount ?? "")}" placeholder="optional"></label>
         <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
         <label>Notes<textarea name="summaryNotes" rows="2">${esc(entry.summaryNotes || "")}</textarea></label>
       `;
@@ -5686,6 +5889,9 @@
           form.querySelector('[name="cashTransaction"]')?.checked
         );
         payload.noReceipt = Boolean(form.querySelector('[name="noReceipt"]')?.checked);
+        payload.vendingMachine = Boolean(
+          form.querySelector('[name="vendingMachine"]')?.checked
+        );
         payload.workUsePercent = Number(payload.workUsePercent);
         payload.amount = Number(payload.amount);
       } else {
@@ -5695,6 +5901,17 @@
         payload.gstAmount = payload.gstAmount === "" ? 0 : Number(payload.gstAmount);
         payload.netPay = payload.netPay === "" ? null : Number(payload.netPay);
         payload.payer = payload.entity;
+        if (payload.overnightDays === "" || payload.overnightDays == null) {
+          payload.overnightDays = null;
+        } else {
+          payload.overnightDays = Math.round(Number(payload.overnightDays));
+          payload.overnightDaysSource = "manual_edit";
+        }
+        if (payload.travelAllowanceAmount === "" || payload.travelAllowanceAmount == null) {
+          payload.travelAllowanceAmount = null;
+        } else {
+          payload.travelAllowanceAmount = Number(payload.travelAllowanceAmount);
+        }
       }
 
       const submitBtn = form.querySelector('button[type="submit"]');
@@ -5715,6 +5932,9 @@
         closeEditModal();
         if (typeof toast === "function") toast(isExpense ? "Expense updated" : "Income updated");
         if (typeof refreshAll === "function") await refreshAll();
+        if (typeof window.haulageRefreshOvernightDays === "function") {
+          void window.haulageRefreshOvernightDays();
+        }
       } catch (err) {
         if (errEl) {
           errEl.textContent = err.message || "Save failed.";
@@ -5831,6 +6051,8 @@
     hideOutsidePeriodTags(cfg);
     injectCashTags(cfg);
     injectEditButtons(cfg);
+    injectAttachReceiptButtons(cfg);
+    bindAttachReceiptClicks(cfg);
     decorateReconciledRows(cfg);
     updateReconcileButton(cfg);
   }
@@ -5990,11 +6212,10 @@
 })();
 
 /* --- Allowance caps: segmented ATO tallies + day/week/month (AEST) ---------
- * Replaces the static list in #allowance-caps. Band-1 daily stack is
- * Band-1 example (TD 2025/4): meals $128 + overtime meal $38.65 +
- * accommodation $138 + incidentals $24.25 = $328.90. Caps follow the selected
- * FY via summary.allowances (TD 2025/4 / TD 2026/4…). Shows roaming spend per
- * segment under the
+ * Replaces the static list in #allowance-caps. Caps follow the selected FY via
+ * summary.allowances (TD 2021/6 … TD 2026/4). Band-1 example for 2025-26
+ * (TD 2025/4): meals $128 + overtime meal $38.65 + accommodation $138 +
+ * incidentals $24.25 = $328.90. Shows roaming spend per segment under the
  * grand total, with day / week / month period views and per-day breakdowns.
  * Logic: lib/allowance-tally.js (loaded via /api when unavailable in browser —
  * duplicated thin client helpers below call the same shapes).
@@ -6628,6 +6849,29 @@
     const projected = Number(data.projectedYearEndDays) || claimed;
     const pct = total > 0 ? Math.min(100, (claimed / total) * 100) : 0;
     const barPct = Math.max(pct, claimed > 0 ? 2 : 0);
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    const entryRows = entries
+      .slice()
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+      .map((e) => {
+        const days = Number(e.days) || 0;
+        const amt = e.amount != null ? money(e.amount) : "—";
+        const when = e.date
+          ? new Date(`${e.date}T00:00:00`).toLocaleDateString("en-AU")
+          : "—";
+        return `<li class="overnight-entry">
+          <div class="overnight-entry-copy">
+            <strong>${esc(e.label || "Payslip")}</strong>
+            <span class="muted">${esc(when)} · ${days} day${days === 1 ? "" : "s"}${e.amount != null ? ` · ${amt}` : ""}</span>
+          </div>
+          ${
+            e.id
+              ? `<button type="button" class="btn secondary overnight-edit-btn" data-edit-income="${esc(e.id)}">Edit LAFHA</button>`
+              : ""
+          }
+        </li>`;
+      })
+      .join("");
 
     return `
       <div class="overnight-card">
@@ -6649,6 +6893,14 @@
             ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with Travel/LAFHA · ${money(data.amountPaid)} paid`
             : "Scan payslips that list Travel or Living Away from Home (LAFHA) allowance — days are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day/hour count."
         }</p>
+        ${
+          entryRows
+            ? `<details class="overnight-entries">
+                <summary>Payslips counted (${entries.length}) — edit LAFHA days if OCR missed a slip</summary>
+                <ul class="overnight-entry-list">${entryRows}</ul>
+              </details>`
+            : `<p class="overnight-hint muted">No Travel/LAFHA days on income yet. After upload, set Living Away from Home days on Approve, or Edit an income row.</p>`
+        }
         <p class="overnight-hint">${esc(data.note || "")}</p>
       </div>`;
   }
@@ -6713,6 +6965,7 @@
   function start() {
     if (!BOX_IDS.some((id) => document.getElementById(id))) return;
     patchForecastFetch();
+    window.haulageRefreshOvernightDays = refreshFromApi;
     void refreshFromApi();
     document.getElementById("fy-select")?.addEventListener("change", () => void refreshFromApi());
     document.querySelectorAll('.nav-btn[data-view="forecast"], .nav-btn[data-view="dashboard"]').forEach((btn) => {
@@ -6742,7 +6995,9 @@
 
 /* --- Title-case a few dynamic headings rendered by app.js ------------------
  * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
- * section headings are corrected here after each render.
+ * section headings are corrected here after each render. Also injects an
+ * expense-detail ledger so vending-machine rows keep their slate-teal colour
+ * in the on-screen EOFY report (PDF uses the same tint via report-pdf.js).
  */
 (function () {
   "use strict";
@@ -6758,8 +7013,37 @@
     "Income & remittances": "Income & Remittances",
     "Expense deductions (ATO schedules)": "Expense Deductions (ATO schedules)",
     "Tax estimate": "Tax Estimate",
-    "Living Away from Home (LAFHA) days": "Living Away from Home (LAFHA) Days",
   };
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(n) {
+    const v = Number(n) || 0;
+    return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-AU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function clientFy(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})/);
+    if (!m) return "";
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const start = month >= 6 ? year : year - 1;
+    return `${start}-${String(start + 1).slice(2)}`;
+  }
+
+  function categoryName(id) {
+    if (typeof categoryLabel === "function") return categoryLabel(id);
+    return String(id || "").replace(/_/g, " ");
+  }
 
   function fixPageTitle() {
     const el = document.getElementById("page-title");
@@ -6777,6 +7061,63 @@
     });
   }
 
+  /** Append FY expense detail with vending-machine row colour after report render. */
+  function injectReportExpenseLedger() {
+    const el = document.getElementById("report-content");
+    if (!el) return;
+    if (el.querySelector(".report-expense-ledger")) return;
+    const report = typeof state !== "undefined" && state.report;
+    const fy = report && report.summary && report.summary.financialYear;
+    const expenses =
+      (typeof state !== "undefined" && state.records && state.records.expenses) || [];
+    if (!fy) return;
+
+    const rows = expenses
+      .filter((e) => e && !e.deletedAt && clientFy(e.date) === fy)
+      .slice()
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    const body = rows.length
+      ? rows
+          .map((e) => {
+            const flags = [];
+            if (e.vendingMachine) flags.push('<span class="tag tag-vending">Vending</span>');
+            if (e.cashTransaction) flags.push('<span class="tag tag-cash">Cash</span>');
+            if (e.noReceipt) flags.push('<span class="tag tag-no-receipt">No receipt</span>');
+            const cls = e.vendingMachine ? "vending-machine-row" : "";
+            return `<tr class="${cls}">
+              <td>${esc(e.date || "")}</td>
+              <td>${esc(e.vendor || "—")}</td>
+              <td>${esc(categoryName(e.category))}</td>
+              <td class="amount">${money(e.amount)}</td>
+              <td>${flags.join(" ") || "—"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="5" class="muted">No expenses recorded for this FY.</td></tr>`;
+
+    const section = document.createElement("div");
+    section.className = "report-section report-expense-ledger";
+    section.innerHTML = `
+      <h3>Expense Ledger (Detail)</h3>
+      <p class="muted">Vending machine purchases are shaded soft slate-teal for reconciliation (often no printed receipt).</p>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Flags</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    `;
+    const taxSection = [...el.querySelectorAll(".report-section")].find((s) =>
+      /tax estimate/i.test(s.querySelector("h3")?.textContent || "")
+    );
+    if (taxSection) el.insertBefore(section, taxSection);
+    else el.appendChild(section);
+  }
+
+  function enhanceReport() {
+    fixReportHeadings();
+    injectReportExpenseLedger();
+  }
+
   function start() {
     const title = document.getElementById("page-title");
     if (title) {
@@ -6789,8 +7130,8 @@
     }
     const report = document.getElementById("report-content");
     if (report) {
-      new MutationObserver(fixReportHeadings).observe(report, { childList: true, subtree: true });
-      fixReportHeadings();
+      new MutationObserver(enhanceReport).observe(report, { childList: true, subtree: true });
+      enhanceReport();
     }
   }
 
@@ -7135,7 +7476,7 @@
       title: "Dashboard",
       body: [
         "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
-        "Travel allowance days shows how many Travel / Living Away from Home (LAFHA) days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip Travel/LAFHA counters (or amount ÷ ATO meal rate).",
+        "Travel allowance days shows how many Travel / Living Away from Home (LAFHA) days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip Travel/LAFHA counters (or amount ÷ rate). Open the payslip list on the card and use Edit LAFHA if OCR missed days on a slip.",
         "Allowance caps track common work allowances (meals, overtime meals, and similar ATO bands) against what you’ve claimed so far for the day, week or month. Use this to stay under the published rates before EOFY. Change the financial year in the top bar and both the Travel allowance days card and allowance caps refresh for that year’s Taxation Determination.",
       ],
     },
@@ -7150,15 +7491,15 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. When a payslip lists Travel or Living Away from Home (LAFHA) allowance, that day/hour counter is saved with the income row for the Dashboard and Financial Forecast Travel allowance days snapshot.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
     "car-expenses": {
       title: "Car Expenses and Claims",
       body: [
-        "Car Expenses is a sidebar item under Income for ATO work-related car claims (cents per km, logbook, or actual running costs). Save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active — the compiled box lists active cars for your records.",
-        "The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. This view has its own car receipt photos gallery and car expenses ledger so you can review car claims separately from general expenses.",
+        "Choose your ATO D1 claim method: Cents per kilometre (start → end work trips, rate × km up to 5,000 km/year) or Logbook (12-week diary with destinations, then actual expenses × business-use %). Compact work-vehicle presets still sit at the top — mark a car Active for work-use %.",
+        "Cents/km ledger is your trips. Logbook lets you add destinations through the day, then Close out trip (with confirmation). Reconcile closed trips to lock them. The primary mod can adjust, delete and restore trips from the admin panel. Keep ATO written evidence for logbook running costs.",
       ],
     },
     report: {
@@ -7179,7 +7520,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Under Registered fuel vehicles you can add a class code for the individual truck (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor — that tank drives fill spacing instead of a generic heavy rigid. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
@@ -7593,7 +7934,7 @@
     }
 
     if (!list.length) {
-      listEl.innerHTML = `<p class="muted small">No work vehicles yet — add one below (make, model, rego, engine size, odometer and work use).</p>`;
+      listEl.innerHTML = `<p class="muted small">No work vehicles yet — open “Add or edit” below.</p>`;
       return;
     }
 
@@ -9719,93 +10060,33 @@
   }
 })();
 
-/* --- EOFY on-screen: LAFHA days section from decorated /report JSON ------- */
+/* --- Vending machine checkbox: suggest No receipt when ticked ------------ */
 (function () {
   "use strict";
 
-  let lastReport = null;
-  let injecting = false;
-
-  function esc(str) {
-    return String(str == null ? "" : str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function moneyDayRate(n) {
-    const v = Number(n);
-    if (!Number.isFinite(v)) return "—";
-    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(v);
-  }
-
-  function ensureLafhaDaysSection(report) {
-    const el = document.getElementById("report-content");
-    if (!el || !report || !report.lafhaDays || injecting) return;
-    if (el.querySelector("[data-enh-lafha-days]")) return;
-    injecting = true;
-    try {
-      const lafha = report.lafhaDays;
-      const taxSection = [...el.querySelectorAll(".report-section")].find((sec) =>
-        /tax estimate/i.test(sec.querySelector("h3")?.textContent || "")
-      );
-      const host = document.createElement("div");
-      host.className = "report-section";
-      host.setAttribute("data-enh-lafha-days", "1");
-      const claimed = Number(lafha.daysClaimed) || 0;
-      const total = Number(lafha.daysInFy) || 0;
-      host.innerHTML = `
-      <h3>Living Away from Home (LAFHA) Days</h3>
-      <p class="muted">${esc(lafha.determination || "ATO")} · meal rate reference ${moneyDayRate(
-        lafha.ratePerDay
-      )}/day · FY ${esc(lafha.financialYear || "—")} — days only (not dollar totals)</p>
-      <div class="cap-list">
-        <div class="cap-row"><span>Travel / LAFHA days claimed</span><span>${claimed}</span></div>
-        <div class="cap-row"><span>Days in financial year</span><span>${total || "—"}</span></div>
-        <div class="cap-row"><span>FY days elapsed</span><span>${
-          lafha.daysElapsed != null ? lafha.daysElapsed : "—"
-        }</span></div>
-        <div class="cap-row"><span>Projected EOFY Travel / LAFHA days</span><span>${
-          lafha.projectedYearEndDays != null ? lafha.projectedYearEndDays : "—"
-        }</span></div>
-      </div>
-      <p class="muted">${esc(lafha.note || "")}</p>
-    `;
-      if (taxSection) taxSection.before(host);
-      else el.appendChild(host);
-    } finally {
-      injecting = false;
-    }
-  }
-
-  const origFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const res = await origFetch.apply(this, args);
-    try {
-      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
-      if (url && /\/report(\?|$)/.test(String(url)) && !/report\.pdf/i.test(String(url))) {
-        const data = await res.clone().json();
-        if (data && data.lafhaDays) {
-          lastReport = data;
-          queueMicrotask(() => ensureLafhaDaysSection(data));
-          setTimeout(() => ensureLafhaDaysSection(data), 100);
-          setTimeout(() => ensureLafhaDaysSection(data), 400);
-        }
+  function bindVendingHint(vendingEl, noReceiptEl) {
+    if (!vendingEl || vendingEl.dataset.vendingBound === "1") return;
+    vendingEl.dataset.vendingBound = "1";
+    vendingEl.addEventListener("change", () => {
+      if (vendingEl.checked && noReceiptEl && !noReceiptEl.checked) {
+        noReceiptEl.checked = true;
       }
-    } catch {
-      /* non-fatal */
-    }
-    return res;
-  };
+    });
+  }
+
+  function bindManualForm() {
+    bindVendingHint(
+      document.getElementById("manual-vending-machine"),
+      document.getElementById("manual-no-receipt")
+    );
+  }
 
   function start() {
-    const host = document.getElementById("report-content");
-    if (!host || host.dataset.lafhaDaysPatched) return;
-    host.dataset.lafhaDaysPatched = "1";
-    new MutationObserver(() => {
-      if (lastReport) ensureLafhaDaysSection(lastReport);
-    }).observe(host, { childList: true, subtree: true });
+    bindManualForm();
+    const form = document.getElementById("manual-receipt-form");
+    if (form) {
+      new MutationObserver(bindManualForm).observe(form, { childList: true, subtree: true });
+    }
   }
 
   if (document.readyState === "loading") {
