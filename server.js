@@ -54,6 +54,7 @@ const { moveEntries } = require("./lib/ledger-move");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
+const { decorateAccountantReport } = require("./lib/report-branding");
 
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
@@ -2351,7 +2352,7 @@ api.get("/summary", (req, res) => {
 api.get("/report", (req, res) => {
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = buildAccountantReport(records, profileFor(records, fy));
+  const report = decorateAccountantReport(buildAccountantReport(records, profileFor(records, fy)));
   applyHistoricalRates(report.summary, records, fy);
   // Keep the ATO schedule mapping in sync with the year-corrected deductions.
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
@@ -2368,7 +2369,7 @@ api.get("/report.pdf", (req, res) => {
   if (!assertProFeature(req, res, "pdf")) return;
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = buildAccountantReport(records, profileFor(records, fy));
+  const report = decorateAccountantReport(buildAccountantReport(records, profileFor(records, fy)));
   applyHistoricalRates(report.summary, records, fy);
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
     schedule: b.atoSchedule,

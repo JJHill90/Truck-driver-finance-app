@@ -2484,6 +2484,19 @@
     });
   }
 
+  /** UI labels for profile.driverType ids (keep long_haul id; show Linehaul). */
+  function driverTypeDisplayLabel(id) {
+    const key = String(id || "").trim();
+    const labels = {
+      local: "Local driver",
+      short_haul: "Short-haul driver",
+      long_haul: "Linehaul driver",
+      owner_driver: "Owner-driver / contractor",
+    };
+    if (!key) return "—";
+    return labels[key] || key.replace(/_/g, " ");
+  }
+
   function renderAdminDetail(data) {
     const detail = byId("admin-user-detail");
     if (!detail) return;
@@ -2637,7 +2650,7 @@
         ${canDelete ? `<button type="button" class="btn danger" id="admin-detail-delete">Delete profile</button>` : ""}
         <button type="button" class="btn secondary" id="admin-detail-close">Close</button>
       </div>
-      <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(profile.driverType || "—")} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
+      <p class="muted">${esc(profile.name || "Unnamed driver")} · ${esc(driverTypeDisplayLabel(profile.driverType))} · ${esc(profile.employer || "No employer")} · FY ${esc(profile.financialYear || "—")}</p>
       <p class="muted">Username (tell the driver if forgotten): <strong>${esc(username)}</strong> · ${lockBadge}</p>
       <p class="muted admin-override-hint">Primary mod: add, edit and remove data in Taxation Hub and Fuel Hub for this driver, reset login, upgrade or downgrade their plan for both apps, and restore earlier snapshots. Your own session stays signed in as primary mod.</p>
 
@@ -9709,6 +9722,110 @@
       globalThis.renderRecentActivity = noopRecent;
       noopRecent();
     }, 400);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- EOFY report: Linehaul Driver wording (do not edit app.js) -----------
+ * Verbatim app.js shows driverType id with underscores → spaces ("long haul")
+ * and tax-calculator still builds a "Line Haulage Driver" title. API now
+ * returns decorated title + driverTypeLabel; patch the on-screen report DOM.
+ */
+(function () {
+  "use strict";
+
+  let lastReport = null;
+  let fixing = false;
+
+  function esc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function labelFor(id, fallback) {
+    const key = String(id || "").trim();
+    const labels = {
+      local: "Local driver",
+      short_haul: "Short-haul driver",
+      long_haul: "Linehaul driver",
+      owner_driver: "Owner-driver / contractor",
+    };
+    if (labels[key]) return labels[key];
+    if (fallback) return fallback;
+    return key ? key.replace(/_/g, " ") : "—";
+  }
+
+  function fixEofyReportDom(report) {
+    const el = document.getElementById("report-content");
+    if (!el || !report || fixing) return;
+    fixing = true;
+    try {
+      const title = report.title;
+      if (title) {
+        const h3 = el.querySelector(".report-section .panel-header h3, .report-section h3");
+        if (h3 && h3.textContent !== title) h3.textContent = title;
+      }
+      const driver = report.driver || {};
+      const label = driver.driverTypeLabel || labelFor(driver.driverType);
+      const p = [...el.querySelectorAll(".report-section p")].find((n) =>
+        /^\s*Driver:/i.test((n.textContent || "").trim())
+      );
+      if (p && label) {
+        const next = `<strong>Driver:</strong> ${esc(driver.name || "—")} · ${esc(label)} · ${esc(
+          driver.employer || "—"
+        )}`;
+        if (p.innerHTML !== next) p.innerHTML = next;
+      }
+      el.querySelectorAll("h3, p, span, td, li").forEach((node) => {
+        if (!node.childElementCount && node.textContent) {
+          const next = node.textContent
+            .replace(/\bLine Haulage Driver\b/gi, "Linehaul Driver")
+            .replace(/\bLong[-\s]?haul driver\b/gi, "Linehaul driver")
+            .replace(/\blong haul\b/gi, "Linehaul driver");
+          if (next !== node.textContent) node.textContent = next;
+        }
+      });
+    } finally {
+      fixing = false;
+    }
+  }
+
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const res = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      if (url && /\/report(\?|$)/.test(String(url)) && !/report\.pdf/i.test(String(url))) {
+        const data = await res.clone().json();
+        if (data && data.title) {
+          lastReport = data;
+          queueMicrotask(() => fixEofyReportDom(data));
+          setTimeout(() => fixEofyReportDom(data), 50);
+          setTimeout(() => fixEofyReportDom(data), 250);
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    return res;
+  };
+
+  function start() {
+    const host = document.getElementById("report-content");
+    if (!host || host.dataset.linehaulPatched) return;
+    host.dataset.linehaulPatched = "1";
+    const mo = new MutationObserver(() => {
+      if (lastReport) fixEofyReportDom(lastReport);
+    });
+    mo.observe(host, { childList: true, subtree: true });
   }
 
   if (document.readyState === "loading") {
