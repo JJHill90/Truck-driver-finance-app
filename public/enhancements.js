@@ -6758,6 +6758,7 @@
     "Income & remittances": "Income & Remittances",
     "Expense deductions (ATO schedules)": "Expense Deductions (ATO schedules)",
     "Tax estimate": "Tax Estimate",
+    "Living Away from Home (LAFHA) days": "Living Away from Home (LAFHA) Days",
   };
 
   function fixPageTitle() {

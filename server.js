@@ -54,6 +54,10 @@ const { moveEntries } = require("./lib/ledger-move");
 const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
+const {
+  recordsForAccountantReport,
+  decorateReportPresentation,
+} = require("./lib/report-present");
 
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
@@ -2351,8 +2355,9 @@ api.get("/summary", (req, res) => {
 api.get("/report", (req, res) => {
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = buildAccountantReport(records, profileFor(records, fy));
-  applyHistoricalRates(report.summary, records, fy);
+  const reportRecords = recordsForAccountantReport(records);
+  const report = buildAccountantReport(reportRecords, profileFor(records, fy));
+  applyHistoricalRates(report.summary, reportRecords, fy);
   // Keep the ATO schedule mapping in sync with the year-corrected deductions.
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
     schedule: b.atoSchedule,
@@ -2360,6 +2365,7 @@ api.get("/report", (req, res) => {
     deductibleAmount: b.deductibleTotal,
     transactionCount: b.count,
   }));
+  decorateReportPresentation(report, records, fy);
   res.json(report);
 });
 
@@ -2368,14 +2374,16 @@ api.get("/report.pdf", (req, res) => {
   if (!assertProFeature(req, res, "pdf")) return;
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = buildAccountantReport(records, profileFor(records, fy));
-  applyHistoricalRates(report.summary, records, fy);
+  const reportRecords = recordsForAccountantReport(records);
+  const report = buildAccountantReport(reportRecords, profileFor(records, fy));
+  applyHistoricalRates(report.summary, reportRecords, fy);
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
     schedule: b.atoSchedule,
     category: b.label,
     deductibleAmount: b.deductibleTotal,
     transactionCount: b.count,
   }));
+  decorateReportPresentation(report, records, fy);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="haulage-eofy-${fy}.pdf"`);
   const doc = buildReportPdf(report, records, fy);
