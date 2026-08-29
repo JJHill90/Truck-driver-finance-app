@@ -1899,15 +1899,175 @@ table.data tfoot td { border-top: 2px solid var(--border); }
   border-color: var(--accent);
 }
 .car-vehicles-box {
-  margin: 0 0 18px;
-  padding: 14px 16px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel-2, rgba(0, 0, 0, 0.03));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
+.car-vehicles-box--compact .car-vehicles-box-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.car-vehicles-box--compact .car-vehicles-compiled {
+  min-height: 2.6rem;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  resize: vertical;
+}
+.car-vehicles-box--compact .car-vehicle-card {
+  padding: 6px 8px;
+  gap: 6px 8px;
+  border-radius: 8px;
+}
+.car-vehicles-box--compact .car-vehicle-meta strong {
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+.car-vehicles-box--compact .car-vehicle-meta .muted {
+  margin: 1px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+.car-vehicles-box--compact .car-vehicle-badge {
+  margin-top: 2px;
+  font-size: 0.62rem;
+}
+.car-vehicles-box--compact .car-vehicle-actions .btn {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+}
+.car-vehicle-form-details {
+  margin-top: 2px;
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+}
+.car-vehicle-form-details > summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  list-style: none;
+}
+.car-vehicle-form-details > summary::-webkit-details-marker {
+  display: none;
+}
+.car-vehicles-box--compact .car-vehicle-form {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: none;
+  gap: 8px;
+}
+.car-vehicles-box--compact .car-workuse-hint {
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+.car-vehicle-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.car-expenses-lead {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.car-claim-method-box {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2, rgba(0, 0, 0, 0.02));
+}
+.car-claim-method-box h3 {
+  margin: 0 0 8px;
+  font-size: 0.98rem;
+}
+.car-claim-method-options {
+  display: grid;
+  gap: 8px;
+}
+.car-claim-method-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--panel, #fff);
+}
+.car-claim-method-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent, #b45309) 55%, var(--border));
+  box-shadow: inset 3px 0 0 var(--accent, #b45309);
+}
+.car-claim-method-option strong {
+  display: block;
+  font-size: 0.9rem;
+}
+.car-claim-method-option .muted {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.car-claim-method-help,
+.car-cents-fy-preview {
+  margin: 8px 0 0;
+  line-height: 1.35;
+}
+.car-method-panel {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.car-method-panel h3 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+.car-method-panel h4 {
+  margin: 10px 0 4px;
+  font-size: 0.88rem;
+}
+.car-logbook-ato-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent, #b45309) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent, #b45309) 12%, transparent);
+}
+.car-logbook-ato-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.car-logbook-ato-banner p {
+  margin: 0;
+}
+.car-logbook-open-trip {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.car-logbook-stops {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+.car-trips-table .tag-open {
+  color: #3a2a05;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+.car-trips-table tr.reconciled-row {
+  background: var(--reconcile-wash, rgba(52, 211, 153, 0.16));
+  box-shadow: inset 3px 0 0 var(--reconcile, #34d399);
+}
+
 .car-vehicles-box-head {
   display: flex;
   align-items: center;

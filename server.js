@@ -102,6 +102,7 @@ const {
   normalizeCars,
   primaryActiveWorkUsePercent,
 } = require("./lib/profile-cars");
+const carTrips = require("./lib/car-trips");
 const fuelNhvr = require("./lib/fuel-nhvr");
 const fuelPrices = require("./lib/fuel-prices");
 const fuelStations = require("./lib/fuel-stations");
@@ -1543,6 +1544,12 @@ api.get("/admin/users/:username", (req, res) => {
     deletedIncome,
     receipts,
     fuelhub: fuelhubStore.snapshot(fuelStore),
+    carTrips: (() => {
+      carTrips.ensureCarTrips(records);
+      return includeDeleted
+        ? records.carTrips || []
+        : (records.carTrips || []).filter((t) => t && !t.deletedAt);
+    })(),
     vendors: storage.listVendors(records),
     history: recordsHistory.listSnapshots(target.username, { limit: 20 }),
     summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
@@ -2146,6 +2153,133 @@ api.delete("/admin/users/:username/fuelhub/prices/:stationId", (req, res) => {
   res.json({ ok: true, fuelhub: adminFuelhubPayload(ctx.store) });
 });
 
+
+// --- Admin: car trips (ATO D1) -------------------------------------------
+api.post("/admin/users/:username/car-trips", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const result = carTrips.createTrip(loaded.records, req.body || {}, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  if (result.trip.method === carTrips.METHODS.CENTS) {
+    carTrips.syncCentsTripExpense(loaded.records, result.trip, {
+      storageAddExpense: (recs, payload) => storage.addExpense(recs, payload),
+    });
+  }
+  persistTarget(loaded, { reason: "admin-car-trip-create", actor: sessionUsername(req) });
+  res.json({ ok: true, trip: result.trip });
+});
+
+api.put("/admin/users/:username/car-trips/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const result = carTrips.updateTrip(loaded.records, req.params.id, req.body || {});
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persistTarget(loaded, { reason: "admin-car-trip-update", actor: sessionUsername(req) });
+  res.json({ ok: true, trip: result.trip });
+});
+
+api.post("/admin/users/:username/car-trips/:id/close", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const result = carTrips.closeTrip(loaded.records, req.params.id, req.body || {}, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persistTarget(loaded, { reason: "admin-car-trip-close", actor: sessionUsername(req) });
+  res.json({ ok: true, trip: result.trip });
+});
+
+api.post("/admin/users/:username/car-trips/reconcile", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const ids = (req.body && req.body.ids) || [];
+  const result = carTrips.reconcileTrips(loaded.records, ids, { username: sessionUsername(req) });
+  persistTarget(loaded, { reason: "admin-car-trip-reconcile", actor: sessionUsername(req) });
+  res.json({ ok: true, updated: result.updated.length, trips: result.updated });
+});
+
+api.post("/admin/users/:username/car-trips/unreconcile", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const ids = (req.body && req.body.ids) || [];
+  const result = carTrips.unreconcileTrips(loaded.records, ids, { username: sessionUsername(req) });
+  persistTarget(loaded, { reason: "admin-car-trip-unreconcile", actor: sessionUsername(req) });
+  res.json({ ok: true, updated: result.updated.length, trips: result.updated });
+});
+
+api.post("/admin/users/:username/car-trips/:id/soft-delete", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const result = carTrips.softDeleteTrip(loaded.records, req.params.id, {
+    username: sessionUsername(req),
+    force: true,
+  });
+  if (!result.ok) {
+    res.status(result.code === "not_found" ? 404 : 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  carTrips.softDeleteLinkedExpense(loaded.records, result.trip, {
+    softDeleteEntry,
+    username: sessionUsername(req),
+  });
+  persistTarget(loaded, { reason: "admin-car-trip-delete", actor: sessionUsername(req) });
+  res.json({ ok: true, trip: result.trip });
+});
+
+api.post("/admin/users/:username/car-trips/:id/restore", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const loaded = loadTargetUserRecords(req.params.username);
+  if (!loaded) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+  const result = carTrips.restoreTrip(loaded.records, req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    res.status(result.code === "not_found" ? 404 : 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persistTarget(loaded, { reason: "admin-car-trip-restore", actor: sessionUsername(req) });
+  res.json({ ok: true, trip: result.trip });
+});
+
+
 api.post("/admin/users", (req, res) => {
   if (!requireAdmin(req, res)) return;
   const { username, password, email } = req.body || {};
@@ -2306,7 +2440,21 @@ api.get("/records", (req, res) => {
     base.missingLinkedLedger = isMissingLinkedLedger(base, activeIncome, activeExpenses);
     return base;
   });
-  res.json({ ...records, receipts, vendors: storage.listVendors(full) });
+  carTrips.ensureCarTrips(full);
+  const trips = (full.carTrips || []).filter((t) => t && !t.deletedAt);
+  res.json({
+    ...records,
+    carTrips: trips,
+    carClaimMethod: carTrips.normalizeMethod(
+      (full.profile && full.profile.carClaimMethod) || carTrips.METHODS.CENTS
+    ),
+    carCentsPreview: carTrips.centsClaimPreview(
+      full,
+      (records.profile && records.profile.financialYear) || getCurrentFinancialYear()
+    ),
+    receipts,
+    vendors: storage.listVendors(full),
+  });
 });
 
 // --- Profile -------------------------------------------------------------
@@ -2327,6 +2475,9 @@ api.put("/profile", (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, "cars")) {
     body.cars = normalizeCars(body.cars);
   }
+  if (Object.prototype.hasOwnProperty.call(body, "carClaimMethod")) {
+    body.carClaimMethod = carTrips.normalizeMethod(body.carClaimMethod);
+  }
   // Registered fuel-class vehicles (Fuel Hub) — not ATO work cars.
   if (Object.prototype.hasOwnProperty.call(body, "fuelVehicles")) {
     body.fuelVehicles = fuelVehicleClass.normalizeFuelVehicles(body.fuelVehicles);
@@ -2338,6 +2489,172 @@ api.put("/profile", (req, res) => {
   persist(req);
   res.json({ profile, hubProfile: hub });
 });
+
+
+// --- Car trips (ATO D1 cents/km + logbook) --------------------------------
+api.get("/car-trips", (req, res) => {
+  const records = getRecords(req);
+  carTrips.ensureCarTrips(records);
+  const includeDeleted = String(req.query.includeDeleted || "") === "1";
+  const list = includeDeleted
+    ? records.carTrips || []
+    : (records.carTrips || []).filter((t) => t && !t.deletedAt);
+  const fy = req.query.financialYear || records.profile?.financialYear || getCurrentFinancialYear();
+  res.json({
+    trips: list,
+    method: carTrips.normalizeMethod(records.profile?.carClaimMethod),
+    help: {
+      cents_per_km: carTrips.ATO_CENTS_HELP,
+      logbook: carTrips.ATO_LOGBOOK_HELP,
+    },
+    centsPreview: carTrips.centsClaimPreview(records, fy),
+  });
+});
+
+api.post("/car-trips", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in before recording car trips." });
+    return;
+  }
+  const records = getRecords(req);
+  const body = { ...(req.body || {}) };
+  if (!body.method && records.profile && records.profile.carClaimMethod) {
+    body.method = records.profile.carClaimMethod;
+  }
+  const result = carTrips.createTrip(records, body, { username: sessionUsername(req) });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  if (result.trip.method === carTrips.METHODS.CENTS) {
+    carTrips.syncCentsTripExpense(records, result.trip, {
+      storageAddExpense: (recs, payload) => storage.addExpense(recs, payload),
+    });
+  }
+  persist(req);
+  res.json({ trip: result.trip });
+});
+
+api.post("/car-trips/:id/destinations", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in before updating car trips." });
+    return;
+  }
+  const records = getRecords(req);
+  const result = carTrips.addDestination(records, req.params.id, req.body || {});
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({ trip: result.trip });
+});
+
+api.post("/car-trips/:id/close", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in before closing car trips." });
+    return;
+  }
+  const records = getRecords(req);
+  const result = carTrips.closeTrip(records, req.params.id, req.body || {}, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({ trip: result.trip });
+});
+
+api.put("/car-trips/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in before editing car trips." });
+    return;
+  }
+  const records = getRecords(req);
+  const result = carTrips.updateTrip(records, req.params.id, req.body || {});
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  if (result.trip.method === carTrips.METHODS.CENTS && result.trip.status === "closed") {
+    carTrips.syncCentsTripExpense(records, result.trip, {
+      storageAddExpense: (recs, payload) => storage.addExpense(recs, payload),
+      storageUpdate: (recs, id, patch) => updateExpense(recs, id, patch),
+    });
+  }
+  persist(req);
+  res.json({ trip: result.trip });
+});
+
+api.post("/car-trips/reconcile", (req, res) => {
+  const records = getRecords(req);
+  const ids = (req.body && req.body.ids) || [];
+  const result = carTrips.reconcileTrips(records, ids, { username: sessionUsername(req) });
+  if (result.updated.length) {
+    for (const trip of result.updated) {
+      if (trip.expenseId) {
+        reconcileEntries(records, "expense", [trip.expenseId], {
+          username: sessionUsername(req),
+        });
+      }
+    }
+    persist(req);
+  }
+  res.json({
+    ok: true,
+    updated: result.updated.length,
+    skipped: result.skipped,
+    notFound: result.notFound,
+    trips: result.updated,
+  });
+});
+
+api.post("/car-trips/unreconcile", (req, res) => {
+  const records = getRecords(req);
+  const ids = (req.body && req.body.ids) || [];
+  const result = carTrips.unreconcileTrips(records, ids, { username: sessionUsername(req) });
+  if (result.updated.length) persist(req);
+  res.json({ ok: true, updated: result.updated.length, trips: result.updated });
+});
+
+api.delete("/car-trips/:id", (req, res) => {
+  const records = getRecords(req);
+  const result = carTrips.softDeleteTrip(records, req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    const status = result.code === "reconciled" ? 409 : result.code === "not_found" ? 404 : 400;
+    res.status(status).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
+  carTrips.softDeleteLinkedExpense(records, result.trip, {
+    softDeleteEntry,
+    username: sessionUsername(req),
+  });
+  persist(req);
+  res.json({ ok: true, softDeleted: true, trip: result.trip });
+});
+
+api.post("/car-trips/:id/restore", (req, res) => {
+  const records = getRecords(req);
+  const result = carTrips.restoreTrip(records, req.params.id, {
+    username: sessionUsername(req),
+  });
+  if (!result.ok) {
+    res.status(result.code === "not_found" ? 404 : 400).json({ ok: false, error: result.error, code: result.code });
+    return;
+  }
+  if (result.trip.expenseId) {
+    restoreEntry(records, "expense", result.trip.expenseId, {
+      username: sessionUsername(req),
+    });
+  }
+  persist(req);
+  res.json({ ok: true, trip: result.trip });
+});
+
 
 // --- Summary / report / forecast ----------------------------------------
 api.get("/summary", (req, res) => {
