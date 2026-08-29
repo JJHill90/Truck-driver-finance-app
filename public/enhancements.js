@@ -2904,6 +2904,35 @@
             ? `<table class="admin-table"><thead><tr><th>Vendor</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>${fuelReceiptRows}</tbody></table>`
             : `<p class="admin-empty">No Fuel Hub receipts.</p>`
         }</div>
+        <h5 class="admin-subhead">Car trips (ATO D1) (${(data.carTrips || []).length})</h5>
+        <div class="admin-table-wrap">${
+          (data.carTrips || []).length
+            ? `<table class="admin-table"><thead><tr><th>Date</th><th>Method</th><th>Route</th><th>Km</th><th>Status</th><th></th></tr></thead><tbody>${(
+                data.carTrips || []
+              )
+                .map((t) => {
+                  const route =
+                    t.method === "logbook" && Array.isArray(t.destinations) && t.destinations.length
+                      ? t.destinations.map((d) => d.name).filter(Boolean).join(" → ")
+                      : `${t.origin || "—"} → ${t.destination || "—"}`;
+                  const deleted = t.deletedAt
+                    ? `<button type="button" class="btn secondary small" data-admin-car-trip="restore" data-id="${esc(t.id)}">Restore</button>`
+                    : `<button type="button" class="btn danger small" data-admin-car-trip="delete" data-id="${esc(t.id)}">Delete</button>`;
+                  const unlock = t.reconciled
+                    ? `<button type="button" class="btn secondary small" data-admin-car-trip="unreconcile" data-id="${esc(t.id)}">Unlock</button>`
+                    : "";
+                  return `<tr class="${t.deletedAt ? "admin-deleted-row" : ""} ${t.reconciled ? "admin-reconciled-row" : ""}">
+                    <td>${esc(t.date || "")}</td>
+                    <td>${esc(t.method || "")}</td>
+                    <td>${esc(route)}</td>
+                    <td>${t.kilometres != null ? esc(t.kilometres) : "—"}</td>
+                    <td>${esc(t.status || "")}${t.reconciled ? " · reconciled" : ""}${t.deletedAt ? " · deleted" : ""}</td>
+                    <td>${unlock} ${deleted}</td>
+                  </tr>`;
+                })
+                .join("")}</tbody></table>`
+            : `<p class="admin-empty">No car trips.</p>`
+        }</div>
       </div>`;
 
     byId("admin-detail-close")?.addEventListener("click", () => {
@@ -3197,6 +3226,38 @@
           await openAdminUser(username);
         } catch (err) {
           if (window.toast) window.toast(err.message || "Could not remove");
+        }
+      });
+    });
+
+    detail.querySelectorAll("[data-admin-car-trip]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-admin-car-trip");
+        const id = btn.getAttribute("data-id");
+        try {
+          if (action === "delete") {
+            const ok = window.confirm(`Soft-delete car trip for ${username}?`);
+            if (!ok) return;
+            await apiPost(
+              `/admin/users/${encodeURIComponent(username)}/car-trips/${encodeURIComponent(id)}/soft-delete`,
+              {}
+            );
+            if (window.toast) window.toast("Car trip deleted");
+          } else if (action === "restore") {
+            await apiPost(
+              `/admin/users/${encodeURIComponent(username)}/car-trips/${encodeURIComponent(id)}/restore`,
+              {}
+            );
+            if (window.toast) window.toast("Car trip restored");
+          } else if (action === "unreconcile") {
+            await apiPost(`/admin/users/${encodeURIComponent(username)}/car-trips/unreconcile`, {
+              ids: [id],
+            });
+            if (window.toast) window.toast("Car trip unlocked");
+          }
+          await openAdminUser(username);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Car trip action failed");
         }
       });
     });
@@ -7438,8 +7499,8 @@
     "car-expenses": {
       title: "Car Expenses and Claims",
       body: [
-        "Car Expenses is a sidebar item under Income for ATO work-related car claims (cents per km, logbook, or actual running costs). Save work vehicle presets (make, model, registration, engine size, speedometer/odometer and estimated work-use %) and mark them Active — the compiled box lists active cars for your records.",
-        "The work-use slider starts near the ATO D1 public logbook example (~63%) and prefills claim work-use so deductible previews for fuel/servicing follow your profile. This view has its own car receipt photos gallery and car expenses ledger so you can review car claims separately from general expenses.",
+        "Choose your ATO D1 claim method: Cents per kilometre (start → end work trips, rate × km up to 5,000 km/year) or Logbook (12-week diary with destinations, then actual expenses × business-use %). Compact work-vehicle presets still sit at the top — mark a car Active for work-use %.",
+        "Cents/km ledger is your trips. Logbook lets you add destinations through the day, then Close out trip (with confirmation). Reconcile closed trips to lock them. The primary mod can adjust, delete and restore trips from the admin panel. Keep ATO written evidence for logbook running costs.",
       ],
     },
     report: {
@@ -7874,7 +7935,7 @@
     }
 
     if (!list.length) {
-      listEl.innerHTML = `<p class="muted small">No work vehicles yet — add one below (make, model, rego, engine size, odometer and work use).</p>`;
+      listEl.innerHTML = `<p class="muted small">No work vehicles yet — open “Add or edit” below.</p>`;
       return;
     }
 
