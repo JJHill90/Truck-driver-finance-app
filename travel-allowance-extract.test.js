@@ -41,6 +41,27 @@ NET PAY: $2,281.50
     expect(result.amount).toBe(393.96);
   });
 
+  it("derives days from rate×amount when HOURS column is missing", () => {
+    const result = extractTravelAllowance({
+      rawText: "Travel Allowance $56.28 $168.84 $1,245.00\nNet Pay 2200.00",
+      date: "2026-06-11",
+    });
+    expect(result.detected).toBe(true);
+    expect(result.amount).toBe(168.84);
+    expect(result.overnightDays).toBe(3);
+    expect(result.daysSource).toBe("payslip_amount_div_rate");
+  });
+
+  it("prefers employer daily rate over ATO meal stack when $ divides cleanly", () => {
+    const result = extractTravelAllowance({
+      rawText: "Travel Allowance $168.84",
+      date: "2026-06-11",
+    });
+    expect(result.detected).toBe(true);
+    expect(result.overnightDays).toBe(3);
+    expect(result.daysSource).toBe("payslip_amount_div_rate");
+  });
+
   it("ignores synthetic overnight_allowance breakdown with detected:false", () => {
     const result = extractTravelAllowance({
       rawText: "Gross wages 3000 Net 2200",
