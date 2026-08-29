@@ -9718,3 +9718,99 @@
     start();
   }
 })();
+
+/* --- EOFY on-screen: LAFHA days section from decorated /report JSON ------- */
+(function () {
+  "use strict";
+
+  let lastReport = null;
+  let injecting = false;
+
+  function esc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function moneyDayRate(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "—";
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(v);
+  }
+
+  function ensureLafhaDaysSection(report) {
+    const el = document.getElementById("report-content");
+    if (!el || !report || !report.lafhaDays || injecting) return;
+    if (el.querySelector("[data-enh-lafha-days]")) return;
+    injecting = true;
+    try {
+      const lafha = report.lafhaDays;
+      const taxSection = [...el.querySelectorAll(".report-section")].find((sec) =>
+        /tax estimate/i.test(sec.querySelector("h3")?.textContent || "")
+      );
+      const host = document.createElement("div");
+      host.className = "report-section";
+      host.setAttribute("data-enh-lafha-days", "1");
+      const claimed = Number(lafha.daysClaimed) || 0;
+      const total = Number(lafha.daysInFy) || 0;
+      host.innerHTML = `
+      <h3>Living Away from Home (LAFHA) Days</h3>
+      <p class="muted">${esc(lafha.determination || "ATO")} · meal rate reference ${moneyDayRate(
+        lafha.ratePerDay
+      )}/day · FY ${esc(lafha.financialYear || "—")} — days only (not dollar totals)</p>
+      <div class="cap-list">
+        <div class="cap-row"><span>Travel / LAFHA days claimed</span><span>${claimed}</span></div>
+        <div class="cap-row"><span>Days in financial year</span><span>${total || "—"}</span></div>
+        <div class="cap-row"><span>FY days elapsed</span><span>${
+          lafha.daysElapsed != null ? lafha.daysElapsed : "—"
+        }</span></div>
+        <div class="cap-row"><span>Projected EOFY Travel / LAFHA days</span><span>${
+          lafha.projectedYearEndDays != null ? lafha.projectedYearEndDays : "—"
+        }</span></div>
+      </div>
+      <p class="muted">${esc(lafha.note || "")}</p>
+    `;
+      if (taxSection) taxSection.before(host);
+      else el.appendChild(host);
+    } finally {
+      injecting = false;
+    }
+  }
+
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const res = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+      if (url && /\/report(\?|$)/.test(String(url)) && !/report\.pdf/i.test(String(url))) {
+        const data = await res.clone().json();
+        if (data && data.lafhaDays) {
+          lastReport = data;
+          queueMicrotask(() => ensureLafhaDaysSection(data));
+          setTimeout(() => ensureLafhaDaysSection(data), 100);
+          setTimeout(() => ensureLafhaDaysSection(data), 400);
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+    return res;
+  };
+
+  function start() {
+    const host = document.getElementById("report-content");
+    if (!host || host.dataset.lafhaDaysPatched) return;
+    host.dataset.lafhaDaysPatched = "1";
+    new MutationObserver(() => {
+      if (lastReport) ensureLafhaDaysSection(lastReport);
+    }).observe(host, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
