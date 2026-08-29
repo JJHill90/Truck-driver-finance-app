@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=vending-2" />
+    <link rel="stylesheet" href="./styles.css?v=fuel-veh-fuelhub-1" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -231,10 +231,6 @@
                     <label class="checkbox">
                       <input type="checkbox" name="noReceipt" id="manual-no-receipt" />
                       No receipt
-                    </label>
-                    <label class="checkbox">
-                      <input type="checkbox" name="vendingMachine" id="manual-vending-machine" />
-                      Vending machine
                     </label>
                   </div>
                   <div class="span-2 form-actions">
@@ -649,65 +645,6 @@
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
             </form>
           </div>
-          <div class="panel" id="fuel-vehicles-panel">
-            <div class="panel-header"><h2>Registered fuel vehicles</h2></div>
-            <div id="fuel-vehicles-box" class="car-vehicles-box fuel-vehicles-box">
-              <div class="car-vehicles-box-head">
-                <h3>Fuel class &amp; tank</h3>
-                <span id="fuel-vehicles-status" class="car-vehicles-status muted">Loading…</span>
-              </div>
-              <p class="muted small">
-                These class codes are finer than a general heavy rigid. Add the vehicle on this profile
-                (registration + class such as <strong>XN93DX</strong>, <strong>YN16BQ</strong> or
-                <strong>YN17BQ</strong>) and mark it <strong>Active</strong> — Fuel Hub uses that tank
-                for travel range and fill routes. You can type a custom code and tank litres to monitor.
-                This is separate from ATO work cars on Car Expenses.
-              </p>
-              <label class="car-vehicles-compiled-label" for="fuel-vehicles-compiled">Active registered vehicle</label>
-              <textarea
-                id="fuel-vehicles-compiled"
-                class="car-vehicles-compiled"
-                rows="2"
-                readonly
-                aria-live="polite"
-              ></textarea>
-              <div id="fuel-vehicles-list" class="car-vehicles-list"></div>
-              <form id="fuel-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
-                <input type="hidden" name="id" id="fuel-vehicle-id" value="" />
-                <label>Nickname<input type="text" name="nickname" id="fuel-vehicle-nickname" placeholder="e.g. Local HR" maxlength="40" /></label>
-                <label>Registration<input type="text" name="registration" id="fuel-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
-                <label>Fuel class
-                  <select name="classCode" id="fuel-vehicle-class" aria-label="Fuel carrying class">
-                    <option value="XN93DX">XN93DX — compact rigid 380 L</option>
-                    <option value="YN16BQ" selected>YN16BQ — standard rigid 520 L</option>
-                    <option value="YN17BQ">YN17BQ — long-range rigid 680 L</option>
-                    <option value="custom">Custom class code…</option>
-                  </select>
-                </label>
-                <label id="fuel-vehicle-custom-wrap" hidden>Custom class code
-                  <input type="text" name="customClassCode" id="fuel-vehicle-custom-class" placeholder="e.g. AB12CD" maxlength="12" />
-                </label>
-                <label>Tank capacity (L)
-                  <input type="number" name="tankCapacityL" id="fuel-vehicle-tank" min="80" max="4000" step="1" value="520" />
-                </label>
-                <label>Fuel on board (L)
-                  <input type="number" name="currentFuelL" id="fuel-vehicle-fuel" min="0" max="4000" step="1" value="286" />
-                </label>
-                <p class="muted small span-2" id="fuel-vehicle-class-hint">
-                  YN16BQ is a standard heavy-rigid tank. Compact (XN93DX) fills more often; long-range (YN17BQ) carries more diesel mass.
-                </p>
-                <label class="checkbox span-2">
-                  <input type="checkbox" name="active" id="fuel-vehicle-active" checked />
-                  Active for Fuel Hub routes
-                </label>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary" id="fuel-vehicle-save">Save vehicle to profile</button>
-                  <button type="button" class="btn secondary" id="fuel-vehicle-cancel" hidden>Cancel edit</button>
-                </div>
-              </form>
-              <p id="fuel-vehicles-message" class="muted small" role="status"></p>
-            </div>
-          </div>
         </section>
 
         <!-- Support -->
@@ -846,7 +783,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=vending-1"></script>
+    <script src="./enhancements.js?v=fuel-veh-fuelhub-1"></script>
     <script src="./fuelhub.js?v=admin-both-2"></script>
   </body>
 </html>
