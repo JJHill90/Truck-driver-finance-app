@@ -5348,6 +5348,128 @@
     });
   }
 
+  function receiptHasImage(receiptId) {
+    if (!receiptId) return false;
+    const receipts =
+      (typeof state !== "undefined" && state.records && state.records.receipts) || [];
+    const r = receipts.find((x) => x && x.id === receiptId);
+    return Boolean(r && (r.imagePath || r.hasImage));
+  }
+
+  /**
+   * Unreconciled rows without a real photo get "Add receipt" so drivers can
+   * attach evidence later (e.g. after finding a vending / lost slip).
+   */
+  function injectAttachReceiptButtons(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const attr = `data-attach-${cfg.type}`;
+    list.querySelectorAll(`tbody tr[${cfg.idAttr}]`).forEach((tr) => {
+      const id = tr.getAttribute(cfg.idAttr);
+      if (!id || id === "__draft__" || tr.classList.contains("draft-row")) return;
+      const entry = findEntry(cfg.type, id);
+      if (!entry || entry.reconciled) {
+        tr.querySelector(`[${attr}]`)?.remove();
+        return;
+      }
+      const hasPhoto = receiptHasImage(entry.receiptId);
+      const photoBtn = tr.querySelector("[data-view-receipt]");
+      if (hasPhoto) {
+        tr.querySelector(`[${attr}]`)?.remove();
+        return;
+      }
+      // Photo on a stub receipt is useless — swap for Add receipt.
+      if (photoBtn) photoBtn.remove();
+
+      const actions = tr.querySelector(".row-actions");
+      if (!actions) return;
+      if (actions.querySelector(`[${attr}]`)) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn secondary small";
+      btn.textContent = "Add receipt";
+      btn.setAttribute(attr, id);
+      btn.title =
+        cfg.type === "income"
+          ? "Attach a payslip or income document photo"
+          : "Attach a receipt photo (e.g. if you found one later)";
+      const edit = actions.querySelector(`[data-edit-${cfg.type}]`);
+      const del = actions.querySelector(`[data-del-${cfg.type}]`);
+      if (edit) actions.insertBefore(btn, edit);
+      else if (del) actions.insertBefore(btn, del);
+      else actions.appendChild(btn);
+    });
+  }
+
+  async function attachReceiptFile(cfg, entryId, file) {
+    if (!file) return;
+    const prepare = globalThis.prepareImageForUpload;
+    if (typeof prepare !== "function") {
+      if (typeof toast === "function") toast("Upload helper unavailable — refresh the page.");
+      return;
+    }
+    let prepared;
+    try {
+      prepared = await prepare(file);
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message || "Could not read that file.");
+      return;
+    }
+    const path =
+      cfg.type === "income"
+        ? `/income/${encodeURIComponent(entryId)}/attach-receipt`
+        : `/expenses/${encodeURIComponent(entryId)}/attach-receipt`;
+    try {
+      const res = await fetch(`${apiBase()}${path}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64: prepared.dataUrl || prepared.imageBase64,
+          mimeType: prepared.mimeType || file.type,
+          filename: prepared.filename || file.name,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not attach receipt.");
+      if (typeof toast === "function") toast("Receipt attached");
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message || "Attach failed");
+    }
+  }
+
+  function bindAttachReceiptClicks(cfg) {
+    const list = document.getElementById(cfg.listId);
+    if (!list || list.dataset.attachBound === "1") return;
+    list.dataset.attachBound = "1";
+    list.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(`[data-attach-${cfg.type}]`);
+      if (!btn || btn.disabled) return;
+      ev.preventDefault();
+      const entryId = btn.getAttribute(`data-attach-${cfg.type}`);
+      if (!entryId) return;
+      let input = document.getElementById("enh-attach-receipt-input");
+      if (!input) {
+        input = document.createElement("input");
+        input.type = "file";
+        input.id = "enh-attach-receipt-input";
+        input.accept = "image/*,application/pdf,.pdf";
+        input.className = "hidden";
+        input.setAttribute("aria-hidden", "true");
+        document.body.appendChild(input);
+      }
+      input.value = "";
+      input.onchange = () => {
+        const file = input.files && input.files[0];
+        input.onchange = null;
+        void attachReceiptFile(cfg, entryId, file);
+      };
+      input.click();
+    });
+  }
+
   function reconcileApiPath(cfg) {
     return cfg.type === "income" ? "/income/reconcile" : "/expenses/reconcile";
   }
@@ -5548,7 +5670,11 @@
 
       const actions = tr.querySelector(".row-actions");
       if (actions) {
-        actions.querySelectorAll(`[data-del-${cfg.type}], [data-edit-${cfg.type}]`).forEach((btn) => {
+        actions
+          .querySelectorAll(
+            `[data-del-${cfg.type}], [data-edit-${cfg.type}], [data-attach-${cfg.type}]`
+          )
+          .forEach((btn) => {
           btn.disabled = true;
           btn.setAttribute("aria-disabled", "true");
           btn.classList.add("is-locked");
@@ -5864,6 +5990,8 @@
     hideOutsidePeriodTags(cfg);
     injectCashTags(cfg);
     injectEditButtons(cfg);
+    injectAttachReceiptButtons(cfg);
+    bindAttachReceiptClicks(cfg);
     decorateReconciledRows(cfg);
     updateReconcileButton(cfg);
   }
