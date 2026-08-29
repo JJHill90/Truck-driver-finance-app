@@ -29,6 +29,7 @@ describe("updateExpense", () => {
       workUsePercent: 80,
       cashTransaction: true,
       noReceipt: true,
+      vendingMachine: true,
     });
     expect(updated.id).toBe("e1");
     expect(updated.receiptId).toBe("r1");
@@ -42,6 +43,7 @@ describe("updateExpense", () => {
     expect(updated.workUsePercent).toBe(80);
     expect(updated.cashTransaction).toBe(true);
     expect(updated.noReceipt).toBe(true);
+    expect(updated.vendingMachine).toBe(true);
     expect(updated.updatedAt).toBeTruthy();
   });
 
@@ -91,5 +93,28 @@ describe("updateIncome", () => {
     expect(updated.netPay).toBe(950);
     expect(updated.payPeriod).toBe("01/02/2026 – 14/02/2026");
     expect(updated.summaryNotes).toBe("corrected");
+  });
+
+  it("updates Living Away from Home / Travel allowance days", () => {
+    const records = {
+      income: [
+        {
+          id: "i2",
+          date: "2026-03-01",
+          type: "salary_wages",
+          amount: 2000,
+          overnightDays: 0,
+          travelAllowanceAmount: null,
+        },
+      ],
+    };
+    const updated = updateIncome(records, "i2", {
+      overnightDays: 3,
+      overnightDaysSource: "manual_edit",
+      travelAllowanceAmount: 168.84,
+    });
+    expect(updated.overnightDays).toBe(3);
+    expect(updated.overnightDaysSource).toBe("manual_edit");
+    expect(updated.travelAllowanceAmount).toBe(168.84);
   });
 });

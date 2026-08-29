@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=car-ato-1" />
+    <link rel="stylesheet" href="./styles.css?v=fuel-veh-fuelhub-1" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -337,199 +337,97 @@
         <section id="view-car-expenses" class="view">
           <div class="panel">
             <div class="panel-header"><h2>Car Expenses and Claims</h2></div>
-            <p class="muted car-expenses-lead">
-              ATO D1 work-related car expenses — choose <strong>Cents per kilometre</strong> or
-              <strong>Logbook method</strong>, then record trips against your work vehicle.
+            <p class="muted">
+              Work-related car claims under ATO rules (cents per km, logbook, or actual running costs).
+              Enter date, vendor, amount and notes as usual; choose a car category below.
             </p>
 
-            <div id="car-vehicles-box" class="car-vehicles-box car-vehicles-box--compact">
+            <div id="car-vehicles-box" class="car-vehicles-box">
               <div class="car-vehicles-box-head">
                 <h3>Work vehicles</h3>
                 <span id="car-vehicles-status" class="car-vehicles-status muted">Loading…</span>
               </div>
-              <label class="car-vehicles-compiled-label" for="car-vehicles-compiled">Active vehicles</label>
+              <p class="muted small">
+                Save make, model, registration and engine size for ATO work-related car claims.
+                Mark a vehicle <strong>Active</strong> when you use it for work — you can keep more than one car on file.
+              </p>
+              <label class="car-vehicles-compiled-label" for="car-vehicles-compiled">Active vehicles (for your records / accountant)</label>
               <textarea
                 id="car-vehicles-compiled"
                 class="car-vehicles-compiled"
-                rows="2"
+                rows="3"
                 readonly
                 aria-live="polite"
               ></textarea>
               <div id="car-vehicles-list" class="car-vehicles-list"></div>
-              <details class="car-vehicle-form-details">
-                <summary>Add or edit a work vehicle</summary>
-                <form id="car-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
-                  <input type="hidden" name="id" id="car-vehicle-id" value="" />
-                  <label>Make<input type="text" name="make" id="car-vehicle-make" placeholder="Toyota" maxlength="80" /></label>
-                  <label>Model<input type="text" name="model" id="car-vehicle-model" placeholder="Hilux" maxlength="80" /></label>
-                  <label>Rego<input type="text" name="registration" id="car-vehicle-rego" placeholder="ABC123" maxlength="20" /></label>
-                  <label>Engine<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="2.8 L" maxlength="40" /></label>
-                  <label>Odometer
-                    <input type="text" name="odometerReading" id="car-vehicle-odometer" placeholder="142,350 km" maxlength="40" />
+              <form id="car-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
+                <input type="hidden" name="id" id="car-vehicle-id" value="" />
+                <label>Car make<input type="text" name="make" id="car-vehicle-make" placeholder="e.g. Toyota" maxlength="80" /></label>
+                <label>Car model<input type="text" name="model" id="car-vehicle-model" placeholder="e.g. Hilux" maxlength="80" /></label>
+                <label>Registration<input type="text" name="registration" id="car-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
+                <label>Engine size<input type="text" name="engineSize" id="car-vehicle-engine" placeholder="e.g. 2.8 L" maxlength="40" /></label>
+                <label class="span-2">Speedometer / odometer reading
+                  <input type="text" name="odometerReading" id="car-vehicle-odometer" placeholder="e.g. 142,350 km" maxlength="40" />
+                </label>
+                <div class="span-2 car-workuse-field">
+                  <label class="car-workuse-label" for="car-vehicle-workuse">
+                    Estimated work use
+                    <span class="car-workuse-value"><span id="car-vehicle-workuse-display">63</span>%</span>
                   </label>
-                  <div class="car-workuse-field">
-                    <label class="car-workuse-label" for="car-vehicle-workuse">
-                      Work use
-                      <span class="car-workuse-value"><span id="car-vehicle-workuse-display">63</span>%</span>
-                    </label>
-                    <input
-                      type="range"
-                      name="estimatedWorkUsePercent"
-                      id="car-vehicle-workuse"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value="63"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                      aria-valuenow="63"
-                    />
-                    <p id="car-vehicle-workuse-hint" class="muted small car-workuse-hint">
-                      ATO D1 example ~63%. Home↔depot is usually private.
-                    </p>
-                  </div>
-                  <label class="checkbox">
-                    <input type="checkbox" name="active" id="car-vehicle-active" checked />
-                    Active
-                  </label>
-                  <div class="form-actions car-vehicle-form-actions">
-                    <button type="submit" class="btn primary" id="car-vehicle-save">Save vehicle</button>
-                    <button type="button" class="btn secondary" id="car-vehicle-cancel" hidden>Cancel</button>
-                  </div>
-                </form>
-              </details>
+                  <input
+                    type="range"
+                    name="estimatedWorkUsePercent"
+                    id="car-vehicle-workuse"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value="63"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="63"
+                  />
+                  <p id="car-vehicle-workuse-hint" class="muted small car-workuse-hint">
+                    ATO public D1 guidance uses a worked example of about 63% work use (4,100 work km ÷ 6,500 total km).
+                    Set your own estimate from a logbook — home to your usual depot is generally private.
+                  </p>
+                </div>
+                <label class="checkbox span-2">
+                  <input type="checkbox" name="active" id="car-vehicle-active" checked />
+                  Active for work claims
+                </label>
+                <div class="span-2 form-actions">
+                  <button type="submit" class="btn primary" id="car-vehicle-save">Save vehicle to profile</button>
+                  <button type="button" class="btn secondary" id="car-vehicle-cancel" hidden>Cancel edit</button>
+                </div>
+              </form>
               <p id="car-vehicles-message" class="muted small" role="status"></p>
             </div>
 
-            <div class="car-claim-method-box" id="car-claim-method-box">
-              <h3>Claim method (ATO D1)</h3>
-              <div class="car-claim-method-options" role="radiogroup" aria-label="Car claim method">
-                <label class="car-claim-method-option">
-                  <input type="radio" name="carClaimMethod" value="cents_per_km" id="car-method-cents" />
-                  <span>
-                    <strong>Cents per kilometre</strong>
-                    <span class="muted small">Work trips by start → end. Rate × km (max 5,000 km / year).</span>
-                  </span>
-                </label>
-                <label class="car-claim-method-option">
-                  <input type="radio" name="carClaimMethod" value="logbook" id="car-method-logbook" />
-                  <span>
-                    <strong>Logbook method</strong>
-                    <span class="muted small">12-week diary + actual expenses × business-use %.</span>
-                  </span>
-                </label>
+            <form id="expense-form" class="form-grid">
+              <label>Date<input type="date" name="date" required /></label>
+              <label>Category
+                <select id="expense-category" name="category" class="category-select" required></select>
+              </label>
+              <label>Vendor<input type="text" name="vendor" placeholder="Vendor name" /></label>
+              <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required /></label>
+              <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
+              <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
+              <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
+              <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
+              <div class="span-2 form-actions">
+                <button type="submit" class="btn primary">Save car claim</button>
               </div>
-              <p id="car-claim-method-help" class="car-claim-method-help muted small"></p>
-              <p id="car-cents-fy-preview" class="car-cents-fy-preview muted small" hidden></p>
-            </div>
-
-            <div id="car-cents-panel" class="car-method-panel" hidden>
-              <h3>Record a work trip</h3>
-              <p class="muted small">Core ledger is your trips. Receipt uploads stay optional for your records.</p>
-              <form id="car-trip-cents-form" class="form-grid">
-                <label>Date<input type="date" name="date" required /></label>
-                <label>Work km<input type="number" name="kilometres" step="0.1" min="0" placeholder="0" required /></label>
-                <label class="span-2">Starting destination
-                  <input type="text" name="origin" required placeholder="e.g. Home depot / yard" maxlength="120" />
-                </label>
-                <label class="span-2">Ending destination
-                  <input type="text" name="destination" required placeholder="e.g. Customer site" maxlength="120" />
-                </label>
-                <label class="span-2">Purpose (optional)
-                  <input type="text" name="purpose" placeholder="e.g. Collect parts / site inspection" maxlength="240" />
-                </label>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save trip</button>
-                </div>
-              </form>
-            </div>
-
-            <div id="car-logbook-panel" class="car-method-panel" hidden>
-              <div class="car-logbook-ato-banner" role="note">
-                <strong>ATO logbook reminder</strong>
-                <p class="muted small" id="car-logbook-ato-copy"></p>
-              </div>
-              <h3>Logbook trip (multi-stop)</h3>
-              <form id="car-trip-logbook-open-form" class="form-grid">
-                <label>Date<input type="date" name="date" required /></label>
-                <label>Odometer start<input type="text" name="odometerStart" placeholder="e.g. 142350" maxlength="40" /></label>
-                <label class="span-2">Start location
-                  <input type="text" name="origin" required placeholder="Where this day’s running begins" maxlength="120" />
-                </label>
-                <label class="span-2">Purpose
-                  <input type="text" name="purpose" placeholder="Work reason for today’s running" maxlength="240" />
-                </label>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Start trip</button>
-                </div>
-              </form>
-              <div id="car-logbook-open-trip" class="car-logbook-open-trip" hidden>
-                <h4>Open trip</h4>
-                <p id="car-logbook-open-summary" class="muted small"></p>
-                <ol id="car-logbook-stops" class="car-logbook-stops"></ol>
-                <form id="car-trip-logbook-stop-form" class="form-grid">
-                  <label class="span-2">Add destination
-                    <input type="text" name="name" required placeholder="Next stop" maxlength="120" />
-                  </label>
-                  <label>Odometer<input type="text" name="odometer" placeholder="Reading" maxlength="40" /></label>
-                  <label>Note<input type="text" name="note" placeholder="Optional" maxlength="160" /></label>
-                  <div class="span-2 form-actions">
-                    <button type="submit" class="btn secondary">Add destination</button>
-                  </div>
-                </form>
-                <form id="car-trip-logbook-close-form" class="form-grid">
-                  <label>Total work km<input type="number" name="kilometres" step="0.1" min="0" placeholder="Trip km" /></label>
-                  <label>Odometer end<input type="text" name="odometerEnd" placeholder="Final reading" maxlength="40" /></label>
-                  <div class="span-2 form-actions">
-                    <button type="submit" class="btn primary">Close out trip</button>
-                  </div>
-                </form>
-              </div>
-
-              <h3>Running-cost claims (logbook)</h3>
-              <p class="muted small">
-                Claim actual car costs (fuel, servicing, tyres, rego/insurance, parking/tolls). Deductible
-                portion follows your active vehicle work-use %. Keep written evidence.
-              </p>
-              <form id="expense-form" class="form-grid">
-                <label>Date<input type="date" name="date" required /></label>
-                <label>Category
-                  <select id="expense-category" name="category" class="category-select" required></select>
-                </label>
-                <label>Vendor<input type="text" name="vendor" placeholder="Vendor name" /></label>
-                <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" required /></label>
-                <label class="span-2">Description<input type="text" name="description" placeholder="Notes" /></label>
-                <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
-                <label class="checkbox"><input type="checkbox" name="reimbursed" /> Reimbursed</label>
-                <div id="expense-extra-fields" class="span-2 form-grid inner"></div>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary">Save car claim</button>
-                </div>
-              </form>
-              <div id="expense-preview" class="preview-note hidden"></div>
-            </div>
+            </form>
+            <div id="expense-preview" class="preview-note hidden"></div>
           </div>
 
           <div class="panel">
-            <div class="panel-header">
-              <h2>Work trips ledger</h2>
-              <div class="ledger-header-actions">
-                <button type="button" class="btn ledger-reconcile-btn" id="car-trips-reconcile-btn" hidden>
-                  Reconcile trips
-                </button>
-                <span class="muted" id="car-trips-list-summary"></span>
-              </div>
-            </div>
-            <div id="car-trips-list"></div>
-          </div>
-
-          <div class="panel" id="car-receipts-panel">
             <div class="panel-header"><h2>Car receipt photos</h2></div>
-            <p class="muted">Optional photos for substantiation or logbook running-cost claims.</p>
+            <p class="muted">Receipt images linked to car expense claims (fuel, servicing, tyres, and similar).</p>
             <div id="car-receipt-gallery" class="receipt-gallery"></div>
           </div>
 
-          <div class="panel" id="car-expense-ledger-panel">
+          <div class="panel">
             <div class="panel-header">
               <h2>Car Expenses Ledger</h2>
               <span class="muted" id="car-expense-list-summary"></span>
@@ -747,65 +645,6 @@
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
             </form>
           </div>
-          <div class="panel" id="fuel-vehicles-panel">
-            <div class="panel-header"><h2>Registered fuel vehicles</h2></div>
-            <div id="fuel-vehicles-box" class="car-vehicles-box fuel-vehicles-box">
-              <div class="car-vehicles-box-head">
-                <h3>Fuel class &amp; tank</h3>
-                <span id="fuel-vehicles-status" class="car-vehicles-status muted">Loading…</span>
-              </div>
-              <p class="muted small">
-                These class codes are finer than a general heavy rigid. Add the vehicle on this profile
-                (registration + class such as <strong>XN93DX</strong>, <strong>YN16BQ</strong> or
-                <strong>YN17BQ</strong>) and mark it <strong>Active</strong> — Fuel Hub uses that tank
-                for travel range and fill routes. You can type a custom code and tank litres to monitor.
-                This is separate from ATO work cars on Car Expenses.
-              </p>
-              <label class="car-vehicles-compiled-label" for="fuel-vehicles-compiled">Active registered vehicle</label>
-              <textarea
-                id="fuel-vehicles-compiled"
-                class="car-vehicles-compiled"
-                rows="2"
-                readonly
-                aria-live="polite"
-              ></textarea>
-              <div id="fuel-vehicles-list" class="car-vehicles-list"></div>
-              <form id="fuel-vehicle-form" class="form-grid car-vehicle-form" autocomplete="off">
-                <input type="hidden" name="id" id="fuel-vehicle-id" value="" />
-                <label>Nickname<input type="text" name="nickname" id="fuel-vehicle-nickname" placeholder="e.g. Local HR" maxlength="40" /></label>
-                <label>Registration<input type="text" name="registration" id="fuel-vehicle-rego" placeholder="e.g. ABC123" maxlength="20" /></label>
-                <label>Fuel class
-                  <select name="classCode" id="fuel-vehicle-class" aria-label="Fuel carrying class">
-                    <option value="XN93DX">XN93DX — compact rigid 380 L</option>
-                    <option value="YN16BQ" selected>YN16BQ — standard rigid 520 L</option>
-                    <option value="YN17BQ">YN17BQ — long-range rigid 680 L</option>
-                    <option value="custom">Custom class code…</option>
-                  </select>
-                </label>
-                <label id="fuel-vehicle-custom-wrap" hidden>Custom class code
-                  <input type="text" name="customClassCode" id="fuel-vehicle-custom-class" placeholder="e.g. AB12CD" maxlength="12" />
-                </label>
-                <label>Tank capacity (L)
-                  <input type="number" name="tankCapacityL" id="fuel-vehicle-tank" min="80" max="4000" step="1" value="520" />
-                </label>
-                <label>Fuel on board (L)
-                  <input type="number" name="currentFuelL" id="fuel-vehicle-fuel" min="0" max="4000" step="1" value="286" />
-                </label>
-                <p class="muted small span-2" id="fuel-vehicle-class-hint">
-                  YN16BQ is a standard heavy-rigid tank. Compact (XN93DX) fills more often; long-range (YN17BQ) carries more diesel mass.
-                </p>
-                <label class="checkbox span-2">
-                  <input type="checkbox" name="active" id="fuel-vehicle-active" checked />
-                  Active for Fuel Hub routes
-                </label>
-                <div class="span-2 form-actions">
-                  <button type="submit" class="btn primary" id="fuel-vehicle-save">Save vehicle to profile</button>
-                  <button type="button" class="btn secondary" id="fuel-vehicle-cancel" hidden>Cancel edit</button>
-                </div>
-              </form>
-              <p id="fuel-vehicles-message" class="muted small" role="status"></p>
-            </div>
-          </div>
         </section>
 
         <!-- Support -->
@@ -944,8 +783,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=car-ato-1"></script>
-    <script src="./car-expenses.js?v=car-ato-1"></script>
+    <script src="./enhancements.js?v=fuel-veh-fuelhub-1"></script>
     <script src="./fuelhub.js?v=admin-both-2"></script>
   </body>
 </html>
