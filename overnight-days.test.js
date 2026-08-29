@@ -14,6 +14,13 @@ describe("overnightDaysForEntry", () => {
     expect(hit.days).toBe(5);
     expect(hit.source).toBe("travel_amount");
   });
+
+  it("uses employer-rate days when ATO meal-rate undercounts the $ line", () => {
+    // $168.84 ÷ $128 ATO ≈ 1 day, but $56.28 × 3 is a clean payroll line.
+    const hit = overnightDaysForEntry({ travelAllowanceAmount: 168.84 }, 128);
+    expect(hit.days).toBe(3);
+    expect(hit.source).toBe("travel_amount_payroll");
+  });
 });
 
 describe("summariseOvernightDays", () => {

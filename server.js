@@ -3094,7 +3094,7 @@ api.post("/receipts/manual", (req, res) => {
     applyExpensePresets(body, account);
   }
   const { expense, receipt } = storage.addManualReceipt(records, body);
-  // Cash / no-receipt flags (layered; storage.js is verbatim).
+  // Cash / no-receipt / vending flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
     expense.cashTransaction = Boolean(body.cashTransaction);
     if (receipt && receipt.manual) receipt.manual.cashTransaction = expense.cashTransaction;
@@ -3102,6 +3102,10 @@ api.post("/receipts/manual", (req, res) => {
   if (body.noReceipt != null) {
     expense.noReceipt = Boolean(body.noReceipt);
     if (receipt && receipt.manual) receipt.manual.noReceipt = expense.noReceipt;
+  }
+  if (body.vendingMachine != null) {
+    expense.vendingMachine = Boolean(body.vendingMachine);
+    if (receipt && receipt.manual) receipt.manual.vendingMachine = expense.vendingMachine;
   }
   rememberVendor(records, {
     name: body.vendor || expense.vendor,
