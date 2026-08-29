@@ -5990,11 +5990,10 @@
 })();
 
 /* --- Allowance caps: segmented ATO tallies + day/week/month (AEST) ---------
- * Replaces the static list in #allowance-caps. Band-1 daily stack is
- * Band-1 example (TD 2025/4): meals $128 + overtime meal $38.65 +
- * accommodation $138 + incidentals $24.25 = $328.90. Caps follow the selected
- * FY via summary.allowances (TD 2025/4 / TD 2026/4…). Shows roaming spend per
- * segment under the
+ * Replaces the static list in #allowance-caps. Caps follow the selected FY via
+ * summary.allowances (TD 2021/6 … TD 2026/4). Band-1 example for 2025-26
+ * (TD 2025/4): meals $128 + overtime meal $38.65 + accommodation $138 +
+ * incidentals $24.25 = $328.90. Shows roaming spend per segment under the
  * grand total, with day / week / month period views and per-day breakdowns.
  * Logic: lib/allowance-tally.js (loaded via /api when unavailable in browser —
  * duplicated thin client helpers below call the same shapes).

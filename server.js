@@ -2394,6 +2394,7 @@ api.get("/forecast", (req, res) => {
   const forecast = buildForecast(records, records.profile, manual);
   const fy =
     (req.query.fy && String(req.query.fy)) ||
+    (req.query.financialYear && String(req.query.financialYear)) ||
     (records.profile && records.profile.financialYear) ||
     forecast.financialYear;
   const backfilled = backfillOvernightDays(records);
@@ -2405,7 +2406,10 @@ api.get("/forecast", (req, res) => {
 /** LAFHA / Travel allowance days claimed vs FY length (planning snapshot). */
 api.get("/overnight-days", (req, res) => {
   const records = getActiveRecords(req);
-  const fy = (req.query.fy && String(req.query.fy)) || undefined;
+  const fy =
+    (req.query.fy && String(req.query.fy)) ||
+    (req.query.financialYear && String(req.query.financialYear)) ||
+    undefined;
   const backfilled = backfillOvernightDays(records);
   if (backfilled.updated > 0) persist(req);
   const summary = summariseOvernightDays(records, records.profile, fy);
