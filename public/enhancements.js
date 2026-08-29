@@ -347,9 +347,13 @@
           const noReceiptEl = document.querySelector(
             "#manual-receipt-form [name=noReceipt], #manual-no-receipt"
           );
+          const vendingEl = document.querySelector(
+            "#manual-receipt-form [name=vendingMachine], #manual-vending-machine"
+          );
           if (/\/receipts\/manual(\?|$)/.test(url)) {
             if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
             if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
+            if (vendingEl) bodyObj.vendingMachine = Boolean(vendingEl.checked);
           }
 
           const presets = (window.__haulageUser && window.__haulageUser.presets) || {};
@@ -5280,7 +5284,7 @@
     });
   }
 
-  /** Show Cash / No receipt tags on expense ledger rows. */
+  /** Show Cash / No receipt / Vending machine tags on expense ledger rows. */
   function injectCashTags(cfg) {
     if (cfg.type !== "expense") return;
     const list = document.getElementById(cfg.listId);
@@ -5294,6 +5298,7 @@
       if (!entry) return;
       const detailCell = tr.querySelector("td:nth-child(3)");
       if (!detailCell) return;
+      tr.classList.toggle("vending-machine-row", Boolean(entry.vendingMachine));
       if (entry.cashTransaction && !detailCell.querySelector(".tag-cash")) {
         const tag = document.createElement("span");
         tag.className = "tag tag-cash";
@@ -5307,6 +5312,14 @@
         tag.className = "tag tag-no-receipt";
         tag.textContent = "No receipt";
         tag.title = "No receipt kept for this expense";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
+      if (entry.vendingMachine && !detailCell.querySelector(".tag-vending")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-vending";
+        tag.textContent = "Vending";
+        tag.title = "Vending machine purchase (often no printed receipt)";
         detailCell.appendChild(document.createTextNode(" "));
         detailCell.appendChild(tag);
       }
@@ -5637,6 +5650,7 @@
         <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
         <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (Paid cash check for claim)</label>
         <label class="enh-edit-check"><input name="noReceipt" type="checkbox"${entry.noReceipt ? " checked" : ""}> No receipt</label>
+        <label class="enh-edit-check"><input name="vendingMachine" type="checkbox"${entry.vendingMachine ? " checked" : ""}> Vending machine</label>
         <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
       `
       : `
@@ -5688,6 +5702,9 @@
           form.querySelector('[name="cashTransaction"]')?.checked
         );
         payload.noReceipt = Boolean(form.querySelector('[name="noReceipt"]')?.checked);
+        payload.vendingMachine = Boolean(
+          form.querySelector('[name="vendingMachine"]')?.checked
+        );
         payload.workUsePercent = Number(payload.workUsePercent);
         payload.amount = Number(payload.amount);
       } else {
@@ -6790,7 +6807,9 @@
 
 /* --- Title-case a few dynamic headings rendered by app.js ------------------
  * app.js is kept verbatim, so the page title (#page-title) and the EOFY report
- * section headings are corrected here after each render.
+ * section headings are corrected here after each render. Also injects an
+ * expense-detail ledger so vending-machine rows keep their slate-teal colour
+ * in the on-screen EOFY report (PDF uses the same tint via report-pdf.js).
  */
 (function () {
   "use strict";
@@ -6808,6 +6827,36 @@
     "Tax estimate": "Tax Estimate",
   };
 
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(n) {
+    const v = Number(n) || 0;
+    return (v < 0 ? "-$" : "$") + Math.abs(v).toLocaleString("en-AU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  function clientFy(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})/);
+    if (!m) return "";
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const start = month >= 6 ? year : year - 1;
+    return `${start}-${String(start + 1).slice(2)}`;
+  }
+
+  function categoryName(id) {
+    if (typeof categoryLabel === "function") return categoryLabel(id);
+    return String(id || "").replace(/_/g, " ");
+  }
+
   function fixPageTitle() {
     const el = document.getElementById("page-title");
     if (!el) return;
@@ -6824,6 +6873,63 @@
     });
   }
 
+  /** Append FY expense detail with vending-machine row colour after report render. */
+  function injectReportExpenseLedger() {
+    const el = document.getElementById("report-content");
+    if (!el) return;
+    if (el.querySelector(".report-expense-ledger")) return;
+    const report = typeof state !== "undefined" && state.report;
+    const fy = report && report.summary && report.summary.financialYear;
+    const expenses =
+      (typeof state !== "undefined" && state.records && state.records.expenses) || [];
+    if (!fy) return;
+
+    const rows = expenses
+      .filter((e) => e && !e.deletedAt && clientFy(e.date) === fy)
+      .slice()
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    const body = rows.length
+      ? rows
+          .map((e) => {
+            const flags = [];
+            if (e.vendingMachine) flags.push('<span class="tag tag-vending">Vending</span>');
+            if (e.cashTransaction) flags.push('<span class="tag tag-cash">Cash</span>');
+            if (e.noReceipt) flags.push('<span class="tag tag-no-receipt">No receipt</span>');
+            const cls = e.vendingMachine ? "vending-machine-row" : "";
+            return `<tr class="${cls}">
+              <td>${esc(e.date || "")}</td>
+              <td>${esc(e.vendor || "—")}</td>
+              <td>${esc(categoryName(e.category))}</td>
+              <td class="amount">${money(e.amount)}</td>
+              <td>${flags.join(" ") || "—"}</td>
+            </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="5" class="muted">No expenses recorded for this FY.</td></tr>`;
+
+    const section = document.createElement("div");
+    section.className = "report-section report-expense-ledger";
+    section.innerHTML = `
+      <h3>Expense Ledger (Detail)</h3>
+      <p class="muted">Vending machine purchases are shaded soft slate-teal for reconciliation (often no printed receipt).</p>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Vendor</th><th>Category</th><th>Amount</th><th>Flags</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    `;
+    const taxSection = [...el.querySelectorAll(".report-section")].find((s) =>
+      /tax estimate/i.test(s.querySelector("h3")?.textContent || "")
+    );
+    if (taxSection) el.insertBefore(section, taxSection);
+    else el.appendChild(section);
+  }
+
+  function enhanceReport() {
+    fixReportHeadings();
+    injectReportExpenseLedger();
+  }
+
   function start() {
     const title = document.getElementById("page-title");
     if (title) {
@@ -6836,8 +6942,8 @@
     }
     const report = document.getElementById("report-content");
     if (report) {
-      new MutationObserver(fixReportHeadings).observe(report, { childList: true, subtree: true });
-      fixReportHeadings();
+      new MutationObserver(enhanceReport).observe(report, { childList: true, subtree: true });
+      enhanceReport();
     }
   }
 
@@ -9757,6 +9863,42 @@
       globalThis.renderRecentActivity = noopRecent;
       noopRecent();
     }, 400);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Vending machine checkbox: suggest No receipt when ticked ------------ */
+(function () {
+  "use strict";
+
+  function bindVendingHint(vendingEl, noReceiptEl) {
+    if (!vendingEl || vendingEl.dataset.vendingBound === "1") return;
+    vendingEl.dataset.vendingBound = "1";
+    vendingEl.addEventListener("change", () => {
+      if (vendingEl.checked && noReceiptEl && !noReceiptEl.checked) {
+        noReceiptEl.checked = true;
+      }
+    });
+  }
+
+  function bindManualForm() {
+    bindVendingHint(
+      document.getElementById("manual-vending-machine"),
+      document.getElementById("manual-no-receipt")
+    );
+  }
+
+  function start() {
+    bindManualForm();
+    const form = document.getElementById("manual-receipt-form");
+    if (form) {
+      new MutationObserver(bindManualForm).observe(form, { childList: true, subtree: true });
+    }
   }
 
   if (document.readyState === "loading") {
