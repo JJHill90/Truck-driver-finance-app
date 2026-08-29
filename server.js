@@ -26,6 +26,7 @@ const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichmen
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
+const { attachReceiptToEntry } = require("./lib/attach-receipt");
 const {
   withActiveLedger,
   softDeleteEntry,
@@ -2610,6 +2611,40 @@ api.put("/expenses/:id", (req, res) => {
   res.json({ entry, analysis: calcExpenseDeduction(entry) });
 });
 
+/** Attach a receipt photo/PDF to an unreconciled expense that has none yet. */
+api.post("/expenses/:id/attach-receipt", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({
+      error: "Log in to your profile before attaching a receipt.",
+    });
+    return;
+  }
+  if (!assertCanUpload(req, res)) return;
+  const records = getRecords(req);
+  const body = req.body || {};
+  const result = attachReceiptToEntry(records, "expense", req.params.id, {
+    dataUrl: body.imageBase64 || body.dataUrl,
+    mimeType: body.mimeType,
+    filename: body.filename,
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({
+    entry: result.entry,
+    receipt: {
+      id: result.receipt.id,
+      filename: result.receipt.filename,
+      mimeType: result.receipt.mimeType,
+      purpose: result.receipt.purpose,
+      hasImage: Boolean(result.receipt.imagePath),
+    },
+    analysis: calcExpenseDeduction(result.entry),
+  });
+});
+
 api.post("/expenses/reconcile", (req, res) => {
   const records = getRecords(req);
   const ids = (req.body && req.body.ids) || [];
@@ -2683,6 +2718,39 @@ api.put("/income/:id", (req, res) => {
   }
   persist(req);
   res.json({ entry });
+});
+
+/** Attach a receipt/payslip photo/PDF to an unreconciled income row that has none yet. */
+api.post("/income/:id/attach-receipt", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({
+      error: "Log in to your profile before attaching a receipt.",
+    });
+    return;
+  }
+  if (!assertCanUpload(req, res)) return;
+  const records = getRecords(req);
+  const body = req.body || {};
+  const result = attachReceiptToEntry(records, "income", req.params.id, {
+    dataUrl: body.imageBase64 || body.dataUrl,
+    mimeType: body.mimeType,
+    filename: body.filename,
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  persist(req);
+  res.json({
+    entry: result.entry,
+    receipt: {
+      id: result.receipt.id,
+      filename: result.receipt.filename,
+      mimeType: result.receipt.mimeType,
+      purpose: result.receipt.purpose,
+      hasImage: Boolean(result.receipt.imagePath),
+    },
+  });
 });
 
 api.post("/income/reconcile", (req, res) => {
