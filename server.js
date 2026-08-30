@@ -3317,6 +3317,9 @@ api.post("/receipts/scan", async (req, res, next) => {
           ocrResult.taxableIncome = Number(ocrResult.grossTotal);
         }
       }
+    } else if (scanPurpose === "expense") {
+      // Prefer an empty approve amount over a card-PAN OCR guess ($5822.10).
+      ocrResult.amount = null;
     }
     const scanAmount =
       labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
