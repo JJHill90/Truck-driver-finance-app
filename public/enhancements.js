@@ -2547,6 +2547,46 @@
       }
     });
 
+    async function runAdminVendorRepair(dryRun) {
+      const reOcr = Boolean(byId("admin-repair-vendors-reocr")?.checked);
+      const result = await adminAssistPost(username, "repair-vendors", {
+        dryRun,
+        reOcr,
+      });
+      if (!result) return;
+      const box = byId("admin-repair-vendors-result");
+      const fixes = (result.details || []).filter((d) => d.ok);
+      const lines = fixes
+        .slice(0, 12)
+        .map((d) => `${esc(d.from || "(blank)")} → <strong>${esc(d.to)}</strong>`)
+        .join("<br>");
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `
+          <p><strong>${dryRun ? "Preview" : "Applied"}:</strong> ${result.updated || 0} fix(es)
+            · ${result.eligible || 0} eligible · ${result.skipped || 0} skipped</p>
+          ${lines ? `<p class="muted">${lines}${fixes.length > 12 ? "<br>…" : ""}</p>` : "<p class=\"muted\">No confident fixes from stored scans.</p>"}
+        `;
+      }
+      if (window.toast) {
+        window.toast(
+          dryRun
+            ? `Preview: ${result.updated || 0} vendor fix(es) available`
+            : `Applied ${result.updated || 0} vendor fix(es)`
+        );
+      }
+      if (!dryRun && result.updated) await openAdminUser(username);
+    }
+
+    byId("admin-repair-vendors-preview")?.addEventListener("click", () => runAdminVendorRepair(true));
+    byId("admin-repair-vendors-apply")?.addEventListener("click", async () => {
+      const ok = window.confirm(
+        `Apply vendor repairs for ${username}?\n\nOnly empty or junk names will change. Preview first if unsure.`
+      );
+      if (!ok) return;
+      await runAdminVendorRepair(false);
+    });
+
     byId("admin-save-profile")?.addEventListener("click", async () => {
       const body = {
         name: byId("admin-profile-name")?.value || "",
@@ -2779,6 +2819,19 @@
           </div>
         </div>
         <div id="admin-recover-result" class="admin-recover-result hidden"></div>
+      </div>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Repair vendor names from receipt scans</h4>
+        <p class="muted span-2">Re-reads attached receipt OCR (and optionally re-scans images) to replace empty or junk vendor names. Good trading names are left alone. Preview first, then apply.</p>
+        <div class="form-grid admin-assist-form">
+          <label class="checkbox span-2"><input type="checkbox" id="admin-repair-vendors-reocr" /> Re-OCR images when stored text is missing or weak (slower)</label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn secondary" id="admin-repair-vendors-preview">Preview fixes</button>
+            <button type="button" class="btn primary" id="admin-repair-vendors-apply">Apply fixes</button>
+          </div>
+          <div id="admin-repair-vendors-result" class="admin-recover-result hidden span-2"></div>
+        </div>
       </div>
 
       <div class="admin-section admin-assist-section">
@@ -5082,6 +5135,24 @@
     ledgerActions(header).appendChild(btn);
   }
 
+  function ensureRepairVendorsButton(cfg) {
+    if (cfg.type !== "expense") return;
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header || header.querySelector(".repair-vendors-btn")) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn secondary small repair-vendors-btn";
+    btn.textContent = "Fix vendor names";
+    btn.title =
+      "Re-read attached receipt scans and replace junk/empty vendor names with the shop name from the docket (when it can be identified).";
+    btn.addEventListener("click", () => runVendorRepair(btn));
+    ledgerActions(header).appendChild(btn);
+  }
+
   // FY dropdown (same style as the photo galleries) that drives the app's
   // financial year, so the ledger, its totals and the dashboard all move
   // together when it changes.
@@ -5425,6 +5496,57 @@
       const msg = data.updated
         ? `Invoice dates refreshed — ${data.updated} row(s) updated${data.scanned ? ` (${data.scanned} re-scanned)` : ""}.`
         : "All rows already use the invoice date — nothing to change.";
+      if (typeof toast === "function") toast(msg);
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message);
+      else window.alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  async function runVendorRepair(btn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const previewRes = await fetch(`${apiBase()}/maintenance/repair-vendors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) throw new Error(preview.error || "Could not check vendors.");
+      if (!preview.updated) {
+        if (typeof toast === "function") {
+          toast("No junk vendor names found that the receipt scans can fix.");
+        }
+        return;
+      }
+      const sample = (preview.details || [])
+        .filter((d) => d.ok)
+        .slice(0, 5)
+        .map((d) => `• ${d.from || "(blank)"} → ${d.to}`)
+        .join("\n");
+      const ok = window.confirm(
+        `Fix ${preview.updated} vendor name(s) from attached receipt scans?\n\n${sample}${
+          preview.updated > 5 ? "\n…" : ""
+        }\n\nOnly empty or unreadable names are changed.`
+      );
+      if (!ok) return;
+      btn.textContent = "Fixing…";
+      const res = await fetch(`${apiBase()}/maintenance/repair-vendors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not repair vendors.");
+      const msg = data.updated
+        ? `Vendor names fixed — ${data.updated} row(s) updated.`
+        : "No vendor names needed fixing.";
       if (typeof toast === "function") toast(msg);
       if (typeof refreshAll === "function") await refreshAll();
     } catch (err) {
@@ -6151,6 +6273,7 @@
     injectReconcileColumn(cfg);
     ensureReconcileButton(cfg);
     ensureRefreshButton(cfg);
+    ensureRepairVendorsButton(cfg);
     ensureFyPicker(cfg);
     ensureMonthPicker(cfg);
     ensureWeekPicker(cfg);

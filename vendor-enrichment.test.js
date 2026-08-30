@@ -551,6 +551,8 @@ describe("AU chain recognition + junk vendor prompt gate", () => {
     expect(looksLikeJunkVendor("4% Lae")).toBe(true);
     expect(looksLikeJunkVendor("Sse de ae")).toBe(true);
     expect(looksLikeJunkVendor("NRA RA")).toBe(true);
+    expect(looksLikeJunkVendor("XqR7")).toBe(true);
+    expect(looksLikeJunkVendor("S24")).toBe(true);
     expect(looksLikeJunkVendor("Woolworths")).toBe(false);
     expect(looksLikeJunkVendor("BP Archerfield")).toBe(false);
     expect(looksLikeJunkVendor("Ampol Foodary Miles")).toBe(false);
