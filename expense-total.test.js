@@ -252,4 +252,50 @@ GST Amount 1.54
     const pick = pickBestExpenseTotal({ ocrAmount: 1.54, rawText: noTotal });
     expect(pick.amount).toBe(16.9);
   });
+
+  it("does not promote a card-PAN fragment over TOTAL $191.91 (Woolworths case)", () => {
+    const text = `
+Woolworths
+The fresh food people
+ABN 88 000 014 675
+SUBTOTAL $191.91
+TOTAL $191.91
+Visa DEBIT
+CARD: ************8822 T
+PURCHASE $191.91
+TOTAL $191.91
+EFT $191.91
+You saved $22.50
+`;
+    const pick = pickBestExpenseTotal({ ocrAmount: 191.91, rawText: text });
+    expect(pick.amount).toBe(191.91);
+
+    const panBug = `
+TOTAL $191.91
+VISA ************5822.10
+PURCHASE $191.91
+`;
+    const fixed = pickBestExpenseTotal({ ocrAmount: 191.91, rawText: panBug });
+    expect(fixed.amount).toBe(191.91);
+    expect(fixed.amount).not.toBe(5822.1);
+
+    const garbOCR = `
+TOTAL $191.91
+PURCHASE $191.91
+RRR EGAN Visa (EBT CAD, 5822.1 TRA EER ER
+`;
+    const fromGarbled = pickBestExpenseTotal({ ocrAmount: 5822.1, rawText: garbOCR });
+    expect(fromGarbled.amount).toBe(191.91);
+  });
+
+  it("ignores You saved / Specials amounts as payable totals", () => {
+    const text = `
+TOTAL $105.07
+EFT $105.07
+You saved $17.00
+Specials $17.00
+`;
+    const pick = pickBestExpenseTotal({ ocrAmount: 17, rawText: text });
+    expect(pick.amount).toBe(105.07);
+  });
 });

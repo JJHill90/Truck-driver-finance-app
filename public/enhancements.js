@@ -482,6 +482,10 @@
               suggestedCategory: ocr.suggestedCategory || null,
               vendorAbn: ocr.vendorAbn || null,
               vendor: ocr.vendor || ocr.entity || null,
+              vendorNeedsInput: Boolean(ocr.vendorNeedsInput),
+              vendorUnidentifiedMessage:
+                ocr.vendorUnidentifiedMessage ||
+                "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?",
               purpose,
               receiptId: data.receipt && data.receipt.id,
               isPdf: /pdf/i.test(mimeType),
@@ -814,15 +818,77 @@
   }
 
   /** Keep expense confirm vendor/ABN in sync with tighter ABN pairing. */
+  function looksLikeJunkVendorClient(name) {
+    const s = String(name || "").trim();
+    if (!s) return true;
+    if (/^(tax\s*invoice|invoice|receipt|abn\b|gst\b|total\b)/i.test(s)) return true;
+    if (s.length <= 2) return true;
+    const tokens = s.split(/\s+/).filter(Boolean);
+    if (tokens.length >= 2) {
+      const short = tokens.filter((t) => t.replace(/[^a-zA-Z]/g, "").length <= 2).length;
+      if (short / tokens.length >= 0.5) return true;
+    }
+    const letters = s.replace(/[^a-zA-Z]/g, "");
+    if (letters.length >= 4) {
+      const vowels = (letters.match(/[aeiouAEIOU]/g) || []).length;
+      if (vowels === 0) return true;
+    }
+    return false;
+  }
+
+  function promptMissingVendor(box) {
+    if (!box || latest?.purpose !== "expense") return;
+    if (!latest.vendorNeedsInput && !looksLikeJunkVendorClient(latest.vendor)) return;
+    if (box.__enhVendorPrompted === latest.token) return;
+    box.__enhVendorPrompted = latest.token;
+
+    const vendor = box.querySelector("#scan-confirm-vendor");
+    if (vendor && looksLikeJunkVendorClient(vendor.value)) vendor.value = "";
+
+    const msg =
+      latest.vendorUnidentifiedMessage ||
+      "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?";
+
+    // Prefer a lightweight in-page banner; fall back to window.prompt so the
+    // driver can type the shop name immediately.
+    let banner = box.querySelector("#enh-vendor-missing");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "enh-vendor-missing";
+      banner.className = "enh-vendor-missing banner";
+      banner.setAttribute("role", "alert");
+      const form = box.querySelector(".scan-confirm-form") || box.querySelector(".scan-confirm");
+      if (form) form.insertAdjacentElement("beforebegin", banner);
+      else box.prepend(banner);
+    }
+    banner.innerHTML = `<strong>Vendor not recognised.</strong> ${esc(msg)}`;
+
+    const typed = window.prompt(msg, vendor && vendor.value ? vendor.value : "");
+    if (typed != null && String(typed).trim()) {
+      const name = String(typed).trim();
+      if (vendor) vendor.value = name;
+      latest.vendor = name;
+      latest.vendorNeedsInput = false;
+      banner.innerHTML = `<strong>Vendor:</strong> ${esc(name)}`;
+      if (typeof globalThis.toast === "function") globalThis.toast(`Vendor set to ${name}`);
+    } else if (vendor) {
+      vendor.focus();
+      vendor.placeholder = "Type vendor / shop name";
+      vendor.classList.add("input-needs-attention");
+    }
+  }
+
   function syncExpenseAbnFields(box) {
     if (!box || latest?.purpose !== "expense") return;
     const abn = box.querySelector("#scan-confirm-abn");
     const vendor = box.querySelector("#scan-confirm-vendor");
     if (abn && latest.vendorAbn && !abn.value) abn.value = latest.vendorAbn;
-    if (vendor && latest.vendor) {
-      if (!vendor.value || /tax\s*invoice|invoice|receipt/i.test(vendor.value)) {
+    if (vendor && latest.vendor && !latest.vendorNeedsInput) {
+      if (!vendor.value || /tax\s*invoice|invoice|receipt/i.test(vendor.value) || looksLikeJunkVendorClient(vendor.value)) {
         vendor.value = latest.vendor;
       }
+    } else if (vendor && latest.vendorNeedsInput) {
+      if (looksLikeJunkVendorClient(vendor.value)) vendor.value = "";
     }
     const manualAbn = document.querySelector("#manual-receipt-form [name=vendorAbn]");
     const manualVendor = document.querySelector("#manual-receipt-form [name=vendor]");
@@ -830,6 +896,7 @@
     if (manualVendor && latest.vendor && (!manualVendor.value || /tax\s*invoice|invoice|receipt/i.test(manualVendor.value))) {
       manualVendor.value = latest.vendor;
     }
+    promptMissingVendor(box);
   }
 
   function enhanceBox(box) {
@@ -847,6 +914,46 @@
     const existing = box.querySelector("#enh-panel");
     if (existing) existing.remove();
     box.appendChild(buildPanel(latest));
+    gateExpenseConfirmVendor(box);
+  }
+
+  /** Block Approve when expense vendor is still blank / OCR junk. */
+  function gateExpenseConfirmVendor(box) {
+    if (!box || latest?.purpose !== "expense") return;
+    if (box.__enhVendorGate) return;
+    box.__enhVendorGate = true;
+    const yes = box.querySelector("#scan-confirm-yes");
+    if (!yes) return;
+    yes.addEventListener(
+      "click",
+      (ev) => {
+        const vendorEl = box.querySelector("#scan-confirm-vendor");
+        const value = vendorEl ? String(vendorEl.value || "").trim() : String(latest.vendor || "").trim();
+        if (!value || looksLikeJunkVendorClient(value)) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          const msg =
+            latest.vendorUnidentifiedMessage ||
+            "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?";
+          const typed = window.prompt(msg, value || "");
+          if (typed != null && String(typed).trim() && !looksLikeJunkVendorClient(typed)) {
+            if (vendorEl) vendorEl.value = String(typed).trim();
+            latest.vendor = String(typed).trim();
+            latest.vendorNeedsInput = false;
+            yes.click();
+            return;
+          }
+          if (vendorEl) {
+            vendorEl.focus();
+            vendorEl.classList.add("input-needs-attention");
+          }
+          if (typeof globalThis.toast === "function") {
+            globalThis.toast("Add the vendor/shop name before approving.");
+          }
+        }
+      },
+      true
+    );
   }
 
   // Fold income confirm ABN + travel allowance into the approve payload (app.js omits them).
@@ -2440,6 +2547,46 @@
       }
     });
 
+    async function runAdminVendorRepair(dryRun) {
+      const reOcr = Boolean(byId("admin-repair-vendors-reocr")?.checked);
+      const result = await adminAssistPost(username, "repair-vendors", {
+        dryRun,
+        reOcr,
+      });
+      if (!result) return;
+      const box = byId("admin-repair-vendors-result");
+      const fixes = (result.details || []).filter((d) => d.ok);
+      const lines = fixes
+        .slice(0, 12)
+        .map((d) => `${esc(d.from || "(blank)")} → <strong>${esc(d.to)}</strong>`)
+        .join("<br>");
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `
+          <p><strong>${dryRun ? "Preview" : "Applied"}:</strong> ${result.updated || 0} fix(es)
+            · ${result.eligible || 0} eligible · ${result.skipped || 0} skipped</p>
+          ${lines ? `<p class="muted">${lines}${fixes.length > 12 ? "<br>…" : ""}</p>` : "<p class=\"muted\">No confident fixes from stored scans.</p>"}
+        `;
+      }
+      if (window.toast) {
+        window.toast(
+          dryRun
+            ? `Preview: ${result.updated || 0} vendor fix(es) available`
+            : `Applied ${result.updated || 0} vendor fix(es)`
+        );
+      }
+      if (!dryRun && result.updated) await openAdminUser(username);
+    }
+
+    byId("admin-repair-vendors-preview")?.addEventListener("click", () => runAdminVendorRepair(true));
+    byId("admin-repair-vendors-apply")?.addEventListener("click", async () => {
+      const ok = window.confirm(
+        `Apply vendor repairs for ${username}?\n\nOnly empty or junk names will change. Preview first if unsure.`
+      );
+      if (!ok) return;
+      await runAdminVendorRepair(false);
+    });
+
     byId("admin-save-profile")?.addEventListener("click", async () => {
       const body = {
         name: byId("admin-profile-name")?.value || "",
@@ -2672,6 +2819,19 @@
           </div>
         </div>
         <div id="admin-recover-result" class="admin-recover-result hidden"></div>
+      </div>
+
+      <div class="admin-section admin-assist-section">
+        <h4>Repair vendor names from receipt scans</h4>
+        <p class="muted span-2">Re-reads attached receipt OCR (and optionally re-scans images) to replace empty or junk vendor names. Good trading names are left alone. Preview first, then apply.</p>
+        <div class="form-grid admin-assist-form">
+          <label class="checkbox span-2"><input type="checkbox" id="admin-repair-vendors-reocr" /> Re-OCR images when stored text is missing or weak (slower)</label>
+          <div class="span-2 form-actions">
+            <button type="button" class="btn secondary" id="admin-repair-vendors-preview">Preview fixes</button>
+            <button type="button" class="btn primary" id="admin-repair-vendors-apply">Apply fixes</button>
+          </div>
+          <div id="admin-repair-vendors-result" class="admin-recover-result hidden span-2"></div>
+        </div>
       </div>
 
       <div class="admin-section admin-assist-section">
@@ -4975,6 +5135,24 @@
     ledgerActions(header).appendChild(btn);
   }
 
+  function ensureRepairVendorsButton(cfg) {
+    if (cfg.type !== "expense") return;
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    const panel = list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header || header.querySelector(".repair-vendors-btn")) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn secondary small repair-vendors-btn";
+    btn.textContent = "Fix vendor names";
+    btn.title =
+      "Re-read attached receipt scans and replace junk/empty vendor names with the shop name from the docket (when it can be identified).";
+    btn.addEventListener("click", () => runVendorRepair(btn));
+    ledgerActions(header).appendChild(btn);
+  }
+
   // FY dropdown (same style as the photo galleries) that drives the app's
   // financial year, so the ledger, its totals and the dashboard all move
   // together when it changes.
@@ -5318,6 +5496,57 @@
       const msg = data.updated
         ? `Invoice dates refreshed — ${data.updated} row(s) updated${data.scanned ? ` (${data.scanned} re-scanned)` : ""}.`
         : "All rows already use the invoice date — nothing to change.";
+      if (typeof toast === "function") toast(msg);
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch (err) {
+      if (typeof toast === "function") toast(err.message);
+      else window.alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  async function runVendorRepair(btn) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Checking…";
+    try {
+      const previewRes = await fetch(`${apiBase()}/maintenance/repair-vendors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const preview = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) throw new Error(preview.error || "Could not check vendors.");
+      if (!preview.updated) {
+        if (typeof toast === "function") {
+          toast("No junk vendor names found that the receipt scans can fix.");
+        }
+        return;
+      }
+      const sample = (preview.details || [])
+        .filter((d) => d.ok)
+        .slice(0, 5)
+        .map((d) => `• ${d.from || "(blank)"} → ${d.to}`)
+        .join("\n");
+      const ok = window.confirm(
+        `Fix ${preview.updated} vendor name(s) from attached receipt scans?\n\n${sample}${
+          preview.updated > 5 ? "\n…" : ""
+        }\n\nOnly empty or unreadable names are changed.`
+      );
+      if (!ok) return;
+      btn.textContent = "Fixing…";
+      const res = await fetch(`${apiBase()}/maintenance/repair-vendors`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not repair vendors.");
+      const msg = data.updated
+        ? `Vendor names fixed — ${data.updated} row(s) updated.`
+        : "No vendor names needed fixing.";
       if (typeof toast === "function") toast(msg);
       if (typeof refreshAll === "function") await refreshAll();
     } catch (err) {
@@ -6044,6 +6273,7 @@
     injectReconcileColumn(cfg);
     ensureReconcileButton(cfg);
     ensureRefreshButton(cfg);
+    ensureRepairVendorsButton(cfg);
     ensureFyPicker(cfg);
     ensureMonthPicker(cfg);
     ensureWeekPicker(cfg);

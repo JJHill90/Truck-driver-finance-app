@@ -88,6 +88,7 @@ const {
 } = require("./lib/document-label");
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
+const { repairVendorsFromScans } = require("./lib/vendor-repair");
 const {
   sanitizeIncomeFields,
   buildIncomeDescription,
@@ -227,6 +228,7 @@ function recordsForUser(user) {
     const rec = storage.loadRecords(fileForUser(user));
     recordsCache.set(key, rec);
     maybeBackfillInvoiceDates(rec, user);
+    maybeBackfillVendorRepair(rec, user);
   }
   return recordsCache.get(key);
 }
@@ -254,6 +256,29 @@ function maybeBackfillInvoiceDates(records, user) {
       }
     })
     .catch((err) => console.warn("Invoice-date backfill failed:", err.message));
+}
+
+// One-time (per user) repair of junk/empty vendors from stored receipt OCR text
+// (no image re-OCR — that stays opt-in via the maintenance/admin endpoints).
+function maybeBackfillVendorRepair(records, user) {
+  if (!records || (records.meta && records.meta.vendorRepairV1)) return;
+  records.meta = records.meta || {};
+  records.meta.vendorRepairV1 = true;
+  repairVendorsFromScans(records, { openai: null, dryRun: false, reOcr: false })
+    .then((result) => {
+      if (result.updated || records.meta) {
+        persistUserRecords(user, records, fileForUser(user), {
+          reason: "vendor-repair-backfill",
+          actor: user || "system",
+        });
+      }
+      if (result.updated) {
+        console.log(
+          `Vendor repair backfill for ${user || "guest"}: updated ${result.updated} of ${result.eligible} eligible.`
+        );
+      }
+    })
+    .catch((err) => console.warn("Vendor repair backfill failed:", err.message));
 }
 function getRecords(req) {
   return recordsForUser(req.user);
@@ -1556,6 +1581,39 @@ api.get("/admin/users/:username", (req, res) => {
     history: recordsHistory.listSnapshots(target.username, { limit: 20 }),
     summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
   });
+});
+
+/** Admin: dry-run or apply junk-vendor repairs from attached receipt scans. */
+api.post("/admin/users/:username/repair-vendors", async (req, res, next) => {
+  try {
+    if (!requireAdmin(req, res)) return;
+    const loaded = loadTargetUserRecords(req.params.username);
+    if (!loaded) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+    const body = req.body || {};
+    const dryRun = body.dryRun !== false; // default preview for admin safety
+    const reOcr = Boolean(body.reOcr);
+    const limit = Math.max(0, Math.min(500, Number(body.limit) || 0));
+    const result = await repairVendorsFromScans(loaded.records, {
+      openai,
+      dryRun,
+      reOcr,
+      limit,
+    });
+    loaded.records.meta = loaded.records.meta || {};
+    loaded.records.meta.vendorRepairV1 = true;
+    if (!dryRun) {
+      persistTarget(loaded, {
+        reason: "admin-vendor-repair",
+        actor: req.user,
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
 /** Admin: unlock reconciled ledger rows for a driver. */
@@ -3317,6 +3375,9 @@ api.post("/receipts/scan", async (req, res, next) => {
           ocrResult.taxableIncome = Number(ocrResult.grossTotal);
         }
       }
+    } else if (scanPurpose === "expense") {
+      // Prefer an empty approve amount over a card-PAN OCR guess ($5822.10).
+      ocrResult.amount = null;
     }
     const scanAmount =
       labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
@@ -3394,6 +3455,34 @@ api.post("/maintenance/refresh-invoice-dates", async (req, res, next) => {
     records.meta = records.meta || {};
     records.meta.invoiceDateRefreshV1 = true;
     persist(req);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Repair junk/empty vendors on old ledger rows from the attached receipt scan
+// (stored OCR text by default; set reOcr:true to re-read the image when needed).
+api.post("/maintenance/repair-vendors", async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Log in to repair vendor names on your receipts." });
+      return;
+    }
+    const records = getRecords(req);
+    const body = req.body || {};
+    const dryRun = Boolean(body.dryRun);
+    const reOcr = Boolean(body.reOcr);
+    const limit = Math.max(0, Math.min(500, Number(body.limit) || 0));
+    const result = await repairVendorsFromScans(records, {
+      openai,
+      dryRun,
+      reOcr,
+      limit,
+    });
+    records.meta = records.meta || {};
+    records.meta.vendorRepairV1 = true;
+    if (!dryRun) persist(req, { reason: "vendor-repair" });
     res.json(result);
   } catch (err) {
     next(err);

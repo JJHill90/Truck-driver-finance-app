@@ -1281,6 +1281,12 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .scan-box { margin-top: 14px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
 .scan-box h3 { margin-top: 0; }
 .banner { background: rgba(245, 158, 11, 0.12); border: 1px solid var(--accent); color: var(--text); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.86rem; }
+.enh-vendor-missing { border-color: #c45c26; background: rgba(196, 92, 38, 0.14); }
+.input-needs-attention {
+  outline: 2px solid #c45c26;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgba(196, 92, 38, 0.25);
+}
 .file-preview-pill { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 0.85rem; }
 
 /* Scan confirm */

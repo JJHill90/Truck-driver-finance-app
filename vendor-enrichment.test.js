@@ -543,3 +543,72 @@ describe("retail vendor business types beyond servo/convenience", () => {
     expect(ocr.categorySource).toBe("vendor_content");
   });
 });
+
+describe("AU chain recognition + junk vendor prompt gate", () => {
+  it("flags spaced OCR garbage as junk vendors", () => {
+    expect(looksLikeJunkVendor("P E WHEY TAA")).toBe(true);
+    expect(looksLikeJunkVendor("a BE a oe")).toBe(true);
+    expect(looksLikeJunkVendor("4% Lae")).toBe(true);
+    expect(looksLikeJunkVendor("Sse de ae")).toBe(true);
+    expect(looksLikeJunkVendor("NRA RA")).toBe(true);
+    expect(looksLikeJunkVendor("XqR7")).toBe(true);
+    expect(looksLikeJunkVendor("S24")).toBe(true);
+    expect(looksLikeJunkVendor("Woolworths")).toBe(false);
+    expect(looksLikeJunkVendor("BP Archerfield")).toBe(false);
+    expect(looksLikeJunkVendor("Ampol Foodary Miles")).toBe(false);
+  });
+
+  it("recognises Woolworths from slogan / ABN when OCR vendor is junk", () => {
+    const hit = resolveCanonicalVendor({
+      vendor: "4% Lae",
+      text: "4% Lae\nThe fresh food people\nABN 88 000 014 675\nTOTAL $191.91",
+      abn: "88 000 014 675",
+    });
+    expect(hit.name).toMatch(/^Woolworths/);
+    expect(hit.name).not.toMatch(/fresh food/i);
+
+    const ocr = enrichOcrFromVendors(
+      {
+        vendor: "4% Lae",
+        suggestedCategory: "other_work",
+        vendorAbn: "88 000 014 675",
+        rawText: "The fresh food people\nABN 88 000 014 675\nTOTAL $191.91",
+      },
+      [],
+      "expense"
+    );
+    expect(ocr.vendor).toMatch(/^Woolworths/);
+    expect(ocr.suggestedCategory).toBe("groceries_travel");
+    expect(ocr.vendorNeedsInput).toBe(false);
+  });
+
+  it("recognises Ampol and BP from retail cues", () => {
+    const ampol = resolveCanonicalVendor({
+      vendor: "RE es",
+      text: "Ampol Retail Pty Ltd\nT/As Ampol Foodary Miles\nABN 64 000 175 342\nTOTAL $24.40",
+    });
+    expect(ampol.name).toMatch(/^Ampol/);
+
+    const bp = resolveCanonicalVendor({
+      vendor: "Sse de ae",
+      text: "BP Archerfield\nRampage Retail Pty Ltd\nABN 66 600 817 178\nTotal $27.00",
+      abn: "66 600 817 178",
+    });
+    expect(bp.name).toMatch(/^BP/);
+  });
+
+  it("asks for vendor input when no readable name can be resolved", () => {
+    const ocr = enrichOcrFromVendors(
+      {
+        vendor: "P E WHEY TAA",
+        suggestedCategory: "other_work",
+        rawText: "random thermal shreds\nno brand markers here\nTOTAL 12.00",
+      },
+      [],
+      "expense"
+    );
+    expect(ocr.vendorNeedsInput).toBe(true);
+    expect(ocr.vendor).toBe("");
+    expect(ocr.vendorUnidentifiedMessage).toMatch(/vendor name cannot be identified/i);
+  });
+});
