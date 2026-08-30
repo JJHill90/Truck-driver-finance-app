@@ -482,6 +482,10 @@
               suggestedCategory: ocr.suggestedCategory || null,
               vendorAbn: ocr.vendorAbn || null,
               vendor: ocr.vendor || ocr.entity || null,
+              vendorNeedsInput: Boolean(ocr.vendorNeedsInput),
+              vendorUnidentifiedMessage:
+                ocr.vendorUnidentifiedMessage ||
+                "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?",
               purpose,
               receiptId: data.receipt && data.receipt.id,
               isPdf: /pdf/i.test(mimeType),
@@ -814,15 +818,77 @@
   }
 
   /** Keep expense confirm vendor/ABN in sync with tighter ABN pairing. */
+  function looksLikeJunkVendorClient(name) {
+    const s = String(name || "").trim();
+    if (!s) return true;
+    if (/^(tax\s*invoice|invoice|receipt|abn\b|gst\b|total\b)/i.test(s)) return true;
+    if (s.length <= 2) return true;
+    const tokens = s.split(/\s+/).filter(Boolean);
+    if (tokens.length >= 2) {
+      const short = tokens.filter((t) => t.replace(/[^a-zA-Z]/g, "").length <= 2).length;
+      if (short / tokens.length >= 0.5) return true;
+    }
+    const letters = s.replace(/[^a-zA-Z]/g, "");
+    if (letters.length >= 4) {
+      const vowels = (letters.match(/[aeiouAEIOU]/g) || []).length;
+      if (vowels === 0) return true;
+    }
+    return false;
+  }
+
+  function promptMissingVendor(box) {
+    if (!box || latest?.purpose !== "expense") return;
+    if (!latest.vendorNeedsInput && !looksLikeJunkVendorClient(latest.vendor)) return;
+    if (box.__enhVendorPrompted === latest.token) return;
+    box.__enhVendorPrompted = latest.token;
+
+    const vendor = box.querySelector("#scan-confirm-vendor");
+    if (vendor && looksLikeJunkVendorClient(vendor.value)) vendor.value = "";
+
+    const msg =
+      latest.vendorUnidentifiedMessage ||
+      "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?";
+
+    // Prefer a lightweight in-page banner; fall back to window.prompt so the
+    // driver can type the shop name immediately.
+    let banner = box.querySelector("#enh-vendor-missing");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "enh-vendor-missing";
+      banner.className = "enh-vendor-missing banner";
+      banner.setAttribute("role", "alert");
+      const form = box.querySelector(".scan-confirm-form") || box.querySelector(".scan-confirm");
+      if (form) form.insertAdjacentElement("beforebegin", banner);
+      else box.prepend(banner);
+    }
+    banner.innerHTML = `<strong>Vendor not recognised.</strong> ${esc(msg)}`;
+
+    const typed = window.prompt(msg, vendor && vendor.value ? vendor.value : "");
+    if (typed != null && String(typed).trim()) {
+      const name = String(typed).trim();
+      if (vendor) vendor.value = name;
+      latest.vendor = name;
+      latest.vendorNeedsInput = false;
+      banner.innerHTML = `<strong>Vendor:</strong> ${esc(name)}`;
+      if (typeof globalThis.toast === "function") globalThis.toast(`Vendor set to ${name}`);
+    } else if (vendor) {
+      vendor.focus();
+      vendor.placeholder = "Type vendor / shop name";
+      vendor.classList.add("input-needs-attention");
+    }
+  }
+
   function syncExpenseAbnFields(box) {
     if (!box || latest?.purpose !== "expense") return;
     const abn = box.querySelector("#scan-confirm-abn");
     const vendor = box.querySelector("#scan-confirm-vendor");
     if (abn && latest.vendorAbn && !abn.value) abn.value = latest.vendorAbn;
-    if (vendor && latest.vendor) {
-      if (!vendor.value || /tax\s*invoice|invoice|receipt/i.test(vendor.value)) {
+    if (vendor && latest.vendor && !latest.vendorNeedsInput) {
+      if (!vendor.value || /tax\s*invoice|invoice|receipt/i.test(vendor.value) || looksLikeJunkVendorClient(vendor.value)) {
         vendor.value = latest.vendor;
       }
+    } else if (vendor && latest.vendorNeedsInput) {
+      if (looksLikeJunkVendorClient(vendor.value)) vendor.value = "";
     }
     const manualAbn = document.querySelector("#manual-receipt-form [name=vendorAbn]");
     const manualVendor = document.querySelector("#manual-receipt-form [name=vendor]");
@@ -830,6 +896,7 @@
     if (manualVendor && latest.vendor && (!manualVendor.value || /tax\s*invoice|invoice|receipt/i.test(manualVendor.value))) {
       manualVendor.value = latest.vendor;
     }
+    promptMissingVendor(box);
   }
 
   function enhanceBox(box) {
@@ -847,6 +914,46 @@
     const existing = box.querySelector("#enh-panel");
     if (existing) existing.remove();
     box.appendChild(buildPanel(latest));
+    gateExpenseConfirmVendor(box);
+  }
+
+  /** Block Approve when expense vendor is still blank / OCR junk. */
+  function gateExpenseConfirmVendor(box) {
+    if (!box || latest?.purpose !== "expense") return;
+    if (box.__enhVendorGate) return;
+    box.__enhVendorGate = true;
+    const yes = box.querySelector("#scan-confirm-yes");
+    if (!yes) return;
+    yes.addEventListener(
+      "click",
+      (ev) => {
+        const vendorEl = box.querySelector("#scan-confirm-vendor");
+        const value = vendorEl ? String(vendorEl.value || "").trim() : String(latest.vendor || "").trim();
+        if (!value || looksLikeJunkVendorClient(value)) {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          const msg =
+            latest.vendorUnidentifiedMessage ||
+            "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?";
+          const typed = window.prompt(msg, value || "");
+          if (typed != null && String(typed).trim() && !looksLikeJunkVendorClient(typed)) {
+            if (vendorEl) vendorEl.value = String(typed).trim();
+            latest.vendor = String(typed).trim();
+            latest.vendorNeedsInput = false;
+            yes.click();
+            return;
+          }
+          if (vendorEl) {
+            vendorEl.focus();
+            vendorEl.classList.add("input-needs-attention");
+          }
+          if (typeof globalThis.toast === "function") {
+            globalThis.toast("Add the vendor/shop name before approving.");
+          }
+        }
+      },
+      true
+    );
   }
 
   // Fold income confirm ABN + travel allowance into the approve payload (app.js omits them).
