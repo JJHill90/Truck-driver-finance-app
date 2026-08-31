@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
+const multer = require("multer");
 
 const {
   getCurrentFinancialYear,
@@ -89,6 +90,7 @@ const {
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
 const { repairVendorsFromScans } = require("./lib/vendor-repair");
+const { normalizeScanUpload } = require("./lib/scan-upload");
 const {
   sanitizeIncomeFields,
   buildIncomeDescription,
@@ -581,6 +583,31 @@ app.post(
 app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
+
+/** Multipart scan uploads (Firefox-friendly alternative to giant JSON base64). */
+const scanUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
+
+function optionalScanMultipart(req, res, next) {
+  const ct = String(req.headers["content-type"] || "");
+  if (!ct.includes("multipart/form-data")) {
+    next();
+    return;
+  }
+  scanUpload.single("file")(req, res, (err) => {
+    if (err) {
+      const msg =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "Upload too large (max 25 MB)."
+          : err.message || "Upload failed.";
+      res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: msg });
+      return;
+    }
+    next();
+  });
+}
 
 // Resolve the signed-in user (if any) from the session cookie.
 api.use((req, _res, next) => {
@@ -1294,14 +1321,14 @@ api.delete("/fuelhub/contacts/:id", (req, res) => {
   res.json({ ok: true, ...fuelReceiptPayload(store) });
 });
 
-api.post("/fuelhub/receipts/scan", async (req, res) => {
+api.post("/fuelhub/receipts/scan", optionalScanMultipart, async (req, res) => {
   try {
     if (!req.user) {
       res.status(401).json({ error: "Sign in to scan a fuel receipt." });
       return;
     }
     if (!assertCanUpload(req, res)) return;
-    const { imageBase64, mimeType, filename } = req.body || {};
+    const { imageBase64, mimeType, filename } = normalizeScanUpload(req);
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
       return;
@@ -3181,7 +3208,7 @@ api.post("/income/:id/restore", (req, res) => {
 });
 
 // --- Receipts ------------------------------------------------------------
-api.post("/receipts/scan", async (req, res, next) => {
+api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
   try {
     if (!req.user) {
       res.status(401).json({
@@ -3193,7 +3220,8 @@ api.post("/receipts/scan", async (req, res, next) => {
     // Check quota before OCR so free users are not charged wait time on a blocked upload.
     if (!assertCanUpload(req, res)) return;
     const records = getRecords(req);
-    const { imageBase64, mimeType, filename, purpose } = req.body || {};
+    const upload = normalizeScanUpload(req);
+    const { imageBase64, mimeType, filename, purpose } = upload;
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
       return;
@@ -3388,7 +3416,7 @@ api.post("/receipts/scan", async (req, res, next) => {
       originalFilename: filename || "receipt.jpg",
     });
 
-    const forceDuplicate = Boolean((req.body || {}).forceDuplicate);
+    const forceDuplicate = Boolean(upload.forceDuplicate);
     const duplicateMatches = findDuplicateMatches(
       records,
       ocrResult,

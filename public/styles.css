@@ -1719,6 +1719,12 @@ tr.vending-machine-row {
   margin: 0;
   font-size: 0.82rem;
 }
+.ocr-progress-cancel {
+  margin-top: 10px;
+}
+.ocr-progress-cancel.hidden {
+  display: none;
+}
 @keyframes ocr-spin {
   to { transform: rotate(360deg); }
 }

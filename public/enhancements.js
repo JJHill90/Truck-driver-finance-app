@@ -34,6 +34,10 @@
   /* --- OCR in-progress timing (income + expense scans) --------------------
    * Scanned PDFs and duplicate "Continue upload" re-reads can take a while.
    * Show a clear elapsed timer so the wait does not feel like a hang.
+   *
+   * Firefox note: giant JSON base64 bodies block the main thread (timer + CSS
+   * spinner freeze at 0:00). Large scans are converted to multipart FormData
+   * before fetch, and we yield after painting so the first tick can land.
    */
   const ocrProgress = {
     el: null,
@@ -44,7 +48,11 @@
     purpose: "expense",
     phase: "reading",
     passStartedAt: 0,
+    abortController: null,
   };
+
+  const PDF_SCAN_TIMEOUT_MS = 240000; // 4 min — remittance PDFs + raster OCR
+  const MULTIPART_SCAN_MIN = 400000; // ~400 KB JSON → prefer FormData on Firefox
 
   function formatElapsed(ms) {
     const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
@@ -79,6 +87,78 @@
     };
   }
 
+  /** Peek purpose / forceDuplicate without JSON.parse of a multi-MB body. */
+  function peekScanJsonMeta(bodyStr) {
+    const s = String(bodyStr || "");
+    const head = s.slice(0, 400);
+    const tail = s.slice(-800);
+    const purpose =
+      /"purpose"\s*:\s*"income"/.test(tail) || /"purpose"\s*:\s*"income"/.test(head)
+        ? "income"
+        : "expense";
+    const forceDuplicate =
+      /"forceDuplicate"\s*:\s*true/.test(tail) || /"forceDuplicate"\s*:\s*true/.test(head);
+    return { purpose, forceDuplicate };
+  }
+
+  /**
+   * Pull data-URL fields from app.js's JSON.stringify order without a full
+   * JSON.parse (keeps Firefox responsive on remittance PDFs).
+   */
+  function extractScanJsonFields(bodyStr) {
+    const s = String(bodyStr || "");
+    const key = '"imageBase64":"';
+    const start = s.indexOf(key);
+    if (start < 0) return null;
+    const dataStart = start + key.length;
+    let dataEnd = s.indexOf('","mimeType":"', dataStart);
+    if (dataEnd < 0) dataEnd = s.indexOf('","mimeType": "', dataStart);
+    if (dataEnd < 0) dataEnd = s.indexOf('","', dataStart);
+    if (dataEnd < 0) return null;
+    const dataUrl = s
+      .slice(dataStart, dataEnd)
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\");
+    const rest = s.slice(dataEnd);
+    const mimeType = (rest.match(/"mimeType"\s*:\s*"([^"]*)"/) || [])[1] || "";
+    const filename = (rest.match(/"filename"\s*:\s*"([^"]*)"/) || [])[1] || "upload.bin";
+    const meta = peekScanJsonMeta(s);
+    return {
+      dataUrl,
+      mimeType,
+      filename,
+      purpose: meta.purpose,
+      forceDuplicate: meta.forceDuplicate,
+    };
+  }
+
+  async function jsonScanBodyToFormData(bodyStr) {
+    const fields = extractScanJsonFields(bodyStr);
+    if (!fields || !fields.dataUrl) return null;
+    let blob;
+    try {
+      blob = await (await fetch(fields.dataUrl)).blob();
+    } catch {
+      return null;
+    }
+    const form = new FormData();
+    form.append("file", blob, fields.filename || "upload.bin");
+    form.append("mimeType", fields.mimeType || blob.type || "application/octet-stream");
+    form.append("filename", fields.filename || "upload.bin");
+    form.append("purpose", fields.purpose || "expense");
+    if (fields.forceDuplicate) form.append("forceDuplicate", "true");
+    return form;
+  }
+
+  function yieldToUi() {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        setTimeout(resolve, 0);
+      });
+    });
+  }
+
   function ensureOcrProgressEl(purpose) {
     let el = document.getElementById("ocr-progress");
     if (!el) {
@@ -95,9 +175,19 @@
             <p class="ocr-progress-phase"></p>
             <p class="ocr-progress-elapsed">Elapsed <strong>0:00</strong></p>
             <p class="ocr-progress-hint muted"></p>
+            <button type="button" class="btn secondary small ocr-progress-cancel hidden">Cancel scan</button>
           </div>
         </div>`;
       document.body.appendChild(el);
+      el.querySelector(".ocr-progress-cancel")?.addEventListener("click", () => {
+        if (ocrProgress.abortController) {
+          try {
+            ocrProgress.abortController.abort();
+          } catch {
+            /* ignore */
+          }
+        }
+      });
     }
     const anchor =
       purpose === "income"
@@ -137,6 +227,7 @@
     const phase = el.querySelector(".ocr-progress-phase");
     const elapsedEl = el.querySelector(".ocr-progress-elapsed");
     const hint = el.querySelector(".ocr-progress-hint");
+    const cancelBtn = el.querySelector(".ocr-progress-cancel");
     if (title && title.textContent !== copy.title) title.textContent = copy.title;
     if (phase && phase.textContent !== copy.phase) phase.textContent = copy.phase;
     if (elapsedEl) {
@@ -147,6 +238,11 @@
       if (elapsedEl.innerHTML !== nextHtml) elapsedEl.innerHTML = nextHtml;
     }
     if (hint && hint.textContent !== copy.hint) hint.textContent = copy.hint;
+    if (cancelBtn) {
+      const showCancel =
+        Boolean(ocrProgress.abortController) && ocrProgress.phase !== "awaiting-duplicate";
+      cancelBtn.classList.toggle("hidden", !showCancel);
+    }
     el.classList.remove("hidden");
     el.classList.toggle("ocr-progress-wait", ocrProgress.phase === "awaiting-duplicate");
     updateOcrProgressButtons(copy, elapsed);
@@ -165,7 +261,8 @@
     ensureOcrProgressEl(ocrProgress.purpose);
     paintOcrProgress();
     if (ocrProgress.timer) clearInterval(ocrProgress.timer);
-    ocrProgress.timer = setInterval(paintOcrProgress, 500);
+    // 250ms feels snappier; still cheap. Critical path is not blocking the thread.
+    ocrProgress.timer = setInterval(paintOcrProgress, 250);
   }
 
   function setOcrProgressPhase(phase) {
@@ -187,6 +284,7 @@
       clearTimeout(ocrProgress.hideTimer);
       ocrProgress.hideTimer = null;
     }
+    ocrProgress.abortController = null;
     const elapsedMs = ocrProgress.startedAt ? Date.now() - ocrProgress.startedAt : 0;
     const el = ocrProgress.el || document.getElementById("ocr-progress");
     const silent = Boolean(opts.silent);
@@ -196,10 +294,12 @@
       const phase = el.querySelector(".ocr-progress-phase");
       const elapsedEl = el.querySelector(".ocr-progress-elapsed");
       const hint = el.querySelector(".ocr-progress-hint");
+      const cancelBtn = el.querySelector(".ocr-progress-cancel");
       if (title) title.textContent = "OCR finished";
       if (phase) phase.textContent = "Totals are ready to review.";
       if (elapsedEl) elapsedEl.innerHTML = `Took <strong>${formatElapsed(elapsedMs)}</strong>`;
       if (hint) hint.textContent = "";
+      if (cancelBtn) cancelBtn.classList.add("hidden");
       el.classList.remove("ocr-progress-wait");
       el.classList.remove("hidden");
       ocrProgress.hideTimer = setTimeout(() => {
@@ -406,18 +506,63 @@
 
     const runScanOrPassthrough = async () => {
       if (url && /\/receipts\/scan(\?|$)/.test(url)) {
-        let bodyObj = {};
-        try {
-          if (options.body) bodyObj = JSON.parse(options.body);
-        } catch {
-          /* ignore */
+        let bodyStr = typeof options.body === "string" ? options.body : "";
+        let meta = peekScanJsonMeta(bodyStr);
+        // Prefer FormData for large JSON base64 (Firefox freezes on giant strings).
+        let fetchOpts = { ...(options || {}) };
+        if (bodyStr && bodyStr.length >= MULTIPART_SCAN_MIN) {
+          try {
+            const form = await jsonScanBodyToFormData(bodyStr);
+            if (form) {
+              fetchOpts = { ...fetchOpts, body: form };
+              // Browser must set multipart boundary — drop JSON content-type.
+              if (fetchOpts.headers) {
+                const headers = { ...(fetchOpts.headers || {}) };
+                delete headers["Content-Type"];
+                delete headers["content-type"];
+                fetchOpts.headers = headers;
+              }
+              bodyStr = "";
+            }
+          } catch {
+            /* keep JSON body */
+          }
         }
-        const purpose = bodyObj.purpose === "income" ? "income" : "expense";
-        const initialPhase = bodyObj.forceDuplicate ? "rereading" : "reading";
+
+        const purpose = meta.purpose;
+        const initialPhase = meta.forceDuplicate ? "rereading" : "reading";
+        // Remittance PDFs often need >90s (raster OCR). Replace app.js's short abort.
+        const looksPdf =
+          /application\/pdf/i.test(bodyStr) ||
+          /\.pdf"/i.test(String(bodyStr).slice(-400)) ||
+          (typeof FormData !== "undefined" && fetchOpts.body instanceof FormData);
+        let scanTimeoutId = null;
+        {
+          const controller = new AbortController();
+          ocrProgress.abortController = controller;
+          const prevSignal = fetchOpts.signal;
+          if (prevSignal) {
+            if (prevSignal.aborted) controller.abort();
+            else prevSignal.addEventListener("abort", () => controller.abort(), { once: true });
+          }
+          fetchOpts.signal = controller.signal;
+          const timeoutMs = looksPdf ? PDF_SCAN_TIMEOUT_MS : 90000;
+          scanTimeoutId = setTimeout(() => {
+            try {
+              controller.abort();
+            } catch {
+              /* ignore */
+            }
+          }, timeoutMs);
+        }
+
         startOcrProgress(purpose, initialPhase);
+        // Let the first paint + spinner start before the upload work.
+        await yieldToUi();
+        paintOcrProgress();
 
         try {
-          let res = await origFetch.apply(this, args);
+          let res = await origFetch.call(this, url, fetchOpts);
           let status = res.status;
           let data = null;
           try {
@@ -432,7 +577,7 @@
             });
           }
 
-          if (data && data.possibleDuplicate && !bodyObj.forceDuplicate) {
+          if (data && data.possibleDuplicate && !meta.forceDuplicate) {
             setOcrProgressPhase("awaiting-duplicate");
             const proceed = await promptDuplicateContinue(data);
             if (!proceed) {
@@ -444,27 +589,60 @@
                 { status: 409, headers: { "Content-Type": "application/json" } }
               );
             }
-            bodyObj.forceDuplicate = true;
+            meta = { ...meta, forceDuplicate: true };
             setOcrProgressPhase("rereading");
+            await yieldToUi();
             // Do not reuse apiWithTimeout's AbortSignal — time spent on the
             // duplicate modal would otherwise abort this second OCR pass.
-            const retryOpts = { ...(options || {}) };
-            delete retryOpts.signal;
-            res = await origFetch(url, {
-              ...retryOpts,
-              method: retryOpts.method || "POST",
-              credentials: retryOpts.credentials || "same-origin",
-              headers: {
-                "Content-Type": "application/json",
-                ...(retryOpts.headers || {}),
-              },
-              body: JSON.stringify(bodyObj),
-            });
-            status = res.status;
+            const retryController = new AbortController();
+            ocrProgress.abortController = retryController;
+            const retryTimeout = setTimeout(() => {
+              try {
+                retryController.abort();
+              } catch {
+                /* ignore */
+              }
+            }, PDF_SCAN_TIMEOUT_MS);
             try {
-              data = await res.json();
-            } catch {
-              data = null;
+              let retryBody = fetchOpts.body;
+              if (retryBody && typeof FormData !== "undefined" && retryBody instanceof FormData) {
+                const form = new FormData();
+                for (const [k, v] of retryBody.entries()) {
+                  if (k === "forceDuplicate") continue;
+                  form.append(k, v);
+                }
+                form.append("forceDuplicate", "true");
+                retryBody = form;
+              } else if (typeof options.body === "string") {
+                // Patch JSON without re-stringifying the multi-MB payload.
+                const raw = options.body;
+                if (/"forceDuplicate"\s*:/.test(raw)) {
+                  retryBody = raw.replace(/"forceDuplicate"\s*:\s*(false|true)/, '"forceDuplicate":true');
+                } else {
+                  retryBody = raw.replace(/\}\s*$/, ',"forceDuplicate":true}');
+                }
+              }
+              res = await origFetch(url, {
+                method: "POST",
+                credentials: fetchOpts.credentials || "same-origin",
+                headers:
+                  retryBody instanceof FormData
+                    ? undefined
+                    : {
+                        "Content-Type": "application/json",
+                        ...(fetchOpts.headers || {}),
+                      },
+                body: retryBody,
+                signal: retryController.signal,
+              });
+              status = res.status;
+              try {
+                data = await res.json();
+              } catch {
+                data = null;
+              }
+            } finally {
+              clearTimeout(retryTimeout);
             }
           }
 
@@ -516,6 +694,7 @@
             headers: { "Content-Type": "application/json" },
           });
         } finally {
+          if (scanTimeoutId) clearTimeout(scanTimeoutId);
           stopOcrProgress();
         }
       }
