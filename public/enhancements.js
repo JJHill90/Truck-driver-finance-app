@@ -218,6 +218,14 @@
   }
 
   function paintOcrProgress() {
+    try {
+      paintOcrProgressUnsafe();
+    } catch (err) {
+      console.warn("OCR progress paint failed:", err);
+    }
+  }
+
+  function paintOcrProgressUnsafe() {
     const el = ocrProgress.el || ensureOcrProgressEl(ocrProgress.purpose);
     if (!el) return;
     const copy = ocrPhaseCopy(ocrProgress.phase, ocrProgress.purpose);
@@ -239,6 +247,7 @@
     }
     if (hint && hint.textContent !== copy.hint) hint.textContent = copy.hint;
     if (cancelBtn) {
+      // Ensure cancel exists even if an older progress card was left in the DOM.
       const showCancel =
         Boolean(ocrProgress.abortController) && ocrProgress.phase !== "awaiting-duplicate";
       cancelBtn.classList.toggle("hidden", !showCancel);
@@ -312,6 +321,62 @@
     ocrProgress.startedAt = 0;
     ocrProgress.passStartedAt = 0;
     ocrProgress.phase = "reading";
+  }
+
+  /**
+   * Firefox freezes when app.js JSON.stringify's a multi-MB PDF data-URL.
+   * For PDFs, skip building that giant string — stash the File and send
+   * multipart FormData from the fetch wrapper instead.
+   */
+  let pendingScanFile = null;
+  const TINY_PDF_STUB =
+    "data:application/pdf;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
+
+  function isPdfFile(file) {
+    if (!file) return false;
+    const ext = String(file.name || "")
+      .split(".")
+      .pop()
+      .toLowerCase();
+    return file.type === "application/pdf" || ext === "pdf";
+  }
+
+  function patchPrepareImageForUpload() {
+    const orig = window.prepareImageForUpload;
+    if (typeof orig !== "function" || orig.__haulagePdfPatch) return;
+    async function patched(file, ...rest) {
+      if (isPdfFile(file)) {
+        if (file.size > 25 * 1024 * 1024) {
+          throw new Error(`${file.name} exceeds 25 MB. Use a smaller file or manual entry.`);
+        }
+        pendingScanFile = file;
+        return {
+          dataUrl: TINY_PDF_STUB,
+          mimeType: "application/pdf",
+          kind: "pdf",
+        };
+      }
+      pendingScanFile = null;
+      return orig.call(this, file, ...rest);
+    }
+    patched.__haulagePdfPatch = true;
+    window.prepareImageForUpload = patched;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", patchPrepareImageForUpload);
+  } else {
+    patchPrepareImageForUpload();
+  }
+
+  async function buildScanFormDataFromFile(file, meta) {
+    const form = new FormData();
+    form.append("file", file, file.name || "upload.pdf");
+    form.append("mimeType", file.type || meta.mimeType || "application/pdf");
+    form.append("filename", file.name || meta.filename || "upload.pdf");
+    form.append("purpose", meta.purpose || "expense");
+    if (meta.forceDuplicate) form.append("forceDuplicate", "true");
+    return form;
   }
 
   /** Modal: possible duplicate detected — Continue or Cancel. */
@@ -508,14 +573,33 @@
       if (url && /\/receipts\/scan(\?|$)/.test(url)) {
         let bodyStr = typeof options.body === "string" ? options.body : "";
         let meta = peekScanJsonMeta(bodyStr);
-        // Prefer FormData for large JSON base64 (Firefox freezes on giant strings).
-        let fetchOpts = { ...(options || {}) };
-        if (bodyStr && bodyStr.length >= MULTIPART_SCAN_MIN) {
+        // Prefer FormData for PDFs (stashed File) or large JSON base64 bodies.
+        let fetchOpts = { credentials: "same-origin", ...(options || {}) };
+        const stashedPdf = pendingScanFile;
+        let scanFileForRetry = null;
+        if (stashedPdf) {
+          try {
+            scanFileForRetry = stashedPdf;
+            fetchOpts = {
+              ...fetchOpts,
+              body: await buildScanFormDataFromFile(stashedPdf, meta),
+            };
+            if (fetchOpts.headers) {
+              const headers = { ...(fetchOpts.headers || {}) };
+              delete headers["Content-Type"];
+              delete headers["content-type"];
+              fetchOpts.headers = headers;
+            }
+            bodyStr = "";
+            pendingScanFile = null;
+          } catch {
+            /* fall through to JSON / conversion */
+          }
+        } else if (bodyStr && bodyStr.length >= MULTIPART_SCAN_MIN) {
           try {
             const form = await jsonScanBodyToFormData(bodyStr);
             if (form) {
               fetchOpts = { ...fetchOpts, body: form };
-              // Browser must set multipart boundary — drop JSON content-type.
               if (fetchOpts.headers) {
                 const headers = { ...(fetchOpts.headers || {}) };
                 delete headers["Content-Type"];
@@ -605,7 +689,12 @@
             }, PDF_SCAN_TIMEOUT_MS);
             try {
               let retryBody = fetchOpts.body;
-              if (retryBody && typeof FormData !== "undefined" && retryBody instanceof FormData) {
+              if (scanFileForRetry) {
+                retryBody = await buildScanFormDataFromFile(scanFileForRetry, {
+                  ...meta,
+                  forceDuplicate: true,
+                });
+              } else if (retryBody && typeof FormData !== "undefined" && retryBody instanceof FormData) {
                 const form = new FormData();
                 for (const [k, v] of retryBody.entries()) {
                   if (k === "forceDuplicate") continue;
