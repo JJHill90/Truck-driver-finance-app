@@ -1496,8 +1496,12 @@ tr.vending-machine-row {
   flex-direction: column;
   min-height: 0;
 }
+.dashboard-charts.dashboard-charts-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .dashboard-chart-panel #snapshot-content,
-.dashboard-chart-panel #spend-income-chart {
+.dashboard-chart-panel #spend-income-chart,
+.dashboard-chart-panel #gross-tax-chart {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -1582,11 +1586,24 @@ tr.vending-machine-row {
 .enh-dot-red { background: var(--red); }
 .enh-dot-blue { background: var(--blue); }
 .enh-dot-accent { background: var(--accent); }
+.enh-dot-gross { background: #0d9488; }
+.enh-dot-tax { background: #c2410c; }
 .enh-pos { color: var(--green); }
 .enh-neg { color: var(--red); }
 .enh-aftertax { margin: 12px 0 0; }
 .enh-spend-vs-income-stat .value { color: var(--blue); }
+.enh-gross-tax-note {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  max-width: 36rem;
+}
 
+@media (max-width: 1100px) {
+  .dashboard-charts.dashboard-charts-three {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 900px) {
   .dashboard-charts.grid-2 { grid-template-columns: 1fr; }
   .enh-pie-wrap.enh-pie-lg {
