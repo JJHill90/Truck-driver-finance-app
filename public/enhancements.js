@@ -753,6 +753,7 @@
               vendorUnidentifiedMessage:
                 ocr.vendorUnidentifiedMessage ||
                 "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?",
+              taxWithheld: Number(ocr.taxWithheld || ocr.paygWithheld) || null,
               purpose,
               receiptId: data.receipt && data.receipt.id,
               isPdf: /pdf/i.test(mimeType),
@@ -1266,6 +1267,24 @@
         if (Number(ta.overnightDays) > 0) {
           payload.overnightDays = Math.round(Number(ta.overnightDays));
           payload.overnightDaysSource = ta.daysSource || "ocr";
+        }
+      }
+      // Persist PAYG / income tax withheld for the dashboard Gross vs Tax doughnut.
+      if (!(Number(payload.taxWithheld) > 0) && latest && latest.purpose === "income") {
+        let tax = Number(latest.taxWithheld) || 0;
+        if (!(tax > 0) && Array.isArray(latest.breakdown)) {
+          tax = latest.breakdown
+            .filter(
+              (c) =>
+                c &&
+                (c.type === "tax" ||
+                  /\b(payg|paye|withhold|income\s*tax)\b/i.test(String(c.label || "")))
+            )
+            .reduce((a, c) => a + Math.abs(Number(c.amount) || 0), 0);
+        }
+        if (tax > 0) {
+          payload.taxWithheld = Math.round(tax * 100) / 100;
+          payload.paygWithheld = payload.taxWithheld;
         }
       }
       return payload;
@@ -4246,6 +4265,9 @@
  *  2) Total Spend vs Net Income pie — blue income, red spend; centre % =
  *     spend as a share of net income. Also replaces the 4th stat card
  *     (“Est. tax…”) with the same percentage readout.
+ *  3) Gross Income vs Income Tax — teal gross / rust PAYG from uploaded
+ *     remittances (summary.payslipTaxVisual). Purely visual; does not feed
+ *     tax maths. Disclaimer under the chart points drivers to Net Income.
  * Charts sit side-by-side and scale larger for visual impact.
  */
 (function () {
@@ -4445,6 +4467,71 @@
     host.innerHTML = chart;
   }
 
+  /** Teal gross / rust PAYG — distinct from Snapshot + Spend pies. */
+  const GROSS_TAX_COLORS = {
+    gross: "#0d9488",
+    tax: "#c2410c",
+  };
+
+  function payslipVisualFromSummary(summary) {
+    const v = (summary && summary.payslipTaxVisual) || {};
+    const gross = Number(v.grossIncome) || 0;
+    const tax = Number(v.incomeTax) || 0;
+    const pct =
+      v.taxOfGrossPct != null && Number.isFinite(Number(v.taxOfGrossPct))
+        ? Number(v.taxOfGrossPct)
+        : gross > 0
+          ? Math.round((tax / gross) * 1000) / 10
+          : null;
+    return { gross, tax, pct };
+  }
+
+  function renderGrossTax(summary, host) {
+    if (!host) return;
+    const { gross, tax, pct } = payslipVisualFromSummary(summary);
+    const slices = [
+      { color: GROSS_TAX_COLORS.gross, value: gross, label: "Gross income", cls: "enh-dot-gross" },
+      { color: GROSS_TAX_COLORS.tax, value: tax, label: "Income tax", cls: "enh-dot-tax" },
+    ];
+    const gradient = conicFromSlices(slices);
+    const legend = slices
+      .map(
+        (s) =>
+          `<li><span class="enh-dot ${s.cls}"></span><span class="enh-pie-legend-text">${esc(s.label)}</span> <strong>${fmt(s.value)}</strong></li>`
+      )
+      .join("");
+
+    let chart;
+    if (!gradient) {
+      chart = `<div class="enh-snapshot enh-snapshot-empty">
+          <div class="enh-pie-wrap enh-pie-lg"><div class="enh-pie enh-pie-empty"></div>
+            <div class="enh-pie-center"><span class="enh-pie-net-label">Gross / tax</span><span class="enh-pie-net">—</span></div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">${legend}</ul>
+            <p class="muted">Upload a remittance or payslip to compare gross pay and tax withheld.</p>
+          </div>
+        </div>`;
+    } else {
+      chart = `<div class="enh-snapshot">
+          <div class="enh-pie-wrap enh-pie-lg">
+            <div class="enh-pie" style="background: ${gradient}"></div>
+            <div class="enh-pie-center">
+              <span class="enh-pie-net-label">Tax of gross</span>
+              <span class="enh-pie-net">${pct == null ? "—" : fmtPct(pct)}</span>
+            </div>
+          </div>
+          <div class="enh-pie-side">
+            <ul class="enh-pie-legend">
+              ${legend}
+              <li class="enh-pie-net-row">Income tax of gross <strong>${pct == null ? "—" : fmtPct(pct)}</strong></li>
+            </ul>
+          </div>
+        </div>`;
+    }
+    host.innerHTML = `${chart}<p class="muted enh-gross-tax-note">Always refer to Net Income when factoring financial decisions.</p>`;
+  }
+
   function extractSnapshotExtras(host) {
     const msg = (host.querySelector("p.muted") && host.querySelector("p.muted").textContent) || "";
     const warnList = host.querySelector(".warning-list");
@@ -4469,11 +4556,15 @@
 
     const snapHost = document.getElementById("snapshot-content");
     const spendHost = document.getElementById("spend-income-chart");
+    const grossTaxHost = document.getElementById("gross-tax-chart");
     if (snapHost && (force || !snapHost.querySelector(".enh-snapshot"))) {
       renderSnapshot(nums, snapHost, extractSnapshotExtras(snapHost));
     }
     if (spendHost && (force || !spendHost.querySelector(".enh-snapshot"))) {
       renderSpendIncome(nums, spendHost);
+    }
+    if (grossTaxHost && (force || !grossTaxHost.querySelector(".enh-snapshot"))) {
+      renderGrossTax(latest, grossTaxHost);
     }
   }
 
@@ -4490,16 +4581,21 @@
     const needsSpend =
       document.getElementById("spend-income-chart") &&
       !document.getElementById("spend-income-chart").querySelector(".enh-snapshot");
-    if (needsSnap || needsStat || needsSpend) renderAll();
+    const needsGrossTax =
+      document.getElementById("gross-tax-chart") &&
+      !document.getElementById("gross-tax-chart").querySelector(".enh-snapshot");
+    if (needsSnap || needsStat || needsSpend || needsGrossTax) renderAll();
   });
 
   function start() {
     const snapHost = document.getElementById("snapshot-content");
     const grid = document.getElementById("stat-grid");
     const spendHost = document.getElementById("spend-income-chart");
+    const grossTaxHost = document.getElementById("gross-tax-chart");
     if (snapHost) observer.observe(snapHost, { childList: true });
     if (grid) observer.observe(grid, { childList: true });
     if (spendHost) observer.observe(spendHost, { childList: true });
+    if (grossTaxHost) observer.observe(grossTaxHost, { childList: true });
     renderAll({ force: true });
   }
 

@@ -92,6 +92,11 @@ const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
 const { repairVendorsFromScans } = require("./lib/vendor-repair");
 const { normalizeScanUpload } = require("./lib/scan-upload");
 const {
+  extractTaxWithheld,
+  attachIncomeTaxWithheld,
+  payslipTaxVisualFromRecords,
+} = require("./lib/income-tax-withheld");
+const {
   sanitizeIncomeFields,
   buildIncomeDescription,
   stripChequeTokens,
@@ -1812,6 +1817,9 @@ api.post("/admin/users/:username/:type(expenses|income)", (req, res) => {
     : storage.addExpense(loaded.records, body);
   entry.adminCreatedAt = new Date().toISOString();
   entry.adminCreatedBy = sessionUsername(req);
+  if (isIncome) {
+    attachIncomeTaxWithheld(entry, body, null);
+  }
   if (!isIncome) {
     rememberVendor(loaded.records, {
       name: body.vendor || entry.vendor,
@@ -2749,6 +2757,10 @@ api.get("/summary", (req, res) => {
   const fy = req.query.financialYear || records.profile.financialYear;
   const summary = summariseYear(records, profileFor(records, fy));
   applyHistoricalRates(summary, records, fy); // year-correct brackets/levies/rates
+  // Visual-only doughnut totals from uploaded remittance / payslip PAYG lines.
+  summary.payslipTaxVisual = payslipTaxVisualFromRecords(records, fy, {
+    getFinancialYearForDate,
+  });
   res.json(summary);
 });
 
@@ -3104,6 +3116,7 @@ api.post("/income", (req, res) => {
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
+  attachIncomeTaxWithheld(entry, body, null);
   persist(req);
   res.json({ entry });
 });
@@ -3123,6 +3136,7 @@ api.put("/income/:id", (req, res) => {
     res.status(404).json({ error: "Income not found." });
     return;
   }
+  attachIncomeTaxWithheld(entry, body, null);
   persist(req);
   res.json({ entry });
 });
@@ -3327,6 +3341,16 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     ocrResult.componentBreakdown = componentBreakdown;
     ocrResult.compliance = compliance;
     ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+
+    // Surface PAYG / income tax withheld for the dashboard Gross vs Tax doughnut
+    // (and so confirm can persist it on the income row). Visual only.
+    if (purpose === "income") {
+      const withheld = extractTaxWithheld(ocrResult, componentBreakdown);
+      if (withheld > 0) {
+        ocrResult.taxWithheld = withheld;
+        ocrResult.paygWithheld = withheld;
+      }
+    }
 
     // Pay period / payment date -> surface in the confirm form and saved entry
     // (so it appears in filing), and expose structured info for the UI panel.
@@ -3589,6 +3613,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
       restoreEntry(records, "income", existing.id, { username: sessionUsername(req) });
       existing = updateIncome(records, existing.id, { ...payload, receiptId: receipt.id }) || existing;
       attachTravelAllowanceToIncome(existing, payload, receipt);
+      attachIncomeTaxWithheld(existing, payload, receipt);
       rememberVendor(records, {
         name: payload.entity || payload.vendor || payload.payer || existing.entity,
         abn: payload.vendorAbn || payload.abn || existing.vendorAbn,
@@ -3615,6 +3640,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     if (existing && !isDeleted(existing)) {
       const entry = updateIncome(records, existing.id, { ...payload, receiptId: receipt?.id || null }) || existing;
       attachTravelAllowanceToIncome(entry, payload, receipt);
+      attachIncomeTaxWithheld(entry, payload, receipt);
       if (receipt) {
         receipt.purpose = "income";
         receipt.linkedIncomeId = entry.id;
@@ -3637,6 +3663,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
 
     const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
     attachTravelAllowanceToIncome(entry, payload, receipt);
+    attachIncomeTaxWithheld(entry, payload, receipt);
     rememberVendor(records, {
       name: payload.entity || payload.vendor || payload.payer || entry.entity,
       abn: payload.vendorAbn || payload.abn || entry.vendorAbn,
