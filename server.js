@@ -1817,6 +1817,9 @@ api.post("/admin/users/:username/:type(expenses|income)", (req, res) => {
     : storage.addExpense(loaded.records, body);
   entry.adminCreatedAt = new Date().toISOString();
   entry.adminCreatedBy = sessionUsername(req);
+  if (isIncome) {
+    attachIncomeTaxWithheld(entry, body, null);
+  }
   if (!isIncome) {
     rememberVendor(loaded.records, {
       name: body.vendor || entry.vendor,
@@ -3113,6 +3116,7 @@ api.post("/income", (req, res) => {
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
+  attachIncomeTaxWithheld(entry, body, null);
   persist(req);
   res.json({ entry });
 });
@@ -3132,6 +3136,7 @@ api.put("/income/:id", (req, res) => {
     res.status(404).json({ error: "Income not found." });
     return;
   }
+  attachIncomeTaxWithheld(entry, body, null);
   persist(req);
   res.json({ entry });
 });
