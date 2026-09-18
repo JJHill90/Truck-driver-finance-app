@@ -1562,6 +1562,10 @@
     if (screen) screen.setAttribute("aria-hidden", "false");
   }
 
+  function isGoTaxSuite() {
+    return Boolean(document.body && document.body.classList.contains("gotax-suite"));
+  }
+
   /** Show Driver Hub login forms (signed out). */
   function showDriverHubLogin() {
     lockApp();
@@ -1666,6 +1670,14 @@
     const backLogin = byId("title-auth-back-login");
     const headline = document.querySelector("#title-auth-panel .title-screen-headline");
     const sub = document.querySelector("#title-auth-panel .title-screen-sub");
+    const titleScreen = byId("title-screen");
+    const suite = isGoTaxSuite();
+    if (headline && headline.dataset.loginCopy == null) {
+      headline.dataset.loginCopy = headline.textContent || "";
+    }
+    if (sub && sub.dataset.loginCopy == null) {
+      sub.dataset.loginCopy = sub.textContent || "";
+    }
     if (emailWrap) emailWrap.classList.toggle("hidden", !isRegister);
     if (hint) hint.classList.toggle("hidden", !isRegister);
     if (strength) strength.classList.toggle("hidden", !isRegister);
@@ -1684,15 +1696,29 @@
       registerBtn.classList.toggle("secondary", !isRegister);
     }
     if (backLogin) backLogin.classList.toggle("hidden", !isRegister);
+    if (titleScreen) titleScreen.classList.toggle("title-register-open", Boolean(isRegister));
     if (headline) {
-      headline.textContent = isRegister
-        ? "Create your Driver Hub profile."
-        : "One login for every driver app.";
+      if (isRegister) {
+        headline.textContent = suite
+          ? "Create your Go Taxation Suite profile."
+          : "Create your Driver Hub profile.";
+      } else {
+        headline.textContent = suite
+          ? headline.dataset.loginCopy || "Tax records for employees, sole traders and partnerships."
+          : "One login for every driver app.";
+      }
     }
     if (sub) {
-      sub.textContent = isRegister
-        ? "Choose a username, email and strong password. You’ll use this same login for Taxation Hub, Fuel Hub and future Driver Hub apps."
-        : "Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.";
+      if (isRegister) {
+        sub.textContent = suite
+          ? "Choose a username, email and strong password. You’ll use this login for Go Taxation Suite."
+          : "Choose a username, email and strong password. You’ll use this same login for Taxation Hub, Fuel Hub and future Driver Hub apps.";
+      } else {
+        sub.textContent = suite
+          ? sub.dataset.loginCopy ||
+            "Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report."
+          : "Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.";
+      }
     }
     const form = byId("title-auth-form");
     if (form) form.classList.toggle("title-register-mode", Boolean(isRegister));
@@ -1780,7 +1806,7 @@
     let registerMode = false;
 
     async function doLogin() {
-      setTitleMessage("Logging in to Driver Hub…");
+      setTitleMessage(isGoTaxSuite() ? "Signing in…" : "Logging in to Driver Hub…");
       try {
         await apiPost("/auth/login", readTitleCreds());
         resetReviewShown();
@@ -1808,13 +1834,17 @@
         registerMode = true;
         showTitleRegisterMode(true);
         setTitleMessage(
-          "Choose a strong password and add your email so you can recover this Driver Hub profile later.",
+          isGoTaxSuite()
+            ? "Choose a strong password and add your email so you can recover this Go Taxation Suite profile later."
+            : "Choose a strong password and add your email so you can recover this Driver Hub profile later.",
           false
         );
         byId("title-auth-email")?.focus();
         return;
       }
-      setTitleMessage("Creating Driver Hub profile…");
+      setTitleMessage(
+        isGoTaxSuite() ? "Creating your Go Taxation Suite profile…" : "Creating Driver Hub profile…"
+      );
       try {
         const creds = readTitleCreds();
         if (!creds.email) {
@@ -1835,7 +1865,7 @@
         const me = await apiGet("/auth/me");
         if (!(me.user && me.user.username)) {
           showDriverHubLogin();
-          setTitleMessage("Sign in to Driver Hub first.", true);
+          setTitleMessage(isGoTaxSuite() ? "Sign in first." : "Sign in to Driver Hub first.", true);
           return;
         }
         openTaxationHub(me.user);
@@ -1859,7 +1889,7 @@
         const me = await apiGet("/auth/me");
         if (!(me.user && me.user.username)) {
           showDriverHubLogin();
-          setTitleMessage("Sign in to Driver Hub first.", true);
+          setTitleMessage(isGoTaxSuite() ? "Sign in first." : "Sign in to Driver Hub first.", true);
           return;
         }
         openFuelHub();

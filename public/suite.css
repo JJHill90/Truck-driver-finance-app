@@ -15,6 +15,43 @@ body.gotax-suite #profile-work-combination {
   display: none !important;
 }
 
+body.gotax-suite .title-screen {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: clamp(16px, 4vh, 40px) clamp(20px, 5vw, 56px);
+}
+
+body.gotax-suite .title-screen-content {
+  width: min(460px, 100%);
+  max-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.gotax-suite .title-screen.title-register-open .title-screen-brand {
+  font-size: clamp(1.85rem, 5vw, 2.55rem);
+  margin-bottom: 4px;
+}
+
+body.gotax-suite .title-screen.title-register-open .title-screen-brand::after {
+  margin-top: 8px;
+}
+
+body.gotax-suite .title-screen.title-register-open .title-screen-headline {
+  margin: 10px 0 8px;
+  max-width: none;
+  font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+}
+
+body.gotax-suite .title-screen.title-register-open .title-screen-sub {
+  margin-bottom: 14px;
+  max-width: none;
+}
+
 body.gotax-suite .title-screen-sky {
   background: radial-gradient(1200px 480px at 20% 0%, rgba(56, 189, 248, 0.35), transparent 60%),
     linear-gradient(180deg, #0b1f33 0%, #102a43 55%, #0c1929 100%);
