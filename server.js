@@ -754,14 +754,14 @@ api.post("/auth/login", async (req, res) => {
           const recovery = auth.createRecoveryTokenForEmail(existing.email);
           if (recovery.found) {
             const base = mail.appBaseUrl(req);
-            const resetUrl = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+            const recoveryPath = `${suite.recoveryPagePath(req)}?token=${encodeURIComponent(recovery.token)}`;
+            const resetUrl = `${base}${recoveryPath}`;
             const sent = await mail.sendRecoveryEmail({
               to: recovery.email,
               username: recovery.username,
               resetUrl,
             });
             // Same-origin path so the UI can continue without SMTP / email delivery.
-            const recoveryPath = `/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
             payload.emailSent = Boolean(sent.sent);
             if (!sent.sent) {
               payload.recoveryUrl = recoveryPath;
@@ -869,7 +869,7 @@ api.post("/auth/recover/request", async (req, res) => {
     const recovery = auth.createRecoveryTokenForEmail(email);
     if (recovery.found) {
       const base = mail.appBaseUrl(req);
-      const recoveryPath = `/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+      const recoveryPath = `${suite.recoveryPagePath(req)}?token=${encodeURIComponent(recovery.token)}`;
       const resetUrl = `${base}${recoveryPath}`;
       const sent = await mail.sendRecoveryEmail({
         to: recovery.email,
@@ -1983,7 +1983,7 @@ api.post("/admin/users/:username/recover-link", async (req, res) => {
   try {
     const recovery = adminAssist.adminCreateRecovery(req.params.username);
     const base = mail.appBaseUrl(req);
-    const recoveryPath = `${base}/haulage/recover.html?token=${encodeURIComponent(recovery.token)}`;
+    const recoveryPath = `${base}${suite.recoveryPagePath(req)}?token=${encodeURIComponent(recovery.token)}`;
     let emailed = false;
     if (mail.mailConfigured()) {
       const sent = await mail.sendRecoveryEmail({
@@ -3963,10 +3963,19 @@ app.get(["/suite", "/suite/"], (_req, res) => {
 app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
 app.use("/suite", express.static(PUBLIC_DIR));
 
-// --- Static UI at /haulage ----------------------------------------------
-app.use("/haulage", express.static(PUBLIC_DIR));
-app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
-app.get("/", (_req, res) => res.redirect("/haulage/"));
+// --- Static UI at /haulage (Driver Hub) ---------------------------------
+// Dedicated Go Taxation Suite hosts (APP_PRODUCT=suite) send / and /haulage
+// to /suite/ so the second Render service is not a truck-driver login.
+if (suite.isStandaloneSuite()) {
+  app.use("/haulage", (req, res) => {
+    const rest = req.url && req.url !== "/" ? req.url : "/";
+    res.redirect(302, `/suite${rest}`);
+  });
+} else {
+  app.use("/haulage", express.static(PUBLIC_DIR));
+  app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+}
+app.get("/", (_req, res) => res.redirect(302, suite.publicHomePath()));
 
 // Error handler -> friendly JSON (413 for oversized uploads).
 app.use((err, _req, res, _next) => {
@@ -3981,8 +3990,12 @@ app.use((err, _req, res, _next) => {
 if (process.env.NODE_ENV !== "test") {
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
-    console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
+    if (suite.isStandaloneSuite()) {
+      console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
+    } else {
+      console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
+      console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
+    }
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     backup.startBackupScheduler({

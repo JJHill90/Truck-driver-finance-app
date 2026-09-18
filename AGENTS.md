@@ -27,6 +27,10 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   partnership tax, same tabs as Taxation Hub) is at
   **`http://localhost:3000/suite/`**. Suite records live under `data/suite/`;
   ATO logic is in `lib/suite/` (not the truck-driver occupation tables).
+  A dedicated Render host sets `APP_PRODUCT=suite` (service `go-taxation-suite`
+  in `render.yaml`, disk `gotax-data`): `/` and `/haulage` redirect to `/suite/`,
+  every `/api/haulage` request uses the general ATO engine, and accounts stay on
+  that service’s own disk — not the Driver Hub `haulage-data` disk.
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
   shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session
@@ -164,9 +168,9 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, `APP_BASE_URL`. Without SMTP the API
   returns a same-origin `recoveryUrl` and the title-screen UI shows
   “Continue to reset password” (not an error).
-- **Primary mod admin:** bootstraps `Haulage_Admin` / `Haulage_Admin` on startup
-  via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` /
-  `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`,
+- **Primary mod admin:** bootstraps the primary-mod account on startup
+  via `auth.ensureAdminBootstrap()` (override with `HAULAGE_ADMIN_USERNAME` / # pragma: allowlist secret
+  `HAULAGE_ADMIN_PASSWORD`). Admin-only routes: `GET /admin/users`, # pragma: allowlist secret
   `POST /admin/users` (create driver profile), `DELETE /admin/users/:username`
   (wipe account + records + receipt files; cannot delete primary mod),
   `GET /admin/users/:username` (`?includeDeleted=1` for soft-deleted ledger
@@ -185,7 +189,7 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   (`lib/ledger-lifecycle.js`) locks those rows (`reconciled` / `reconciledAt` /
   `reconciledBy`). Reconciled rows cannot be edited or deleted by the driver.
   Deletes are soft (`deletedAt` / `deletedBy`) so tax/summary views use
-  `withActiveLedger`; Haulage_Admin can restore or force-remove via the admin
+  `withActiveLedger`; the primary mod can restore or force-remove via the admin
   panel.
 - Scan enrichment is layered on without editing the provided files:
   `lib/document-breakdown.js` computes the typed component breakdown + ATO
@@ -212,10 +216,12 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   prefers gross). On-disk files stay UUID-named under `data/receipts/`; the
   label is `receipt.filename` (downloads, share, gallery title).
 - **Hosted multi-user (Render):** accounts live under `data/` on a **persistent
-  disk** (`render.yaml` → `haulage-data` at `/opt/render/project/src/data`).
+  disk** (`render.yaml` → `haulage-data` for Driver Hub, `gotax-data` for Go
+  Taxation Suite, both mounted at `/opt/render/project/src/data`).
   Without that disk, every deploy wipes users — the admin list then only shows
-  `Haulage_Admin`. Drivers must register on the **same hosted URL**; local
-  laptop accounts do not appear on Render.
+  the primary mod. Drivers must register on the **same hosted URL**; local
+  laptop accounts do not appear on Render. The two Render services do not share
+  a disk or user list.
 - **Full-store backups.** `lib/backup.js` writes daily `.tar.gz` archives of
   accounts, per-user JSON, receipts, history and support messages to
   `data/backups/` (keeps `BACKUP_KEEP`, default 7; Render uses 5). Prunes old archives and stale `.partial` files before each run; retries once on disk-full. Clock-aligned scheduler
@@ -229,12 +235,17 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   optional notify via `BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL` when mail is
   configured. Hands-off off-site copy: GitHub Action
   `.github/workflows/daily-backup.yml` (+ secrets `HAULAGE_BASE_URL`,
-  `HAULAGE_ADMIN_USERNAME`, `HAULAGE_ADMIN_PASSWORD`) archives to Actions
+  `HAULAGE_ADMIN_USERNAME`, `HAULAGE_ADMIN_PASSWORD`) archives to Actions # pragma: allowlist secret
   artifacts at 5pm Sydney; optional S3 still available.
 - **Render deploy branch must be `main`.** Service `haulage-finance`
-  (`srv-d9ga1gernols73c55bm0`) auto-deploys on commit. There is one shared app
-  build for admin and every driver profile (per-user data only differs under
-  `data/users/`). If the dashboard Production Branch is left on an old
+  (`srv-d9ga1gernols73c55bm0`) auto-deploys on commit. Blueprint service
+  `go-taxation-suite` is the second Render web service for Go Taxation Suite
+  (`APP_PRODUCT=suite`, health `/suite/`, disk `gotax-data`). After this lands
+  on `main`, sync the Blueprint (or create the web service by hand from the
+  same GitHub repo) — adding it to `render.yaml` does not create the instance
+  until Render applies the Blueprint. There is one shared app build per service
+  for admin and every profile (per-user data only differs under `data/users/`
+  or `data/suite/users/`). If the dashboard Production Branch is left on an old
   `cursor/…` feature branch, merges to `main` will not reach users — switch the
   branch back to `main` and redeploy.
 - **Duplicate scan guard:** `/receipts/scan` runs OCR then
@@ -343,7 +354,7 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   outside the window stays listed so an existing profile year is not lost.
 - **Login required to write.** Guests (no session) get `403` on mutating API
   routes — sign in on the Profile tab first. Any signed-in profile can add/edit
-  their own data; admin-only routes (`/admin/*`) still require `Haulage_Admin`.
+  their own data; admin-only routes (`/admin/*`) still require the primary mod.
   Open without login: `GET`s, `/auth/login`, `/auth/logout`, `/auth/register`,
   and `/expenses/preview`.
 - **Uploads require login.** `/receipts/scan`, `/receipts/manual`, and
@@ -380,7 +391,7 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   **one** soft Pro upgrade prompt per calendar month after using **half**
   their free uploads (8 of 15); hard `402` still applies at the cap. After
   the trial ends, `/alerts` soft-notifies to update to a paid plan; the
-  account falls back to Free until they upgrade. **Haulage_Admin** may also
+  account falls back to Free until they upgrade. **the primary mod** may also
   set `planGrant` to `pro_plus` or `free` anytime (Profile → Primary mod →
   Plan). Soft gates return `402` with `UPLOAD_LIMIT` / `PRO_REQUIRED`
   (checked before OCR on scan/manual; PDF/forecast Pro-gated). Stripe

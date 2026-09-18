@@ -66,6 +66,7 @@ npm start
 
 Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
 **Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/**.
+To mimic the dedicated Render host locally: `APP_PRODUCT=suite npm start` — root `/` then redirects to `/suite/`.
 
 ## Scripts
 
@@ -134,9 +135,9 @@ on load — including prompts when email is missing or the password is older tha
   set a new strong password. Without SMTP configured, the UI shows an in-app
   “Continue to reset password” button (`recoveryUrl`) instead of sending mail.
 - Without logging in, the app works against a shared **guest** store.
-- **Primary mod:** username `Haulage_Admin` / password `Haulage_Admin` (bootstrapped
-  on server start; override with `HAULAGE_ADMIN_USERNAME` /
-  `HAULAGE_ADMIN_PASSWORD`). On the Profile tab they see **Primary mod — user
+- **Primary mod:** bootstrapped on server start from `HAULAGE_ADMIN_USERNAME` / # pragma: allowlist secret
+  `HAULAGE_ADMIN_PASSWORD` (set those in the host environment; do not commit # pragma: allowlist secret
+  them). On the Profile tab they see **Primary mod — user
   profiles** and can open any user’s income, expenses and receipt downloads
   (read-only), and **upgrade/downgrade Free ↔ Pro+** at any time.
 
@@ -152,7 +153,7 @@ on load — including prompts when email is missing or the password is older tha
   after the trial ends you keep the Free limits (15 uploads + 1 on-screen
   report) and a soft alert asks you to update to a paid plan.
   Signup copy via `GET /api/haulage/billing/trial`.
-- **Admin Pro+ grant:** `Haulage_Admin` can set any driver to Pro+ or Free via
+- **Admin Pro+ grant:** the primary mod can set any driver to Pro+ or Free via
   Profile → Primary mod (`POST /api/haulage/admin/users/:username/plan`).
 - Profile → **Plan** shows remaining uploads and Choose Pro plan (month/year).
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
@@ -163,9 +164,8 @@ on load — including prompts when email is missing or the password is older tha
 
 - `PORT` — server port (default `3000`).
 - `OPENAI_API_KEY` — optional; enables cloud OCR for receipts/payslips.
-- `HAULAGE_ADMIN_USERNAME` — primary mod username (default `Haulage_Admin`).
-- `HAULAGE_ADMIN_PASSWORD` — primary mod password (default `Haulage_Admin` when
-  username is `Haulage_Admin`).
+- `HAULAGE_ADMIN_USERNAME` — primary mod username (set in the host environment). # pragma: allowlist secret
+- `HAULAGE_ADMIN_PASSWORD` — primary mod password (set in the host environment). # pragma: allowlist secret
 - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`,
   `STRIPE_WEBHOOK_SECRET` — optional Stripe billing for Pro ($5/mo or $60/yr).
   Without them, free quotas and trials still work.
@@ -224,16 +224,38 @@ The app is a plain Node/Express server, so it runs on any host. It binds
 
 ### Render (one-click, real-time updates)
 
+This repo deploys **two** Render web services from the same GitHub repository
+(`render.yaml`). You do **not** need a second GitHub repo.
+
+| Service | Product | Public URL | Persistent disk |
+| --- | --- | --- | --- |
+| `haulage-finance` | Driver Hub / Taxation Hub / Fuel Hub | `https://<service>.onrender.com/haulage/` | `haulage-data` |
+| `go-taxation-suite` | Go Taxation Suite (`APP_PRODUCT=suite`) | `https://<service>.onrender.com/suite/` (root `/` redirects here) | `gotax-data` |
+
+Each service has its **own disk and accounts**. A Driver Hub login does not
+appear on Go Taxation Suite, and vice versa.
+
 1. Push this repo to GitHub (already done).
-2. In Render: **New → Blueprint**, connect this repo. Render reads `render.yaml`
-   and provisions the `haulage-finance` web service.
-3. It redeploys automatically on every push to the connected branch, and gives a
-   permanent URL like `https://haulage-finance.onrender.com/haulage/`.
-4. (Optional) Set `OPENAI_API_KEY` in the dashboard to enable cloud OCR.
+2. **New Blueprint** (first time): Render dashboard → **New → Blueprint** →
+   connect this repo. Render reads `render.yaml` and provisions both services.
+3. **Second service only** (if `haulage-finance` already exists): Dashboard →
+   **Blueprints** → this repo → **Manual Sync** so Render creates
+   `go-taxation-suite` without replacing Driver Hub. Or **New → Web Service**,
+   connect the **same** GitHub repo, name it `go-taxation-suite`, start command
+   `node server.js`, health check `/suite/`, env `APP_PRODUCT=suite`, and attach
+   a 1 GB disk at `/opt/render/project/src/data`.
+4. Both redeploy on every push to the connected branch (**must be `main`**).
+5. Set `APP_BASE_URL` on the suite service to its public HTTPS origin. Add the
+   primary-mod password and optional `OPENAI_API_KEY` / Stripe / SMTP in the
+   Render dashboard (do not commit those values).
+
+A dedicated GitHub repository is optional. If you later copy this codebase into
+its own repo, keep `APP_PRODUCT=suite` and you can point a new Render service at
+that repo instead of using the Blueprint’s second service.
 
 The free plan is reachable but cold-starts after idle and has an **ephemeral
-filesystem** (accounts/receipts reset on redeploy). For always-on + persistent
-data, switch `plan` to `starter` and uncomment the `disk` block in `render.yaml`.
+filesystem** (accounts/receipts reset on redeploy). Persistent disks on these
+services need a paid `starter` plan.
 
 ### Docker (any host)
 
@@ -241,6 +263,10 @@ data, switch `plan` to `starter` and uncomment the `disk` block in `render.yaml`
 docker build -t haulage-finance .
 docker run -p 3000:3000 -v haulage-data:/app/data haulage-finance
 # open http://localhost:3000/haulage/
+
+# Dedicated Go Taxation Suite host (same image, own volume):
+docker run -p 3000:3000 -e APP_PRODUCT=suite -v gotax-data:/app/data haulage-finance
+# open http://localhost:3000/suite/
 ```
 
 The `-v haulage-data:/app/data` volume persists the JSON store, receipts and user
@@ -264,12 +290,16 @@ variables → Actions):
 | Secret | Example |
 |--------|---------|
 | `HAULAGE_BASE_URL` | `https://haulage-finance.onrender.com` |
-| `HAULAGE_ADMIN_USERNAME` | `Haulage_Admin` |
-| `HAULAGE_ADMIN_PASSWORD` | *(your primary mod password)* |
+| `GOTAX_BASE_URL` | `https://go-taxation-suite.onrender.com` |
+| `HAULAGE_ADMIN_USERNAME` | *(primary-mod username secret)* | # pragma: allowlist secret
+| `HAULAGE_ADMIN_PASSWORD` | *(your primary mod password)* | # pragma: allowlist secret
 
 Then: Actions → **Daily data backup** → **Run workflow** once to verify.
 Scheduled runs need no further clicks. Download any day’s file from that
 workflow’s Artifacts list.
+
+Go Taxation Suite uses the same script with secret `GOTAX_BASE_URL` (workflow
+`.github/workflows/daily-backup-suite.yml`).
 
 Optional extras: `BACKUP_S3_BUCKET` + AWS credentials, or `BACKUP_OFFSITE_DIR`.
 `BACKUP_NOTIFY_EMAIL` / `SUPPORT_EMAIL` can email when a server-side backup

@@ -12,6 +12,7 @@ COPY . .
 
 ENV NODE_ENV=production
 ENV PORT=3000
+# Dedicated Go Taxation Suite host: APP_PRODUCT=suite (see render.yaml).
 EXPOSE 3000
 
 # Runtime data (JSON store, receipts, user accounts) lives here. Mount a

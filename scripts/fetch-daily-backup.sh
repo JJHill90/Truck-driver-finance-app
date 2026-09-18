@@ -4,8 +4,9 @@
 #
 # Required env:
 #   HAULAGE_BASE_URL          e.g. https://haulage-finance.onrender.com
-#   HAULAGE_ADMIN_USERNAME    primary mod username
-#   HAULAGE_ADMIN_PASSWORD    primary mod password
+#   GOTAX_BASE_URL            alias for a Go Taxation Suite Render host
+#   HAULAGE_ADMIN_USERNAME    primary mod username # pragma: allowlist secret
+#   HAULAGE_ADMIN_PASSWORD    primary mod password # pragma: allowlist secret
 #
 # Optional:
 #   OUT_DIR                   default ./backups
@@ -13,14 +14,14 @@
 
 set -euo pipefail
 
-BASE_URL="${HAULAGE_BASE_URL:-}"
-USERNAME="${HAULAGE_ADMIN_USERNAME:-}"
-PASSWORD="${HAULAGE_ADMIN_PASSWORD:-}"
+BASE_URL="${HAULAGE_BASE_URL:-${GOTAX_BASE_URL:-}}"
+USERNAME="${HAULAGE_ADMIN_USERNAME:-}" # pragma: allowlist secret
+PASSWORD="${HAULAGE_ADMIN_PASSWORD:-}" # pragma: allowlist secret
 OUT_DIR="${OUT_DIR:-./backups}"
 SKIP_CREATE="${SKIP_CREATE:-0}"
 
 if [[ -z "$BASE_URL" || -z "$USERNAME" || -z "$PASSWORD" ]]; then
-  echo "Missing HAULAGE_BASE_URL / HAULAGE_ADMIN_USERNAME / HAULAGE_ADMIN_PASSWORD" >&2
+  echo "Missing HAULAGE_BASE_URL / HAULAGE_ADMIN_USERNAME / HAULAGE_ADMIN_PASSWORD" >&2 # pragma: allowlist secret
   exit 1
 fi
 

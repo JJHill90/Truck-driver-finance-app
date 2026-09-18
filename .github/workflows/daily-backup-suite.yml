@@ -1,0 +1,67 @@
+# Off-site daily backup for the Go Taxation Suite Render service.
+# Same script as Driver Hub; set GOTAX_BASE_URL to the suite host.
+#
+# Required repository secrets: GOTAX_BASE_URL plus the same primary-mod
+# username/password secrets used by the Driver Hub backup workflow.
+#
+# Manual test: Actions → Daily Go Taxation Suite backup → Run workflow
+
+name: Daily Go Taxation Suite backup
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 17:00 AEDT (UTC+11)
+    - cron: "0 7 * * *" # 17:00 AEST (UTC+10)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-gotax-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Sydney local hour
+        id: gate
+        run: |
+          HOUR="$(TZ=Australia/Sydney date +%H)"
+          echo "Sydney hour=${HOUR} event=${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$HOUR" = "17" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping — not 5pm in Australia/Sydney."
+          fi
+
+      - name: Checkout
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Create and download backup
+        if: steps.gate.outputs.run == 'true'
+        id: fetch
+        env:
+          GOTAX_BASE_URL: ${{ secrets.GOTAX_BASE_URL }}
+          HAULAGE_ADMIN_USERNAME: ${{ secrets.HAULAGE_ADMIN_USERNAME }} # pragma: allowlist secret
+          HAULAGE_ADMIN_PASSWORD: ${{ secrets.HAULAGE_ADMIN_PASSWORD }} # pragma: allowlist secret
+          OUT_DIR: backups
+        run: |
+          if [ -z "$GOTAX_BASE_URL" ] || [ -z "$HAULAGE_ADMIN_USERNAME" ] || [ -z "$HAULAGE_ADMIN_PASSWORD" ]; then # pragma: allowlist secret
+            echo "Set repository secrets GOTAX_BASE_URL, HAULAGE_ADMIN_USERNAME, HAULAGE_ADMIN_PASSWORD." # pragma: allowlist secret
+            exit 1
+          fi
+          chmod +x scripts/fetch-daily-backup.sh
+          bash scripts/fetch-daily-backup.sh
+
+      - name: Upload backup artifact
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gotax-backup-${{ steps.fetch.outputs.BACKUP_ID || github.run_id }}
+          path: backups/*.tar.gz
+          if-no-files-found: error
+          retention-days: 90

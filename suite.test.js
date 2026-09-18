@@ -171,9 +171,49 @@ describe("suite scan breakdown", () => {
 });
 
 describe("suite product detection", () => {
+  const prevProduct = process.env.APP_PRODUCT;
+  const prevStandalone = process.env.GOTAX_STANDALONE;
+
+  afterEach(() => {
+    if (prevProduct === undefined) delete process.env.APP_PRODUCT;
+    else process.env.APP_PRODUCT = prevProduct;
+    if (prevStandalone === undefined) delete process.env.GOTAX_STANDALONE;
+    else process.env.GOTAX_STANDALONE = prevStandalone;
+  });
+
   it("detects the suite cookie and /suite referer", () => {
+    delete process.env.APP_PRODUCT;
+    delete process.env.GOTAX_STANDALONE;
     expect(suite.productOf({ headers: { cookie: "gotax_product=1" } })).toBe("suite");
     expect(suite.productOf({ headers: { referer: "http://localhost:3000/suite/" } })).toBe("suite");
+    expect(suite.productOf({ headers: { cookie: "" } })).toBe("haulage");
+    expect(suite.publicHomePath()).toBe("/haulage/");
+    expect(suite.recoveryPagePath({ headers: { cookie: "" } })).toBe("/haulage/recover.html");
+    expect(suite.recoveryPagePath({ headers: { cookie: "gotax_product=1" } })).toBe(
+      "/suite/recover.html"
+    );
+  });
+
+  it("treats APP_PRODUCT=suite as a dedicated Render host", () => {
+    process.env.APP_PRODUCT = "suite";
+    delete process.env.GOTAX_STANDALONE;
+    expect(suite.isStandaloneSuite()).toBe(true);
+    expect(suite.productOf({ headers: { cookie: "" } })).toBe("suite");
+    expect(suite.publicHomePath()).toBe("/suite/");
+    expect(suite.recoveryPagePath({ headers: {} })).toBe("/suite/recover.html");
+  });
+
+  it("treats GOTAX_STANDALONE=1 as a dedicated Render host", () => {
+    delete process.env.APP_PRODUCT;
+    process.env.GOTAX_STANDALONE = "1";
+    expect(suite.isStandaloneSuite()).toBe(true);
+    expect(suite.productOf(null)).toBe("suite");
+  });
+
+  it("does not switch Driver Hub when APP_PRODUCT=haulage", () => {
+    process.env.APP_PRODUCT = "haulage";
+    process.env.GOTAX_STANDALONE = "1";
+    expect(suite.isStandaloneSuite()).toBe(false);
     expect(suite.productOf({ headers: { cookie: "" } })).toBe("haulage");
   });
 });
