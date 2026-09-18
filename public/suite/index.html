@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="./truck.svg" />
-    <title>Driver Hub — Taxation Hub &amp; Fuel Hub</title>
+    <link rel="icon" type="image/svg+xml" href="/suite/suite-mark.svg" />
+    <title>Go Taxation Suite</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,26 +12,35 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
+    <link rel="stylesheet" href="./suite.css?v=gotax-3" />
+    <script>
+      document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
+      try {
+        localStorage.setItem("driverhub-selected-app", "taxationhub");
+      } catch (e) {
+        /* ignore */
+      }
+    </script>
   </head>
-  <body class="auth-locked">
-    <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
+  <body class="auth-locked gotax-suite">
+    <!-- Login gate: then open Go Taxation Suite -->
     <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky" aria-hidden="true"></div>
       <div class="title-screen-road" aria-hidden="true"></div>
       <img class="title-screen-truck" src="./truck.svg" alt="" aria-hidden="true" />
       <div class="title-screen-content">
-        <p id="title-brand" class="title-screen-brand">Driver<span class="brand-hub">Hub</span></p>
+        <p id="title-brand" class="title-screen-brand">Go Taxation <span class="brand-hub">Suite</span></p>
         <div id="title-auth-panel">
           <h1 class="title-screen-headline">
-            One login for every driver app.
+            Tax records for employees, sole traders and partnerships.
           </h1>
           <p class="title-screen-sub">
-            Sign in with your Driver Hub account, then open Taxation Hub or Fuel Hub from your hub.
+            Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report — the same layout as Taxation Hub, with general ATO rules instead of truck-driver legislation.
           </p>
           <form id="title-auth-form" class="title-auth-form" autocomplete="on">
             <label>
-              Driver Hub username
-              <input id="title-auth-username" name="username" autocomplete="username" placeholder="e.g. james.smith" />
+              Username
+              <input id="title-auth-username" name="username" autocomplete="username" placeholder="e.g. alex.nguyen" />
             </label>
             <label id="title-auth-email-wrap" class="hidden">
               Email
@@ -52,8 +61,8 @@
               Create a strong password: 12+ characters with upper &amp; lower case, a number and a symbol. Avoid common words.
             </p>
             <div class="title-auth-actions">
-              <button type="submit" class="btn primary" id="title-auth-login">Log in to Driver Hub</button>
-              <button type="button" class="btn secondary" id="title-auth-register">Create Driver Hub profile</button>
+              <button type="submit" class="btn primary" id="title-auth-login">Log in</button>
+              <button type="button" class="btn secondary" id="title-auth-register">Create profile</button>
             </div>
             <p id="title-trial-hint" class="title-trial-hint muted" hidden></p>
             <button type="button" class="btn link title-forgot-btn" id="title-auth-forgot">
@@ -64,7 +73,7 @@
             </button>
           </form>
           <form id="title-recover-form" class="title-auth-form hidden" autocomplete="on">
-            <p class="muted">Enter the email on your Driver Hub profile. We’ll email a recovery link when mail is configured; otherwise you can continue on this page to reset your password.</p>
+            <p class="muted">Enter the email on your profile. We’ll email a recovery link when mail is configured; otherwise you can continue on this page to reset your password.</p>
             <label>
               Email
               <input id="title-recover-email" name="recover-email" type="email" autocomplete="email" placeholder="you@example.com" />
@@ -83,27 +92,22 @@
             <span id="title-hub-plan-badge" class="hub-plan-badge hidden" aria-live="polite"></span>
           </p>
           <p class="title-screen-sub">
-            Signed in as <strong id="title-hub-username">—</strong>. Open Taxation Hub or Fuel Hub — both use this Driver Hub login.
+            Signed in as <strong id="title-hub-username">—</strong>. Opening Go Taxation Suite.
           </p>
           <div class="title-hub-apps">
             <button type="button" class="title-hub-app" id="hub-open-taxationhub" data-hub-app="taxationhub">
-              <span class="title-hub-app-name">Taxation<span class="brand-hub">Hub</span></span>
-              <span class="title-hub-app-desc">Tax services for drivers — consolidate expenses, remittances, receipt scans and EOFY estimates in one place.</span>
-              <span class="title-hub-app-cta">Open Taxation Hub</span>
+              <span class="title-hub-app-name">Go Taxation <span class="brand-hub">Suite</span></span>
+              <span class="title-hub-app-desc">PAYG, sole trader and partnership tax records — expenses, income scans and EOFY estimates.</span>
+              <span class="title-hub-app-cta">Continue</span>
             </button>
-            <button type="button" class="title-hub-app" id="hub-open-fuelhub" data-hub-app="fuelhub">
-              <span class="title-hub-app-name">Fuel<span class="brand-hub">Hub</span></span>
-              <span class="title-hub-app-desc">Plan diesel fills on NHVR freight routes — load, trailers, tank, cards and cheapest truck-access stops. Not a car-nav shortcut.</span>
-              <span class="title-hub-app-cta">Open Fuel Hub</span>
+            <button type="button" class="title-hub-app hidden" id="hub-open-fuelhub" data-hub-app="fuelhub" hidden>
+              <span class="title-hub-app-name">Fuel Hub</span>
+              <span class="title-hub-app-desc">Not part of Go Taxation Suite.</span>
+              <span class="title-hub-app-cta">Hidden</span>
             </button>
           </div>
-          <p class="title-screen-sub suite-cross-link">
-            Not a truck driver?
-            <a href="/suite/">Open Go Taxation Suite</a>
-            for PAYG employees, sole traders and partnerships.
-          </p>
           <div class="title-hub-actions">
-            <button type="button" class="btn title-hub-logout" id="title-hub-logout">Log out of DriverHub</button>
+            <button type="button" class="btn title-hub-logout" id="title-hub-logout">Log out</button>
           </div>
           <p id="title-hub-message" class="title-auth-message" role="status"></p>
         </div>
@@ -114,8 +118,8 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <img src="./truck.svg" alt="" />
-          <span>Taxation<span class="brand-hub">Hub</span></span>
+          <img src="./suite-mark.svg" alt="" />
+          <span>Go Taxation <span class="brand-hub">Suite</span></span>
           <span id="sidebar-plan-badge" class="hub-plan-badge hidden" aria-live="polite"></span>
         </div>
         <nav class="sidebar-nav">
@@ -128,8 +132,8 @@
           <button class="nav-btn" data-view="forecast">Forecast</button>
         </nav>
         <div class="sidebar-bottom">
-          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub and support">
-            <button type="button" class="nav-btn" id="nav-driverhub">Driver Hub Apps</button>
+          <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Support">
+            <button type="button" class="nav-btn gotax-hidden" id="nav-driverhub" hidden>Apps</button>
             <button class="nav-btn" data-view="support">Support</button>
           </nav>
           <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">
@@ -305,7 +309,7 @@
                 <label>Gross Pay ($)<input type="number" name="grossTotal" step="0.01" min="0" /></label>
                 <label>GST ($)<input type="number" name="gstAmount" step="0.01" min="0" value="0" /></label>
                 <label>Net Pay ($)<input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" required /></label>
-                <label>Living Away from Home days (LAFHA)<input type="number" name="overnightDays" step="1" min="0" max="31" placeholder="e.g. 7" /></label>
+                <label>Work travel nights<input type="number" name="overnightDays" step="1" min="0" max="31" placeholder="e.g. 7" /></label>
                 <input type="hidden" name="taxableIncome" value="" />
                 <input type="hidden" name="amount" value="" />
                 <!-- Kept for verbatim app.js prefillIncomeForm (pay period → reference) -->
@@ -672,10 +676,10 @@
           <div id="admin-panel-home">
           <div class="panel hidden" id="admin-panel">
             <div class="panel-header">
-              <h2>Primary mod — Taxation Hub &amp; Fuel Hub</h2>
+              <h2>Primary mod — Go Taxation Suite</h2>
               <button type="button" class="btn success" id="admin-refresh">Refresh</button>
             </div>
-            <p class="muted">Create driver profiles, upgrade or downgrade their plan for both apps, and add, edit or remove Taxation Hub ledger rows and Fuel Hub data. Opening a driver does not switch your signed-in session. The primary mod account cannot be deleted.</p>
+            <p class="muted">Create taxpayer profiles, upgrade or downgrade their plan, and add, edit or remove ledger rows. Opening a user does not switch your signed-in session. The primary mod account cannot be deleted.</p>
             <form id="admin-create-user-form" class="form-grid admin-create-form">
               <label>Username<input type="text" id="admin-new-username" name="username" autocomplete="off" placeholder="e.g. james.smith" required /></label>
               <label>Email (optional)<input type="email" id="admin-new-email" name="email" autocomplete="off" placeholder="driver@example.com" /></label>
@@ -707,52 +711,51 @@
           </div>
           </div>
           <div class="panel">
-            <div class="panel-header"><h2>Driver Profile</h2></div>
+            <div class="panel-header"><h2>Taxpayer profile</h2></div>
             <form id="profile-form" class="form-grid">
               <label>Name<input type="text" name="name" placeholder="Full name" /></label>
-              <label>Driver type<select id="driver-type" name="driverType"></select></label>
-              <label class="profile-employer-field">Employer
+              <label>Registration type<select id="driver-type" name="driverType"></select></label>
+              <p class="muted small span-2 suite-entity-note" id="suite-entity-hint">
+                Employee (PAYG) uses salary and work-related deductions. Sole traders and partnerships also record business income, ABN and GST if registered.
+              </p>
+              <label class="profile-employer-field">Employer / trading name
                 <span class="profile-employer-input-wrap">
                   <input
                     type="text"
                     name="employer"
                     id="profile-employer"
-                    placeholder="Start typing, e.g. Lindsay"
+                    placeholder="Employer or trading name"
                     autocomplete="organization"
                     aria-autocomplete="list"
                     aria-controls="profile-employer-suggestions"
                   />
                   <ul id="profile-employer-suggestions" class="profile-employer-suggestions" role="listbox" hidden></ul>
                 </span>
-                <span class="muted small">Suggestions from known transport fleets — you can still type any employer.</span>
+                <span class="muted small">Occupation suggestions appear as you type — you can enter any employer or trading name.</span>
               </label>
-              <label>Annual salary ($)<input type="number" name="annualSalary" step="0.01" min="0" id="profile-annual-salary" /></label>
-              <label>Licence class
-                <select name="licenceClass" id="profile-licence-class" aria-label="Licence class from salary">
-                  <option value="lr_mr">LR/MR — Light/Medium Rigid ($58k–$75k)</option>
-                  <option value="hr">HR — Heavy Rigid ($70k–$88k)</option>
-                  <option value="hc">HC — Heavy Combination ($79k–$110k)</option>
-                  <option value="mc">MC — Multi-Combination ($110k–$160k+)</option>
+              <label>Occupation<input type="text" name="occupation" id="profile-occupation" placeholder="e.g. office administrator" /></label>
+              <label>ABN<input type="text" name="abn" id="profile-abn" placeholder="11-digit ABN" inputmode="numeric" /></label>
+              <label>Annual salary / expected income ($)<input type="number" name="annualSalary" step="0.01" min="0" id="profile-annual-salary" /></label>
+              <label class="gotax-hidden profile-licence-field">Licence class
+                <select name="licenceClass" id="profile-licence-class" aria-label="Unused in Go Taxation Suite">
+                  <option value="lr_mr">LR/MR</option>
+                  <option value="hr">HR</option>
+                  <option value="hc">HC</option>
+                  <option value="mc">MC</option>
                 </select>
               </label>
-              <p class="muted small span-2" id="licence-class-hint">
-                Licence class updates from annual salary (LR/MR → HR → HC → MC).
-              </p>
-              <label>Work vehicle
-                <select name="workCombination" id="profile-work-combination" aria-label="Work vehicle for Fuel Hub">
-                  <option value="rigid">Heavy rigid</option>
-                  <option value="semi">Prime mover + semi</option>
-                  <option value="b_double">B-double</option>
-                  <option value="b_triple">B-triple</option>
-                  <option value="road_train_t1">Type 1 road train</option>
-                  <option value="road_train_t2">Type 2 road train</option>
+              <p class="muted small span-2 gotax-hidden" id="licence-class-hint"></p>
+              <label class="gotax-hidden profile-vehicle-field">Work vehicle
+                <select name="workCombination" id="profile-work-combination" aria-label="Unused in Go Taxation Suite">
+                  <option value="rigid">—</option>
                 </select>
               </label>
-              <p class="muted small span-2" id="work-combination-hint">
-                Fuel Hub uses this vehicle plus your driver type (e.g. linehaul) to set diesel L/100 km on planned runs. Linehaul on HC/MC defaults to a B-double.
-              </p>
+              <p class="muted small span-2 gotax-hidden" id="work-combination-hint"></p>
+              <label>Partnership name<input type="text" name="partnershipName" id="profile-partnership-name" placeholder="If registered as a partnership" /></label>
+              <label>Your partnership share (%)<input type="number" name="partnerSharePercent" id="profile-partner-share" min="0" max="100" step="0.01" placeholder="50" /></label>
               <label>Financial year<select id="profile-financial-year" name="financialYear"></select></label>
-              <label class="checkbox span-2"><input type="checkbox" name="tfnSupplied" /> TFN supplied to employer</label>
+              <label class="checkbox span-2"><input type="checkbox" name="tfnSupplied" /> TFN supplied to employer / ATO</label>
+              <label class="checkbox span-2"><input type="checkbox" name="gstRegistered" id="profile-gst-registered" /> GST registered (sole trader / partnership)</label>
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
             </form>
           </div>
@@ -894,8 +897,8 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=gross-tax-doughnut-1"></script>
+    <script src="./enhancements.js?v=gotax-create-profile-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
-    <script src="./fuelhub.js?v=admin-both-2"></script>
+    <script src="./suite.js?v=gotax-3"></script>
   </body>
 </html>

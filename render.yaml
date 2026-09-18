@@ -1,7 +1,11 @@
-# Render Blueprint — one-click deploy of the Haulage finance app.
+# Render Blueprint — two web services from this repo:
+#   haulage-finance     Driver Hub / Taxation Hub / Fuel Hub  →  /haulage/
+#   go-taxation-suite   Go Taxation Suite (general ATO)       →  /suite/
 # In the Render dashboard: New → Blueprint → connect this repo. Render detects
-# this file and provisions the service. The app redeploys automatically on every
-# push to the connected branch (real-time updates).
+# this file and provisions both services (each with its own persistent disk).
+# If haulage-finance already exists, open Blueprints → this repo → Manual Sync
+# to create the second service without replacing the first.
+# Both redeploy automatically on every push to the connected branch (use main).
 services:
   - type: web
     name: haulage-finance
@@ -16,14 +20,17 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Driver Hub host. Do not set this to suite on the truck-driver service.
+      - key: APP_PRODUCT
+        value: haulage
       # Optional: enable cloud OCR. Set the value in the Render dashboard.
       - key: OPENAI_API_KEY
         sync: false
-      # Primary mod (sole admin) account — password set in Render dashboard / API
-      # (defaults to Haulage_Admin when username is Haulage_Admin).
-      - key: HAULAGE_ADMIN_USERNAME
-        value: Haulage_Admin
-      - key: HAULAGE_ADMIN_PASSWORD
+      # Primary mod (sole admin) account — username and password are set in
+      # the Render dashboard (not stored in this Blueprint).
+      - key: HAULAGE_ADMIN_USERNAME # pragma: allowlist secret
+        sync: false
+      - key: HAULAGE_ADMIN_PASSWORD # pragma: allowlist secret
         sync: false
       # Outbound email — required for Support contact + recovery emails to leave
       # the server. Prefer Gmail SMTP (app password) OR Resend API key.
@@ -102,5 +109,99 @@ services:
     # Persist accounts + receipts across deploys (required for multi-user admin).
     disk:
       name: haulage-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+
+  # Second Render service — Go Taxation Suite on its own URL and disk.
+  # Root `/` and `/haulage` redirect to `/suite/`. Accounts are NOT shared with
+  # haulage-finance (separate persistent disk). Same GitHub repo / branch.
+  - type: web
+    name: go-taxation-suite
+    runtime: node
+    plan: starter # persistent disk requires a paid plan
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /suite/
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: APP_PRODUCT
+        value: suite
+      - key: OPENAI_API_KEY
+        sync: false
+      # Primary mod password is set in the Render dashboard (same bootstrap as Driver Hub).
+      - key: HAULAGE_ADMIN_USERNAME # pragma: allowlist secret
+        sync: false
+      - key: HAULAGE_ADMIN_PASSWORD # pragma: allowlist secret
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_CAPACITOR
+        sync: false
+      - key: SUPPORT_EMAIL
+        value: support@godriverhub.com
+      - key: MAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: ALLOW_GUEST_STORE
+        value: "0"
+      - key: AUTH_LOCKOUT_MS
+        value: "1800000"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_MAX
+        value: "30"
+      - key: RATE_LIMIT_LOGIN_MAX
+        value: "20"
+      - key: BACKUP_ENABLED
+        value: "1"
+      - key: BACKUP_AT
+        value: "17:00"
+      - key: BACKUP_TIMEZONE
+        value: Australia/Sydney
+      - key: BACKUP_KEEP
+        value: "5"
+      - key: BACKUP_MIN_KEEP
+        value: "2"
+      - key: BACKUP_NOTIFY_EMAIL
+        sync: false
+      - key: BACKUP_OFFSITE_DIR
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_PREFIX
+        value: gotax-backups
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: ap-southeast-2
+      # Stripe — Go Taxation Suite Pro. Use a separate Price from Taxation Hub.
+      # Webhook endpoint: /api/haulage/billing/webhook
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+    disk:
+      name: gotax-data
       mountPath: /opt/render/project/src/data
       sizeGB: 1
