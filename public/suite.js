@@ -20,56 +20,52 @@
   }
 
   function relabelOvernight(root) {
-    if (!root) return;
-    root.querySelectorAll(".overnight-title").forEach((el) => {
-      el.textContent = "Work travel nights";
-    });
-    root.querySelectorAll(".overnight-stat").forEach((el) => {
-      el.innerHTML = el.innerHTML
-        .replace(/Travel \/ LAFHA days claimed YTD/g, "Work travel nights claimed YTD")
-        .replace(/projected EOFY Travel \/ LAFHA days/g, "projected EOFY work travel nights");
-    });
-    root.querySelectorAll(".overnight-hint, .overnight-meta, summary").forEach((el) => {
-      el.textContent = String(el.textContent || "")
+    if (!root || root.dataset.gotaxOvernight === "1") return;
+    const title = root.querySelector(".overnight-title");
+    if (!title) return;
+    if (title.textContent === "Work travel nights") {
+      root.dataset.gotaxOvernight = "1";
+      return;
+    }
+    title.textContent = "Work travel nights";
+    root.querySelectorAll(".overnight-stat, .overnight-hint, .overnight-meta, summary").forEach((el) => {
+      const next = String(el.textContent || "")
         .replace(/Travel \/ Living Away from Home \(LAFHA\)/g, "work travel")
         .replace(/Living Away from Home days/g, "Work travel nights")
         .replace(/LAFHA/g, "travel")
         .replace(/truck-driver meal rate/g, "ATO reasonable travel meal rate")
-        .replace(/Travel\/LAFHA/g, "work travel");
+        .replace(/Travel\/LAFHA/g, "work travel")
+        .replace(/Travel \/ LAFHA days claimed YTD/g, "Work travel nights claimed YTD")
+        .replace(/projected EOFY Travel \/ LAFHA days/g, "projected EOFY work travel nights");
+      if (next !== el.textContent) el.textContent = next;
     });
+    root.dataset.gotaxOvernight = "1";
   }
 
   function watchOvernight() {
-    const ids = ["dashboard-overnight-box", "forecast-overnight-box"];
-    ids.forEach((id) => {
+    ["dashboard-overnight-box", "forecast-overnight-box"].forEach((id) => {
       const el = byId(id);
       if (!el) return;
       relabelOvernight(el);
-      new MutationObserver(() => relabelOvernight(el)).observe(el, { childList: true, subtree: true });
+      new MutationObserver(() => {
+        el.dataset.gotaxOvernight = "";
+        relabelOvernight(el);
+      }).observe(el, { childList: true });
     });
   }
 
-  function relabelScanCopy() {
-    document.body.addEventListener(
-      "DOMNodeInserted",
-      () => {
-        /* deprecated; observer below */
-      },
-      false
-    );
-    new MutationObserver(() => {
-      document.querySelectorAll("label, p, h3, h4, summary").forEach((el) => {
-        const t = el.textContent || "";
-        if (/Living Away from Home|LAFHA/.test(t) && !el.dataset.gotaxRelabelled) {
-          el.dataset.gotaxRelabelled = "1";
-          el.innerHTML = el.innerHTML
-            .replace(/Living Away from Home days \(LAFHA\)/g, "Work travel nights")
-            .replace(/Living Away from Home \/ Travel allowance/g, "Travel allowance")
-            .replace(/Travel \/ LAFHA allowance/g, "Travel allowance")
-            .replace(/LAFHA/g, "travel");
-        }
-      });
-    }).observe(document.body, { childList: true, subtree: true });
+  function relabelScanCopy(root) {
+    (root || document).querySelectorAll("label, p, h3, h4, summary").forEach((el) => {
+      if (el.dataset.gotaxRelabelled) return;
+      const t = el.textContent || "";
+      if (!/Living Away from Home|LAFHA/.test(t)) return;
+      el.dataset.gotaxRelabelled = "1";
+      el.innerHTML = el.innerHTML
+        .replace(/Living Away from Home days \(LAFHA\)/g, "Work travel nights")
+        .replace(/Living Away from Home \/ Travel allowance/g, "Travel allowance")
+        .replace(/Travel \/ LAFHA allowance/g, "Travel allowance")
+        .replace(/LAFHA/g, "travel");
+    });
   }
 
   function syncEntityFields() {
@@ -110,15 +106,15 @@
   }
 
   function patchTitles() {
-    const TITLE_MAP = {
-      "Driver profile": "Taxpayer profile",
-      "Driver Profile": "Taxpayer profile",
-    };
     const title = byId("page-title");
-    if (title && TITLE_MAP[title.textContent]) title.textContent = TITLE_MAP[title.textContent];
+    if (title && /driver profile/i.test(title.textContent || "")) {
+      title.textContent = "Taxpayer profile";
+    }
     document.querySelectorAll("#view-report h3").forEach((h) => {
-      if (/Line ?[Hh]aul|Driver/.test(h.textContent || "")) {
-        h.textContent = (h.textContent || "")
+      const t = h.textContent || "";
+      if (/Linehaul|Line Haulage/i.test(t) && !h.dataset.gotaxTitle) {
+        h.dataset.gotaxTitle = "1";
+        h.textContent = t
           .replace(/Linehaul Driver – Performance & Tax Summary/g, "Go Taxation Suite – Performance & Tax Summary")
           .replace(/Line Haulage Driver/g, "Taxpayer");
       }
@@ -127,10 +123,13 @@
 
   function start() {
     watchOvernight();
-    relabelScanCopy();
+    relabelScanCopy(document);
     injectHomeOfficeHours();
     byId("driver-type")?.addEventListener("change", syncEntityFields);
     syncEntityFields();
+    setInterval(patchTitles, 2000);
+    patchTitles();
+
     const form = byId("profile-form");
     form?.addEventListener(
       "submit",
@@ -146,18 +145,28 @@
       },
       true
     );
-    setInterval(patchTitles, 1500);
-    patchTitles();
 
-    // If enhancements shows the hub picker, continue into the shell.
     const picker = byId("title-hub-picker");
+    let opened = false;
     if (picker) {
-      new MutationObserver(() => {
+      const tryOpen = () => {
+        if (opened) return;
         if (!picker.classList.contains("hidden") && document.body.classList.contains("auth-locked")) {
+          opened = true;
           byId("hub-open-taxationhub")?.click();
         }
-      }).observe(picker, { attributes: true, attributeFilter: ["class"] });
+      };
+      tryOpen();
+      new MutationObserver(tryOpen).observe(picker, { attributes: true, attributeFilter: ["class"] });
     }
+
+    new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach((node) => {
+          if (node.nodeType === 1) relabelScanCopy(node);
+        });
+      }
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === "loading") {
