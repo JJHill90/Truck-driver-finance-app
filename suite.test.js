@@ -309,6 +309,40 @@ describe("suite product detection", () => {
     process.env.APP_PRODUCT = "haulage";
     process.env.GOTAX_STANDALONE = "1";
     expect(suite.isStandaloneSuite()).toBe(false);
+    expect(suite.isStandaloneHaulage()).toBe(true);
     expect(suite.productOf({ headers: { cookie: "" } })).toBe("haulage");
+  });
+
+  it("ignores the suite cookie, referer and query on a locked Driver Hub host", () => {
+    process.env.APP_PRODUCT = "haulage";
+    delete process.env.GOTAX_STANDALONE;
+    const req = {
+      headers: {
+        cookie: "gotax_product=1",
+        referer: "http://localhost:3000/suite/",
+      },
+      query: { product: "suite" },
+    };
+    expect(suite.isSuiteRequest(req)).toBe(false);
+    expect(suite.productOf(req)).toBe("haulage");
+    expect(suite.recoveryPagePath(req)).toBe("/haulage/recover.html");
+    expect(suite.lockedProductRedirectPath("/suite/")).toBe("/haulage/");
+    expect(suite.lockedProductRedirectPath("/suite/recover.html")).toBe("/haulage/");
+    expect(suite.lockedProductRedirectPath("/haulage/")).toBeNull();
+  });
+
+  it("redirects /haulage to /suite on a locked Suite host", () => {
+    process.env.APP_PRODUCT = "suite";
+    expect(suite.lockedProductRedirectPath("/haulage/")).toBe("/suite/");
+    expect(suite.lockedProductRedirectPath("/haulage/recover.html")).toBe("/suite/recover.html");
+    expect(suite.lockedProductRedirectPath("/suite/")).toBeNull();
+    expect(suite.productOf({ headers: { cookie: "" } })).toBe("suite");
+  });
+
+  it("does not redirect either UI on a combined local host", () => {
+    delete process.env.APP_PRODUCT;
+    delete process.env.GOTAX_STANDALONE;
+    expect(suite.lockedProductRedirectPath("/suite/")).toBeNull();
+    expect(suite.lockedProductRedirectPath("/haulage/")).toBeNull();
   });
 });

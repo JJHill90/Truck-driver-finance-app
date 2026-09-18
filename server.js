@@ -661,9 +661,13 @@ function optionalScanMultipart(req, res, next) {
 }
 
 // Resolve product (Taxation Hub vs Go Taxation Suite) then the signed-in user.
-api.use((req, _res, next) => {
+api.use((req, res, next) => {
+  const cookies = parseCookies(req);
   req.product = suite.productOf(req);
-  const token = parseCookies(req)[SESSION_COOKIE];
+  if (suite.isStandaloneHaulage() && cookies.gotax_product) {
+    res.append("Set-Cookie", "gotax_product=; Path=/; Max-Age=0; SameSite=Lax");
+  }
+  const token = cookies[SESSION_COOKIE];
   req.sessionToken = token || null;
   req.user = auth.getSessionUser(token);
   next();
@@ -941,9 +945,13 @@ api.get("/lafha", (req, res) => {
 });
 
 api.get("/version", (_req, res) => {
+  const lockedSuite = suite.isStandaloneSuite();
+  const lockedHaulage = suite.isStandaloneHaulage();
   res.json({
     prNumber: HAULAGE_PR_NUMBER,
     label: formatVersionLabel(HAULAGE_PR_NUMBER),
+    product: lockedSuite ? "suite" : "haulage",
+    productLocked: lockedSuite || lockedHaulage,
   });
 });
 
@@ -3966,6 +3974,18 @@ api.post("/support/contact", async (req, res) => {
 
 app.use("/api/haulage", api);
 
+// Locked Render hosts refuse the other product's UI so Driver Hub and Suite
+// never share a public URL (APP_PRODUCT=haulage → /suite redirects away;
+// APP_PRODUCT=suite → /haulage redirects away).
+app.use((req, res, next) => {
+  const dest = suite.lockedProductRedirectPath(req.path);
+  if (dest) {
+    res.redirect(302, dest);
+    return;
+  }
+  next();
+});
+
 // --- Go Taxation Suite (general PAYG / sole trader / partnership) ----------
 app.get(["/suite", "/suite/"], (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));
@@ -3974,17 +3994,8 @@ app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
 app.use("/suite", express.static(PUBLIC_DIR));
 
 // --- Static UI at /haulage (Driver Hub) ---------------------------------
-// Dedicated Go Taxation Suite hosts (APP_PRODUCT=suite) send / and /haulage
-// to /suite/ so the second Render service is not a truck-driver login.
-if (suite.isStandaloneSuite()) {
-  app.use("/haulage", (req, res) => {
-    const rest = req.url && req.url !== "/" ? req.url : "/";
-    res.redirect(302, `/suite${rest}`);
-  });
-} else {
-  app.use("/haulage", express.static(PUBLIC_DIR));
-  app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
-}
+app.use("/haulage", express.static(PUBLIC_DIR));
+app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 app.get("/", (_req, res) => res.redirect(302, suite.publicHomePath()));
 
 // Error handler -> friendly JSON (413 for oversized uploads).
@@ -4002,6 +4013,8 @@ if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
       console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
+    } else if (suite.isStandaloneHaulage()) {
+      console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
     } else {
       console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
       console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);

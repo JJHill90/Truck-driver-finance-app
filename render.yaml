@@ -20,7 +20,8 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      # Driver Hub host. Do not set this to suite on the truck-driver service.
+      # Driver Hub host. Locks this service to /haulage/ (ignores /suite and
+      # the gotax_product cookie). Do not set this to suite here.
       - key: APP_PRODUCT
         value: haulage
       # Optional: enable cloud OCR. Set the value in the Render dashboard.
@@ -128,6 +129,7 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      # Go Taxation Suite host. Locks this service to /suite/ (redirects /haulage).
       - key: APP_PRODUCT
         value: suite
       - key: OPENAI_API_KEY
