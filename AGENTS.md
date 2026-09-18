@@ -31,6 +31,10 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   in `render.yaml`, disk `gotax-data`): `/` and `/haulage` redirect to `/suite/`,
   every `/api/haulage` request uses the general ATO engine, and accounts stay on
   that service’s own disk — not the Driver Hub `haulage-data` disk.
+  Driver Hub’s service sets `APP_PRODUCT=haulage`: `/suite` redirects to
+  `/haulage/`, the suite cookie is ignored, and truck-driver records stay in
+  `data/users/` on `haulage-data`. The two products do not share accounts,
+  ledgers, or tax tables in production.
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
   shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session

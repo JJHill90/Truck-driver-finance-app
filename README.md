@@ -65,8 +65,7 @@ npm start
 ```
 
 Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
-**Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/**.
-To mimic the dedicated Render host locally: `APP_PRODUCT=suite npm start` — root `/` then redirects to `/suite/`.
+**Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/** only when `APP_PRODUCT` is unset (local combined host). Production Driver Hub sets `APP_PRODUCT=haulage` and redirects `/suite` away. To mimic the dedicated Suite Render host locally: `APP_PRODUCT=suite npm start` — root `/` then redirects to `/suite/`.
 
 ## Scripts
 
@@ -233,7 +232,10 @@ This repo deploys **two** Render web services from the same GitHub repository
 | `go-taxation-suite` | Go Taxation Suite (`APP_PRODUCT=suite`) | `https://<service>.onrender.com/suite/` (root `/` redirects here) | `gotax-data` |
 
 Each service has its **own disk and accounts**. A Driver Hub login does not
-appear on Go Taxation Suite, and vice versa.
+appear on Go Taxation Suite, and vice versa. `APP_PRODUCT` **locks** the host:
+`haulage-finance` ignores the suite cookie and redirects `/suite` to `/haulage/`;
+`go-taxation-suite` redirects `/haulage` to `/suite/`. Truck-driver ledgers stay
+in `data/users/`; Suite ledgers stay in `data/suite/users/` on the other disk.
 
 1. Push this repo to GitHub (already done).
 2. **New Blueprint** (first time): Render dashboard → **New → Blueprint** →

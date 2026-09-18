@@ -9567,6 +9567,9 @@
         el.textContent = data.label;
         if (data.prNumber != null) el.title = `PR #${data.prNumber}`;
       });
+      if (data.productLocked && data.product === "haulage") {
+        document.querySelectorAll(".suite-cross-link").forEach((el) => el.remove());
+      }
     } catch {
       /* keep static fallback in HTML */
     }
