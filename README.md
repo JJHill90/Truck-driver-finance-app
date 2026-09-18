@@ -65,6 +65,7 @@ npm start
 ```
 
 Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
+**Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/**.
 
 ## Scripts
 
@@ -89,6 +90,10 @@ lib/                    Provided backend modules (verbatim):
   local-receipt-ocr.js  Tesseract.js money/text extraction
   income-document-ocr.js Payslip/remittance + PDF parsing
   receipt-ocr-money.js  Money parsing helpers
+lib/suite/              Go Taxation Suite (general ATO, first-party):
+  ato.js                PAYG / sole trader / partnership categories & rates
+  tax.js                EOFY summary without truck-driver determinations
+  breakdown.js          Scan compliance without LAFHA truck estimates
 lib/ (Fuel Hub, first-party):
   fuel-nhvr.js          Heavy-vehicle combinations, mass schemes, freight corridors
   fuel-prices.js        Government-style diesel bands + retailer cards
@@ -104,9 +109,11 @@ public/
   index.html            App shell / all DOM the frontend expects
   app.js                Frontend SPA (provided verbatim)
   enhancements.js       Driver Hub picker, Taxation Hub layer
+  suite.js              Go Taxation Suite overlay
   fuelhub.js            Fuel Hub UI
   styles.css            Styles
   truck.svg             Icon
+public/suite/           Go Taxation Suite shell (same tabs as Taxation Hub)
 data/                   Runtime store + receipts (git-ignored)
 ```
 

@@ -124,6 +124,7 @@ const fuelDashboard = require("./lib/fuel-dashboard");
 const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 const fuelForecast = require("./lib/fuel-forecast");
 const fuelReceipts = require("./lib/fuel-receipts");
+const suite = require("./lib/suite");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -201,7 +202,8 @@ function guestStoreEnabled() {
   );
 }
 
-function emptyGuestRecords() {
+function emptyGuestRecords(product) {
+  if (product === "suite") return suite.emptyGuestRecords();
   return {
     profile: {
       name: "",
@@ -220,22 +222,33 @@ function emptyGuestRecords() {
   };
 }
 
-function fileForUser(user) {
+function productOf(req) {
+  return (req && req.product) || "haulage";
+}
+
+function fileForUser(user, product) {
+  if (product === "suite") {
+    if (!user) return path.join(suite.SUITE_DATA_DIR, "guest.json");
+    return suite.recordsFileFor(user);
+  }
   return user ? auth.recordsFileFor(user) : storage.DEFAULT_FILE;
 }
-function recordsForUser(user) {
+
+function recordsForUser(user, product) {
+  const prod = product || "haulage";
   if (!user) {
     if (!guestStoreEnabled()) {
       // Ephemeral empty shell — never load/persist the shared guest file.
-      return emptyGuestRecords();
+      return emptyGuestRecords(prod);
     }
   }
-  const key = user || "__guest__";
+  const key = suite.cacheKey(user, prod);
   if (!recordsCache.has(key)) {
-    const rec = storage.loadRecords(fileForUser(user));
+    const rec = storage.loadRecords(fileForUser(user, prod));
+    if (prod === "suite") rec.profile = suite.ensureProfile(rec.profile || {});
     recordsCache.set(key, rec);
-    maybeBackfillInvoiceDates(rec, user);
-    maybeBackfillVendorRepair(rec, user);
+    maybeBackfillInvoiceDates(rec, user, prod);
+    maybeBackfillVendorRepair(rec, user, prod);
   }
   return recordsCache.get(key);
 }
@@ -244,14 +257,14 @@ function recordsForUser(user) {
 // instead of the scanned invoice date. Flagged so it runs once and never
 // overrides dates the user later edits; runs in the background so it does not
 // block the first request. Re-runnable on demand via the maintenance endpoint.
-function maybeBackfillInvoiceDates(records, user) {
+function maybeBackfillInvoiceDates(records, user, product) {
   if (!records || (records.meta && records.meta.invoiceDateRefreshV1)) return;
   records.meta = records.meta || {};
   records.meta.invoiceDateRefreshV1 = true; // set first to avoid re-entry
   refreshInvoiceDatesFromScans(records, { openai })
     .then((result) => {
       if (result.updated || records.meta) {
-        persistUserRecords(user, records, fileForUser(user), {
+        persistUserRecords(user, records, fileForUser(user, product), {
           reason: "invoice-date-backfill",
           actor: user || "system",
         });
@@ -267,14 +280,14 @@ function maybeBackfillInvoiceDates(records, user) {
 
 // One-time (per user) repair of junk/empty vendors from stored receipt OCR text
 // (no image re-OCR — that stays opt-in via the maintenance/admin endpoints).
-function maybeBackfillVendorRepair(records, user) {
+function maybeBackfillVendorRepair(records, user, product) {
   if (!records || (records.meta && records.meta.vendorRepairV1)) return;
   records.meta = records.meta || {};
   records.meta.vendorRepairV1 = true;
   repairVendorsFromScans(records, { openai: null, dryRun: false, reOcr: false })
     .then((result) => {
       if (result.updated || records.meta) {
-        persistUserRecords(user, records, fileForUser(user), {
+        persistUserRecords(user, records, fileForUser(user, product), {
           reason: "vendor-repair-backfill",
           actor: user || "system",
         });
@@ -288,7 +301,7 @@ function maybeBackfillVendorRepair(records, user) {
     .catch((err) => console.warn("Vendor repair backfill failed:", err.message));
 }
 function getRecords(req) {
-  return recordsForUser(req.user);
+  return recordsForUser(req.user, productOf(req));
 }
 function sessionUsername(req) {
   return req.user ? String(req.user) : null;
@@ -310,7 +323,7 @@ function persistUserRecords(username, records, file, meta = {}) {
 }
 
 function persist(req, meta = {}) {
-  persistUserRecords(req.user, getRecords(req), fileForUser(req.user), {
+  persistUserRecords(req.user, getRecords(req), fileForUser(req.user, productOf(req)), {
     reason: meta.reason || "auto",
     actor: sessionUsername(req) || req.user || null,
   });
@@ -320,14 +333,30 @@ function persist(req, meta = {}) {
 function flushAllCachedRecordsToDisk() {
   for (const [key, records] of recordsCache.entries()) {
     try {
-      if (key === "__guest__" && !guestStoreEnabled()) continue;
-      const file =
-        key === "__guest__" ? storage.DEFAULT_FILE : auth.recordsFileFor(key);
-      storage.saveRecords(records, file);
+      const parsed = suite.parseCacheKey(key);
+      if (!parsed.user && !guestStoreEnabled()) continue;
+      storage.saveRecords(records, fileForUser(parsed.user, parsed.product));
     } catch (err) {
       console.warn(`Backup flush failed for ${key}:`, err.message);
     }
   }
+}
+
+function expenseAnalysis(req, entry) {
+  if (productOf(req) === "suite") {
+    const profile = (getRecords(req) && getRecords(req).profile) || {};
+    return suite.calcExpenseDeduction(entry, profile);
+  }
+  return calcExpenseDeduction(entry);
+}
+
+function summariseFor(req, records, profile) {
+  if (productOf(req) === "suite") {
+    return suite.summariseYear(records, profile);
+  }
+  const summary = summariseYear(records, profile);
+  applyHistoricalRates(summary, records, profile && profile.financialYear);
+  return summary;
 }
 
 function clearRecordsCache() {
@@ -405,16 +434,19 @@ function assertProFeature(req, res, feature) {
 function profileFor(records, financialYear) {
   return { ...records.profile, financialYear: financialYear || records.profile.financialYear };
 }
-function loadTargetUserRecords(username) {
+function loadTargetUserRecords(username, req) {
   const user = auth.getUser(username);
   if (!user) return null;
-  const file = auth.recordsFileFor(user.username);
+  const prod = req ? productOf(req) : "haulage";
+  const key = suite.cacheKey(user.username, prod);
+  const file = fileForUser(user.username, prod);
   let records;
-  if (recordsCache.has(user.username)) {
-    records = recordsCache.get(user.username);
+  if (recordsCache.has(key)) {
+    records = recordsCache.get(key);
   } else {
     records = storage.loadRecords(file);
-    recordsCache.set(user.username, records);
+    if (prod === "suite") records.profile = suite.ensureProfile(records.profile || {});
+    recordsCache.set(key, records);
   }
   return { user, records, file };
 }
@@ -428,7 +460,7 @@ function persistTarget(loaded, meta = {}) {
 
 function adminTargetFuelhub(req, res) {
   if (!requireAdmin(req, res)) return null;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return null;
@@ -498,21 +530,32 @@ function clearSessionCookie(res, req) {
 // preferring typed labels, de-duplicating by amount, keeping one primary.
 // For expenses, the primary is the overall/grand total (else the largest amount).
 // Missing-data / compliance alerts for the current user's records.
-function buildAlerts(records) {
+function buildAlerts(records, product) {
   const alerts = [];
   const profile = records.profile || {};
-  const summary = summariseYear(records, profile);
+  const summary =
+    product === "suite" ? suite.summariseYear(records, profile) : summariseYear(records, profile);
 
   const missing = [];
   if (!profile.name) missing.push("name");
-  if (!profile.employer) missing.push("employer");
+  if (product === "suite") {
+    const entity = suite.normalizeEntityType(profile.entityType || profile.driverType);
+    if (entity === "employee" && !profile.employer) missing.push("employer");
+    if (entity === "sole_trader" && !profile.abn && !profile.tradingName && !profile.employer) {
+      missing.push("ABN or trading name");
+    }
+    if (entity === "partnership" && !profile.partnershipName) missing.push("partnership name");
+  } else if (!profile.employer) {
+    missing.push("employer");
+  }
   if (!Number(profile.annualSalary)) missing.push("annual salary");
   if (missing.length) {
     alerts.push({ level: "info", message: `Complete your profile: ${missing.join(", ")}.` });
   }
 
   const needReceipt = (records.expenses || []).filter((e) => {
-    const meta = getCategoryMeta(e.category);
+    const meta =
+      product === "suite" ? suite.getCategoryMeta(e.category) : getCategoryMeta(e.category);
     const needs =
       meta &&
       ["receipt", "written_evidence", "receipt_and_work_use"].includes(meta.substantiation);
@@ -531,7 +574,10 @@ function buildAlerts(records) {
   if (!(records.income || []).length) {
     alerts.push({
       level: "info",
-      message: `No income recorded${profile.financialYear ? ` for FY ${profile.financialYear}` : ""} yet — scan a payslip or remittance.`,
+      message:
+        product === "suite"
+          ? `No income recorded${profile.financialYear ? ` for FY ${profile.financialYear}` : ""} yet — scan a PAYG income statement, invoice or partnership distribution.`
+          : `No income recorded${profile.financialYear ? ` for FY ${profile.financialYear}` : ""} yet — scan a payslip or remittance.`,
     });
   }
   if (!(records.expenses || []).length) {
@@ -614,8 +660,9 @@ function optionalScanMultipart(req, res, next) {
   });
 }
 
-// Resolve the signed-in user (if any) from the session cookie.
+// Resolve product (Taxation Hub vs Go Taxation Suite) then the signed-in user.
 api.use((req, _res, next) => {
+  req.product = suite.productOf(req);
   const token = parseCookies(req)[SESSION_COOKIE];
   req.sessionToken = token || null;
   req.user = auth.getSessionUser(token);
@@ -668,7 +715,7 @@ api.post("/auth/register", (req, res) => {
   try {
     const user = auth.registerUser(username, password, presets, email);
     const token = auth.createSession(user.username);
-    recordsForUser(user.username); // initialise their store
+    recordsForUser(user.username, productOf(req)); // initialise their store
     setSessionCookie(res, token, req);
     res.json({ user });
   } catch (err) {
@@ -739,7 +786,7 @@ api.post("/auth/login", async (req, res) => {
   }
   const user = result.user;
   const token = auth.createSession(user.username);
-  recordsForUser(user.username);
+  recordsForUser(user.username, productOf(req));
   setSessionCookie(res, token, req);
 
   // Periodic email reminder when password is older than 90 days.
@@ -863,7 +910,7 @@ api.post("/auth/recover/reset", (req, res) => {
   try {
     const user = auth.resetPasswordWithToken(token, password);
     const session = auth.createSession(user.username);
-    recordsForUser(user.username);
+    recordsForUser(user.username, productOf(req));
     setSessionCookie(res, session, req);
     res.json({ user });
   } catch (err) {
@@ -872,7 +919,7 @@ api.post("/auth/recover/reset", (req, res) => {
 });
 
 api.get("/alerts", (req, res) => {
-  const alerts = buildAlerts(getActiveRecords(req));
+  const alerts = buildAlerts(getActiveRecords(req), productOf(req));
   const user = req.user ? auth.getUser(req.user) : null;
   if (user) alerts.push(...auth.accountAlerts(user));
   res.json({ alerts, user: user || req.user || null });
@@ -1509,16 +1556,19 @@ function requireAdmin(req, res) {
   return true;
 }
 
-function userRecordsSummary(username) {
-  const file = auth.recordsFileFor(username);
+function userRecordsSummary(username, req) {
+  const prod = req ? productOf(req) : "haulage";
+  const file = fileForUser(username, prod);
+  const key = suite.cacheKey(username, prod);
   // Prefer the live in-memory store when this user is already cached (e.g. they
   // are signed in elsewhere on this process); otherwise read from disk.
-  const records = recordsCache.has(username)
-    ? recordsCache.get(username)
-    : storage.loadRecords(file);
+  const records = recordsCache.has(key) ? recordsCache.get(key) : storage.loadRecords(file);
   const fy = records.profile?.financialYear || getCurrentFinancialYear();
-  const summary = summariseYear(records, profileFor(records, fy));
-  applyHistoricalRates(summary, records, fy);
+  const summary =
+    prod === "suite"
+      ? suite.summariseYear(records, profileFor(records, fy))
+      : summariseYear(records, profileFor(records, fy));
+  if (prod !== "suite") applyHistoricalRates(summary, records, fy);
   return {
     user: auth.getUser(username),
     profile: records.profile || {},
@@ -1547,7 +1597,7 @@ api.get("/admin/users", (req, res) => {
   auth.ensurePrimaryAdmin();
   const users = auth.listUsers().map((u) => {
     try {
-      const snap = userRecordsSummary(u.username);
+      const snap = userRecordsSummary(u.username, req);
       return { ...u, counts: snap.counts, totals: snap.totals, profileName: snap.profile.name || "" };
     } catch (err) {
       return { ...u, counts: { expenses: 0, income: 0, receipts: 0 }, totals: null, error: err.message };
@@ -1558,18 +1608,13 @@ api.get("/admin/users", (req, res) => {
 
 api.get("/admin/users/:username", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const target = auth.getUser(req.params.username);
-  if (!target) {
+  const loaded = loadTargetUserRecords(req.params.username, req);
+  if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
   }
-  const file = auth.recordsFileFor(target.username);
-  const records = recordsCache.has(target.username)
-    ? recordsCache.get(target.username)
-    : storage.loadRecords(file);
+  const { user: target, records } = loaded;
   const fy = req.query.financialYear || records.profile?.financialYear || getCurrentFinancialYear();
-  const summary = summariseYear(records, profileFor(records, fy));
-  applyHistoricalRates(summary, records, fy);
 
   const receipts = (records.receipts || []).map((r) => ({
     id: r.id,
@@ -1590,8 +1635,9 @@ api.get("/admin/users/:username", (req, res) => {
   const deletedIncome = (records.income || []).filter((i) => isDeleted(i));
 
   const targetRecord = auth.getUserRecord(target.username);
-  const hub = hubProfile.presentHubProfile(target, records);
-  const fuelStore = fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
+  const hub = productOf(req) === "suite" ? null : hubProfile.presentHubProfile(target, records);
+  const fuelStore =
+    productOf(req) === "suite" ? null : fuelhubStore.ensureFuelhub(records, { hubProfile: hub });
   res.json({
     user: target,
     account: adminAssist.adminAccountStatus(target.username),
@@ -1602,7 +1648,7 @@ api.get("/admin/users/:username", (req, res) => {
     deletedExpenses,
     deletedIncome,
     receipts,
-    fuelhub: fuelhubStore.snapshot(fuelStore),
+    fuelhub: fuelStore ? fuelhubStore.snapshot(fuelStore) : null,
     carTrips: (() => {
       carTrips.ensureCarTrips(records);
       return includeDeleted
@@ -1611,7 +1657,7 @@ api.get("/admin/users/:username", (req, res) => {
     })(),
     vendors: storage.listVendors(records),
     history: recordsHistory.listSnapshots(target.username, { limit: 20 }),
-    summary: summariseYear(withActiveLedger(records), profileFor(records, fy)),
+    summary: summariseFor(req, withActiveLedger(records), profileFor(records, fy)),
   });
 });
 
@@ -1619,7 +1665,7 @@ api.get("/admin/users/:username", (req, res) => {
 api.post("/admin/users/:username/repair-vendors", async (req, res, next) => {
   try {
     if (!requireAdmin(req, res)) return;
-    const loaded = loadTargetUserRecords(req.params.username);
+    const loaded = loadTargetUserRecords(req.params.username, req);
     if (!loaded) {
       res.status(404).json({ error: "User not found." });
       return;
@@ -1651,7 +1697,7 @@ api.post("/admin/users/:username/repair-vendors", async (req, res, next) => {
 /** Admin: unlock reconciled ledger rows for a driver. */
 api.post("/admin/users/:username/:type(expenses|income)/unreconcile", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1669,7 +1715,7 @@ api.post("/admin/users/:username/:type(expenses|income)/unreconcile", (req, res)
 /** Admin: restore soft-deleted ledger rows for a driver. */
 api.post("/admin/users/:username/:type(expenses|income)/restore", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1692,7 +1738,7 @@ api.post("/admin/users/:username/:type(expenses|income)/restore", (req, res) => 
 /** Admin: force soft-delete (including reconciled) for cleanup. */
 api.post("/admin/users/:username/:type(expenses|income)/soft-delete", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1718,7 +1764,7 @@ api.post("/admin/users/:username/:type(expenses|income)/soft-delete", (req, res)
 /** Admin: move selected expenses ↔ income (soft-delete source, create opposite row). */
 api.post("/admin/users/:username/:type(expenses|income)/move", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1748,7 +1794,7 @@ api.post("/admin/users/:username/:type(expenses|income)/move", (req, res) => {
 /** Admin: reconcile ledger rows on a driver's behalf. */
 api.post("/admin/users/:username/:type(expenses|income)/reconcile", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1766,7 +1812,7 @@ api.post("/admin/users/:username/:type(expenses|income)/reconcile", (req, res) =
 /** Admin: edit a driver's expense/income row (overrides locks). */
 api.put("/admin/users/:username/:type(expenses|income)/:id", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1803,7 +1849,7 @@ api.put("/admin/users/:username/:type(expenses|income)/:id", (req, res) => {
 /** Admin: add a new expense or income row on a driver's ledger. */
 api.post("/admin/users/:username/:type(expenses|income)", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1834,7 +1880,7 @@ api.post("/admin/users/:username/:type(expenses|income)", (req, res) => {
 /** Admin: override driver profile fields. */
 api.put("/admin/users/:username/profile", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -1977,7 +2023,7 @@ api.get("/admin/users/:username/history", (req, res) => {
 /** Admin: restore a driver's full records file from a snapshot. */
 api.post("/admin/users/:username/history/:snapshotId/restore", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2046,7 +2092,7 @@ api.get("/admin/users/:username/receipts/:id/file", (req, res) => {
 
 api.delete("/admin/users/:username/receipts/:id", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2252,7 +2298,7 @@ api.delete("/admin/users/:username/fuelhub/prices/:stationId", (req, res) => {
 // --- Admin: car trips (ATO D1) -------------------------------------------
 api.post("/admin/users/:username/car-trips", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2275,7 +2321,7 @@ api.post("/admin/users/:username/car-trips", (req, res) => {
 
 api.put("/admin/users/:username/car-trips/:id", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2291,7 +2337,7 @@ api.put("/admin/users/:username/car-trips/:id", (req, res) => {
 
 api.post("/admin/users/:username/car-trips/:id/close", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2309,7 +2355,7 @@ api.post("/admin/users/:username/car-trips/:id/close", (req, res) => {
 
 api.post("/admin/users/:username/car-trips/reconcile", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2322,7 +2368,7 @@ api.post("/admin/users/:username/car-trips/reconcile", (req, res) => {
 
 api.post("/admin/users/:username/car-trips/unreconcile", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2335,7 +2381,7 @@ api.post("/admin/users/:username/car-trips/unreconcile", (req, res) => {
 
 api.post("/admin/users/:username/car-trips/:id/soft-delete", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2358,7 +2404,7 @@ api.post("/admin/users/:username/car-trips/:id/soft-delete", (req, res) => {
 
 api.post("/admin/users/:username/car-trips/:id/restore", (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const loaded = loadTargetUserRecords(req.params.username);
+  const loaded = loadTargetUserRecords(req.params.username, req);
   if (!loaded) {
     res.status(404).json({ error: "User not found." });
     return;
@@ -2415,7 +2461,10 @@ api.delete("/admin/users/:username", (req, res) => {
     }
     auth.deleteUser(target.username);
     recordsCache.delete(target.username);
+    recordsCache.delete(`suite:${target.username}`);
     if (fs.existsSync(recordsFile)) fs.unlinkSync(recordsFile);
+    const suiteFile = suite.recordsFileFor(target.username);
+    if (fs.existsSync(suiteFile)) fs.unlinkSync(suiteFile);
     res.json({ ok: true, username: target.username });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -2482,7 +2531,15 @@ api.post("/admin/backups/:id/restore", async (req, res) => {
 });
 
 // --- Reference data ------------------------------------------------------
-api.get("/standards", (_req, res) => {
+api.get("/standards", (req, res) => {
+  if (productOf(req) === "suite") {
+    const records = getRecords(req);
+    const entity = suite.normalizeEntityType(
+      (req.query.entityType || req.query.driverType || records.profile?.entityType || records.profile?.driverType)
+    );
+    res.json(suite.standards(entity));
+    return;
+  }
   res.json({
     categories: listMenuCategories(),
     specialClaimCategories: listSpecialClaimCategories(),
@@ -2500,6 +2557,13 @@ api.get("/standards", (_req, res) => {
 api.get("/employers", (req, res) => {
   const q = String(req.query.q || req.query.query || "");
   const limit = Number(req.query.limit) || 12;
+  if (productOf(req) === "suite") {
+    res.json({
+      query: q,
+      employers: suite.searchOccupations(q, { limit }).map((name) => ({ name })),
+    });
+    return;
+  }
   res.json({
     query: q,
     employers: searchTransportEmployers(q, { limit }),
@@ -2507,6 +2571,13 @@ api.get("/employers", (req, res) => {
 });
 
 api.get("/driver-role-defaults", (req, res) => {
+  if (productOf(req) === "suite") {
+    const type = String(req.query.driverType || req.query.type || req.query.entityType || "");
+    if (type) {
+      return res.json({ default: suite.getEntityDefaults(type) });
+    }
+    return res.json({ defaults: suite.listEntityDefaults() });
+  }
   const type = String(req.query.driverType || req.query.type || "");
   if (type) {
     const one = getDriverRoleDefaults(type);
@@ -2558,6 +2629,19 @@ api.put("/profile", (req, res) => {
   const body = { ...(req.body || {}) };
   if (body.annualSalary != null && body.annualSalary !== "") {
     body.annualSalary = Number(body.annualSalary);
+  }
+  if (productOf(req) === "suite") {
+    if (Object.prototype.hasOwnProperty.call(body, "cars")) {
+      body.cars = normalizeCars(body.cars);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "carClaimMethod")) {
+      body.carClaimMethod = carTrips.normalizeMethod(body.carClaimMethod);
+    }
+    const merged = suite.applySuiteProfile(body, records.profile || {});
+    const profile = storage.updateProfile(records, merged);
+    persist(req);
+    res.json({ profile, hubProfile: null, product: "gotax" });
+    return;
   }
   // Licence class (LR/MR → MC) follows annual salary when omitted or invalid.
   const fromSalary = getLicenceClassForSalary(body.annualSalary ?? records.profile?.annualSalary);
@@ -2755,8 +2839,7 @@ api.post("/car-trips/:id/restore", (req, res) => {
 api.get("/summary", (req, res) => {
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const summary = summariseYear(records, profileFor(records, fy));
-  applyHistoricalRates(summary, records, fy); // year-correct brackets/levies/rates
+  const summary = summariseFor(req, records, profileFor(records, fy));
   // Visual-only doughnut totals from uploaded remittance / payslip PAYG lines.
   summary.payslipTaxVisual = payslipTaxVisualFromRecords(records, fy, {
     getFinancialYearForDate,
@@ -2767,8 +2850,16 @@ api.get("/summary", (req, res) => {
 api.get("/report", (req, res) => {
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = decorateAccountantReport(buildAccountantReport(records, profileFor(records, fy)));
-  applyHistoricalRates(report.summary, records, fy);
+  const profile = profileFor(records, fy);
+  const report =
+    productOf(req) === "suite"
+      ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
+      : decorateAccountantReport(buildAccountantReport(records, profile));
+  if (productOf(req) === "suite") {
+    report.summary = suite.summariseYear(records, profile);
+  } else {
+    applyHistoricalRates(report.summary, records, fy);
+  }
   // Keep the ATO schedule mapping in sync with the year-corrected deductions.
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
     schedule: b.atoSchedule,
@@ -2784,8 +2875,16 @@ api.get("/report.pdf", (req, res) => {
   if (!assertProFeature(req, res, "pdf")) return;
   const records = getActiveRecords(req);
   const fy = req.query.financialYear || records.profile.financialYear;
-  const report = decorateAccountantReport(buildAccountantReport(records, profileFor(records, fy)));
-  applyHistoricalRates(report.summary, records, fy);
+  const profile = profileFor(records, fy);
+  const report =
+    productOf(req) === "suite"
+      ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
+      : decorateAccountantReport(buildAccountantReport(records, profile));
+  if (productOf(req) === "suite") {
+    report.summary = suite.summariseYear(records, profile);
+  } else {
+    applyHistoricalRates(report.summary, records, fy);
+  }
   report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
     schedule: b.atoSchedule,
     category: b.label,
@@ -2793,7 +2892,10 @@ api.get("/report.pdf", (req, res) => {
     transactionCount: b.count,
   }));
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="haulage-eofy-${fy}.pdf"`);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${productOf(req) === "suite" ? "gotax" : "haulage"}-eofy-${fy}.pdf"`
+  );
   const doc = buildReportPdf(report, records, fy);
   doc.pipe(res);
   doc.end();
@@ -2807,7 +2909,10 @@ api.get("/forecast", (req, res) => {
     projectedIncome: req.query.projectedIncome,
     projectedDeductions: req.query.projectedDeductions,
   };
-  const forecast = buildForecast(records, records.profile, manual);
+  const forecast =
+    productOf(req) === "suite"
+      ? suite.buildForecast(records, records.profile, manual)
+      : buildForecast(records, records.profile, manual);
   const fy =
     (req.query.fy && String(req.query.fy)) ||
     (req.query.financialYear && String(req.query.financialYear)) ||
@@ -2969,7 +3074,7 @@ api.post("/expenses/preview", (req, res) => {
   const payload = normalizePayloadDate({ ...(req.body || {}) });
   if (payload.category) payload.category = normalizeExpenseCategoryId(payload.category);
   applyActiveCarWorkUse(records, payload);
-  const analysis = calcExpenseDeduction(payload);
+  const analysis = expenseAnalysis(req, payload);
   if (payload.workUseFromCarProfile) {
     analysis.workUsePercent = Number(payload.workUsePercent);
     analysis.workUseFromCarProfile = true;
@@ -2997,13 +3102,17 @@ api.post("/expenses", (req, res) => {
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
   const entry = storage.addExpense(records, body);
+  if (productOf(req) === "suite" && body.category === "home_office_hours") {
+    const hours = Number(body.hours || body.homeOfficeHours || 0);
+    if (hours > 0) entry.hours = hours;
+  }
   rememberVendor(records, {
     name: body.vendor || entry.vendor,
     abn: body.vendorAbn || entry.vendorAbn,
     category: body.category || entry.category,
   });
   persist(req);
-  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+  res.json({ entry, analysis: expenseAnalysis(req, entry) });
 });
 
 api.put("/expenses/:id", (req, res) => {
@@ -3017,6 +3126,9 @@ api.put("/expenses/:id", (req, res) => {
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
   const entry = updateExpense(records, req.params.id, body);
+  if (productOf(req) === "suite" && entry && (body.hours != null || body.homeOfficeHours != null)) {
+    entry.hours = Number(body.hours || body.homeOfficeHours || 0);
+  }
   if (!entry) {
     res.status(404).json({ error: "Expense not found." });
     return;
@@ -3027,7 +3139,7 @@ api.put("/expenses/:id", (req, res) => {
     category: body.category || entry.category,
   });
   persist(req);
-  res.json({ entry, analysis: calcExpenseDeduction(entry) });
+  res.json({ entry, analysis: expenseAnalysis(req, entry) });
 });
 
 /** Attach a receipt photo/PDF to an unreconciled expense that has none yet. */
@@ -3060,7 +3172,7 @@ api.post("/expenses/:id/attach-receipt", (req, res) => {
       purpose: result.receipt.purpose,
       hasImage: Boolean(result.receipt.imagePath),
     },
-    analysis: calcExpenseDeduction(result.entry),
+    analysis: expenseAnalysis(req, result.entry),
   });
 });
 
@@ -3333,11 +3445,10 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     }
 
     // Enrich: typed component breakdown + ATO compliance assessment.
-    const { componentBreakdown, breakdownKind, compliance, payPeriod } = analyzeScan(
-      ocrResult,
-      purpose === "income" ? "income" : "expense",
-      records.profile
-    );
+    const { componentBreakdown, breakdownKind, compliance, payPeriod } =
+      productOf(req) === "suite"
+        ? suite.analyzeScan(ocrResult, purpose === "income" ? "income" : "expense", records.profile)
+        : analyzeScan(ocrResult, purpose === "income" ? "income" : "expense", records.profile);
     ocrResult.componentBreakdown = componentBreakdown;
     ocrResult.compliance = compliance;
     ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
@@ -3576,7 +3687,7 @@ api.post("/receipts/manual", (req, res) => {
     category: body.category || expense.category,
   });
   persist(req);
-  res.json({ entry: expense, analysis: calcExpenseDeduction(expense) });
+  res.json({ entry: expense, analysis: expenseAnalysis(req, expense) });
 });
 
 api.post("/receipts/:id/confirm", (req, res) => {
@@ -3714,7 +3825,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
   persist(req);
   res.json({
     entry,
-    analysis: calcExpenseDeduction(entry),
+    analysis: expenseAnalysis(req, entry),
     receipt: receipt ? { id: receipt.id, filename: receipt.filename, purpose: receipt.purpose } : null,
   });
 });
@@ -3845,6 +3956,13 @@ api.post("/support/contact", async (req, res) => {
 
 app.use("/api/haulage", api);
 
+// --- Go Taxation Suite (general PAYG / sole trader / partnership) ----------
+app.get(["/suite", "/suite/"], (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));
+});
+app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
+app.use("/suite", express.static(PUBLIC_DIR));
+
 // --- Static UI at /haulage ----------------------------------------------
 app.use("/haulage", express.static(PUBLIC_DIR));
 app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
@@ -3864,6 +3982,7 @@ if (process.env.NODE_ENV !== "test") {
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
+    console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     backup.startBackupScheduler({

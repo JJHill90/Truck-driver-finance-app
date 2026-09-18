@@ -1,0 +1,48 @@
+/* Go Taxation Suite — overlay on the Taxation Hub layout (no truck chrome). */
+
+body.gotax-suite .title-screen-truck,
+body.gotax-suite .title-screen-road,
+body.gotax-suite #hub-open-fuelhub,
+body.gotax-suite #fuelhub-shell,
+body.gotax-suite #nav-driverhub,
+body.gotax-suite #fuelhub-nav-driverhub,
+body.gotax-suite .profile-licence-field,
+body.gotax-suite .profile-vehicle-field,
+body.gotax-suite #licence-class-hint,
+body.gotax-suite #work-combination-hint,
+body.gotax-suite #profile-licence-class,
+body.gotax-suite #profile-work-combination {
+  display: none !important;
+}
+
+body.gotax-suite .title-screen-sky {
+  background: radial-gradient(1200px 480px at 20% 0%, rgba(56, 189, 248, 0.35), transparent 60%),
+    linear-gradient(180deg, #0b1f33 0%, #102a43 55%, #0c1929 100%);
+}
+
+body.gotax-suite .sidebar-brand img,
+body.gotax-suite .title-screen-brand + *,
+body.gotax-suite .sidebar-brand span.brand-hub {
+  /* keep sky Hub accent from parent styles */
+}
+
+body.gotax-suite #title-hub-picker .title-hub-apps {
+  grid-template-columns: 1fr;
+}
+
+body.gotax-suite.gotax-entity-business #view-dashboard .overnight-title {
+  /* relabelled in suite.js */
+}
+
+body.gotax-suite .gotax-entity-fields {
+  display: contents;
+}
+
+body.gotax-suite .gotax-hidden {
+  display: none !important;
+}
+
+body.gotax-suite .suite-entity-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}

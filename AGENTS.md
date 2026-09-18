@@ -23,7 +23,10 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
 - Single service. Start with `npm start` (or `npm run dev` for `node --watch`).
   Listens on port `3000` bound to `0.0.0.0`; open the UI at
   **`http://localhost:3000/haulage/`** (root `/` 302-redirects there). `PORT`
-  overrides the port.
+  overrides the port. **Go Taxation Suite** (general PAYG / sole trader /
+  partnership tax, same tabs as Taxation Hub) is at
+  **`http://localhost:3000/suite/`**. Suite records live under `data/suite/`;
+  ATO logic is in `lib/suite/` (not the truck-driver occupation tables).
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
   shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session
