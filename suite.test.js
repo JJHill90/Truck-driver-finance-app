@@ -60,6 +60,13 @@ describe("suite tax engine", () => {
     );
     expect(s.allowances.truckDriverMealsDaily.breakfast.label).toMatch(/work travel/i);
     expect(s.allowances.truckDriverMealsDaily.breakfast.label).not.toMatch(/truck/i);
+    expect(s.allowances.travelKind).toBe("ordinary_employee");
+    expect(s.allowances.workTravelMealsDaily.dinner.cap).toBe(66.65);
+    expect(s.allowances.dailyTravelTotal).toBe(338);
+    expect(s.allowances.domesticTravelCaps.accommodation).toBe(173);
+    expect(s.allowances.domesticTravelCaps.incidentals).toBe(24.5);
+    expect(s.allowances.lafhaWeekly.oneAdult).toBe(341);
+    expect(s.allowances.lafhaWeekly.determination).toBe("TD 2025/2");
   });
 
   it("caps travel dinner at the TD reasonable amount", () => {
@@ -67,7 +74,7 @@ describe("suite tax engine", () => {
       { category: "meals_dinner", amount: 200, date: "2025-08-01" },
       { financialYear: "2025-26", annualSalary: 80000, entityType: "employee" }
     );
-    expect(r.deductibleAmount).toBe(61.3);
+    expect(r.deductibleAmount).toBe(66.65);
     expect(r.warnings.length).toBeGreaterThan(0);
   });
 
@@ -167,6 +174,94 @@ describe("suite scan breakdown", () => {
     const lafha = (result.componentBreakdown || []).filter((c) => c.type === "overnight_allowance");
     expect(lafha).toHaveLength(0);
     expect(result.compliance.checks.some((c) => /PAYG/i.test(c.name))).toBe(true);
+  });
+});
+
+describe("suite work travel nights and ordinary-employee LAFHA", () => {
+  it("uses TD 2025/4 Tables 1–3 Melbourne capital-city amounts, not Table 5 truck meals", () => {
+    const caps = suite.mealCapsForYear("2025-26", 80000);
+    expect(caps.determination).toBe("TD 2025/4");
+    expect(caps.breakfast).toBe(34.75);
+    expect(caps.lunch).toBe(39.1);
+    expect(caps.dinner).toBe(66.65);
+    expect(caps.mealsDaily).toBe(140.5);
+    expect(caps.incidentals).toBe(24.5);
+    expect(caps.accommodation).toBe(173);
+    expect(caps.mealsAndIncidentals).toBe(165);
+    expect(caps.dailyTravelTotal).toBe(338);
+    expect(caps.overtimeMealCap).toBe(38.65);
+    expect(caps.representativePlace).toBe("Melbourne");
+  });
+
+  it("raises band-2 and band-3 capital-city stacks", () => {
+    const b2 = suite.mealCapsForYear("2025-26", 200000);
+    expect(b2.salaryBand).toBe("band2");
+    expect(b2.mealsDaily).toBe(166.3);
+    expect(b2.dailyTravelTotal).toBe(432.35);
+    const b3 = suite.mealCapsForYear("2025-26", 300000);
+    expect(b3.salaryBand).toBe("band3");
+    expect(b3.mealsDaily).toBe(185.15);
+    expect(b3.dailyTravelTotal).toBe(485.2);
+  });
+
+  it("uses TD 2026/4 Melbourne Table 1 for 2026-27", () => {
+    const caps = suite.mealCapsForYear("2026-27", 90000);
+    expect(caps.determination).toBe("TD 2026/4");
+    expect(caps.breakfast).toBe(36);
+    expect(caps.lunch).toBe(40.45);
+    expect(caps.dinner).toBe(69);
+    expect(caps.accommodation).toBe(175);
+    expect(caps.incidentals).toBe(25.4);
+    expect(caps.dailyTravelTotal).toBe(345.85);
+  });
+
+  it("estimates work travel nights from meals + incidentals, not the $128 truck rate", () => {
+    const records = {
+      income: [
+        {
+          id: "i1",
+          date: "2025-08-10",
+          type: "allowance_travel",
+          description: "Travel allowance",
+          amount: 330,
+          travelAllowanceAmount: 330,
+        },
+      ],
+    };
+    const snap = suite.summariseOvernightDays(
+      records,
+      { financialYear: "2025-26", annualSalary: 80000, entityType: "employee" },
+      "2025-26"
+    );
+    expect(snap.travelKind).toBe("ordinary_employee");
+    expect(snap.title).toBe("Work travel nights");
+    expect(snap.ratePerDay).toBe(165);
+    expect(snap.daysClaimed).toBe(2);
+    expect(snap.note).toMatch(/Tables 1–3/);
+    expect(snap.note).not.toMatch(/truck-driver meal rate/i);
+    expect(snap.note).toMatch(/TD 2025\/2/);
+    expect(snap.note).toMatch(/\$341\/week/);
+  });
+
+  it("summarises FBT LAFHA as a weekly food component, not truck daily meals", () => {
+    const s = suite.summariseLafha(
+      { annualSalary: 85000, entityType: "employee" },
+      [],
+      "2025-26"
+    );
+    expect(s.determination).toBe("TD 2025/2");
+    expect(s.reasonablePerWeek).toBe(341);
+    expect(s.statutoryFoodPerWeek).toBe(42);
+    expect(s.unsubstantiatedExemptPerWeek).toBe(299);
+    expect(s.reasonablePerDay).toBeNull();
+    expect(s.note).toMatch(/sales and marketing/i);
+    expect(s.note).not.toMatch(/Table 5/);
+    expect(s.workTravelDaily.dailyTotal).toBe(338);
+  });
+
+  it("uses TD 2026/2 one-adult weekly food for 2026-27", () => {
+    expect(suite.lafhaWeeklyForYear("2026-27").oneAdult).toBe(353);
+    expect(suite.lafhaWeeklyForYear("2026-27").determination).toBe("TD 2026/2");
   });
 });
 

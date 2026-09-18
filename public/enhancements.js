@@ -6807,10 +6807,13 @@
 
 /* --- Allowance caps: segmented ATO tallies + day/week/month (AEST) ---------
  * Replaces the static list in #allowance-caps. Caps follow the selected FY via
- * summary.allowances (TD 2021/6 … TD 2026/4). Band-1 example for 2025-26
- * (TD 2025/4): meals $128 + overtime meal $38.65 + accommodation $138 +
- * incidentals $24.25 = $328.90. Shows roaming spend per segment under the
- * grand total, with day / week / month period views and per-day breakdowns.
+ * summary.allowances (TD 2021/6 … TD 2026/4). Taxation Hub band-1 example for
+ * 2025-26 (TD 2025/4 Table 5): meals $128 + overtime meal $38.65 +
+ * accommodation $138 + incidentals $24.25 = $328.90. Go Taxation Suite uses
+ * Tables 1–3 capital-city amounts (Melbourne representative) and does not mix
+ * in the truck-driver table or overtime into the overnight daily total.
+ * Shows roaming spend per segment under the grand total, with day / week /
+ * month period views and per-day breakdowns.
  * Logic: lib/allowance-tally.js (loaded via /api when unavailable in browser —
  * duplicated thin client helpers below call the same shapes).
  */
@@ -6832,12 +6835,17 @@
     return Math.round(num(n) * 100) / 100;
   }
   function buildSegments(allowances) {
-    const meals = (allowances && allowances.truckDriverMealsDaily) || {};
+    const meals =
+      (allowances && (allowances.workTravelMealsDaily || allowances.truckDriverMealsDaily)) || {};
     const travel = (allowances && allowances.domesticTravelCaps) || {};
     const breakfast = num(meals.breakfast && meals.breakfast.cap);
     const lunch = num(meals.lunch && meals.lunch.cap);
     const dinner = num(meals.dinner && meals.dinner.cap);
     const mealsCombined = round2(breakfast + lunch + dinner);
+    const ordinary =
+      (allowances && allowances.travelKind === "ordinary_employee") ||
+      (allowances && allowances.dailyTravelTotal != null) ||
+      Boolean(allowances && allowances.workTravelMealsDaily);
     return [
       { id: "breakfast", label: "Breakfast", group: "meals", cap: breakfast, spendIds: ["meals_breakfast"] },
       { id: "lunch", label: "Lunch", group: "meals", cap: lunch, spendIds: ["meals_lunch"] },
@@ -6852,8 +6860,9 @@
       },
       {
         id: "overtime_meals",
-        label: "Overtime meal",
-        group: "other",
+        label: ordinary ? "Overtime meal (separate)" : "Overtime meal",
+        group: ordinary ? "overtime" : "other",
+        excludeFromDaily: ordinary,
         cap: num(allowances && allowances.overtimeMealCap),
         spendIds: ["overtime_meals"],
       },
@@ -6874,6 +6883,9 @@
     ];
   }
   function dailyAllowanceTotal(allowances) {
+    if (allowances && allowances.dailyTravelTotal != null && Number.isFinite(Number(allowances.dailyTravelTotal))) {
+      return round2(Number(allowances.dailyTravelTotal));
+    }
     const segments = buildSegments(allowances);
     const mealsCap = (segments.find((s) => s.id === "meals_combined") || {}).cap || 0;
     const other = segments
@@ -6900,6 +6912,7 @@
         label: seg.label,
         group: seg.group,
         sharesMealPool: Boolean(seg.sharesMealPool),
+        excludeFromDaily: Boolean(seg.excludeFromDaily),
         cap: seg.cap,
         spend,
         remaining: round2(seg.cap - spend),
@@ -6909,7 +6922,9 @@
     const mealPoolSpend = round2(
       rows.filter((r) => r.group === "meals").reduce((s, r) => s + r.spend, 0)
     );
-    const spend = round2(rows.reduce((s, r) => s + r.spend, 0));
+    const spend = round2(
+      rows.filter((r) => !r.excludeFromDaily).reduce((s, r) => s + r.spend, 0)
+    );
     return {
       date: dateIso,
       dailyAllow,
@@ -6958,6 +6973,7 @@
           label: seg.label,
           group: seg.group,
           sharesMealPool: seg.sharesMealPool,
+          excludeFromDaily: seg.excludeFromDaily,
           dailyCap: seg.cap,
           spend: 0,
         };
@@ -7357,10 +7373,18 @@
         ${mealNote}
         ${perDayHtml}
         <p class="muted allowance-hint">
-          Daily stack (salary band) = food/meals (breakfast + lunch + dinner) + overtime meal + accommodation + incidentals
+          ${
+            allowances.travelKind === "ordinary_employee" || allowances.dailyTravelTotal != null
+              ? `Daily stack (salary band, ${esc(allowances.representativePlace || "Melbourne")} capital city) = food/meals (breakfast + lunch + dinner) + accommodation + incidentals
+          — currently <strong>${money(period.dailyAllow)}</strong>/day for this band and FY (${esc((state.summary && state.summary.allowances && state.summary.allowances.determination) || "TD")} Tables 1–3).
+          Overtime meal is a separate 900-60 amount, not part of overnight travel. Employee truck driver Table 5 is not used.
+          Breakfast/lunch/dinner and daily food/meals share the one meal pot; accommodation and incidentals tally separately.
+          Spend uses matching expense categories; daily figures reset at midnight AEST.`
+              : `Daily stack (salary band) = food/meals (breakfast + lunch + dinner) + overtime meal + accommodation + incidentals
           — currently <strong>${money(allowAmt)}</strong>/day for this band and FY. Breakfast/lunch/dinner and daily food/meals share the one meal pot;
           accommodation and other segments tally separately. Spend uses matching expense categories; daily figures reset at midnight AEST.
-          ATO reasonable amounts update each income year (Taxation Determination), not every January/July.
+          ATO reasonable amounts update each income year (Taxation Determination), not every January/July.`
+          }
         </p>
       </div>
     `;
@@ -7436,7 +7460,12 @@
     return "";
   }
 
+  function isOrdinaryTravel(data) {
+    return Boolean(data && (data.travelKind === "ordinary_employee" || data.product === "gotax"));
+  }
+
   function boxHtml(data) {
+    const ordinary = isOrdinaryTravel(data);
     const claimed = Number(data.daysClaimed) || 0;
     const total = Number(data.daysInFy) || 365;
     const elapsed = Number(data.daysElapsed) || 0;
@@ -7444,6 +7473,24 @@
     const pct = total > 0 ? Math.min(100, (claimed / total) * 100) : 0;
     const barPct = Math.max(pct, claimed > 0 ? 2 : 0);
     const entries = Array.isArray(data.entries) ? data.entries : [];
+    const title = data.title || (ordinary ? "Work travel nights" : "Travel allowance days");
+    const rateLabel = data.rateLabel || (ordinary ? "meals + incidentals" : "meal rate");
+    const claimedLabel = ordinary ? "Work travel nights claimed YTD" : "Travel / LAFHA days claimed YTD";
+    const projectedLabel = ordinary
+      ? "projected EOFY work travel nights"
+      : "projected EOFY Travel / LAFHA days";
+    const editLabel = data.editButtonLabel || (ordinary ? "Edit nights" : "Edit LAFHA");
+    const barAria = ordinary
+      ? `${claimed} of ${total} financial-year days claimed as work travel nights`
+      : `${claimed} of ${total} financial-year days claimed as Travel / Living Away from Home (LAFHA) allowance`;
+    const emptyHint =
+      data.emptyHint ||
+      (ordinary
+        ? "Scan payslips that list a travel allowance — nights are taken from the hours/days counter when present, otherwise estimated from travel $ ÷ ATO Tables 1–3 meals + incidentals (not the truck-driver table)."
+        : "Scan payslips that list Travel or Living Away from Home (LAFHA) allowance — days are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day/hour count.");
+    const noneHint = ordinary
+      ? "No work travel nights on income yet. After upload, set Work travel nights on Approve, or Edit an income row."
+      : "No Travel/LAFHA days on income yet. After upload, set Living Away from Home days on Approve, or Edit an income row.";
     const entryRows = entries
       .slice()
       .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
@@ -7460,7 +7507,7 @@
           </div>
           ${
             e.id
-              ? `<button type="button" class="btn secondary overnight-edit-btn" data-edit-income="${esc(e.id)}">Edit LAFHA</button>`
+              ? `<button type="button" class="btn secondary overnight-edit-btn" data-edit-income="${esc(e.id)}">${esc(editLabel)}</button>`
               : ""
           }
         </li>`;
@@ -7469,31 +7516,31 @@
 
     return `
       <div class="overnight-card">
-        <h3 class="overnight-title">Travel allowance days</h3>
+        <h3 class="overnight-title">${esc(title)}</h3>
         <div class="overnight-hero">
           <div class="overnight-ratio">${claimed} <span>of ${total} FY days</span></div>
-          <p class="overnight-meta">${esc(data.determination || "ATO")} · ${money(data.ratePerDay)}/day meal rate · FY ${esc(data.financialYear || "—")}</p>
+          <p class="overnight-meta">${esc(data.determination || "ATO")} · ${money(data.ratePerDay)}/day ${esc(rateLabel)} · FY ${esc(data.financialYear || "—")}</p>
         </div>
-        <div class="overnight-bar" role="img" aria-label="${claimed} of ${total} financial-year days claimed as Travel / Living Away from Home (LAFHA) allowance">
+        <div class="overnight-bar" role="img" aria-label="${esc(barAria)}">
           <i style="width:${barPct.toFixed(2)}%"></i>
         </div>
         <div class="overnight-stats">
           <div class="overnight-stat"><strong>${elapsed}</strong> FY days elapsed</div>
-          <div class="overnight-stat"><strong>${claimed}</strong> Travel / LAFHA days claimed YTD</div>
-          <div class="overnight-stat"><strong>~${projected}</strong> projected EOFY Travel / LAFHA days</div>
+          <div class="overnight-stat"><strong>${claimed}</strong> ${esc(claimedLabel)}</div>
+          <div class="overnight-stat"><strong>~${projected}</strong> ${esc(projectedLabel)}</div>
         </div>
         <p class="overnight-hint">${
           data.entryCount
-            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with Travel/LAFHA · ${money(data.amountPaid)} paid`
-            : "Scan payslips that list Travel or Living Away from Home (LAFHA) allowance — days are estimated from the amount ÷ ATO truck-driver meal rate, or from an explicit day/hour count."
+            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with ${ordinary ? "work travel" : "Travel/LAFHA"} · ${money(data.amountPaid)} paid`
+            : emptyHint
         }</p>
         ${
           entryRows
             ? `<details class="overnight-entries">
-                <summary>Payslips counted (${entries.length}) — edit LAFHA days if OCR missed a slip</summary>
+                <summary>Payslips counted (${entries.length}) — ${ordinary ? "edit nights" : "edit LAFHA days"} if OCR missed a slip</summary>
                 <ul class="overnight-entry-list">${entryRows}</ul>
               </details>`
-            : `<p class="overnight-hint muted">No Travel/LAFHA days on income yet. After upload, set Living Away from Home days on Approve, or Edit an income row.</p>`
+            : `<p class="overnight-hint muted">${esc(noneHint)}</p>`
         }
         <p class="overnight-hint">${esc(data.note || "")}</p>
       </div>`;
@@ -7509,7 +7556,7 @@
   }
 
   function renderOvernightError(message) {
-    const html = `<p class="muted">${esc(message || "Could not load Travel allowance days.")}</p>`;
+    const html = `<p class="muted">${esc(message || "Could not load travel nights.")}</p>`;
     for (const id of BOX_IDS) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = html;
@@ -8121,8 +8168,43 @@
     },
   };
 
+  const SUITE_HELP = {
+    dashboard: {
+      title: "Dashboard",
+      body: [
+        "The Dashboard is your home screen for the selected financial year. Top stats show Net income (income in hand), Deductible expenses, Net taxable income minus expenses, and Total Spend vs Net Income as a percentage. Two large pie charts sit underneath: Snapshot (net income in hand / deductible / net taxable minus expenses with colour legend totals) and Total Spend vs Net Income (blue income, red spend).",
+        "Work travel nights shows how many overnight work-travel days you’ve claimed so far versus days in the financial year — the same snapshot as Financial Forecast. Days come from payslip travel-allowance counters (or amount ÷ Tables 1–3 meals + incidentals). This is not the employee truck driver meal table. Living-away-from-home for sales, marketing and similar occupations uses the FBT weekly food component (for example TD 2025/2 $341/week for one adult), not a truck daily stack. Open the payslip list on the card and use Edit nights if OCR missed days on a slip.",
+        "Allowance caps use the ATO reasonable amounts for ordinary employees (TD Tables 1–3, Melbourne as the representative capital city): meals + accommodation + incidentals for the salary band. Overtime meal is listed separately and is not mixed into the overnight travel total. Change the financial year in the top bar and both cards refresh for that year’s Taxation Determination.",
+      ],
+    },
+    income: {
+      title: "Income & remittances",
+      body: [
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
+        "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
+      ],
+    },
+    forecast: {
+      title: "Financial Forecast",
+      body: [
+        "Financial Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
+        "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
+        "Work travel nights are snapshotted from each payslip or remittance scan when a travel allowance appears. The same card also appears on the Dashboard. Nights use ordinary-employee Tables 1–3 (not truck-driver Table 5). The bar shows nights claimed so far versus days in the financial year so you can plan EOFY travel claims.",
+      ],
+    },
+  };
+
+  function helpEntry(topic) {
+    const base = HELP[topic] || HELP.dashboard;
+    if (typeof document !== "undefined" && document.body && document.body.classList.contains("gotax-suite")) {
+      return SUITE_HELP[topic] || base;
+    }
+    return base;
+  }
+
   function renderHelp(topic) {
-    const entry = HELP[topic] || HELP.dashboard;
+    const entry = helpEntry(topic);
     const titleEl = document.getElementById("support-help-title");
     const bodyEl = document.getElementById("support-help-body");
     if (titleEl) titleEl.textContent = entry.title;

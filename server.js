@@ -933,7 +933,11 @@ api.get("/lafha", (req, res) => {
     req.query.financialYear ||
     (records.profile && records.profile.financialYear) ||
     getCurrentFinancialYear();
-  res.json(summariseLafha(records.profile || {}, records.income || [], fy));
+  const summary =
+    productOf(req) === "suite"
+      ? suite.summariseLafha(records.profile || {}, records.income || [], fy)
+      : summariseLafha(records.profile || {}, records.income || [], fy);
+  res.json(summary);
 });
 
 api.get("/version", (_req, res) => {
@@ -2920,7 +2924,10 @@ api.get("/forecast", (req, res) => {
     forecast.financialYear;
   const backfilled = backfillOvernightDays(records);
   if (backfilled.updated > 0) persist(req);
-  forecast.overnightDays = summariseOvernightDays(records, records.profile, fy);
+  forecast.overnightDays =
+    productOf(req) === "suite"
+      ? suite.summariseOvernightDays(records, records.profile, fy)
+      : summariseOvernightDays(records, records.profile, fy);
   res.json(forecast);
 });
 
@@ -2933,7 +2940,10 @@ api.get("/overnight-days", (req, res) => {
     undefined;
   const backfilled = backfillOvernightDays(records);
   if (backfilled.updated > 0) persist(req);
-  const summary = summariseOvernightDays(records, records.profile, fy);
+  const summary =
+    productOf(req) === "suite"
+      ? suite.summariseOvernightDays(records, records.profile, fy)
+      : summariseOvernightDays(records, records.profile, fy);
   summary.backfill = backfilled;
   res.json(summary);
 });

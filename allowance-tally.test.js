@@ -92,3 +92,41 @@ describe("date helpers", () => {
     expect(buildSegments(band1Allowances)).toHaveLength(7);
   });
 });
+
+describe("ordinary-employee Tables 1–3 stack", () => {
+  const suiteBand1 = {
+    travelKind: "ordinary_employee",
+    workTravelMealsDaily: {
+      breakfast: { cap: 34.75 },
+      lunch: { cap: 39.1 },
+      dinner: { cap: 66.65 },
+    },
+    overtimeMealCap: 38.65,
+    dailyTravelTotal: 338,
+    domesticTravelCaps: {
+      accommodation: 173,
+      incidentals: 24.5,
+    },
+  };
+
+  it("matches TD 2025/4 Table 1 Melbourne daily total $338.00 without overtime", () => {
+    expect(dailyAllowanceTotal(suiteBand1)).toBe(338);
+    const ot = buildSegments(suiteBand1).find((s) => s.id === "overtime_meals");
+    expect(ot.excludeFromDaily).toBe(true);
+    expect(ot.cap).toBe(38.65);
+  });
+
+  it("does not count overtime spend against the overnight travel total", () => {
+    const day = tallyDay(
+      [
+        { date: "2026-08-04", category: "meals_breakfast", amount: 20 },
+        { date: "2026-08-04", category: "overtime_meals", amount: 30 },
+      ],
+      suiteBand1,
+      "2026-08-04"
+    );
+    expect(day.dailyAllow).toBe(338);
+    expect(day.spend).toBe(20);
+    expect(day.segments.find((s) => s.id === "overtime_meals").spend).toBe(30);
+  });
+});
