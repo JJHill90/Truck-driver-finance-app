@@ -372,5 +372,8 @@ describe("suite occupation travel profile", () => {
     expect(suite.showsOvernightTravel(p)).toBe(true);
     const off = suite.applySuiteProfile({ travelsForWork: false, overnightAllowance: true }, p);
     expect(off.overnightAllowance).toBe(false);
+    const renamed = suite.applySuiteProfile({ occupation: "Inventory auditor" }, p);
+    expect(renamed.occupation).toBe("Inventory auditor");
+    expect(renamed.occupationId).toMatch(/inventory/);
   });
 });
