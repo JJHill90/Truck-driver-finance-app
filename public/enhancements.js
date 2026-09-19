@@ -7384,7 +7384,11 @@
       allowCheck &&
       allowCheck.enabled === false
     ) {
-      lastSignature = dataSignature();
+      const snapSig = dataSignature();
+      if (!force && snapSig === lastSignature && container.querySelector(".gotax-work-snapshot")) {
+        return;
+      }
+      lastSignature = snapSig;
       renderWorkSnapshot(container, allowCheck);
       return;
     }

@@ -23,7 +23,7 @@
     if (!root || root.dataset.gotaxOvernight === "1") return;
     const title = root.querySelector(".overnight-title");
     if (!title) return;
-    if (title.textContent === "Work travel nights") {
+    if (title.textContent === "Work travel nights" || title.textContent === "Work-related claims") {
       root.dataset.gotaxOvernight = "1";
       return;
     }
