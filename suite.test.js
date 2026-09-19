@@ -230,7 +230,14 @@ describe("suite work travel nights and ordinary-employee LAFHA", () => {
     };
     const snap = suite.summariseOvernightDays(
       records,
-      { financialYear: "2025-26", annualSalary: 80000, entityType: "employee" },
+      {
+        financialYear: "2025-26",
+        annualSalary: 80000,
+        entityType: "employee",
+        travelsForWork: true,
+        overnightAllowance: true,
+        occupation: "Sales representative",
+      },
       "2025-26"
     );
     expect(snap.travelKind).toBe("ordinary_employee");
@@ -310,5 +317,63 @@ describe("suite product detection", () => {
     process.env.GOTAX_STANDALONE = "1";
     expect(suite.isStandaloneSuite()).toBe(false);
     expect(suite.productOf({ headers: { cookie: "" } })).toBe("haulage");
+  });
+});
+
+describe("suite occupation travel profile", () => {
+  it("hides overnight travel until the profile ticks travel + overnight allowance", () => {
+    const snap = suite.summariseOvernightDays(
+      { income: [], expenses: [{ id: "e1", date: "2025-08-01", category: "union_fees", amount: 200, deductibleAmount: 200 }] },
+      { financialYear: "2025-26", occupation: "Office administrator", entityType: "employee" },
+      "2025-26"
+    );
+    expect(snap.enabled).toBe(false);
+    expect(snap.replacement.title).toBe("Work-related claims");
+    expect(snap.replacement.deductibleTotal).toBe(200);
+    expect(snap.replacement.deductionHints.length).toBeGreaterThan(0);
+  });
+
+  it("uses Table 5 meal amounts for a truck-driver occupation", () => {
+    const snap = suite.summariseOvernightDays(
+      { income: [] },
+      {
+        financialYear: "2025-26",
+        annualSalary: 80000,
+        occupation: "Linehaul driver",
+        travelsForWork: true,
+        overnightAllowance: true,
+      },
+      "2025-26"
+    );
+    expect(snap.enabled).toBe(true);
+    expect(snap.occupationTravelKind).toBe("truck_driver");
+    expect(snap.ratePerDay).toBe(128);
+    expect(snap.note).toMatch(/Table 5/);
+  });
+
+  it("lists auditor specialisations and trading-name employers", () => {
+    const auditors = suite.searchOccupations("auditor", { limit: 20 });
+    const names = auditors.map((o) => o.name);
+    expect(names).toContain("Financial auditor");
+    expect(names).toContain("Inventory auditor");
+    const employers = suite.searchEmployers("bunn", { limit: 10 });
+    expect(employers.map((e) => e.name)).toContain("Bunnings");
+    expect(employers.map((e) => e.name).join(" ")).not.toMatch(/Pty Ltd/i);
+  });
+
+  it("saves travel flags on the suite profile", () => {
+    const p = suite.applySuiteProfile(
+      { occupation: "Financial auditor", travelsForWork: "on", overnightAllowance: "on" },
+      {}
+    );
+    expect(p.occupation).toBe("Financial auditor");
+    expect(p.travelsForWork).toBe(true);
+    expect(p.overnightAllowance).toBe(true);
+    expect(suite.showsOvernightTravel(p)).toBe(true);
+    const off = suite.applySuiteProfile({ travelsForWork: false, overnightAllowance: true }, p);
+    expect(off.overnightAllowance).toBe(false);
+    const renamed = suite.applySuiteProfile({ occupation: "Inventory auditor" }, p);
+    expect(renamed.occupation).toBe("Inventory auditor");
+    expect(renamed.occupationId).toMatch(/inventory/);
   });
 });
