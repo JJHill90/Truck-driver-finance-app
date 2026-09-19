@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=gotax-3" />
+    <link rel="stylesheet" href="./suite.css?v=gotax-4" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -169,10 +169,10 @@
               <div id="gross-tax-chart"></div>
             </div>
           </div>
-          <div class="panel">
+          <div class="panel gotax-travel-nights-panel">
             <div id="dashboard-overnight-box" class="overnight-days-box" aria-live="polite"></div>
           </div>
-          <div class="panel">
+          <div class="panel gotax-allowance-panel">
             <div class="panel-header"><h2>Allowance caps</h2></div>
             <div id="allowance-caps"></div>
           </div>
@@ -731,9 +731,33 @@
                   />
                   <ul id="profile-employer-suggestions" class="profile-employer-suggestions" role="listbox" hidden></ul>
                 </span>
-                <span class="muted small">Occupation suggestions appear as you type — you can enter any employer or trading name.</span>
+                <span class="muted small">Suggestions are trading names (Bunnings, Woolworths, Qantas) — not Pty Ltd legal entities. You can still type any employer.</span>
               </label>
-              <label>Occupation<input type="text" name="occupation" id="profile-occupation" placeholder="e.g. office administrator" /></label>
+              <label class="profile-occupation-field">Occupation
+                <span class="profile-employer-input-wrap">
+                  <input
+                    type="text"
+                    name="occupation"
+                    id="profile-occupation"
+                    placeholder="Start typing — auditor, nurse, teacher…"
+                    autocomplete="off"
+                    aria-autocomplete="list"
+                    aria-controls="profile-occupation-suggestions"
+                  />
+                  <ul id="profile-occupation-suggestions" class="profile-employer-suggestions" role="listbox" hidden></ul>
+                </span>
+                <input type="hidden" name="occupationId" id="profile-occupation-id" value="" />
+                <span class="muted small">Includes specialisations (e.g. Auditor → financial, inventory, IT). Pick one or type your own.</span>
+              </label>
+              <p class="muted small span-2" id="suite-occupation-travel-hint" hidden></p>
+              <label class="checkbox span-2"><input type="checkbox" id="profile-travels-for-work" /> I travel for work</label>
+              <label class="checkbox span-2" id="profile-overnight-wrap" hidden>
+                <input type="checkbox" id="profile-overnight-allowance" />
+                Travel includes overnight stays that require a travel allowance
+              </label>
+              <p class="muted small span-2" id="suite-travel-policy-hint">
+                If you do not sleep away from home for work, Dashboard and Forecast hide work travel nights and allowance caps and show a work-related claims snapshot instead.
+              </p>
               <label>ABN<input type="text" name="abn" id="profile-abn" placeholder="11-digit ABN" inputmode="numeric" /></label>
               <label>Annual salary / expected income ($)<input type="number" name="annualSalary" step="0.01" min="0" id="profile-annual-salary" /></label>
               <label class="gotax-hidden profile-licence-field">Licence class
@@ -897,8 +921,8 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=gotax-create-profile-1"></script>
+    <script src="./enhancements.js?v=gotax-travel-profile-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
-    <script src="./suite.js?v=gotax-3"></script>
+    <script src="./suite.js?v=gotax-4"></script>
   </body>
 </html>

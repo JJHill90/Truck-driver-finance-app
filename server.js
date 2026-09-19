@@ -2564,13 +2564,26 @@ api.get("/employers", (req, res) => {
   if (productOf(req) === "suite") {
     res.json({
       query: q,
-      employers: suite.searchOccupations(q, { limit }).map((name) => ({ name })),
+      employers: suite.searchEmployers(q, { limit }),
     });
     return;
   }
   res.json({
     query: q,
     employers: searchTransportEmployers(q, { limit }),
+  });
+});
+
+api.get("/occupations", (req, res) => {
+  const q = String(req.query.q || req.query.query || "");
+  const limit = Number(req.query.limit) || 20;
+  if (productOf(req) !== "suite") {
+    res.json({ query: q, occupations: [] });
+    return;
+  }
+  res.json({
+    query: q,
+    occupations: suite.searchOccupations(q, { limit }),
   });
 });
 

@@ -7334,7 +7334,61 @@
     });
   }
 
+  function renderWorkSnapshot(container, allowances) {
+    const snap = (allowances && allowances.workSnapshot) || {};
+    const occ = snap.occupation && (snap.occupation.label || snap.occupation.name);
+    const cats = Array.isArray(snap.topCategories) ? snap.topCategories : [];
+    const hints = Array.isArray(snap.deductionHints) ? snap.deductionHints : [];
+    container.closest(".gotax-allowance-panel")?.querySelector(".panel-header h2") &&
+      (container.closest(".gotax-allowance-panel").querySelector(".panel-header h2").textContent =
+        "Work-related claims");
+    container.innerHTML = `
+      <div class="gotax-work-snapshot cap-list">
+        <div class="cap-row allowance-total">
+          <span><strong>Deductible claims YTD</strong> <small class="muted">${esc(occ || "Set occupation on Profile")}</small></span>
+          <span><strong>${money(snap.deductibleTotal)}</strong></span>
+        </div>
+        <div class="cap-row">
+          <span>PAYG withheld</span>
+          <span>${money(snap.paygWithheld)}</span>
+        </div>
+        <div class="cap-row">
+          <span>Home office hours</span>
+          <span>${snap.homeOfficeHours || 0}</span>
+        </div>
+        ${
+          cats.length
+            ? `<h4 class="allowance-subhead">Top categories</h4>${cats
+                .map(
+                  (c) =>
+                    `<div class="cap-row"><span>${esc(c.label)}</span><span>${money(c.deductibleTotal)}</span></div>`
+                )
+                .join("")}`
+            : `<p class="muted allowance-hint">${esc(snap.emptyHint || "No claims recorded yet.")}</p>`
+        }
+        ${
+          hints.length
+            ? `<h4 class="allowance-subhead">ATO occupation hints</h4><ul class="gotax-occ-hints">${hints
+                .map((h) => `<li>${esc(h)}</li>`)
+                .join("")}</ul>`
+            : ""
+        }
+        <p class="muted allowance-hint">${esc(snap.note || "")}</p>
+      </div>`;
+  }
+
   function render(container, force) {
+    const { allowances: allowCheck } = records();
+    if (
+      document.body.classList.contains("gotax-suite") &&
+      allowCheck &&
+      allowCheck.enabled === false
+    ) {
+      lastSignature = dataSignature();
+      renderWorkSnapshot(container, allowCheck);
+      return;
+    }
+
     const sig = dataSignature();
     if (!force && sig === lastSignature && container.querySelector(".allowance-vs-spend")) return;
     lastSignature = sig;
@@ -7576,9 +7630,51 @@
       </div>`;
   }
 
+  function replacementHtml(data) {
+    const snap = data && data.replacement ? data.replacement : data || {};
+    const occ = snap.occupation && (snap.occupation.label || snap.occupation.name);
+    const cats = Array.isArray(snap.topCategories) ? snap.topCategories : [];
+    const hints = Array.isArray(snap.deductionHints) ? snap.deductionHints : [];
+    const catRows = cats
+      .map(
+        (c) =>
+          `<li class="overnight-entry"><div class="overnight-entry-copy"><strong>${esc(c.label)}</strong><span class="muted">${c.count} claim${c.count === 1 ? "" : "s"}</span></div><span>${money(c.deductibleTotal)}</span></li>`
+      )
+      .join("");
+    const hintRows = hints.map((h) => `<li>${esc(h)}</li>`).join("");
+    return `
+      <div class="overnight-card gotax-work-snapshot">
+        <h3 class="overnight-title">${esc(snap.title || "Work-related claims")}</h3>
+        <div class="overnight-hero">
+          <div class="overnight-ratio">${money(snap.deductibleTotal)} <span>deductible YTD</span></div>
+          <p class="overnight-meta">${esc(occ || "Add an occupation on Profile")} · FY ${esc(snap.financialYear || "—")}</p>
+        </div>
+        <div class="overnight-stats">
+          <div class="overnight-stat"><strong>${money(snap.incomeTotal)}</strong> income recorded</div>
+          <div class="overnight-stat"><strong>${money(snap.paygWithheld)}</strong> PAYG withheld</div>
+          <div class="overnight-stat"><strong>${snap.homeOfficeHours || 0}</strong> home-office hours</div>
+        </div>
+        ${
+          catRows
+            ? `<ul class="overnight-entry-list">${catRows}</ul>`
+            : `<p class="overnight-hint muted">${esc(snap.emptyHint || "No work-related claims yet.")}</p>`
+        }
+        ${hintRows ? `<h4 class="allowance-subhead">Typical claims for this occupation</h4><ul class="gotax-occ-hints">${hintRows}</ul>` : ""}
+        <p class="overnight-hint">${esc(snap.note || "")}</p>
+      </div>`;
+  }
+
+  function setTravelPanelHeaders(showTravel) {
+    document.querySelectorAll(".gotax-allowance-panel .panel-header h2").forEach((h) => {
+      h.textContent = showTravel ? "Allowance caps" : "Work-related claims";
+    });
+  }
+
   function renderOvernightBoxes(data) {
     if (!data) return;
-    const html = boxHtml(data);
+    const showTravel = data.enabled !== false;
+    setTravelPanelHeaders(showTravel);
+    const html = showTravel ? boxHtml(data) : replacementHtml(data);
     for (const id of BOX_IDS) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = html;
@@ -9738,6 +9834,8 @@
     input.value = name;
     hideSuggestions();
     input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    if (document.body.classList.contains("gotax-suite")) return;
 
     const roleId = await askDriverType(name);
     if (!roleId) return;

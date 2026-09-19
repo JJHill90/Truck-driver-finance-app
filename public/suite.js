@@ -68,6 +68,98 @@
     });
   }
 
+  function setFlagInput(form, name, checked) {
+    let hidden = form.querySelector(`input[name="${name}"][type="hidden"]`);
+    if (!hidden) {
+      hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = name;
+      form.appendChild(hidden);
+    }
+    hidden.value = checked ? "true" : "false";
+  }
+
+  function syncTravelFields() {
+    const travel = byId("profile-travels-for-work");
+    const wrap = byId("profile-overnight-wrap");
+    const nights = byId("profile-overnight-allowance");
+    const on = Boolean(travel && travel.checked);
+    if (wrap) wrap.hidden = !on;
+    if (!on && nights) nights.checked = false;
+  }
+
+  function occupationHint(occ) {
+    const el = byId("suite-occupation-travel-hint");
+    if (!el) return;
+    if (!occ) {
+      el.hidden = true;
+      el.textContent = "";
+      return;
+    }
+    el.hidden = false;
+    el.textContent = occ.typicalOvernight
+      ? `${occ.label || occ.name} commonly involves overnight work travel. ${occ.travelHint || ""} Tick the boxes below if that matches you.`
+      : `${occ.label || occ.name} does not usually involve an overnight travel allowance. ${occ.travelHint || ""}`;
+  }
+
+  function wireOccupationTypeahead() {
+    const input = byId("profile-occupation");
+    const list = byId("profile-occupation-suggestions");
+    const idEl = byId("profile-occupation-id");
+    if (!input || !list) return;
+    let timer = null;
+
+    const hide = () => {
+      list.hidden = true;
+      list.innerHTML = "";
+    };
+
+    const pick = (occ) => {
+      input.value = occ.name || "";
+      if (idEl) idEl.value = occ.id || "";
+      occupationHint(occ);
+      hide();
+    };
+
+    input.addEventListener("input", () => {
+      if (idEl) idEl.value = "";
+      clearTimeout(timer);
+      const q = input.value.trim();
+      timer = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `${window.location.origin}/api/haulage/occupations?q=${encodeURIComponent(q)}&limit=20`,
+            { credentials: "same-origin" }
+          );
+          const data = await res.json().catch(() => ({}));
+          const rows = Array.isArray(data.occupations) ? data.occupations : [];
+          if (!rows.length) {
+            hide();
+            occupationHint(null);
+            return;
+          }
+          list.innerHTML = rows
+            .map(
+              (o) =>
+                `<li role="option"><button type="button" data-occ-id="${o.id}">${o.label || o.name}</button></li>`
+            )
+            .join("");
+          list.hidden = false;
+          list.querySelectorAll("button[data-occ-id]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+              const occ = rows.find((r) => r.id === btn.getAttribute("data-occ-id"));
+              if (occ) pick(occ);
+            });
+          });
+        } catch {
+          hide();
+        }
+      }, 180);
+    });
+
+    input.addEventListener("blur", () => setTimeout(hide, 200));
+  }
+
   function syncEntityFields() {
     const select = byId("driver-type");
     const hint = byId("suite-entity-hint");
@@ -142,9 +234,41 @@
           form.appendChild(hidden);
         }
         hidden.value = byId("profile-gst-registered")?.checked ? "true" : "false";
+        setFlagInput(form, "travelsForWork", Boolean(byId("profile-travels-for-work")?.checked));
+        setFlagInput(form, "overnightAllowance", Boolean(byId("profile-overnight-allowance")?.checked));
       },
       true
     );
+    let userEditedTravel = false;
+    byId("profile-travels-for-work")?.addEventListener("change", () => {
+      userEditedTravel = true;
+      syncTravelFields();
+    });
+    byId("profile-overnight-allowance")?.addEventListener("change", () => {
+      userEditedTravel = true;
+    });
+    syncTravelFields();
+    wireOccupationTypeahead();
+    const fillTravel = () => {
+      if (userEditedTravel) return;
+      try {
+        const p = typeof state !== "undefined" && state.records && state.records.profile;
+        if (!p) return;
+        const travel = byId("profile-travels-for-work");
+        const nights = byId("profile-overnight-allowance");
+        if (travel) travel.checked = Boolean(p.travelsForWork);
+        if (nights) nights.checked = Boolean(p.overnightAllowance);
+        if (byId("profile-occupation-id") && p.occupationId) {
+          byId("profile-occupation-id").value = p.occupationId;
+        }
+        syncTravelFields();
+      } catch {
+        /* ignore */
+      }
+    };
+    fillTravel();
+    setTimeout(fillTravel, 600);
+    setTimeout(fillTravel, 1800);
 
     const picker = byId("title-hub-picker");
     let opened = false;
