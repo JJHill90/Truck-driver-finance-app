@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=login-navy-6" />
+    <link rel="stylesheet" href="./suite.css?v=login-navy-7" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -24,7 +24,7 @@
         try {
           var look = new URLSearchParams(location.search).get("look");
           var screen = document.getElementById("title-screen");
-          if (screen && look && /^(watermark|lockup|outline|panel)$/.test(look)) {
+          if (screen && look && /^(watermark|lockup|outline|panel|behind-title|behind-wide|behind-soft)$/.test(look)) {
             screen.setAttribute("data-login-look", look);
           }
         } catch (e) {
@@ -35,7 +35,7 @@
   </head>
   <body class="auth-locked gotax-suite">
     <!-- Login gate: then open Go Taxation Suite -->
-    <div id="title-screen" class="title-screen" data-login-look="lockup" role="dialog" aria-modal="true" aria-labelledby="title-brand">
+    <div id="title-screen" class="title-screen" data-login-look="watermark" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky suite-sky" aria-hidden="true"></div>
       <div class="title-go-mark" aria-hidden="true"><span>G</span><span>O</span></div>
       <div class="title-screen-content">

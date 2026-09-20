@@ -12,39 +12,61 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=login-navy-6" />
+    <link rel="stylesheet" href="./suite.css?v=login-navy-7" />
   </head>
   <body class="gotax-suite login-concept-page">
     <div class="concept-wrap">
       <header class="concept-intro">
-        <p class="muted small">Preview only — not linked from the live login</p>
-        <h1>Go Taxation Suite login concepts</h1>
+        <p class="muted small">Drafts only — the live title screen is unchanged until you pick one</p>
+        <h1>Opaque GO behind Taxation / Suite</h1>
         <p>
-          All four keep copy and the form in the bottom left, stack
-          <strong>Taxation</strong> over <strong>Suite</strong>, and use a deeper navy.
-          The live login currently uses <strong>B — Opaque lockup</strong>: a large
-          white GO sits behind the left copy. Open a look full-screen with the
-          links below.
+          Four ways to put a quite-opaque white <strong>GO</strong> behind the stacked
+          title. The live login stays on the watermark look. Pick an example
+          (1–4) and we will apply that one to the title screen.
         </p>
         <p>
-          <a href="./?look=watermark">A live</a>
-          · <a href="./?look=lockup">B live</a>
-          · <a href="./?look=outline">C live</a>
-          · <a href="./?look=panel">D live</a>
-          · <a href="./">Back to login</a>
+          Full-screen previews:
+          <a href="./?look=lockup">1</a>
+          · <a href="./?look=behind-title">2</a>
+          · <a href="./?look=behind-wide">3</a>
+          · <a href="./?look=behind-soft">4</a>
+          · <a href="./">Live title screen</a>
         </p>
       </header>
 
-      <section class="concept-block" id="look-a">
-        <h2>A — Watermark GO</h2>
-        <p>Giant see-through stacked G / O on the right. Title, headline and form sit bottom-left.</p>
-        <div class="concept-stage" id="stage-watermark"></div>
+      <section class="concept-block" id="example-1">
+        <h2>1 — Stacked GO behind the whole left cluster</h2>
+        <p>G over O, ~90% white, covering Taxation / Suite and most of the form. Navy type so it reads on the letters.</p>
+        <div class="concept-stage" id="stage-lockup"></div>
       </section>
 
-      <section class="concept-block" id="look-b">
-        <h2>B — Opaque lockup</h2>
-        <p>Large, quite-opaque white GO behind Taxation / Suite and the whole left copy cluster.</p>
-        <div class="concept-stage" id="stage-lockup"></div>
+      <section class="concept-block" id="example-2">
+        <h2>2 — GO only behind Taxation / Suite</h2>
+        <p>A compact, quite-opaque horizontal GO sits under the two-line title. Headline and form stay on the navy ground.</p>
+        <div class="concept-stage" id="stage-behind-title"></div>
+      </section>
+
+      <section class="concept-block" id="example-3">
+        <h2>3 — Wide GO behind the title block</h2>
+        <p>One large horizontal GO spanning the left column, behind Taxation / Suite and the headline. Form stays clear below it.</p>
+        <div class="concept-stage" id="stage-behind-wide"></div>
+      </section>
+
+      <section class="concept-block" id="example-4">
+        <h2>4 — Softer GO, light title type</h2>
+        <p>Same stacked placement as example 1, but the GO is about half-opaque so the original light title colour can stay.</p>
+        <div class="concept-stage" id="stage-behind-soft"></div>
+      </section>
+
+      <header class="concept-intro" style="margin-top: 48px">
+        <h1>Earlier looks</h1>
+        <p>These were the first round — still available if you would rather go this way.</p>
+      </header>
+
+      <section class="concept-block" id="look-a">
+        <h2>A — Watermark GO (current live title screen)</h2>
+        <p>Giant see-through stacked G / O on the right. Title, headline and form sit bottom-left.</p>
+        <div class="concept-stage" id="stage-watermark"></div>
       </section>
 
       <section class="concept-block" id="look-c">
@@ -105,8 +127,11 @@
       (function () {
         var tpl = document.getElementById("concept-login");
         [
-          ["stage-watermark", "watermark"],
           ["stage-lockup", "lockup"],
+          ["stage-behind-title", "behind-title"],
+          ["stage-behind-wide", "behind-wide"],
+          ["stage-behind-soft", "behind-soft"],
+          ["stage-watermark", "watermark"],
           ["stage-outline", "outline"],
           ["stage-panel", "panel"],
         ].forEach(function (item) {
