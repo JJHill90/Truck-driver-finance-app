@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./suite-mark.svg" />
+    <title>Go Taxation Suite — login concepts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
+    <link rel="stylesheet" href="./suite.css?v=login-navy-1" />
+  </head>
+  <body class="gotax-suite login-concept-page">
+    <div class="concept-wrap">
+      <header class="concept-intro">
+        <p class="muted small">Preview only — not linked from the live login</p>
+        <h1>Go Taxation Suite login concepts</h1>
+        <p>
+          All four keep copy and the form in the bottom left, stack
+          <strong>Taxation</strong> over <strong>Suite</strong>, and use a deeper navy.
+          The live login currently uses <strong>A — Watermark GO</strong>. Open a look
+          full-screen with the links below, then tell us which to keep.
+        </p>
+        <p>
+          <a href="./?look=watermark">A live</a>
+          · <a href="./?look=lockup">B live</a>
+          · <a href="./?look=outline">C live</a>
+          · <a href="./?look=panel">D live</a>
+          · <a href="./">Back to login</a>
+        </p>
+      </header>
+
+      <section class="concept-block" id="look-a">
+        <h2>A — Watermark GO</h2>
+        <p>Giant see-through stacked G / O on the right. Title, headline and form sit bottom-left.</p>
+        <div class="concept-stage" id="stage-watermark"></div>
+      </section>
+
+      <section class="concept-block" id="look-b">
+        <h2>B — Opaque lockup</h2>
+        <p>Solid white GO in the bottom-left cluster, with Taxation stacked over Suite beside it.</p>
+        <div class="concept-stage" id="stage-lockup"></div>
+      </section>
+
+      <section class="concept-block" id="look-c">
+        <h2>C — Outline GO</h2>
+        <p>Hollow, see-through GO filling the page. Stacked title and form remain bottom-left.</p>
+        <div class="concept-stage" id="stage-outline"></div>
+      </section>
+
+      <section class="concept-block" id="look-d">
+        <h2>D — Frosted panel</h2>
+        <p>Translucent GO behind a navy glass card that holds the stacked title and form.</p>
+        <div class="concept-stage" id="stage-panel"></div>
+      </section>
+    </div>
+
+    <template id="concept-login">
+      <div class="title-screen">
+        <div class="title-screen-sky suite-sky" aria-hidden="true"></div>
+        <div class="title-go-mark" aria-hidden="true"><span>G</span><span>O</span></div>
+        <div class="title-screen-content">
+          <p class="title-screen-brand">
+            <span class="title-brand-lockup-go" aria-hidden="true">GO</span>
+            <span class="title-brand-stack">
+              <span class="title-brand-taxation">Taxation</span>
+              <span class="title-brand-suite brand-hub">Suite</span>
+            </span>
+          </p>
+          <div>
+            <h1 class="title-screen-headline">
+              Tax records for employees, sole traders and partnerships.
+            </h1>
+            <p class="title-screen-sub">
+              Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report — general ATO rules for any occupation.
+            </p>
+            <form class="title-auth-form" autocomplete="off" onsubmit="return false">
+              <label>
+                Username
+                <input name="username" placeholder="e.g. alex.nguyen" />
+              </label>
+              <label>
+                Password
+                <input name="password" type="password" placeholder="Your password" />
+              </label>
+              <div class="title-auth-actions">
+                <button type="button" class="btn primary">Log in</button>
+                <button type="button" class="btn secondary">Create profile</button>
+              </div>
+              <button type="button" class="btn link title-forgot-btn">Forgot username / password?</button>
+            </form>
+            <p class="app-version-footer title-version">Version 2.40</p>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      (function () {
+        var tpl = document.getElementById("concept-login");
+        [
+          ["stage-watermark", "watermark"],
+          ["stage-lockup", "lockup"],
+          ["stage-outline", "outline"],
+          ["stage-panel", "panel"],
+        ].forEach(function (item) {
+          var host = document.getElementById(item[0]);
+          if (!host || !tpl) return;
+          host.appendChild(tpl.content.cloneNode(true));
+          var screen = host.querySelector(".title-screen");
+          if (screen) screen.setAttribute("data-login-look", item[1]);
+        });
+      })();
+    </script>
+  </body>
+</html>

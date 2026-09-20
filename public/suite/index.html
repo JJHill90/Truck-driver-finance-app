@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=hide-cross-1" />
+    <link rel="stylesheet" href="./suite.css?v=login-navy-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -20,14 +20,33 @@
       } catch (e) {
         /* ignore */
       }
+      document.addEventListener("DOMContentLoaded", function () {
+        try {
+          var look = new URLSearchParams(location.search).get("look");
+          var screen = document.getElementById("title-screen");
+          if (screen && look && /^(watermark|lockup|outline|panel)$/.test(look)) {
+            screen.setAttribute("data-login-look", look);
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      });
     </script>
   </head>
   <body class="auth-locked gotax-suite">
     <!-- Login gate: then open Go Taxation Suite -->
-    <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
+    <div id="title-screen" class="title-screen" data-login-look="watermark" role="dialog" aria-modal="true" aria-labelledby="title-brand">
       <div class="title-screen-sky suite-sky" aria-hidden="true"></div>
+      <div class="title-go-mark" aria-hidden="true"><span>G</span><span>O</span></div>
       <div class="title-screen-content">
-        <p id="title-brand" class="title-screen-brand">Go Taxation <span class="brand-hub">Suite</span></p>
+        <p id="title-brand" class="title-screen-brand">
+          <span class="visually-hidden">Go Taxation Suite</span>
+          <span class="title-brand-lockup-go" aria-hidden="true">GO</span>
+          <span class="title-brand-stack" aria-hidden="true">
+            <span class="title-brand-taxation">Taxation</span>
+            <span class="title-brand-suite brand-hub">Suite</span>
+          </span>
+        </p>
         <div id="title-auth-panel">
           <h1 class="title-screen-headline">
             Tax records for employees, sole traders and partnerships.
@@ -919,7 +938,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=hide-cross-1"></script>
+    <script src="./enhancements.js?v=login-navy-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=gotax-5"></script>
   </body>

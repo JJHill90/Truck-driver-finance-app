@@ -1,5 +1,33 @@
 /* Go Taxation Suite — overlay on the Taxation Hub layout (no truck chrome). */
 
+body.gotax-suite {
+  --bg: #06101c;
+  --bg-2: #0a182c;
+  --panel: #102038;
+  --panel-2: #152848;
+  --border: #1e3a5c;
+  --text: #e8eef6;
+  --text-dim: #8fa3c0;
+  --hub-accent: #8eacd4;
+  --blue: #6b8fc4;
+  --navy: #0c1c34;
+  --navy-deep: #040a14;
+  --navy-btn: #1c4a86;
+  --navy-btn-hover: #245aa0;
+}
+
+body.gotax-suite .visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body.gotax-suite .title-screen-truck,
 body.gotax-suite .title-screen-road,
 body.gotax-suite #hub-open-fuelhub,
@@ -15,11 +43,42 @@ body.gotax-suite #profile-work-combination {
   display: none !important;
 }
 
+/* Deeper navy chrome — Driver Hub keeps its own sky/amber palette. */
+body.gotax-suite .btn.primary {
+  background: var(--navy-btn);
+  color: #f4f8ff;
+  border-color: var(--navy-btn);
+}
+body.gotax-suite .btn.primary:hover {
+  background: var(--navy-btn-hover);
+  border-color: var(--navy-btn-hover);
+  color: #f4f8ff;
+}
+body.gotax-suite .nav-btn.active {
+  background: var(--navy-btn);
+  color: #f4f8ff;
+}
+body.gotax-suite .brand-hub {
+  color: var(--hub-accent);
+  text-shadow: 0 0 18px rgba(142, 172, 212, 0.28);
+}
+body.gotax-suite .title-auth-form input {
+  background: rgba(6, 16, 28, 0.78);
+}
+body.gotax-suite .title-auth-form input:focus {
+  border-color: var(--hub-accent);
+  box-shadow: 0 0 0 3px rgba(142, 172, 212, 0.22);
+}
+body.gotax-suite .title-auth-actions .btn.primary {
+  animation: none;
+  box-shadow: none;
+}
+
 body.gotax-suite .title-screen {
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: flex-start;
   overflow: hidden;
-  padding: clamp(16px, 4vh, 40px) clamp(20px, 5vw, 56px);
+  padding: clamp(18px, 4.5vh, 48px) clamp(20px, 5vw, 56px);
 }
 
 body.gotax-suite .title-screen-content {
@@ -30,37 +89,214 @@ body.gotax-suite .title-screen-content {
   overflow-y: auto;
   padding-right: 4px;
   -webkit-overflow-scrolling: touch;
+  z-index: 3;
+}
+
+body.gotax-suite .title-screen-headline,
+body.gotax-suite .title-screen-sub {
+  max-width: none;
 }
 
 body.gotax-suite .title-screen.title-register-open .title-screen-brand {
-  font-size: clamp(1.85rem, 5vw, 2.55rem);
   margin-bottom: 4px;
 }
-
+body.gotax-suite .title-screen.title-register-open .title-brand-stack {
+  font-size: 0.72em;
+}
+body.gotax-suite .title-screen.title-register-open .title-go-mark {
+  opacity: 0.55;
+}
 body.gotax-suite .title-screen.title-register-open .title-screen-brand::after {
   margin-top: 8px;
 }
-
 body.gotax-suite .title-screen.title-register-open .title-screen-headline {
   margin: 10px 0 8px;
   max-width: none;
   font-size: clamp(1.1rem, 2.2vw, 1.35rem);
 }
-
 body.gotax-suite .title-screen.title-register-open .title-screen-sub {
   margin-bottom: 14px;
   max-width: none;
 }
 
-body.gotax-suite .title-screen-sky {
-  background: radial-gradient(1200px 480px at 20% 0%, rgba(56, 189, 248, 0.35), transparent 60%),
-    linear-gradient(180deg, #0b1f33 0%, #102a43 55%, #0c1929 100%);
+body.gotax-suite .title-screen-sky,
+body.gotax-suite .title-screen-sky.suite-sky,
+body.gotax-suite .suite-sky {
+  background:
+    radial-gradient(90% 70% at 82% 18%, rgba(28, 74, 134, 0.38), transparent 58%),
+    radial-gradient(70% 50% at 8% 92%, rgba(8, 22, 48, 0.85), transparent 52%),
+    linear-gradient(180deg, #040a14 0%, #071428 46%, #0a1a34 100%);
 }
 
-body.gotax-suite .sidebar-brand img,
-body.gotax-suite .title-screen-brand + *,
-body.gotax-suite .sidebar-brand span.brand-hub {
-  /* keep sky Hub accent from parent styles */
+body.gotax-suite .title-go-mark {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  right: clamp(-2vw, 4vw, 8vw);
+  top: 50%;
+  left: auto;
+  transform: translateY(-52%);
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(11rem, 34vw, 22rem);
+  letter-spacing: -0.07em;
+  text-transform: uppercase;
+  line-height: 0.72;
+  color: rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+body.gotax-suite .title-brand-lockup-go {
+  display: none;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  font-size: clamp(5.6rem, 16vw, 9.4rem);
+  line-height: 0.76;
+  letter-spacing: -0.07em;
+  color: #fff;
+  text-transform: uppercase;
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+body.gotax-suite .title-screen-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0 0 12px;
+  font-size: clamp(2.4rem, 6vw, 3.7rem);
+}
+
+body.gotax-suite .title-brand-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 0.88;
+  text-transform: uppercase;
+}
+
+body.gotax-suite .title-brand-taxation {
+  color: #f4f8ff;
+  letter-spacing: 0.04em;
+}
+
+body.gotax-suite .title-brand-suite {
+  letter-spacing: 0.12em;
+  font-size: 0.78em;
+}
+
+body.gotax-suite .title-screen-brand::after {
+  width: 3.2rem;
+  margin-top: 10px;
+  background: linear-gradient(90deg, var(--hub-accent), var(--navy-btn));
+}
+
+/* --- Look A: translucent stacked GO on the right (live default) --------- */
+body.gotax-suite .title-screen[data-login-look="watermark"] .title-go-mark {
+  color: rgba(255, 255, 255, 0.11);
+}
+
+/* --- Look B: opaque GO lockup in the bottom-left cluster ---------------- */
+body.gotax-suite .title-screen[data-login-look="lockup"] .title-go-mark {
+  display: none;
+}
+body.gotax-suite .title-screen[data-login-look="lockup"] .title-brand-lockup-go {
+  display: block;
+}
+body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-brand {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.18em 0.22em;
+}
+body.gotax-suite .title-screen[data-login-look="lockup"] .title-brand-stack {
+  font-size: clamp(1.7rem, 4.2vw, 2.7rem);
+}
+body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-brand::after {
+  display: none;
+}
+
+/* --- Look C: giant outlined / see-through GO ---------------------------- */
+body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark {
+  display: block;
+  left: 58%;
+  top: 46%;
+  right: auto;
+  transform: translate(-18%, -54%);
+  font-size: clamp(14rem, 46vw, 30rem);
+  color: transparent;
+  -webkit-text-stroke: 3px rgba(255, 255, 255, 0.22);
+  letter-spacing: -0.08em;
+}
+body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark span {
+  display: inline;
+}
+body.gotax-suite .title-screen[data-login-look="outline"] .title-brand-stack {
+  flex-direction: column;
+}
+
+/* --- Look D: frosted navy panel over a GO watermark --------------------- */
+body.gotax-suite .title-screen[data-login-look="panel"] .title-go-mark {
+  display: block;
+  left: 54%;
+  top: 28%;
+  right: auto;
+  transform: translate(-20%, -40%);
+  font-size: clamp(12rem, 38vw, 24rem);
+  color: rgba(255, 255, 255, 0.16);
+  letter-spacing: -0.08em;
+}
+body.gotax-suite .title-screen[data-login-look="panel"] .title-go-mark span {
+  display: inline;
+}
+body.gotax-suite .title-screen[data-login-look="panel"] .title-screen-content {
+  padding: 22px 24px 16px;
+  border-radius: 20px;
+  background: rgba(8, 18, 36, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+@media (max-width: 720px) {
+  body.gotax-suite .title-screen[data-login-look="watermark"] .title-go-mark {
+    top: 6%;
+    right: -4%;
+    transform: none;
+    font-size: clamp(8rem, 42vw, 14rem);
+  }
+  body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark,
+  body.gotax-suite .title-screen[data-login-look="panel"] .title-go-mark {
+    top: 8%;
+    left: 50%;
+    transform: translateX(-20%);
+    font-size: clamp(8rem, 48vw, 16rem);
+  }
+}
+
+body.gotax-suite.recover-page {
+  background:
+    radial-gradient(80% 50% at 80% 0%, rgba(28, 74, 134, 0.32), transparent 55%),
+    linear-gradient(180deg, #040a14 0%, #071428 100%);
+}
+
+body.gotax-suite .recover-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+body.gotax-suite .recover-brand .title-brand-taxation {
+  color: #f4f8ff;
+}
+body.gotax-suite .recover-brand .title-brand-suite {
+  font-size: 0.78em;
+  letter-spacing: 0.12em;
 }
 
 body.gotax-suite #title-hub-picker .title-hub-apps {
@@ -96,15 +332,53 @@ body.gotax-suite .gotax-work-snapshot .overnight-entry-list {
   padding: 0;
 }
 
-body.gotax-suite .title-screen-truck,
-body.gotax-suite .title-screen-road {
-  display: none !important;
+/* --- Login concept gallery (preview only) -------------------------------- */
+body.login-concept-page {
+  background: #040a14;
+  color: var(--text, #e8eef6);
+  overflow: auto;
 }
-
-body.gotax-suite .title-screen-sky.suite-sky,
-body.gotax-suite .suite-sky {
-  background:
-    radial-gradient(900px 420px at 15% 0%, rgba(45, 212, 191, 0.28), transparent 55%),
-    radial-gradient(700px 380px at 90% 10%, rgba(56, 189, 248, 0.22), transparent 50%),
-    linear-gradient(165deg, #042f2e 0%, #0f172a 48%, #0b1220 100%);
+body.login-concept-page .concept-wrap {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 28px 18px 64px;
+}
+body.login-concept-page .concept-intro h1 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+body.login-concept-page .concept-intro p {
+  margin: 0 0 10px;
+  color: var(--text-dim);
+  max-width: 62ch;
+}
+body.login-concept-page .concept-intro a {
+  color: var(--hub-accent);
+}
+body.login-concept-page .concept-block {
+  margin: 28px 0 0;
+}
+body.login-concept-page .concept-block h2 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+body.login-concept-page .concept-block p {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+body.login-concept-page .concept-stage {
+  position: relative;
+  height: min(72vh, 640px);
+  min-height: 480px;
+  border-radius: 18px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+}
+body.login-concept-page .concept-stage .title-screen {
+  position: absolute;
+  inset: 0;
+  display: flex !important;
 }
