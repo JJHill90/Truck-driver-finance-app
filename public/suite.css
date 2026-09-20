@@ -224,17 +224,17 @@ body.gotax-suite .title-screen[data-login-look="lockup"] .title-go-backdrop {
   align-items: flex-start;
   position: absolute;
   z-index: 0;
-  inset: -6% -8% -2% -10%;
+  inset: -8% -4% -10% -6%;
   pointer-events: none;
   user-select: none;
   font-family: var(--font-brand);
   font-weight: 800;
-  font-size: clamp(12rem, 36vh, 18.5rem);
-  line-height: 0.66;
+  font-size: clamp(13rem, 38vh, 20rem);
+  line-height: 0.7;
   letter-spacing: -0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.9);
-  transform: scaleX(1.55);
+  transform: scaleX(1.42);
   transform-origin: left top;
 }
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-content > *:not(.title-go-backdrop) {
