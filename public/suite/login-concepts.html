@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./suite-mark.svg" />
+    <title>Go Taxation Suite — login concepts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
+    <link rel="stylesheet" href="./suite.css?v=login-navy-11" />
+  </head>
+  <body class="gotax-suite login-concept-page">
+    <div class="concept-wrap">
+      <header class="concept-intro">
+        <p class="muted small">Live title screen is 4B — the other looks stay here as drafts</p>
+        <h1>Option 4 refinements</h1>
+        <p>
+          Larger <strong>GO</strong> reading left to right from the left edge, with a
+          bolder Taxation / Suite on top. <strong>4B</strong> is locked onto
+          <a href="./">/suite/</a>.
+        </p>
+        <p>
+          Full-screen:
+          <a href="./?look=lr-a">4A</a>
+          · <a href="./?look=lr-b">4B</a>
+          · <a href="./?look=lr-c">4C</a>
+          · <a href="./?look=lr-d">4D</a>
+          · <a href="./">Live title screen</a>
+        </p>
+      </header>
+
+      <section class="concept-block" id="example-4a">
+        <h2>4A — Large LTR GO, medium see-through</h2>
+        <p>Full word GO from the left, about 26% white. Extra-bold Taxation / Suite.</p>
+        <div class="concept-stage" id="stage-lr-a"></div>
+      </section>
+
+      <section class="concept-block" id="example-4b">
+        <h2>4B — Larger GO, more see-through (live)</h2>
+        <p>Bigger letters, ~18% white, so the bolder title sits more clearly on top. This is the live title screen.</p>
+        <div class="concept-stage" id="stage-lr-b"></div>
+      </section>
+
+      <section class="concept-block" id="example-4c">
+        <h2>4C — Biggest GO, most see-through fill</h2>
+        <p>Largest left-to-right GO at ~12% white if the title still fights the letters.</p>
+        <div class="concept-stage" id="stage-lr-c"></div>
+      </section>
+
+      <section class="concept-block" id="example-4d">
+        <h2>4D — Outlined GO (open centre)</h2>
+        <p>Same large LTR word, stroke only — the most see-through, with the boldest title.</p>
+        <div class="concept-stage" id="stage-lr-d"></div>
+      </section>
+
+      <header class="concept-intro" style="margin-top: 48px">
+        <h1>Earlier looks</h1>
+        <p>Previous drafts, including original option 4 (stacked softer GO).</p>
+      </header>
+
+      <section class="concept-block" id="example-1">
+        <h2>1 — Stacked GO behind the whole left cluster</h2>
+        <p>G over O, ~90% white, covering Taxation / Suite and most of the form.</p>
+        <div class="concept-stage" id="stage-lockup"></div>
+      </section>
+
+      <section class="concept-block" id="example-2">
+        <h2>2 — GO only behind Taxation / Suite</h2>
+        <p>Compact horizontal GO under the two-line title.</p>
+        <div class="concept-stage" id="stage-behind-title"></div>
+      </section>
+
+      <section class="concept-block" id="example-3">
+        <h2>3 — Wide GO behind the title block</h2>
+        <p>Horizontal GO behind Taxation / Suite and the headline.</p>
+        <div class="concept-stage" id="stage-behind-wide"></div>
+      </section>
+
+      <section class="concept-block" id="example-4">
+        <h2>4 — Original softer stacked GO</h2>
+        <p>The option you preferred, before the left-to-right / bolder-title pass.</p>
+        <div class="concept-stage" id="stage-behind-soft"></div>
+      </section>
+
+      <section class="concept-block" id="look-a">
+        <h2>A — Watermark GO (previous live title screen)</h2>
+        <p>Giant see-through stacked G / O on the right.</p>
+        <div class="concept-stage" id="stage-watermark"></div>
+      </section>
+    </div>
+
+    <template id="concept-login">
+      <div class="title-screen">
+        <div class="title-screen-sky suite-sky" aria-hidden="true"></div>
+        <div class="title-go-mark" aria-hidden="true"><span>G</span><span>O</span></div>
+        <div class="title-screen-content">
+          <div class="title-go-backdrop" aria-hidden="true"><span>G</span><span>O</span></div>
+          <p class="title-screen-brand">
+            <span class="title-brand-lockup-go" aria-hidden="true">GO</span>
+            <span class="title-brand-stack">
+              <span class="title-brand-taxation">Taxation</span>
+              <span class="title-brand-suite brand-hub">Suite</span>
+            </span>
+          </p>
+          <div>
+            <h1 class="title-screen-headline">
+              Tax records for employees, sole traders and partnerships.
+            </h1>
+            <p class="title-screen-sub">
+              Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report — general ATO rules for any occupation.
+            </p>
+            <form class="title-auth-form" autocomplete="off" onsubmit="return false">
+              <label>
+                Username
+                <input name="username" placeholder="e.g. alex.nguyen" />
+              </label>
+              <label>
+                Password
+                <input name="password" type="password" placeholder="Your password" />
+              </label>
+              <div class="title-auth-actions">
+                <button type="button" class="btn primary">Log in</button>
+                <button type="button" class="btn secondary">Create profile</button>
+              </div>
+              <button type="button" class="btn link title-forgot-btn">Forgot username / password?</button>
+            </form>
+            <p class="app-version-footer title-version">Version 2.40</p>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      (function () {
+        var tpl = document.getElementById("concept-login");
+        [
+          ["stage-lr-a", "lr-a"],
+          ["stage-lr-b", "lr-b"],
+          ["stage-lr-c", "lr-c"],
+          ["stage-lr-d", "lr-d"],
+          ["stage-lockup", "lockup"],
+          ["stage-behind-title", "behind-title"],
+          ["stage-behind-wide", "behind-wide"],
+          ["stage-behind-soft", "behind-soft"],
+          ["stage-watermark", "watermark"],
+        ].forEach(function (item) {
+          var host = document.getElementById(item[0]);
+          if (!host || !tpl) return;
+          host.appendChild(tpl.content.cloneNode(true));
+          var screen = host.querySelector(".title-screen");
+          if (screen) screen.setAttribute("data-login-look", item[1]);
+        });
+      })();
+    </script>
+  </body>
+</html>
