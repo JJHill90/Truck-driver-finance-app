@@ -392,6 +392,96 @@ body.gotax-suite .title-screen[data-login-look="behind-soft"] .title-screen-bran
   display: none;
 }
 
+/* Option 4 refinements: large LTR GO, bolder Taxation / Suite */
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-go-mark,
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-brand-lockup-go {
+  display: none;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-screen-content {
+  overflow: visible;
+  isolation: isolate;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-screen-content > *:not(.title-go-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-screen-brand::after {
+  display: none;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-go-backdrop {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  position: absolute;
+  z-index: 0;
+  left: -6%;
+  top: -4%;
+  right: auto;
+  bottom: auto;
+  font-family: var(--font-brand);
+  font-weight: 800;
+  line-height: 0.72;
+  letter-spacing: -0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-go-backdrop span {
+  display: inline;
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-screen-brand {
+  font-weight: 900;
+  font-size: clamp(3.15rem, 7.4vw, 4.85rem);
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-brand-taxation {
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  -webkit-text-stroke: 0.55px #fff;
+  text-shadow: 0 2px 0 rgba(4, 10, 20, 0.45), 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+body.gotax-suite .title-screen[data-login-look^="lr-"] .title-brand-suite {
+  color: #e4eefc;
+  font-weight: 900;
+  font-size: 0.92em;
+  letter-spacing: 0.18em;
+  -webkit-text-stroke: 0.45px #e4eefc;
+  text-shadow: 0 2px 0 rgba(4, 10, 20, 0.45), 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+/* 4A — large LTR GO, medium see-through */
+body.gotax-suite .title-screen[data-login-look="lr-a"] .title-go-backdrop {
+  font-size: 17.5rem;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* 4B — larger GO, a bit more see-through */
+body.gotax-suite .title-screen[data-login-look="lr-b"] .title-go-backdrop {
+  font-size: 21rem;
+  left: -8%;
+  top: -8%;
+  color: rgba(255, 255, 255, 0.22);
+}
+
+/* 4C — biggest GO, most see-through fill */
+body.gotax-suite .title-screen[data-login-look="lr-c"] .title-go-backdrop {
+  font-size: 24rem;
+  left: -10%;
+  top: -10%;
+  color: rgba(255, 255, 255, 0.14);
+}
+
+/* 4D — large outlined GO (see-through centre) */
+body.gotax-suite .title-screen[data-login-look="lr-d"] .title-go-backdrop {
+  font-size: 20rem;
+  left: -7%;
+  top: -6%;
+  color: transparent;
+  -webkit-text-stroke: 6px rgba(255, 255, 255, 0.34);
+}
+
 /* --- Look C: giant outlined / see-through GO ---------------------------- */
 body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark {
   display: block;
@@ -453,6 +543,17 @@ body.gotax-suite .title-screen[data-login-look="panel"] .title-screen-content {
     inset: -4% -4% -2% -6%;
     font-size: clamp(8.5rem, 30vh, 13.5rem);
     transform: scaleX(1.35);
+  }
+  body.gotax-suite .title-screen[data-login-look^="lr-"] .title-go-backdrop {
+    font-size: 11.5rem;
+    left: -4%;
+    top: -2%;
+  }
+  body.gotax-suite .title-screen[data-login-look="lr-b"] .title-go-backdrop {
+    font-size: 13.5rem;
+  }
+  body.gotax-suite .title-screen[data-login-look="lr-c"] .title-go-backdrop {
+    font-size: 15rem;
   }
   body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark,
   body.gotax-suite .title-screen[data-login-look="panel"] .title-go-mark {
