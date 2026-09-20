@@ -1577,6 +1577,11 @@
 
   /** Show app picker after Driver Hub login (Taxation Hub still gated). */
   function showDriverHubPicker(username) {
+    // Go Taxation Suite is its own product — never show Driver Hub app tiles.
+    if (isGoTaxSuite()) {
+      openTaxationHub({ username: username || "—" });
+      return;
+    }
     lockApp();
     byId("title-auth-panel")?.classList.add("hidden");
     const picker = byId("title-hub-picker");
@@ -9652,9 +9657,8 @@
 (function () {
   "use strict";
 
-  async function refreshVersion() {
+  async function loadVersionLabels() {
     const nodes = document.querySelectorAll("[data-app-version]");
-    if (!nodes.length) return;
     try {
       const base =
         typeof API !== "undefined" && API
@@ -9662,22 +9666,60 @@
           : `${window.location.origin}/api/haulage`;
       const res = await fetch(`${base}/version`, { credentials: "same-origin" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.label) return;
-      nodes.forEach((el) => {
-        el.textContent = data.label;
-        if (data.prNumber != null) el.title = `PR #${data.prNumber}`;
-      });
+      if (!res.ok) return;
+      if (data.label) {
+        nodes.forEach((el) => {
+          el.textContent = data.label;
+          if (data.prNumber != null) el.title = `PR #${data.prNumber}`;
+        });
+      }
+      // Point Driver Hub → Suite (and Suite → Driver Hub) at the sibling
+      // Render origin when configured, so the two products never look like
+      // paths on the same site.
+      applyProductSeparation(data);
     } catch {
       /* keep static fallback in HTML */
     }
   }
 
+  function applyProductSeparation(meta) {
+    if (!meta || typeof meta !== "object") return;
+    const suiteLink = document.getElementById("suite-cross-link-a");
+    if (suiteLink && meta.suiteEntryUrl) {
+      suiteLink.href = meta.suiteEntryUrl;
+      if (/^https?:\/\//i.test(meta.suiteEntryUrl)) {
+        suiteLink.target = "_blank";
+        suiteLink.rel = "noopener noreferrer";
+      }
+    }
+    const hubLink = document.getElementById("driverhub-cross-link-a");
+    if (hubLink && meta.driverHubEntryUrl) {
+      hubLink.href = meta.driverHubEntryUrl;
+      if (/^https?:\/\//i.test(meta.driverHubEntryUrl)) {
+        hubLink.target = "_blank";
+        hubLink.rel = "noopener noreferrer";
+      }
+    }
+    if (meta.separateDeployments || meta.standalone) {
+      document.body.classList.add("product-separated");
+    }
+    const badge = document.getElementById("product-separation-badge");
+    if (badge) {
+      badge.hidden = false;
+      badge.textContent = meta.standalone
+        ? "Go Taxation Suite · separate Render service from Driver Hub"
+        : meta.separateDeployments
+          ? `${meta.productName} · separate from ${meta.siblingProductName}`
+          : badge.textContent;
+    }
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-      void refreshVersion();
+      void loadVersionLabels();
     });
   } else {
-    void refreshVersion();
+    void loadVersionLabels();
   }
 })();
 
