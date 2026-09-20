@@ -9673,44 +9673,8 @@
           if (data.prNumber != null) el.title = `PR #${data.prNumber}`;
         });
       }
-      // Point Driver Hub → Suite (and Suite → Driver Hub) at the sibling
-      // Render origin when configured, so the two products never look like
-      // paths on the same site.
-      applyProductSeparation(data);
     } catch {
       /* keep static fallback in HTML */
-    }
-  }
-
-  function applyProductSeparation(meta) {
-    if (!meta || typeof meta !== "object") return;
-    const suiteLink = document.getElementById("suite-cross-link-a");
-    if (suiteLink && meta.suiteEntryUrl) {
-      suiteLink.href = meta.suiteEntryUrl;
-      if (/^https?:\/\//i.test(meta.suiteEntryUrl)) {
-        suiteLink.target = "_blank";
-        suiteLink.rel = "noopener noreferrer";
-      }
-    }
-    const hubLink = document.getElementById("driverhub-cross-link-a");
-    if (hubLink && meta.driverHubEntryUrl) {
-      hubLink.href = meta.driverHubEntryUrl;
-      if (/^https?:\/\//i.test(meta.driverHubEntryUrl)) {
-        hubLink.target = "_blank";
-        hubLink.rel = "noopener noreferrer";
-      }
-    }
-    if (meta.separateDeployments || meta.standalone) {
-      document.body.classList.add("product-separated");
-    }
-    const badge = document.getElementById("product-separation-badge");
-    if (badge) {
-      badge.hidden = false;
-      badge.textContent = meta.standalone
-        ? "Go Taxation Suite · separate Render service from Driver Hub"
-        : meta.separateDeployments
-          ? `${meta.productName} · separate from ${meta.siblingProductName}`
-          : badge.textContent;
     }
   }
 
