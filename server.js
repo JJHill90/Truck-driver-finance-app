@@ -229,7 +229,7 @@ function productOf(req) {
 function fileForUser(user, product) {
   if (product === "suite") {
     if (!user) return path.join(suite.SUITE_DATA_DIR, "guest.json");
-    return suite.recordsFileFor(user);
+    return suite.seedRecordsIfMissing(user, auth.recordsFileFor(user));
   }
   return user ? auth.recordsFileFor(user) : storage.DEFAULT_FILE;
 }
@@ -4032,6 +4032,24 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
+  backup
+    .restoreLatestIfStoreEmpty()
+    .then((restored) => {
+      if (restored && restored.restored) {
+        console.log(`Restored profiles from backup ${restored.id} after empty data dir`);
+      }
+    })
+    .catch((err) => {
+      console.warn("Startup profile restore skipped:", err.message);
+    })
+    .finally(() => {
+      bootListen();
+    });
+}
+
+function bootListen() {
+  if (process.env.NODE_ENV === "test") return;
+  auth.reloadSessionsFromDisk();
   const admin = auth.ensureAdminBootstrap();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
