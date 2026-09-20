@@ -203,7 +203,7 @@ body.gotax-suite .title-screen-brand::after {
   background: linear-gradient(90deg, var(--hub-accent), var(--navy-btn));
 }
 
-/* --- Look A: translucent stacked GO on the right (live default) --------- */
+/* --- Look A: translucent stacked GO on the right ------------------------ */
 body.gotax-suite .title-screen[data-login-look="watermark"] .title-go-mark {
   color: rgba(255, 255, 255, 0.11);
 }
@@ -221,19 +221,19 @@ body.gotax-suite .title-screen[data-login-look="lockup"] .title-go-backdrop {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   position: absolute;
   z-index: 0;
-  inset: -8% -42% -10% -28%;
+  inset: -2% -6% -2% -4%;
   pointer-events: none;
   user-select: none;
   font-family: var(--font-brand);
   font-weight: 800;
-  font-size: clamp(13rem, 46vh, 23rem);
-  line-height: 0.68;
+  font-size: clamp(9.5rem, 28vh, 15.5rem);
+  line-height: 0.7;
   letter-spacing: -0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.9);
 }
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-content > *:not(.title-go-backdrop) {
   position: relative;
@@ -245,11 +245,11 @@ body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-brand::af
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-brand-taxation,
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-headline {
   color: #07111f;
-  text-shadow: none;
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 28px rgba(255, 255, 255, 0.7);
 }
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-brand-suite {
   color: #163a6b;
-  text-shadow: none;
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 28px rgba(255, 255, 255, 0.7);
 }
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-screen-sub,
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-auth-form label,
@@ -257,6 +257,7 @@ body.gotax-suite .title-screen[data-login-look="lockup"] .title-trial-hint,
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-version,
 body.gotax-suite .title-screen[data-login-look="lockup"] .muted {
   color: #2a4060;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
 }
 body.gotax-suite .title-screen[data-login-look="lockup"] .title-auth-form input {
   background: rgba(255, 255, 255, 0.72);
@@ -319,8 +320,8 @@ body.gotax-suite .title-screen[data-login-look="panel"] .title-screen-content {
     font-size: clamp(8rem, 42vw, 14rem);
   }
   body.gotax-suite .title-screen[data-login-look="lockup"] .title-go-backdrop {
-    inset: -6% -18% -8% -16%;
-    font-size: clamp(9rem, 38vh, 16rem);
+    inset: -2% -4% -2% -2%;
+    font-size: clamp(7.5rem, 26vh, 12rem);
   }
   body.gotax-suite .title-screen[data-login-look="outline"] .title-go-mark,
   body.gotax-suite .title-screen[data-login-look="panel"] .title-go-mark {
