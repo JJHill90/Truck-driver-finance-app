@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=gotax-4" />
+    <link rel="stylesheet" href="./suite.css?v=product-sep-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -23,11 +23,12 @@
     </script>
   </head>
   <body class="auth-locked gotax-suite">
-    <!-- Login gate: then open Go Taxation Suite -->
+    <p id="product-separation-badge" class="product-separation-badge" role="note">
+      Go Taxation Suite · separate product from Driver Hub (own login &amp; data)
+    </p>
+    <!-- Login gate: then open Go Taxation Suite (no Driver Hub app picker) -->
     <div id="title-screen" class="title-screen" role="dialog" aria-modal="true" aria-labelledby="title-brand">
-      <div class="title-screen-sky" aria-hidden="true"></div>
-      <div class="title-screen-road" aria-hidden="true"></div>
-      <img class="title-screen-truck" src="./truck.svg" alt="" aria-hidden="true" />
+      <div class="title-screen-sky suite-sky" aria-hidden="true"></div>
       <div class="title-screen-content">
         <p id="title-brand" class="title-screen-brand">Go Taxation <span class="brand-hub">Suite</span></p>
         <div id="title-auth-panel">
@@ -35,7 +36,7 @@
             Tax records for employees, sole traders and partnerships.
           </h1>
           <p class="title-screen-sub">
-            Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report — the same layout as Taxation Hub, with general ATO rules instead of truck-driver legislation.
+            Sign in to compile PAYG salary, business income and deductible expenses into a live EOFY report — general ATO rules for any occupation (not the truck-driver Driver Hub apps).
           </p>
           <form id="title-auth-form" class="title-auth-form" autocomplete="on">
             <label>
@@ -85,6 +86,12 @@
             <div id="title-recover-dev" class="title-recover-fallback hidden"></div>
           </form>
           <p id="title-auth-message" class="title-auth-message" role="status"></p>
+          <p class="title-screen-sub driverhub-cross-link" id="driverhub-cross-link">
+            <span class="suite-cross-link-badge">Not Driver Hub</span>
+            Looking for truck-driver apps?
+            <a id="driverhub-cross-link-a" href="/haulage/" rel="noopener">Open Driver Hub</a>
+            (Taxation Hub &amp; Fuel Hub — separate Render site &amp; login).
+          </p>
         </div>
         <div id="title-hub-picker" class="title-hub-picker hidden" aria-label="Choose an app">
           <h1 class="title-screen-headline">Welcome back</h1>
@@ -921,7 +928,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=gotax-travel-profile-2"></script>
+    <script src="./enhancements.js?v=product-sep-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=gotax-5"></script>
   </body>

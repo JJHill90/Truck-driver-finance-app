@@ -23,6 +23,11 @@ services:
       # Driver Hub host. Do not set this to suite on the truck-driver service.
       - key: APP_PRODUCT
         value: haulage
+      # Absolute origin of the Go Taxation Suite Render service
+      # (e.g. https://your-suite-service.example.com). When set, /suite on this
+      # host redirects there so the products are visibly separate.
+      - key: SUITE_PUBLIC_URL
+        sync: false
       # Optional: enable cloud OCR. Set the value in the Render dashboard.
       - key: OPENAI_API_KEY
         sync: false
@@ -130,6 +135,11 @@ services:
         value: production
       - key: APP_PRODUCT
         value: suite
+      # Absolute origin of the Driver Hub Render service
+      # (e.g. https://your-service.example.com). When set, /haulage on this
+      # host redirects there so Suite is never mistaken for Driver Hub.
+      - key: DRIVERHUB_PUBLIC_URL
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       # Primary mod password is set in the Render dashboard (same bootstrap as Driver Hub).

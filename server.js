@@ -940,10 +940,12 @@ api.get("/lafha", (req, res) => {
   res.json(summary);
 });
 
-api.get("/version", (_req, res) => {
+api.get("/version", (req, res) => {
+  const product = suite.productMeta(req);
   res.json({
     prNumber: HAULAGE_PR_NUMBER,
     label: formatVersionLabel(HAULAGE_PR_NUMBER),
+    ...product,
   });
 });
 
@@ -3980,9 +3982,22 @@ api.post("/support/contact", async (req, res) => {
 app.use("/api/haulage", api);
 
 // --- Go Taxation Suite (general PAYG / sole trader / partnership) ----------
-app.get(["/suite", "/suite/"], (_req, res) => {
+// On the Driver Hub Render service, once SUITE_PUBLIC_URL points at the
+// dedicated go-taxation-suite host, /suite must leave this origin so the two
+ // products are visibly separate (own URL, disk, and accounts).
+function redirectSuiteToSibling(req, res, next) {
+  if (suite.isStandaloneSuite()) return next();
+  const origin = suite.siblingPublicUrl();
+  if (!origin) return next();
+  const rest = req.originalUrl || "/suite/";
+  const pathPart = rest.startsWith("/suite") ? rest.slice("/suite".length) || "/" : "/";
+  res.redirect(302, `${origin}/suite${pathPart === "/" ? "/" : pathPart}`);
+}
+
+app.get(["/suite", "/suite/"], redirectSuiteToSibling, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));
 });
+app.use("/suite", redirectSuiteToSibling);
 app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
 app.use("/suite", express.static(PUBLIC_DIR));
 
@@ -3991,6 +4006,12 @@ app.use("/suite", express.static(PUBLIC_DIR));
 // to /suite/ so the second Render service is not a truck-driver login.
 if (suite.isStandaloneSuite()) {
   app.use("/haulage", (req, res) => {
+    const sibling = suite.siblingPublicUrl();
+    if (sibling) {
+      const rest = req.url && req.url !== "/" ? req.url : "/";
+      res.redirect(302, `${sibling}/haulage${rest === "/" ? "/" : rest}`);
+      return;
+    }
     const rest = req.url && req.url !== "/" ? req.url : "/";
     res.redirect(302, `/suite${rest}`);
   });
