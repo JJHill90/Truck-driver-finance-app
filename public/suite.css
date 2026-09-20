@@ -305,7 +305,7 @@ body.gotax-suite .title-screen[data-login-look="behind-title"] .title-go-backdro
   left: -0.12em;
   font-family: var(--font-brand);
   font-weight: 800;
-  font-size: clamp(6.4rem, 15vw, 9.4rem);
+  font-size: 5.4rem;
   line-height: 0.72;
   letter-spacing: -0.08em;
   text-transform: uppercase;
@@ -321,11 +321,11 @@ body.gotax-suite .title-screen[data-login-look="behind-title"] .title-screen-bra
 }
 body.gotax-suite .title-screen[data-login-look="behind-title"] .title-brand-taxation {
   color: #07111f;
-  text-shadow: 0 0 14px rgba(255, 255, 255, 0.95);
+  text-shadow: none;
 }
 body.gotax-suite .title-screen[data-login-look="behind-title"] .title-brand-suite {
   color: #163a6b;
-  text-shadow: 0 0 14px rgba(255, 255, 255, 0.95);
+  text-shadow: none;
 }
 
 /* Example 3: wide horizontal GO behind the title block */
@@ -343,7 +343,7 @@ body.gotax-suite .title-screen[data-login-look="behind-wide"] .title-go-backdrop
   height: 46%;
   font-family: var(--font-brand);
   font-weight: 800;
-  font-size: clamp(9rem, 22vw, 14rem);
+  font-size: 9.2rem;
   line-height: 0.72;
   letter-spacing: -0.08em;
   text-transform: uppercase;
@@ -442,10 +442,10 @@ body.gotax-suite .title-screen[data-login-look="panel"] .title-screen-content {
     font-size: clamp(8rem, 42vw, 14rem);
   }
   body.gotax-suite .title-screen[data-login-look="behind-title"] .title-go-backdrop {
-    font-size: clamp(5.2rem, 22vw, 7.4rem);
+    font-size: 4.6rem;
   }
   body.gotax-suite .title-screen[data-login-look="behind-wide"] .title-go-backdrop {
-    font-size: clamp(6.5rem, 28vw, 10rem);
+    font-size: 7.2rem;
     height: 38%;
   }
   body.gotax-suite .title-screen[data-login-look="lockup"] .title-go-backdrop,
