@@ -96,32 +96,6 @@ body.gotax-suite .gotax-work-snapshot .overnight-entry-list {
   padding: 0;
 }
 
-/* Clear product separation on Render (Suite ≠ Driver Hub). */
-.product-separation-badge,
-.suite-cross-link-badge {
-  display: inline-block;
-  margin: 0 0 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  background: #0f766e;
-  color: #ecfdf5;
-}
-
-body.gotax-suite > .product-separation-badge {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  max-width: min(92vw, 420px);
-  text-align: center;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
-}
-
 body.gotax-suite .title-screen-truck,
 body.gotax-suite .title-screen-road {
   display: none !important;
@@ -133,16 +107,4 @@ body.gotax-suite .suite-sky {
     radial-gradient(900px 420px at 15% 0%, rgba(45, 212, 191, 0.28), transparent 55%),
     radial-gradient(700px 380px at 90% 10%, rgba(56, 189, 248, 0.22), transparent 50%),
     linear-gradient(165deg, #042f2e 0%, #0f172a 48%, #0b1220 100%);
-}
-
-.suite-cross-link,
-.driverhub-cross-link {
-  margin-top: 14px;
-  line-height: 1.45;
-}
-
-body.product-separated .suite-cross-link-badge,
-body.gotax-suite .suite-cross-link-badge {
-  background: #b45309;
-  color: #fff7ed;
 }

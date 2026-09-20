@@ -245,9 +245,9 @@ appear on Go Taxation Suite, and vice versa.
    `node server.js`, health check `/suite/`, env `APP_PRODUCT=suite`, and attach
    a 1 GB disk at `/opt/render/project/src/data`.
 4. Both redeploy on every push to the connected branch (**must be `main`**).
-5. After both services are live, set cross-links in the Render dashboard so
-   each host points at the other (otherwise `/suite` on Driver Hub still looks
-   like the same site):
+5. After both services are live, set host redirects in the Render dashboard so
+   accidental `/suite` or `/haulage` hits on the wrong service bounce to the
+   correct origin (optional but recommended):
    - On **`haulage-finance`**: `SUITE_PUBLIC_URL=https://YOUR-SUITE-SERVICE.onrender.com`
    - On **`go-taxation-suite`**: `DRIVERHUB_PUBLIC_URL=https://YOUR-DRIVERHUB-SERVICE.onrender.com`
    Also set `APP_BASE_URL` on each service to its own public HTTPS origin. Add the
@@ -255,8 +255,8 @@ appear on Go Taxation Suite, and vice versa.
    Render dashboard (do not commit those values).
 
 You should then see **two services** in the Render dashboard (`haulage-finance`
-and `go-taxation-suite`), each with its own URL and disk. Opening “Go Taxation
-Suite” from Driver Hub leaves the Driver Hub hostname.
+and `go-taxation-suite`), each with its own URL, disk, and accounts. The UIs do
+not cross-promote each other.
 
 A dedicated GitHub repository is optional. If you later copy this codebase into
 its own repo, keep `APP_PRODUCT=suite` and you can point a new Render service at
