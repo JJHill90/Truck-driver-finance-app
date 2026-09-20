@@ -112,7 +112,8 @@ body.gotax-suite .title-screen.title-register-open .title-go-mark {
   opacity: 0.55;
 }
 body.gotax-suite .title-screen.title-register-open[data-login-look="lockup"] .title-go-mark,
-body.gotax-suite .title-screen.title-register-open[data-login-look="lockup"] .title-go-backdrop {
+body.gotax-suite .title-screen.title-register-open[data-login-look="lockup"] .title-go-backdrop,
+body.gotax-suite .title-screen.title-register-open[data-login-look^="lr-"] .title-go-mark {
   opacity: 1;
 }
 body.gotax-suite .title-screen.title-register-open .title-screen-brand::after {
