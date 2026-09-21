@@ -4,7 +4,12 @@ const {
   FREE_SOFT_WARN_USED,
   PRO_PRICE_AUD,
   PRO_PRICE_YEARLY_AUD,
-  TRIAL_MONTHS,
+  SUITE_PRO_PRICE_AUD,
+  SUITE_PRO_PRICE_YEARLY_AUD,
+  SUITE_PRO_PLUS_PRICE_AUD,
+  SUITE_PRO_PLUS_PRICE_YEARLY_AUD,
+  isProPlus,
+  pricingForProduct,
   TRIAL_PRODUCT_LABEL,
   addTrialEnd,
   countUploadsThisMonth,
@@ -22,20 +27,36 @@ const {
 } = require("./lib/entitlements");
 
 describe("entitlements", () => {
-  it("locks Pro at $5/mo or $60/yr and a universal 3-month Pro+ trial", () => {
+  it("locks Pro at $5/mo or $60/yr and starts new profiles on Free", () => {
     expect(PRO_PRICE_AUD).toBe(5);
     expect(PRO_PRICE_YEARLY_AUD).toBe(60);
     expect(FREE_UPLOADS_PER_MONTH).toBe(15);
     expect(FREE_SOFT_WARN_USED).toBe(8);
     expect(FREE_ONSCREEN_REPORTS).toBe(1);
-    expect(TRIAL_MONTHS).toBe(3);
     expect(TRIAL_PRODUCT_LABEL).toBe("Pro+");
     const offer = trialOfferStatus();
-    expect(offer.open).toBe(true);
-    expect(offer.universal).toBe(true);
-    expect(offer.trialMonths).toBe(3);
+    expect(offer.open).toBe(false);
+    expect(offer.universal).toBe(false);
+    expect(offer.startsOn).toBe("free");
+    expect(offer.trialMonths).toBe(0);
     expect(offer.trialLabel).toBe("Pro+");
+    expect(offer.freeUploadsPerMonth).toBe(15);
     expect(offer.priceYearlyLabel).toBe("$60/year");
+    expect(offer.product).toBe("haulage");
+    const suiteOffer = trialOfferStatus("suite");
+    expect(suiteOffer.priceAud).toBe(10);
+    expect(suiteOffer.priceYearlyAud).toBe(110);
+    expect(suiteOffer.priceLabel).toBe("$10/month");
+    expect(suiteOffer.priceYearlyLabel).toBe("$110/year");
+    expect(suiteOffer.product).toBe("suite");
+    expect(SUITE_PRO_PRICE_AUD).toBe(10);
+    expect(SUITE_PRO_PRICE_YEARLY_AUD).toBe(110);
+    expect(SUITE_PRO_PLUS_PRICE_AUD).toBe(18);
+    expect(SUITE_PRO_PLUS_PRICE_YEARLY_AUD).toBe(190);
+    expect(pricingForProduct("suite").priceYearlyAud).toBe(110);
+    expect(pricingForProduct("suite").plusPriceAud).toBe(18);
+    expect(pricingForProduct("haulage").priceAud).toBe(5);
+    expect(pricingForProduct("haulage").plusPriceAud).toBeNull();
   });
 
   it("soft-warns only after halfway free uploads, before the hard cap", () => {
@@ -100,17 +121,19 @@ describe("entitlements", () => {
     expect(isPro(user)).toBe(false);
   });
 
-  it("assigns a Pro+ trial to every new non-admin signup", () => {
+  it("does not assign a signup trial — new drivers stay Free", () => {
     const driver = { username: "dave", createdAt: "2026-08-12T00:00:00Z", isAdmin: false };
-    expect(assignSignupTrial(driver)).toBe(true);
-    expect(driver.proTrialEndsAt).toBeTruthy();
-    expect(isPro(driver, new Date("2026-08-12"))).toBe(true);
-    expect(isPro(driver, new Date("2026-12-01"))).toBe(false);
-
-    // Idempotent — does not overwrite an existing end date.
-    const prior = driver.proTrialEndsAt;
     expect(assignSignupTrial(driver)).toBe(false);
-    expect(driver.proTrialEndsAt).toBe(prior);
+    expect(driver.proTrialEndsAt).toBeUndefined();
+    expect(isPro(driver, new Date("2026-08-12"))).toBe(false);
+
+    const leftover = {
+      username: "pat",
+      proTrialEndsAt: addTrialEnd("2026-08-01T00:00:00Z"),
+    };
+    expect(assignSignupTrial(leftover)).toBe(false);
+    expect(leftover.proTrialEndsAt).toBeTruthy();
+    expect(isPro(leftover, new Date("2026-08-12"))).toBe(true);
 
     const admin = { username: "admin", isAdmin: true };
     expect(assignSignupTrial(admin)).toBe(false);
@@ -194,6 +217,20 @@ describe("entitlements", () => {
     const proBlocked = proFeatureBlockedPayload("pdf", free);
     expect(proBlocked.code).toBe("PRO_REQUIRED");
     expect(proBlocked.feature).toBe("pdf");
+
+    const suiteEnt = resolveEntitlements(
+      { plan: "free", proTrialEndsAt: null },
+      { receipts: [] },
+      now,
+      { product: "suite" }
+    );
+    expect(suiteEnt.priceAud).toBe(10);
+    expect(suiteEnt.priceYearlyAud).toBe(110);
+    expect(suiteEnt.product).toBe("suite");
+    const suiteBlocked = uploadBlockedPayload(suiteEnt);
+    expect(suiteBlocked.error).toMatch(/\$10\/month/);
+    expect(suiteBlocked.error).toMatch(/\$110\/year/);
+    expect(suiteBlocked.error).not.toMatch(/\$5\/month/);
   });
 
   it("gives Pro unlimited uploads and export flags", () => {
@@ -227,6 +264,9 @@ describe("entitlements", () => {
     expect(up.status).toBe("pro_plus");
     expect(up.planGrant).toBe("pro_plus");
     expect(up.canExportPdf).toBe(true);
+    expect(up.isProPlus).toBe(true);
+    expect(up.canShareAccountant).toBe(true);
+    expect(up.canCloudOcr).toBe(true);
 
     applyAdminPlanGrant(user, "free", { by: "Haulage_Admin", at: now.toISOString() });
     expect(user.planGrant).toBe("free");
@@ -287,5 +327,53 @@ describe("entitlements", () => {
     expect(paid.displayPlan).toBe("Pro");
     expect(paid.cancelAtPeriodEnd).toBe(true);
     expect(paid.hasStripeSubscription).toBe(true);
+  });
+
+  it("keeps leftover trials on Pro features and reserves extras for real Pro+", () => {
+    const now = new Date("2026-08-15T12:00:00Z");
+    const paid = resolveEntitlements(
+      { subscriptionStatus: "active", currentPeriodEnd: "2026-09-15T00:00:00Z" },
+      { receipts: [] },
+      now
+    );
+    const complimentary = resolveEntitlements(
+      { planGrant: "pro_plus", plan: "pro" },
+      { receipts: [] },
+      now
+    );
+    const leftoverTrial = resolveEntitlements(
+      { proTrialEndsAt: addTrialEnd("2026-08-01T00:00:00Z") },
+      { receipts: [] },
+      now
+    );
+    const paidPlus = resolveEntitlements(
+      {
+        subscriptionStatus: "active",
+        subscriptionTier: "pro_plus",
+        currentPeriodEnd: "2026-09-15T00:00:00Z",
+      },
+      { receipts: [] },
+      now
+    );
+    expect(paid.displayPlan).toBe("Pro");
+    expect(complimentary.displayPlan).toBe("Pro+");
+    expect(paidPlus.displayPlan).toBe("Pro+");
+    expect(paid.isPro).toBe(true);
+    expect(complimentary.isPro).toBe(true);
+    expect(paid.isProPlus).toBe(false);
+    expect(complimentary.isProPlus).toBe(true);
+    expect(paidPlus.isProPlus).toBe(true);
+    expect(leftoverTrial.isPro).toBe(true);
+    expect(leftoverTrial.isProPlus).toBe(false);
+    expect(leftoverTrial.canExportPdf).toBe(true);
+    expect(leftoverTrial.canCloudOcr).toBe(false);
+    expect(paid.canCloudOcr).toBe(false);
+    expect(complimentary.canShareAccountant).toBe(true);
+    expect(paidPlus.canBasPack).toBe(true);
+    expect(paid.canUpload).toBe(true);
+    expect(complimentary.canUpload).toBe(true);
+    expect(paid.canExportPdf).toBe(complimentary.canExportPdf);
+    expect(isProPlus({ planGrant: "pro_plus" })).toBe(true);
+    expect(isProPlus({ subscriptionStatus: "active", subscriptionTier: "pro" })).toBe(false);
   });
 });

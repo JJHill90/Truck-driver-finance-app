@@ -126,6 +126,8 @@ const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 const fuelForecast = require("./lib/fuel-forecast");
 const fuelReceipts = require("./lib/fuel-receipts");
 const suite = require("./lib/suite");
+const accountantShare = require("./lib/accountant-share");
+const yearCompare = require("./lib/year-compare");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -227,29 +229,38 @@ function productOf(req) {
   return (req && req.product) || "haulage";
 }
 
-function fileForUser(user, product) {
-  if (product === "suite") {
-    if (!user) return path.join(suite.SUITE_DATA_DIR, "guest.json");
-    return suite.seedRecordsIfMissing(user, auth.recordsFileFor(user));
+function ledgerUsername(user, product) {
+  if (product === "suite" && user) {
+    return suite.partnershipSeat.resolveLedgerUsername(user, (name) => auth.getUserRecord(name));
   }
-  return user ? auth.recordsFileFor(user) : storage.DEFAULT_FILE;
+  return user;
+}
+
+function fileForUser(user, product) {
+  const owner = ledgerUsername(user, product);
+  if (product === "suite") {
+    if (!owner) return path.join(suite.SUITE_DATA_DIR, "guest.json");
+    return suite.seedRecordsIfMissing(owner, auth.recordsFileFor(owner));
+  }
+  return owner ? auth.recordsFileFor(owner) : storage.DEFAULT_FILE;
 }
 
 function recordsForUser(user, product) {
   const prod = product || "haulage";
-  if (!user) {
+  const owner = ledgerUsername(user, prod);
+  if (!owner) {
     if (!guestStoreEnabled()) {
       // Ephemeral empty shell — never load/persist the shared guest file.
       return emptyGuestRecords(prod);
     }
   }
-  const key = suite.cacheKey(user, prod);
+  const key = suite.cacheKey(owner, prod);
   if (!recordsCache.has(key)) {
-    const rec = storage.loadRecords(fileForUser(user, prod));
+    const rec = storage.loadRecords(fileForUser(owner, prod));
     if (prod === "suite") rec.profile = suite.ensureProfile(rec.profile || {});
     recordsCache.set(key, rec);
-    maybeBackfillInvoiceDates(rec, user, prod);
-    maybeBackfillVendorRepair(rec, user, prod);
+    maybeBackfillInvoiceDates(rec, owner, prod);
+    maybeBackfillVendorRepair(rec, owner, prod);
   }
   return recordsCache.get(key);
 }
@@ -324,7 +335,8 @@ function persistUserRecords(username, records, file, meta = {}) {
 }
 
 function persist(req, meta = {}) {
-  persistUserRecords(req.user, getRecords(req), fileForUser(req.user, productOf(req)), {
+  const prod = productOf(req);
+  persistUserRecords(ledgerUsername(req.user, prod), getRecords(req), fileForUser(req.user, prod), {
     reason: meta.reason || "auto",
     actor: sessionUsername(req) || req.user || null,
   });
@@ -351,9 +363,14 @@ function expenseAnalysis(req, entry) {
   return calcExpenseDeduction(entry);
 }
 
+function scopedSuiteRecords(records) {
+  return suite.extraEntity.scopeRecords(records);
+}
+
 function summariseFor(req, records, profile) {
   if (productOf(req) === "suite") {
-    return suite.summariseYear(records, profile);
+    const scoped = scopedSuiteRecords(records);
+    return suite.summariseYear(scoped, profile || scoped.profile);
   }
   const summary = summariseYear(records, profile);
   applyHistoricalRates(summary, records, profile && profile.financialYear);
@@ -411,9 +428,10 @@ function getActiveRecords(req) {
 
 /** Resolve freemium entitlements for the signed-in user (guests = free, no uploads). */
 function resolveReqEntitlements(req) {
-  if (!req.user) return entitlements.resolveEntitlements(null, null);
+  const product = productOf(req);
+  if (!req.user) return entitlements.resolveEntitlements(null, null, new Date(), { product });
   const user = auth.getUserRecord(req.user);
-  return entitlements.resolveEntitlements(user, getRecords(req));
+  return entitlements.resolveEntitlements(user, getRecords(req), new Date(), { product });
 }
 
 /** Soft gate: free plan monthly upload quota (402 + UPLOAD_LIMIT). */
@@ -430,6 +448,19 @@ function assertProFeature(req, res, feature) {
   if (ent.isPro) return ent;
   res.status(402).json(entitlements.proFeatureBlockedPayload(feature, ent));
   return null;
+}
+
+/** Soft gate: Pro+ extras (402 + PRO_PLUS_REQUIRED). */
+function assertProPlusFeature(req, res, feature) {
+  const ent = resolveReqEntitlements(req);
+  if (ent.isProPlus) return ent;
+  res.status(402).json(entitlements.proPlusFeatureBlockedPayload(feature, ent));
+  return null;
+}
+
+function openaiForReq(req) {
+  const ent = resolveReqEntitlements(req);
+  return ent && ent.canCloudOcr ? openai : null;
 }
 
 function profileFor(records, financialYear) {
@@ -618,6 +649,9 @@ app.post(
             stripeCustomerId: user.stripeCustomerId,
             stripeSubscriptionId: user.stripeSubscriptionId,
             subscriptionStatus: user.subscriptionStatus,
+            subscriptionInterval: user.subscriptionInterval,
+            subscriptionTier: user.subscriptionTier || null,
+            cancelAtPeriodEnd: user.cancelAtPeriodEnd,
             currentPeriodEnd: user.currentPeriodEnd,
             planUpdatedAt: new Date().toISOString(),
           });
@@ -922,7 +956,7 @@ api.post("/auth/recover/reset", (req, res) => {
 api.get("/alerts", (req, res) => {
   const alerts = buildAlerts(getActiveRecords(req), productOf(req));
   const user = req.user ? auth.getUser(req.user) : null;
-  if (user) alerts.push(...auth.accountAlerts(user));
+  if (user) alerts.push(...auth.accountAlerts(user, productOf(req)));
   res.json({ alerts, user: user || req.user || null });
 });
 
@@ -1393,7 +1427,7 @@ api.post("/fuelhub/receipts/scan", optionalScanMultipart, async (req, res) => {
       res.status(400).json({ error: "Missing image data." });
       return;
     }
-    const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
+    const ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
       purpose: "expense",
     });
     applyAbnEntityPairing(ocrResult, "expense");
@@ -2659,6 +2693,18 @@ api.put("/profile", (req, res) => {
       body.carClaimMethod = carTrips.normalizeMethod(body.carClaimMethod);
     }
     const merged = suite.applySuiteProfile(body, records.profile || {});
+    const plus = resolveReqEntitlements(req);
+    if (Object.prototype.hasOwnProperty.call(body, "extraEntities")) {
+      if (plus.isProPlus) {
+        suite.extraEntity.applyExtraEntities(merged, body.extraEntities, { replace: true });
+      } else {
+        suite.extraEntity.ensureExtraEntities(merged);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "activeEntityId")) {
+      merged.activeEntityId = body.activeEntityId;
+      suite.extraEntity.ensureExtraEntities(merged);
+    }
     const profile = storage.updateProfile(records, merged);
     persist(req);
     res.json({ profile, hubProfile: null, product: "gotax" });
@@ -2869,7 +2915,8 @@ api.get("/summary", (req, res) => {
 });
 
 api.get("/report", (req, res) => {
-  const records = getActiveRecords(req);
+  const raw = getActiveRecords(req);
+  const records = productOf(req) === "suite" ? scopedSuiteRecords(raw) : raw;
   const fy = req.query.financialYear || records.profile.financialYear;
   const profile = profileFor(records, fy);
   const report =
@@ -2894,7 +2941,8 @@ api.get("/report", (req, res) => {
 // Accountant-ready EOFY ledger as a downloadable PDF (Pro).
 api.get("/report.pdf", (req, res) => {
   if (!assertProFeature(req, res, "pdf")) return;
-  const records = getActiveRecords(req);
+  const raw = getActiveRecords(req);
+  const records = productOf(req) === "suite" ? scopedSuiteRecords(raw) : raw;
   const fy = req.query.financialYear || records.profile.financialYear;
   const profile = profileFor(records, fy);
   const report =
@@ -2974,18 +3022,18 @@ api.get("/billing/entitlements", (req, res) => {
   res.json({
     entitlements: resolveReqEntitlements(req),
     stripeConfigured: billingStripe.stripeConfigured(),
-    trialOffer: auth.getTrialOfferStatus(),
+    trialOffer: auth.getTrialOfferStatus(productOf(req)),
   });
 });
 
-/** Public: universal Pro+ trial offer for signup copy. */
-api.get("/billing/trial", (_req, res) => {
-  res.json(auth.getTrialOfferStatus());
+/** Public: signup plan copy (new profiles start on Free). */
+api.get("/billing/trial", (req, res) => {
+  res.json(auth.getTrialOfferStatus(productOf(req)));
 });
 
 /** @deprecated Alias of /billing/trial (older clients). */
-api.get("/billing/founding", (_req, res) => {
-  res.json(auth.getTrialOfferStatus());
+api.get("/billing/founding", (req, res) => {
+  res.json(auth.getTrialOfferStatus(productOf(req)));
 });
 
 api.post("/billing/checkout", async (req, res) => {
@@ -2998,10 +3046,16 @@ api.post("/billing/checkout", async (req, res) => {
     const interval = billingStripe.normaliseInterval(
       (req.body && (req.body.interval || req.body.planInterval)) || "month"
     );
+    const plan = entitlements.normalizeCheckoutPlan(
+      (req.body && (req.body.plan || req.body.tier)) || "pro"
+    );
     const result = await billingStripe.createCheckoutSession({
       user,
       req,
       interval,
+      plan,
+      product: productOf(req),
+      homePath: suite.publicHomePath(req),
       saveCustomerId: (customerId) => {
         auth.updateBilling(req.user, {
           stripeCustomerId: customerId,
@@ -3025,7 +3079,11 @@ api.post("/billing/portal", async (req, res) => {
   }
   try {
     const user = auth.getUserRecord(req.user);
-    const result = await billingStripe.createPortalSession({ user, req });
+    const result = await billingStripe.createPortalSession({
+      user,
+      req,
+      homePath: suite.publicHomePath(req),
+    });
     res.json(result);
   } catch (err) {
     const code = err && err.code;
@@ -3128,6 +3186,7 @@ api.post("/expenses", (req, res) => {
   }
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
+  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
   const entry = storage.addExpense(records, body);
   if (productOf(req) === "suite" && body.category === "home_office_hours") {
     const hours = Number(body.hours || body.homeOfficeHours || 0);
@@ -3253,6 +3312,7 @@ api.post("/income", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
+  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
   attachIncomeTaxWithheld(entry, body, null);
@@ -3380,7 +3440,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       return;
     }
     const ocrPurpose = purpose === "income" ? "income" : "expense";
-    const ocrResult = await extractReceiptData(openai, imageBase64, mimeType, filename, {
+    const ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
       purpose: ocrPurpose,
     });
 
@@ -3799,7 +3859,9 @@ api.post("/receipts/:id/confirm", (req, res) => {
       return;
     }
 
-    const entry = storage.addIncome(records, { ...payload, receiptId: receipt?.id || null });
+    const incomePayload = { ...payload, receiptId: receipt?.id || null };
+    if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, incomePayload);
+    const entry = storage.addIncome(records, incomePayload);
     attachTravelAllowanceToIncome(entry, payload, receipt);
     attachIncomeTaxWithheld(entry, payload, receipt);
     rememberVendor(records, {
@@ -3832,6 +3894,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
   }
   applyActiveCarWorkUse(records, expensePayload);
   delete expensePayload.workUseFromCarProfile;
+  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, expensePayload);
   const entry = storage.addExpense(records, expensePayload);
   rememberVendor(records, {
     name: expensePayload.vendor || entry.vendor,
@@ -3907,11 +3970,257 @@ api.get("/receipts/:id/file", (req, res) => {
   res.sendFile(info.filePath);
 });
 
+function persistPartnershipAccount(user) {
+  if (!user || !user.username) return;
+  auth.updateBilling(user.username, {
+    partnershipOwner: user.partnershipOwner || null,
+    partnershipSeatAt: user.partnershipSeatAt || null,
+  });
+}
+
+function buildSharePack(username, product, financialYear) {
+  const records = withActiveLedger(recordsForUser(username, product));
+  const scoped = product === "suite" ? scopedSuiteRecords(records) : records;
+  const fy = financialYear || (scoped.profile && scoped.profile.financialYear);
+  const profile = profileFor(scoped, fy);
+  const report =
+    product === "suite"
+      ? suite.decorateAccountantReport(suite.buildAccountantReport(scoped, profile))
+      : decorateAccountantReport(buildAccountantReport(scoped, profile));
+  if (product === "suite") {
+    report.summary = suite.summariseYear(scoped, profile);
+  } else {
+    applyHistoricalRates(report.summary, scoped, fy);
+  }
+  return { records: scoped, report, financialYear: fy, profile };
+}
+
+// --- Pro+ extras: share, BAS, year pack, extra entity, partnership --------
+api.get("/accountant-share", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to manage accountant share links." });
+    return;
+  }
+  const records = getRecords(req);
+  res.json({
+    shares: accountantShare.listShares(records).map((s) => ({
+      ...s,
+      url: accountantShare.publicSharePath(productOf(req), s.token),
+    })),
+    entitlements: resolveReqEntitlements(req),
+  });
+});
+
+api.post("/accountant-share", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to create a share link." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "share")) return;
+  try {
+    const prod = productOf(req);
+    const records = getRecords(req);
+    const owner = ledgerUsername(req.user, prod);
+    const share = accountantShare.createShare({
+      records,
+      username: owner,
+      product: prod,
+      financialYear: (req.body && (req.body.financialYear || req.body.fy)) || records.profile.financialYear,
+      createdBy: sessionUsername(req),
+    });
+    persist(req, { reason: "accountant-share" });
+    res.json({
+      share,
+      url: accountantShare.publicSharePath(prod, share.token),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message, code: err.code || "SHARE_FAILED" });
+  }
+});
+
+api.delete("/accountant-share/:token", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to revoke a share link." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "share")) return;
+  try {
+    const result = accountantShare.revokeShare({ records: getRecords(req), token: req.params.token });
+    persist(req, { reason: "accountant-share-revoke" });
+    res.json(result);
+  } catch (err) {
+    const status = err.code === "NOT_FOUND" ? 404 : 400;
+    res.status(status).json({ error: err.message, code: err.code || "REVOKE_FAILED" });
+  }
+});
+
+api.get("/share/:token", (req, res) => {
+  const meta = accountantShare.lookupShare(req.params.token);
+  if (!meta) {
+    res.status(404).json({ error: "This share link is missing, expired or has been revoked." });
+    return;
+  }
+  const pack = buildSharePack(meta.username, meta.product, meta.financialYear);
+  res.json({
+    readOnly: true,
+    financialYear: pack.financialYear,
+    profile: {
+      name: pack.profile.name || "",
+      entityType: pack.profile.entityType || pack.profile.driverType || "",
+      employer: pack.profile.employer || pack.profile.tradingName || "",
+      occupation: pack.profile.occupation || "",
+    },
+    report: pack.report,
+    product: meta.product,
+  });
+});
+
+api.get("/bas", (req, res) => {
+  if (!assertProPlusFeature(req, res, "bas")) return;
+  const records = scopedSuiteRecords(getActiveRecords(req));
+  const fy = req.query.financialYear || req.query.fy || records.profile.financialYear;
+  const pack = suite.basPack.buildBasPack(records, records.profile, {
+    financialYear: fy,
+    quarter: req.query.quarter,
+  });
+  res.json(pack);
+});
+
+api.get("/tax-pack", (req, res) => {
+  if (!assertProPlusFeature(req, res, "year_compare")) return;
+  const raw = getActiveRecords(req);
+  const records = productOf(req) === "suite" ? scopedSuiteRecords(raw) : raw;
+  const summarise = (recs, profile) =>
+    productOf(req) === "suite" ? suite.summariseYear(recs, profile) : summariseYear(recs, profile);
+  const pack = yearCompare.buildYearCompare(records, records.profile, {
+    years: req.query.years,
+    financialYear: req.query.financialYear || req.query.fy || records.profile.financialYear,
+    summariseYear: summarise,
+  });
+  res.json(pack);
+});
+
+api.get("/suite/partnership", (req, res) => {
+  if (productOf(req) !== "suite") {
+    res.status(400).json({ error: "Partnership seats are available on Go Taxation Suite." });
+    return;
+  }
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view the partnership seat." });
+    return;
+  }
+  const account = auth.getUser(req.user);
+  const records = getRecords(req);
+  const owner = ledgerUsername(req.user, "suite");
+  res.json({
+    ...suite.partnershipSeat.presentSeat(records.profile, owner),
+    isOwner: String(owner) === String(req.user),
+    isPartner: Boolean(account && account.partnershipOwner),
+    entitlements: resolveReqEntitlements(req),
+  });
+});
+
+api.post("/suite/partnership/invite", (req, res) => {
+  if (productOf(req) !== "suite") {
+    res.status(400).json({ error: "Partnership seats are available on Go Taxation Suite." });
+    return;
+  }
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to invite a partner." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "partnership")) return;
+  try {
+    const seat = suite.partnershipSeat.invitePartner({
+      ownerUsername: req.user,
+      partnerUsername: (req.body && (req.body.username || req.body.partnerUsername)) || "",
+      ownerRecords: getRecords(req),
+      getUserRecord: (name) => auth.getUserRecord(name),
+      saveUser: persistPartnershipAccount,
+    });
+    persist(req, { reason: "partnership-invite" });
+    res.json(seat);
+  } catch (err) {
+    const status = err.code === "USER_NOT_FOUND" ? 404 : 400;
+    res.status(status).json({ error: err.message, code: err.code || "INVITE_FAILED" });
+  }
+});
+
+api.post("/suite/partnership/revoke", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove a partner seat." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "partnership")) return;
+  const owner = ledgerUsername(req.user, "suite");
+  if (String(owner) !== String(req.user)) {
+    res.status(403).json({ error: "Only the partnership owner can remove the second seat." });
+    return;
+  }
+  const seat = suite.partnershipSeat.revokePartner({
+    ownerUsername: req.user,
+    ownerRecords: getRecords(req),
+    getUserRecord: (name) => auth.getUserRecord(name),
+    saveUser: persistPartnershipAccount,
+  });
+  persist(req, { reason: "partnership-revoke" });
+  res.json(seat);
+});
+
+api.post("/profile/extra-entity", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to add an extra entity." });
+    return;
+  }
+  if (productOf(req) !== "suite") {
+    res.status(400).json({ error: "Extra entities are available on Go Taxation Suite." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "extra_entity")) return;
+  const records = getRecords(req);
+  const profile = suite.ensureProfile(records.profile || {});
+  const extras = suite.extraEntity.normalizeExtraEntities(profile.extraEntities);
+  if (extras.length >= suite.extraEntity.MAX_EXTRA_ENTITIES && !(req.body && req.body.id)) {
+    res.status(400).json({
+      error: `Pro+ includes ${suite.extraEntity.MAX_EXTRA_ENTITIES} extra entity on this login.`,
+    });
+    return;
+  }
+  const next = suite.extraEntity.normalizeExtraEntity(req.body || {});
+  const idx = extras.findIndex((e) => e.id === next.id);
+  if (idx >= 0) extras[idx] = next;
+  else extras.push(next);
+  suite.extraEntity.applyExtraEntities(profile, extras, { replace: true });
+  records.profile = storage.updateProfile(records, profile);
+  persist(req, { reason: "extra-entity" });
+  res.json({ profile: records.profile, extraEntities: records.profile.extraEntities });
+});
+
+api.delete("/profile/extra-entity/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to remove an extra entity." });
+    return;
+  }
+  if (!assertProPlusFeature(req, res, "extra_entity")) return;
+  const records = getRecords(req);
+  const profile = suite.ensureProfile(records.profile || {});
+  const extras = suite.extraEntity
+    .normalizeExtraEntities(profile.extraEntities)
+    .filter((e) => e.id !== req.params.id);
+  suite.extraEntity.applyExtraEntities(profile, extras, { replace: true });
+  if (profile.activeEntityId === req.params.id) profile.activeEntityId = suite.extraEntity.PRIMARY_ID;
+  records.profile = storage.updateProfile(records, profile);
+  persist(req, { reason: "extra-entity-remove" });
+  res.json({ profile: records.profile, extraEntities: records.profile.extraEntities });
+});
+
 // --- Support contact -----------------------------------------------------
-api.get("/support/info", (_req, res) => {
+api.get("/support/info", (req, res) => {
+  const ent = req.user ? resolveReqEntitlements(req) : null;
   res.json({
     email: support.supportInbox(),
     mailConfigured: mail.mailConfigured(),
+    priority: Boolean(ent && ent.canPrioritySupport),
     channels: {
       smtp: mail.smtpConfigured(),
       resend: mail.resendConfigured(),
@@ -3928,7 +4237,9 @@ api.post("/support/contact", async (req, res) => {
   const { name, email, phone, message } = checked.data;
   // req.user is the session username string from auth.getSessionUser(), not an object.
   const username = support.sessionUsername(req.user);
-  const saved = support.saveContactMessage({ name, email, phone, message, username });
+  const ent = username ? resolveReqEntitlements(req) : null;
+  const priority = Boolean(ent && ent.canPrioritySupport);
+  const saved = support.saveContactMessage({ name, email, phone, message, username, priority });
   const inbox = support.supportInbox();
   let mailResult = { sent: false, confirmationSent: false, to: inbox };
   try {
@@ -3939,6 +4250,7 @@ api.post("/support/contact", async (req, res) => {
       message,
       username,
       to: inbox,
+      priority,
     });
   } catch (err) {
     console.warn("Support email failed:", err && err.message ? err.message : err);
@@ -3974,7 +4286,8 @@ api.post("/support/contact", async (req, res) => {
     channel: mailResult.channel || null,
     needsClientDelivery: !emailed,
     supportEmail: inbox,
-    mailto: support.mailtoHref({ name, email, phone, message }),
+    mailto: support.mailtoHref({ name, email, phone, message, priority }),
+    priority,
     confirmationText: mail.buildSupportConfirmationText({ name, supportEmail: inbox }),
     message: statusMessage,
     error: mailResult.error || null,
@@ -3995,6 +4308,10 @@ function redirectSuiteToSibling(req, res, next) {
   const pathPart = rest.startsWith("/suite") ? rest.slice("/suite".length) || "/" : "/";
   res.redirect(302, `${origin}/suite${pathPart === "/" ? "/" : pathPart}`);
 }
+
+app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "share.html"));
+});
 
 app.get(["/suite", "/suite/"], redirectSuiteToSibling, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));

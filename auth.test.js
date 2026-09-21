@@ -1,3 +1,6 @@
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const auth = require("./lib/auth");
 const { scorePassword } = require("./lib/password-strength");
 
@@ -196,6 +199,33 @@ describe("auth primary mod / admin", () => {
     expect(created.username).toBe(username);
     expect(created.isAdmin).toBe(false);
     expect(auth.verifyUser(username, strongPass)).not.toBeNull();
+  });
+
+  it("starts self-register and admin-created drivers on Free", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "haulage-auth-free-"));
+    auth.setDataDirForTests(tmp);
+    try {
+      const first = auth.registerUser("first_mod", strongPass, {}, "first_mod@example.com");
+      expect(first.isAdmin).toBe(true);
+      expect(first.displayPlan).toBe("Pro");
+      expect(first.proTrialEndsAt).toBeNull();
+
+      const driver = auth.registerUser("free_driver", strongPass, {}, "free_driver@example.com");
+      expect(driver.isAdmin).toBe(false);
+      expect(driver.isPro).toBe(false);
+      expect(driver.displayPlan).toBe("Free");
+      expect(driver.plan).toBe("free");
+      expect(driver.proTrialEndsAt).toBeNull();
+
+      const made = auth.createUser("admin_made", strongPass, {}, "admin_made@example.com");
+      expect(made.isAdmin).toBe(false);
+      expect(made.isPro).toBe(false);
+      expect(made.displayPlan).toBe("Free");
+      expect(made.proTrialEndsAt).toBeNull();
+    } finally {
+      auth.setDataDirForTests(null);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it("createUser refuses the reserved primary-mod username", () => {

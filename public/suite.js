@@ -252,7 +252,7 @@
     const fillTravel = () => {
       if (userEditedTravel) return;
       try {
-        const p = typeof state !== "undefined" && state.records && state.records.profile;
+        const p = typeof globalThis.state !== "undefined" && globalThis.state.records && globalThis.state.records.profile;
         if (!p) return;
         const travel = byId("profile-travels-for-work");
         const nights = byId("profile-overnight-allowance");
@@ -291,6 +291,194 @@
         });
       }
     }).observe(document.body, { childList: true, subtree: true });
+
+    wireExtraEntity();
+    wirePartnershipSeat();
+  }
+
+  function api(path, opts) {
+    return fetch(`${window.location.origin}/api/haulage${path}`, {
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", ...(opts && opts.headers) },
+      ...opts,
+    }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    });
+  }
+
+  function currentProfile() {
+    try {
+      return (
+        (typeof globalThis.state !== "undefined" &&
+          globalThis.state.records &&
+          globalThis.state.records.profile) ||
+        {}
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  function renderExtraEntity(profile) {
+    const extras = Array.isArray(profile.extraEntities) ? profile.extraEntities : [];
+    const extra = extras[0] || null;
+    const typeEl = byId("extra-entity-type");
+    const nameEl = byId("extra-entity-name");
+    const abnEl = byId("extra-entity-abn");
+    const salaryEl = byId("extra-entity-salary");
+    const gstEl = byId("extra-entity-gst");
+    const status = byId("extra-entity-status");
+    const active = byId("extra-entity-active");
+    const remove = byId("extra-entity-remove");
+    if (extra) {
+      if (typeEl) typeEl.value = extra.entityType || "sole_trader";
+      if (nameEl) nameEl.value = extra.tradingName || "";
+      if (abnEl) abnEl.value = extra.abn || "";
+      if (salaryEl) salaryEl.value = extra.annualSalary || "";
+      if (gstEl) gstEl.checked = Boolean(extra.gstRegistered);
+      if (remove) remove.classList.remove("hidden");
+    } else if (remove) {
+      remove.classList.add("hidden");
+    }
+    if (status) {
+      status.textContent = extra
+        ? `Saved extra entity: ${extra.tradingName || extra.entityType}.`
+        : "Pro+ unlocks one extra entity on this login.";
+    }
+    if (active) {
+      const id = profile.activeEntityId || "primary";
+      active.textContent =
+        id === "primary" || !extra
+          ? "Active records: primary taxpayer profile."
+          : `Active records: extra entity (${extra.tradingName || extra.entityType}).`;
+    }
+  }
+
+  function wireExtraEntity() {
+    const form = byId("extra-entity-form");
+    if (!form || form.dataset.wired === "1") return;
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const existing = (currentProfile().extraEntities || [])[0] || {};
+        await api("/profile/extra-entity", {
+          method: "POST",
+          body: JSON.stringify({
+            id: existing.id,
+            entityType: byId("extra-entity-type")?.value || "sole_trader",
+            tradingName: byId("extra-entity-name")?.value || "",
+            abn: byId("extra-entity-abn")?.value || "",
+            annualSalary: byId("extra-entity-salary")?.value || 0,
+            gstRegistered: Boolean(byId("extra-entity-gst")?.checked),
+          }),
+        });
+        if (window.toast) window.toast("Extra entity saved");
+        if (typeof globalThis.loadRecords === "function") globalThis.loadRecords();
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not save extra entity");
+      }
+    });
+    byId("extra-entity-switch")?.addEventListener("click", async () => {
+      const extra = (currentProfile().extraEntities || [])[0];
+      const next =
+        currentProfile().activeEntityId && currentProfile().activeEntityId !== "primary"
+          ? "primary"
+          : extra && extra.id;
+      if (!next) {
+        if (window.toast) window.toast("Save an extra entity first");
+        return;
+      }
+      try {
+        await api("/profile", {
+          method: "PUT",
+          body: JSON.stringify({ activeEntityId: next }),
+        });
+        if (window.toast) window.toast("Active entity updated");
+        if (typeof globalThis.loadRecords === "function") globalThis.loadRecords();
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not switch entity");
+      }
+    });
+    byId("extra-entity-remove")?.addEventListener("click", async () => {
+      const extra = (currentProfile().extraEntities || [])[0];
+      if (!extra) return;
+      try {
+        await api(`/profile/extra-entity/${encodeURIComponent(extra.id)}`, { method: "DELETE" });
+        if (window.toast) window.toast("Extra entity removed");
+        if (typeof globalThis.loadRecords === "function") globalThis.loadRecords();
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not remove extra entity");
+      }
+    });
+    const fill = async () => {
+      try {
+        const data = await api("/records");
+        if (data && data.profile) renderExtraEntity(data.profile);
+        else renderExtraEntity(currentProfile());
+      } catch {
+        renderExtraEntity(currentProfile());
+      }
+    };
+    fill();
+    setTimeout(fill, 800);
+    setTimeout(fill, 2000);
+  }
+
+  function renderPartnership(data) {
+    const status = byId("partnership-seat-status");
+    const revoke = byId("partner-seat-revoke");
+    if (!status) return;
+    if (data && data.isPartner) {
+      status.textContent = `You are seated on ${data.owner || "a partner"}'s partnership ledger.`;
+      if (revoke) revoke.classList.add("hidden");
+      return;
+    }
+    if (data && data.partner) {
+      status.textContent = `Second seat: ${data.partner}`;
+      if (revoke) revoke.classList.remove("hidden");
+    } else {
+      status.textContent = "No partner seated yet.";
+      if (revoke) revoke.classList.add("hidden");
+    }
+  }
+
+  function wirePartnershipSeat() {
+    const form = byId("partnership-seat-form");
+    if (!form || form.dataset.wired === "1") return;
+    form.dataset.wired = "1";
+    const refresh = async () => {
+      try {
+        renderPartnership(await api("/suite/partnership"));
+      } catch {
+        /* ignore */
+      }
+    };
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const seat = await api("/suite/partnership/invite", {
+          method: "POST",
+          body: JSON.stringify({ username: byId("partner-seat-username")?.value || "" }),
+        });
+        renderPartnership(seat);
+        if (window.toast) window.toast("Partner seated");
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not invite partner");
+      }
+    });
+    byId("partner-seat-revoke")?.addEventListener("click", async () => {
+      try {
+        renderPartnership(await api("/suite/partnership/revoke", { method: "POST", body: "{}" }));
+        if (window.toast) window.toast("Partner seat removed");
+      } catch (err) {
+        if (window.toast) window.toast(err.message || "Could not remove seat");
+      }
+    });
+    refresh();
+    setTimeout(refresh, 1200);
   }
 
   if (document.readyState === "loading") {

@@ -141,20 +141,21 @@ on load — including prompts when email is missing or the password is older tha
   profiles** and can open any user’s income, expenses and receipt downloads
   (read-only), and **upgrade/downgrade Free ↔ Pro+** at any time.
 
-## Plans (Free / Pro / Pro+ trial)
+## Plans (Free / Pro / Pro+)
 
 - **Free:** 15 document uploads per calendar month + 1 on-screen EOFY report
   (live summary/report in the app). PDF/JSON export and forecast stay Pro.
-  One soft upgrade prompt per month after **8 of 15** free uploads are used.
-- **Pro:** unlimited uploads, PDF + JSON accountant export, forecast —
-  **$5/month** or **$60/year** AUD.
-- **Pro+ trial:** every new driver profile gets **3 months Pro+** (full Pro
-  access) at signup (primary mod excluded). Subscribe from day one, or wait —
-  after the trial ends you keep the Free limits (15 uploads + 1 on-screen
-  report) and a soft alert asks you to update to a paid plan.
-  Signup copy via `GET /api/haulage/billing/trial`.
-- **Admin Pro+ grant:** the primary mod can set any driver to Pro+ or Free via
-  Profile → Primary mod (`POST /api/haulage/admin/users/:username/plan`).
+  New self-register and admin-created profiles start here. One soft upgrade
+  prompt per month after **8 of 15** free uploads are used.
+- **Pro:** unlimited uploads, PDF + JSON accountant export, forecast.
+  Taxation Hub / Driver Hub is **$5/month** or **$60/year** AUD. Go Taxation
+  Suite is **$10/month** or **$110/year** AUD (two months free vs paying
+  monthly). Upgrade from Profile → Plan → Upgrade to Pro.
+- **Pro+:** complimentary full Pro access (same features as paid Pro). The
+  primary mod grants or revokes it via Profile → Primary mod
+  (`POST /api/haulage/admin/users/:username/plan`). There is no separate
+  paid Pro+ checkout — paying always buys Pro.
+- Signup copy via `GET /api/haulage/billing/trial`.
 - Profile → **Plan** shows remaining uploads and Choose Pro plan (month/year).
 - Stripe env (optional until you take cards): `STRIPE_SECRET_KEY`,
   `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`, `STRIPE_WEBHOOK_SECRET`, plus
@@ -167,7 +168,9 @@ on load — including prompts when email is missing or the password is older tha
 - `HAULAGE_ADMIN_USERNAME` — primary mod username (set in the host environment). # pragma: allowlist secret
 - `HAULAGE_ADMIN_PASSWORD` — primary mod password (set in the host environment). # pragma: allowlist secret
 - `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`,
-  `STRIPE_WEBHOOK_SECRET` — optional Stripe billing for Pro ($5/mo or $60/yr).
+  `STRIPE_PRICE_ID_SUITE`, `STRIPE_PRICE_ID_SUITE_YEARLY`,
+  `STRIPE_WEBHOOK_SECRET` — optional Stripe billing. Driver Hub Pro is
+  $5/mo or $60/yr; Suite Pro is $10/mo or $110/yr.
   Without them, free quotas and trials still work.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
   `APP_BASE_URL` — optional outbound email for recovery links and 90-day

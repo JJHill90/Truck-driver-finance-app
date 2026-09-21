@@ -602,6 +602,11 @@ body.gotax-suite .suite-entity-note {
   margin: 0;
 }
 
+body.gotax-suite #suite-extra-entity-panel,
+body.gotax-suite #suite-partnership-panel {
+  margin-top: 16px;
+}
+
 body.gotax-suite .gotax-occ-hints {
   margin: 8px 0 0;
   padding-left: 1.2em;

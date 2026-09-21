@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Accountant pack — read only</title>
+    <link rel="stylesheet" href="/suite/styles.css" />
+    <style>
+      body.share-pack {
+        margin: 0;
+        padding: 28px 18px 64px;
+        background: #0b1c2e;
+        color: #e8eef6;
+        font-family: Figtree, system-ui, sans-serif;
+      }
+      .share-wrap {
+        width: min(880px, 100%);
+        margin: 0 auto;
+      }
+      .share-card {
+        background: #13283d;
+        border: 1px solid #2a4660;
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin: 0 0 16px;
+      }
+      .share-card h1,
+      .share-card h2 {
+        margin: 0 0 8px;
+      }
+      .share-muted {
+        color: #9eb0c3;
+        margin: 0 0 12px;
+      }
+      .share-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+      }
+      .share-stat {
+        background: #0b1c2e;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .share-stat span {
+        display: block;
+        color: #9eb0c3;
+        font-size: 0.82rem;
+      }
+      .share-stat strong {
+        font-size: 1.15rem;
+      }
+    </style>
+  </head>
+  <body class="share-pack">
+    <div class="share-wrap">
+      <div class="share-card">
+        <h1 id="share-title">Accountant EOFY pack</h1>
+        <p class="share-muted" id="share-meta">Loading read-only pack…</p>
+        <div class="share-grid" id="share-stats"></div>
+      </div>
+      <div class="share-card">
+        <h2>Tax estimate</h2>
+        <div class="share-grid" id="share-tax"></div>
+        <p class="share-muted" id="share-note"></p>
+      </div>
+    </div>
+    <script>
+      function money(n) {
+        const v = Number(n) || 0;
+        return v.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
+      }
+      function stat(label, value) {
+        return `<div class="share-stat"><span>${label}</span><strong>${value}</strong></div>`;
+      }
+      (async function () {
+        const token = location.pathname.split("/").filter(Boolean).pop();
+        const res = await fetch(`/api/haulage/share/${encodeURIComponent(token)}`, {
+          credentials: "omit",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          document.getElementById("share-meta").textContent =
+            data.error || "This share link is no longer available.";
+          return;
+        }
+        const p = data.profile || {};
+        const s = (data.report && data.report.summary) || {};
+        const tax = s.taxEstimate || {};
+        document.getElementById("share-title").textContent = `${p.name || "Taxpayer"} — FY ${
+          data.financialYear || ""
+        }`;
+        document.getElementById("share-meta").textContent = [
+          "Read-only accountant pack",
+          p.entityType,
+          p.employer,
+          p.occupation,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        document.getElementById("share-stats").innerHTML = [
+          stat("Assessable income", money(s.income && s.income.assessableTotal)),
+          stat("Deductions", money(s.expenses && s.expenses.deductibleTotal)),
+          stat("Taxable income", money(tax.taxableIncome)),
+          stat("Estimated tax", money(tax.estimatedTax)),
+        ].join("");
+        document.getElementById("share-tax").innerHTML = [
+          stat("Income tax", money(tax.incomeTaxAfterOffsets || tax.incomeTax)),
+          stat("Medicare", money(tax.medicare)),
+          stat("PAYG withheld", money(s.income && s.income.paygWithheld)),
+          stat("Tax payable", money(tax.taxPayable)),
+        ].join("");
+        document.getElementById("share-note").textContent =
+          "Prepared for accountant review. Not tax advice. Verify against current ATO guidance.";
+      })();
+    </script>
+  </body>
+</html>

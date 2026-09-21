@@ -14,6 +14,15 @@ describe("mail support delivery helpers", () => {
     expect(notice).toContain("Email:    dave@example.com");
     expect(notice).toContain("Phone:    0400");
     expect(notice).toContain("Username: dave");
+    const priority = mail.buildSupportNotificationText({
+      name: "Dave",
+      email: "dave@example.com",
+      phone: "0400",
+      message: "Need help with scans",
+      username: "dave",
+      priority: true,
+    });
+    expect(priority).toContain("PRIORITY");
     expect(notice).toMatch(/MESSAGE\n-------\nNeed help with scans/);
 
     const html = mail.buildSupportNotificationHtml({

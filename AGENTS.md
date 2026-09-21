@@ -375,33 +375,34 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
  `public/enhancements.js`. A general **Disclaimer** box at the bottom of
  Support states the app is not financial advice and is an assistance tool for
  receipts/entries — seek accredited tax, financial or legal advice.
-- **Freemium / Pro ($5/mo or $60/yr AUD).** Free plan: **15 uploads/month**
+- **Freemium / Pro.** Free plan: **15 uploads/month**
   (scans + manual receipts) + **1 on-screen EOFY report** (live `/summary` +
   `/report` in the app). Pro: unlimited uploads, PDF + JSON accountant
-  export, forecast. **Pro+ trial:** every new driver profile (self-register
-  or admin-created; primary mod excluded) gets **3 months Pro+** at signup —
-  same entitlements as Pro, assigned once via `proTrialEndsAt`, never
-  backfilled on later login for existing accounts. Subscribe from day one
-  via Profile → Plan → **Upgrade to Pro** (Stripe Checkout: monthly or
-  yearly). A **Free / Pro / Pro+** badge shows under Taxation Hub in the
+  export, forecast. Driver Hub / Taxation Hub Pro is **$5/mo or $60/yr**;
+  Go Taxation Suite Pro is **$10/mo or $110/yr** (do not reuse the Driver Hub
+  Stripe Price ids). **New profiles start on Free** (self-register or
+  admin-created). They pay for **Pro** via Profile → Plan → **Upgrade to Pro**
+  (Stripe Checkout: monthly or yearly), or the primary mod grants complimentary
+  **Pro+** (`planGrant: pro_plus`) — same entitlements as paid Pro, different
+  badge. A leftover `proTrialEndsAt` from older signups is still honoured until
+  it expires. A **Free / Pro / Pro+** badge shows under Taxation Hub in the
   sidebar and on the Driver Hub app picker. Paid Pro users can **Cancel
   subscription** (`POST /billing/cancel`) to stop renewal while keeping Pro
   until `currentPeriodEnd`, or **Keep Pro renewing** (`POST /billing/resume`);
   Manage billing still opens the Stripe Customer Portal. Free users get
   **one** soft Pro upgrade prompt per calendar month after using **half**
-  their free uploads (8 of 15); hard `402` still applies at the cap. After
-  the trial ends, `/alerts` soft-notifies to update to a paid plan; the
-  account falls back to Free until they upgrade. **the primary mod** may also
-  set `planGrant` to `pro_plus` or `free` anytime (Profile → Primary mod →
-  Plan). Soft gates return `402` with `UPLOAD_LIMIT` / `PRO_REQUIRED`
-  (checked before OCR on scan/manual; PDF/forecast Pro-gated). Stripe
-  Checkout + Customer Portal via `lib/billing-stripe.js` (`STRIPE_SECRET_KEY`,
-  `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`, `STRIPE_WEBHOOK_SECRET`,
-  `APP_BASE_URL`); webhook at `POST /api/haulage/billing/webhook` (raw body)
-  — a later paid Stripe activation clears a forced-Free grant. Public
-  `GET /billing/trial` (alias `/billing/founding`) powers signup copy.
-  Without Stripe keys, trials/quotas still apply; checkout returns a clear
-  error.
+  their free uploads (8 of 15); hard `402` still applies at the cap.
+  **the primary mod** may also set `planGrant` to `pro_plus` or `free` anytime
+  (Profile → Primary mod → Plan). Soft gates return `402` with `UPLOAD_LIMIT` /
+  `PRO_REQUIRED` (checked before OCR on scan/manual; PDF/forecast Pro-gated).
+  Stripe Checkout + Customer Portal via `lib/billing-stripe.js`
+  (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`,
+  `STRIPE_PRICE_ID_SUITE`, `STRIPE_PRICE_ID_SUITE_YEARLY`,
+  `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`); webhook at
+  `POST /api/haulage/billing/webhook` (raw body) — a later paid Stripe
+  activation clears a forced-Free grant. Public `GET /billing/trial` (alias
+  `/billing/founding`) powers signup copy (`startsOn: "free"`). Without Stripe
+  keys, Free quotas still apply; checkout returns a clear error.
 - **Profile presets (work-use % + default category).** Profile → Presets saves
   `defaultWorkUsePercent` and `defaultCategory` on the account. These pre-fill
   the general expense / scan-confirm forms (`public/enhancements.js`) and act
