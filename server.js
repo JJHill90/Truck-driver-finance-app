@@ -453,6 +453,12 @@ function assertProFeature(req, res, feature) {
 /** Soft gate: Pro+ extras (402 + PRO_PLUS_REQUIRED). */
 function assertProPlusFeature(req, res, feature) {
   const ent = resolveReqEntitlements(req);
+  // Driver Hub Taxation: share / BAS / multi-year unlock with Pro (same price).
+  // Suite keeps a separate Pro+ tier for those packs.
+  const haulageEofyPacks = new Set(["share", "bas", "year_compare"]);
+  if (productOf(req) !== "suite" && haulageEofyPacks.has(feature) && ent.isPro) {
+    return ent;
+  }
   if (ent.isProPlus) return ent;
   res.status(402).json(entitlements.proPlusFeatureBlockedPayload(feature, ent));
   return null;
