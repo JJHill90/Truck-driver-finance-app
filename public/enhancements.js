@@ -2154,6 +2154,7 @@
     if (uploads) uploads.textContent = "";
     if (msg) msg.textContent = "";
     byId("billing-upgrade")?.classList.add("hidden");
+    byId("billing-upgrade-plus")?.classList.add("hidden");
     byId("billing-cancel")?.classList.add("hidden");
     byId("billing-resume")?.classList.add("hidden");
     byId("billing-manage")?.classList.add("hidden");
@@ -2257,9 +2258,11 @@
     let statusText = "Free plan";
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
     else if (ent.planGrant === "pro_plus" || ent.status === "pro_plus") {
-      statusText = `${trialLabel} (admin grant)`;
+      statusText = `${trialLabel} (admin grant) — accountant share, extra entity, BAS, cloud OCR, priority support`;
+    } else if (ent.isProPlus) {
+      statusText = `Pro+ (${ent.plusPriceLabel || "$18/month"})`;
     } else if (ent.status === "trialing" && !ent.hasStripeSubscription) {
-      statusText = `${trialLabel} trial · ends ${formatTrialEnd(ent.trialEndsAt)}`;
+      statusText = `${trialLabel} trial · ends ${formatTrialEnd(ent.trialEndsAt)} — Pro features only (Pro+ extras need a paid/granted Pro+)`;
     } else if (ent.isPro) {
       statusText = `Pro (${price})`;
       if (ent.cancelAtPeriodEnd && ent.currentPeriodEnd) {
@@ -2292,11 +2295,15 @@
 
     const priceHint = byId("billing-price-hint");
     const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
+    const plusPrice = ent.plusPriceLabel;
+    const plusYearly = ent.plusPriceYearlyLabel;
     if (priceHint) {
-      priceHint.textContent = `Pro is the paid plan (${price} or ${yearly}). ${trialLabel} is complimentary full Pro access from the primary mod. Both unlock unlimited uploads, PDF export and forecast.`;
+      priceHint.textContent = plusPrice
+        ? `Pro is ${price} or ${yearly}. Pro+ is ${plusPrice} or ${plusYearly} and adds accountant share, extra entity, partnership seat, BAS/GST pack, cloud OCR and priority support.`
+        : `Pro is the paid plan (${price} or ${yearly}). ${trialLabel} extras (share link, cloud OCR, multi-year pack, priority support) can be granted by the primary mod.`;
       priceHint.classList.toggle(
         "hidden",
-        Boolean(ent.isAdmin || (ent.isPro && ent.status !== "trialing" && ent.planGrant !== "pro_plus" && !ent.cancelAtPeriodEnd))
+        Boolean(ent.isAdmin || (ent.isProPlus && !ent.cancelAtPeriodEnd))
       );
     }
 
@@ -2312,6 +2319,11 @@
         upgradeBtn.classList.remove("hidden");
         upgradeBtn.textContent = "Upgrade to Pro";
       }
+    }
+    const plusBtn = byId("billing-upgrade-plus");
+    if (plusBtn) {
+      const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus;
+      plusBtn.classList.toggle("hidden", !canBuyPlus);
     }
 
     if (cancelBtn) {
@@ -2336,6 +2348,7 @@
     }
 
     applyProExportGates(ent);
+    applyProPlusGates(ent);
     maybeSoftWarnUploads(ent);
   }
 
@@ -2361,6 +2374,21 @@
       btn.classList.toggle("billing-locked", !pro);
       btn.title = pro ? "" : `Forecast is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()})`;
     });
+  }
+
+  function applyProPlusGates(ent) {
+    const plus = Boolean(ent && ent.isProPlus);
+    document.querySelectorAll("#eofy-pro-plus-tools .btn, #extra-entity-save, #partner-seat-invite").forEach((btn) => {
+      if (!btn) return;
+      btn.classList.toggle("billing-locked", !plus);
+      if (!plus) btn.title = "Included with Pro+";
+    });
+    const note = byId("support-priority-note");
+    if (note) {
+      note.textContent = plus
+        ? "Your Pro+ messages are flagged as priority support."
+        : "Pro+ sends this as priority support.";
+    }
   }
 
   function softWarnStorageKey(ent) {
@@ -2432,22 +2460,32 @@
     const price = ent.priceLabel || fallbackMonthlyPrice();
     const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
     const trialLabel = ent.trialLabel || "Pro+";
+    const plusPrice = ent.plusPriceLabel;
+    const plusYearly = ent.plusPriceYearlyLabel;
+    const wantPlus = data && data.plan === "pro_plus";
     const modal = document.createElement("div");
     modal.id = "enh-billing-modal";
     modal.className = "enh-dup-modal";
+    const plusButtons = plusPrice
+      ? `<button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro_plus">Pro+ — ${esc(plusPrice)}</button>
+          <button type="button" class="btn primary" data-billing-upgrade="year" data-billing-plan="pro_plus">Pro+ — ${esc(plusYearly)}</button>`
+      : "";
     modal.innerHTML = `
       <div class="enh-dup-backdrop" data-billing-dismiss></div>
       <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-billing-title">
-        <h3 id="enh-billing-title">Upgrade to Pro</h3>
+        <h3 id="enh-billing-title">${wantPlus ? "Upgrade to Pro+" : "Upgrade to Pro"}</h3>
         <p>${esc(
           (data && data.error) ||
-            `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly} (same full access as ${trialLabel}).`
+            (plusPrice
+              ? `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly}. Pro+ (${plusPrice} or ${plusYearly}) adds accountant share, extra entity, BAS, cloud OCR and priority support.`
+              : `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly} (same full access as a leftover ${trialLabel} trial).`)
         )}</p>
-        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. You’ll go to secure card payment to activate Pro.</p>
+        <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. Local OCR stays on Free/Pro; cloud OCR is Pro+.</p>
         <div class="enh-dup-actions enh-billing-plan-actions">
           <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
-          <button type="button" class="btn secondary" data-billing-upgrade="month">Pro — ${esc(price)}</button>
-          <button type="button" class="btn primary" data-billing-upgrade="year">Pro — ${esc(yearly)}</button>
+          ${wantPlus ? "" : `<button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro">Pro — ${esc(price)}</button>
+          <button type="button" class="btn primary" data-billing-upgrade="year" data-billing-plan="pro">Pro — ${esc(yearly)}</button>`}
+          ${plusButtons}
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -2458,20 +2496,22 @@
     modal.querySelectorAll("[data-billing-upgrade]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const interval = btn.getAttribute("data-billing-upgrade") || "month";
+        const plan = btn.getAttribute("data-billing-plan") || "pro";
         close();
-        void startCheckout(interval);
+        void startCheckout(interval, plan);
       });
     });
   }
   window.haulagePromptUpgrade = promptUpgrade;
 
-  async function startCheckout(interval = "month") {
+  async function startCheckout(interval = "month", plan = "pro") {
     const period = interval === "year" ? "year" : "month";
+    const tier = plan === "pro_plus" ? "pro_plus" : "pro";
     setBillingMessage(
       period === "year" ? "Opening yearly checkout…" : "Opening monthly checkout…"
     );
     try {
-      const data = await apiPost("/billing/checkout", { interval: period });
+      const data = await apiPost("/billing/checkout", { interval: period, plan: tier });
       if (data.url) {
         window.location.href = data.url;
         return;
@@ -2531,7 +2571,10 @@
 
   function wireBilling() {
     byId("billing-upgrade")?.addEventListener("click", () => {
-      promptUpgrade({ entitlements: cachedEntitlements });
+      promptUpgrade({ entitlements: cachedEntitlements, plan: "pro" });
+    });
+    byId("billing-upgrade-plus")?.addEventListener("click", () => {
+      promptUpgrade({ entitlements: cachedEntitlements, plan: "pro_plus" });
     });
     byId("billing-manage")?.addEventListener("click", () => void openBillingPortal());
     byId("billing-cancel")?.addEventListener("click", () => void cancelSubscription());
@@ -2575,6 +2618,126 @@
         },
         true
       );
+    }
+  }
+
+  function moneyAud(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+  }
+
+  function ensureEofyProPlusTools() {
+    if (byId("eofy-pro-plus-tools")) return;
+    const view = byId("view-report");
+    if (!view) return;
+    const panel = document.createElement("div");
+    panel.className = "panel pro-plus-pack";
+    panel.id = "eofy-pro-plus-tools";
+    panel.innerHTML = `
+      <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
+      <p class="muted">Read-only share link and a multi-year tax pack for your agent.</p>
+      <div class="form-grid">
+        <div class="span-2">
+          <h3 class="profile-section-title">Accountant share link</h3>
+          <div class="form-actions">
+            <button type="button" class="btn primary" id="accountant-share-create">Create share link</button>
+            <button type="button" class="btn secondary small" id="accountant-share-copy">Copy link</button>
+          </div>
+          <p class="muted" id="accountant-share-url"></p>
+        </div>
+        <div class="span-2">
+          <h3 class="profile-section-title">Multi-year tax pack</h3>
+          <div class="form-actions">
+            <button type="button" class="btn secondary" id="tax-pack-load">Compare recent years</button>
+          </div>
+          <div id="tax-pack-result" class="pro-plus-result muted"></div>
+        </div>
+      </div>`;
+    const report = byId("report-content");
+    view.insertBefore(panel, report || null);
+  }
+
+  function wireEofyProPlusTools() {
+    ensureEofyProPlusTools();
+    const create = byId("accountant-share-create");
+    if (create && !create.dataset.wired) {
+      create.dataset.wired = "1";
+      create.addEventListener("click", async () => {
+        try {
+          const data = await apiPost("/accountant-share", {});
+          const url = data.url ? `${window.location.origin}${data.url}` : "";
+          const el = byId("accountant-share-url");
+          if (el) el.textContent = url;
+          if (window.toast) window.toast("Share link created");
+        } catch (err) {
+          if (window.haulagePromptUpgrade && err && err.code === "PRO_PLUS_REQUIRED") {
+            window.haulagePromptUpgrade({
+              error: err.message,
+              entitlements: cachedEntitlements,
+              plan: "pro_plus",
+            });
+          } else if (window.toast) window.toast(err.message || "Could not create share link");
+        }
+      });
+    }
+    const copy = byId("accountant-share-copy");
+    if (copy && !copy.dataset.wired) {
+      copy.dataset.wired = "1";
+      copy.addEventListener("click", async () => {
+        const text = (byId("accountant-share-url") || {}).textContent || "";
+        if (!text) {
+          if (window.toast) window.toast("Create a share link first");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(text);
+          if (window.toast) window.toast("Link copied");
+        } catch {
+          if (window.toast) window.toast(text);
+        }
+      });
+    }
+    const basBtn = byId("bas-pack-load");
+    if (basBtn && !basBtn.dataset.wired) {
+      basBtn.dataset.wired = "1";
+      basBtn.addEventListener("click", async () => {
+        const q = (byId("bas-quarter") || {}).value || "";
+        try {
+          const pack = await apiGet(`/bas${q ? `?quarter=${encodeURIComponent(q)}` : ""}`);
+          if (pack.error) throw new Error(pack.error);
+          const el = byId("bas-pack-result");
+          if (el) {
+            el.textContent = [
+              pack.quarterLabel,
+              `Sales ${moneyAud(pack.sales)} (GST ${moneyAud(pack.gstOnSales)})`,
+              `Purchases ${moneyAud(pack.purchases)} (GST ${moneyAud(pack.gstOnPurchases)})`,
+              `Net GST ${moneyAud(pack.netGst)}`,
+            ].join(" · ");
+          }
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Could not load BAS pack");
+        }
+      });
+    }
+    const taxBtn = byId("tax-pack-load");
+    if (taxBtn && !taxBtn.dataset.wired) {
+      taxBtn.dataset.wired = "1";
+      taxBtn.addEventListener("click", async () => {
+        try {
+          const pack = await apiGet("/tax-pack?years=3");
+          if (pack.error) throw new Error(pack.error);
+          const el = byId("tax-pack-result");
+          if (el) {
+            el.innerHTML = (pack.rows || [])
+              .map(
+                (row) =>
+                  `${row.financialYear}: income ${moneyAud(row.assessableIncome)}, deductions ${moneyAud(row.deductibleExpenses)}, tax ${moneyAud(row.estimatedTax)}`
+              )
+              .join("<br>");
+          }
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Could not load tax pack");
+        }
+      });
     }
   }
 
@@ -3119,7 +3282,7 @@
               planGrant === "free" && !ent.isPro ? " disabled" : ""
             }>Downgrade to Free</button>
           </div>
-          <p class="muted span-2">Plan is the Driver Hub account plan — it applies to both Taxation Hub and Fuel Hub. New profiles start on Free. Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast) — the same features as paid Pro. Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
+          <p class="muted span-2">Plan is the account plan. New profiles start on Free. Pro unlocks unlimited uploads, PDF export and forecast. Pro+ adds accountant share, extra entity, partnership seat, BAS/GST pack, cloud OCR and priority support (paid on Go Taxation Suite, or granted here). Free restores the 15 uploads/month + 1 on-screen report limits.</p>`;
 
     detail.classList.remove("hidden");
     detail.innerHTML = `
@@ -4265,6 +4428,7 @@
     wire();
     wireTitleScreen();
     wireBilling();
+    wireEofyProPlusTools();
     wirePdfDownload();
     handleBillingReturnQuery();
     void refreshTrialHints();
@@ -8315,7 +8479,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
-        `Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}) is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ is complimentary full Pro access granted by the primary mod — same features as paid Pro, different badge. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.`,
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ adds accountant share, extra entity, partnership seat, BAS/GST pack, cloud OCR and priority support. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },
@@ -8344,6 +8508,18 @@
         "Financial Forecast projects where the year is heading from what you’ve already logged. Real-time mode uses your current income and deductions and extrapolates toward EOFY; Manual mode lets you type projected income and deductions and recalculate on demand.",
         "Projected totals can be viewed monthly, quarterly or yearly so you can plan cash flow and tax set-asides. Scenario cards show alternate paths (for example higher deductions or different income) without changing your ledgers — useful before you commit to a claim pattern for the rest of the year.",
         "Work travel nights are snapshotted from each payslip or remittance scan when a travel allowance appears. The same card also appears on the Dashboard. Nights use ordinary-employee Tables 1–3 (not truck-driver Table 5). The bar shows nights claimed so far versus days in the financial year so you can plan EOFY travel claims.",
+      ],
+    },
+    report: {
+      title: "EOFY Report",
+      body: [
+        "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link, a BAS/GST quarterly working pack for GST-registered sole traders, and a multi-year comparison for your agent.",
+      ],
+    },
+    profile: {
+      title: "Profile",
+      body: [
+        "Taxpayer profile sets your registration type (employee, sole trader or partnership), occupation, ABN and GST. Pro+ can add one extra entity on this login (for example PAYG plus a side sole trader) and seat the other partner on a partnership ledger. Plan is Free, Pro ($10/month or $110/year) or Pro+ ($18/month or $190/year).",
       ],
     },
   };

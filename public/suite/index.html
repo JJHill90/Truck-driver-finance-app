@@ -11,8 +11,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=gross-tax-doughnut-1" />
-    <link rel="stylesheet" href="./suite.css?v=login-navy-11" />
+    <link rel="stylesheet" href="./styles.css?v=pro-plus-1" />
+    <link rel="stylesheet" href="./suite.css?v=pro-plus-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -578,6 +578,44 @@
               <button type="button" class="btn secondary" id="export-report">Export JSON</button>
             </div>
           </div>
+          <div class="panel pro-plus-pack" id="eofy-pro-plus-tools">
+            <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
+            <p class="muted">Read-only share link, BAS/GST quarters and a multi-year tax pack for your agent.</p>
+            <div class="form-grid">
+              <div class="span-2">
+                <h3 class="profile-section-title">Accountant share link</h3>
+                <p class="muted small">Creates a read-only EOFY pack they can open without logging in.</p>
+                <div class="form-actions">
+                  <button type="button" class="btn primary" id="accountant-share-create">Create share link</button>
+                  <button type="button" class="btn secondary small" id="accountant-share-copy">Copy link</button>
+                </div>
+                <p class="muted" id="accountant-share-url"></p>
+              </div>
+              <div class="span-2">
+                <h3 class="profile-section-title">BAS / GST quarterly</h3>
+                <label>Quarter
+                  <select id="bas-quarter">
+                    <option value="">Full year</option>
+                    <option value="q1">Q1 Jul–Sep</option>
+                    <option value="q2">Q2 Oct–Dec</option>
+                    <option value="q3">Q3 Jan–Mar</option>
+                    <option value="q4">Q4 Apr–Jun</option>
+                  </select>
+                </label>
+                <div class="form-actions">
+                  <button type="button" class="btn secondary" id="bas-pack-load">Show BAS pack</button>
+                </div>
+                <div id="bas-pack-result" class="pro-plus-result muted"></div>
+              </div>
+              <div class="span-2">
+                <h3 class="profile-section-title">Multi-year tax pack</h3>
+                <div class="form-actions">
+                  <button type="button" class="btn secondary" id="tax-pack-load">Compare recent years</button>
+                </div>
+                <div id="tax-pack-result" class="pro-plus-result muted"></div>
+              </div>
+            </div>
+          </div>
           <div id="report-content" class="panel"></div>
         </section>
 
@@ -647,11 +685,12 @@
                 <p id="billing-uploads" class="muted span-2"></p>
                 <div class="span-2 form-actions" id="billing-actions">
                   <button type="button" class="btn primary" id="billing-upgrade">Upgrade to Pro</button>
+                  <button type="button" class="btn secondary hidden" id="billing-upgrade-plus">Upgrade to Pro+</button>
                   <button type="button" class="btn secondary small hidden" id="billing-cancel">Cancel subscription</button>
                   <button type="button" class="btn secondary small hidden" id="billing-resume">Keep Pro renewing</button>
                   <button type="button" class="btn secondary small hidden" id="billing-manage">Manage billing</button>
                 </div>
-                <p class="muted span-2" id="billing-price-hint">Pro is the paid plan ($10/month or $110/year). Pro+ is complimentary full Pro access from the primary mod.</p>
+                <p class="muted span-2" id="billing-price-hint">Pro is $10/month or $110/year. Pro+ is $18/month or $190/year and adds accountant share, extra entity, partnership seat, BAS pack, cloud OCR and priority support.</p>
                 <p id="billing-message" class="muted span-2" role="status"></p>
               </div>
               <div class="profile-security form-grid">
@@ -801,6 +840,41 @@
               <div class="span-2 form-actions"><button type="submit" class="btn primary">Save profile</button></div>
             </form>
           </div>
+          <div class="panel" id="suite-extra-entity-panel">
+            <div class="panel-header"><h2>Extra entity (Pro+)</h2></div>
+            <p class="muted">Keep an employee PAYG profile and a side sole trader on this same login. Switch the active entity to file receipts against the right return.</p>
+            <p class="muted small" id="extra-entity-status">Pro+ unlocks one extra entity.</p>
+            <form id="extra-entity-form" class="form-grid">
+              <label>Registration type
+                <select id="extra-entity-type">
+                  <option value="sole_trader">Sole trader</option>
+                  <option value="employee">Employee (PAYG)</option>
+                </select>
+              </label>
+              <label>Trading / employer name<input type="text" id="extra-entity-name" placeholder="Side business or employer" /></label>
+              <label>ABN<input type="text" id="extra-entity-abn" placeholder="11-digit ABN" inputmode="numeric" /></label>
+              <label>Expected income ($)<input type="number" id="extra-entity-salary" min="0" step="0.01" /></label>
+              <label class="checkbox span-2"><input type="checkbox" id="extra-entity-gst" /> GST registered</label>
+              <div class="span-2 form-actions">
+                <button type="submit" class="btn primary" id="extra-entity-save">Save extra entity</button>
+                <button type="button" class="btn secondary" id="extra-entity-switch">Use this entity</button>
+                <button type="button" class="btn danger hidden" id="extra-entity-remove">Remove extra entity</button>
+              </div>
+            </form>
+            <p class="muted" id="extra-entity-active"></p>
+          </div>
+          <div class="panel" id="suite-partnership-panel">
+            <div class="panel-header"><h2>Partnership seat (Pro+)</h2></div>
+            <p class="muted">Invite the other partner’s existing login so they can open this partnership ledger.</p>
+            <form id="partnership-seat-form" class="form-grid">
+              <label>Partner username<input type="text" id="partner-seat-username" autocomplete="off" placeholder="Their login username" /></label>
+              <div class="span-2 form-actions">
+                <button type="submit" class="btn primary" id="partner-seat-invite">Invite partner</button>
+                <button type="button" class="btn danger hidden" id="partner-seat-revoke">Remove seat</button>
+              </div>
+            </form>
+            <p class="muted" id="partnership-seat-status"></p>
+          </div>
         </section>
 
         <!-- Support -->
@@ -814,6 +888,7 @@
                 <a id="support-email-link" href="mailto:support@godriverhub.com">support@godriverhub.com</a>,
                 and you’ll get a confirmation notice on the email you enter below.
               </p>
+              <p class="muted small" id="support-priority-note">Pro+ sends this as priority support.</p>
               <form id="support-contact-form" class="form-grid">
                 <label>Name
                   <input type="text" name="name" id="support-name" autocomplete="name" required placeholder="Your name" />
@@ -939,8 +1014,8 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=login-navy-1"></script>
+    <script src="./enhancements.js?v=pro-plus-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
-    <script src="./suite.js?v=gotax-5"></script>
+    <script src="./suite.js?v=pro-plus-1"></script
   </body>
 </html>

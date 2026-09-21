@@ -86,6 +86,24 @@ describe("support.saveContactMessage", () => {
     expect(href.startsWith("mailto:")).toBe(true);
     expect(href).toContain(encodeURIComponent(support.supportInbox()));
     expect(href).toContain(encodeURIComponent("Alex"));
+
+    const priority = support.saveContactMessage({
+      name: "Alex",
+      email: "alex@example.com",
+      phone: "",
+      message: "Need a tax pack",
+      username: "alex.driver",
+      priority: true,
+    });
+    expect(priority.priority).toBe(true);
+    const priorityHref = support.mailtoHref({
+      name: "Alex",
+      email: "alex@example.com",
+      phone: "",
+      message: "Need a tax pack",
+      priority: true,
+    });
+    expect(decodeURIComponent(priorityHref)).toContain("[PRIORITY]");
   });
 
   it("defaults support inbox to the business email", () => {
