@@ -361,6 +361,27 @@ describe("suite occupation travel profile", () => {
     expect(employers.map((e) => e.name).join(" ")).not.toMatch(/Pty Ltd/i);
   });
 
+  it("suggests government entities, councils and established OEMs", () => {
+    const names = (q) => suite.searchEmployers(q, { limit: 20 }).map((e) => e.name);
+    expect(names("ato")).toContain("Australian Taxation Office");
+    expect(names("home affairs")).toContain("Department of Home Affairs");
+    expect(names("centrelink")).toContain("Centrelink");
+    expect(names("raaf")).toContain("Royal Australian Air Force");
+    expect(names("service nsw")).toContain("Service NSW");
+    expect(names("ird")).toContain("Inland Revenue");
+    expect(names("brisbane city")).toContain("Brisbane City Council");
+    expect(names("city of sydney")).toContain("City of Sydney");
+    expect(names("gold coast")).toContain("City of Gold Coast");
+    expect(names("auckland council")).toContain("Auckland Council");
+    expect(names("christchurch city")).toContain("Christchurch City Council");
+    expect(names("toyota")).toContain("Toyota");
+    expect(names("kenworth")).toContain("Kenworth");
+    expect(names("caterpillar")).toContain("Caterpillar");
+    expect(names("john deere")).toContain("John Deere");
+    expect(names("jcb")).toContain("JCB");
+    expect(names("toyota").join(" ")).not.toMatch(/Pty Ltd/i);
+  });
+
   it("saves travel flags on the suite profile", () => {
     const p = suite.applySuiteProfile(
       { occupation: "Financial auditor", travelsForWork: "on", overnightAllowance: "on" },
