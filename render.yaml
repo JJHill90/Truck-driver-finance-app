@@ -23,6 +23,9 @@ services:
       # Driver Hub host. Do not set this to suite on the truck-driver service.
       - key: APP_PRODUCT
         value: haulage
+      # Persistent disk. Native Node and Docker both write here (not /app/data).
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
       # Absolute origin of the Go Taxation Suite Render service
       # (e.g. https://your-suite-service.example.com). When set, /suite on this
       # host redirects there so the products are visibly separate.
@@ -137,6 +140,9 @@ services:
         value: production
       - key: APP_PRODUCT
         value: suite
+      # Persistent disk. Native Node and Docker both write here (not /app/data).
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
       # Absolute origin of the Driver Hub Render service
       # (e.g. https://your-service.example.com). When set, /haulage on this
       # host redirects there so Suite is never mistaken for Driver Hub.

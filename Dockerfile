@@ -13,10 +13,12 @@ COPY . .
 ENV NODE_ENV=production
 ENV PORT=3000
 # Dedicated Go Taxation Suite host: APP_PRODUCT=suite (see render.yaml).
+# Do not set DATA_DIR here — a baked /app/data would hide the Render disk at
+# /opt/render/project/src/data. render.yaml sets DATA_DIR on the service.
 EXPOSE 3000
 
 # Runtime data (JSON store, receipts, user accounts) lives here. Mount a
-# persistent volume at /app/data to keep data across restarts/redeploys.
+# persistent volume at /app/data, or set DATA_DIR to the host mount path.
 VOLUME ["/app/data"]
 
 CMD ["node", "server.js"]
