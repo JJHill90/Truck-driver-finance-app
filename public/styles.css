@@ -369,6 +369,7 @@ button.title-hub-logout:hover {
 .btn.billing-locked,
 .nav-btn.billing-locked {
   opacity: 0.72;
+  cursor: pointer;
 }
 .nav-btn.billing-locked::after {
   content: " Pro";

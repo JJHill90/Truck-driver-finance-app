@@ -448,6 +448,22 @@
     return Boolean(url && /\/api\/haulage(?:\/|$|\?)/.test(String(url)));
   }
 
+  /** GET /forecast fires when Forecast or EOFY opens — do not auto-modal. */
+  function isBrowseSafePaymentGate(method, url) {
+    const m = String(method || "GET").toUpperCase();
+    if (m !== "GET") return false;
+    const u = String(url || "");
+    if (/\/api\/haulage\/fuelhub\/forecast\b/.test(u)) return false;
+    return /\/api\/haulage\/forecast(?:\/|\?|$)/.test(u);
+  }
+
+  function fetchRequestMethod(args, options) {
+    if (options && options.method) return String(options.method).toUpperCase();
+    const req = args && args[0];
+    if (req && typeof req === "object" && req.method) return String(req.method).toUpperCase();
+    return "GET";
+  }
+
   function networkErrorMessage() {
     if (window.location.protocol === "file:") {
       return "Open the app at http://localhost:3000/haulage/ — not as a local file.";
@@ -789,12 +805,19 @@
         }
       }
 
-      // Soft gate for manual uploads and other haulage POSTs that return 402.
+      // Soft gate for paid features. GET /forecast is browse-safe so opening
+      // Forecast or EOFY (which refreshes forecast) does not pop the modal.
       const res = await origFetch.apply(this, args);
       try {
         if (res.status === 402 && isHaulageApiUrl(url)) {
           const data = await res.clone().json();
-          if (data && (data.code === "UPLOAD_LIMIT" || data.code === "PRO_REQUIRED")) {
+          const method = fetchRequestMethod(args, options);
+          if (isBrowseSafePaymentGate(method, url)) {
+            /* let Free users look through the tab */
+          } else if (
+            data &&
+            (data.code === "UPLOAD_LIMIT" || data.code === "PRO_REQUIRED" || data.code === "PRO_PLUS_REQUIRED")
+          ) {
             if (typeof window.toast === "function") {
               window.toast(data.error || "Upgrade to Pro to continue.");
             }
@@ -2356,15 +2379,16 @@
     const pdfBtn = byId("download-report-pdf");
     const jsonBtn = byId("export-report");
     const pro = ent && ent.isPro;
+    // Keep locked actions clickable so Free users get the upgrade prompt.
     if (pdfBtn) {
-      pdfBtn.disabled = !pro;
+      pdfBtn.disabled = false;
       pdfBtn.title = pro
         ? "Download accountant-ready PDF"
         : `Pro feature — upgrade for ${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}`;
       pdfBtn.classList.toggle("billing-locked", !pro);
     }
     if (jsonBtn) {
-      jsonBtn.disabled = !pro;
+      jsonBtn.disabled = false;
       jsonBtn.title = pro
         ? "Export JSON for your accountant"
         : `Pro feature — upgrade for ${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}`;
@@ -2372,7 +2396,9 @@
     }
     document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
       btn.classList.toggle("billing-locked", !pro);
-      btn.title = pro ? "" : `Forecast is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()})`;
+      btn.title = pro
+        ? ""
+        : `Forecast is free to browse. Live numbers unlock with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()})`;
     });
   }
 
@@ -2465,7 +2491,124 @@
   }
   window.haulageRefreshBilling = refreshBillingPanel;
 
+  const BROWSE_LINGER_MS = 30000;
+  const lingerPrompted = new Set();
+  let lingerTimer = null;
+  let lingerView = null;
+
+  function activeBrowseView() {
+    if (byId("view-forecast")?.classList.contains("active")) return "forecast";
+    if (byId("view-report")?.classList.contains("active")) return "report";
+    return null;
+  }
+
+  function cancelBrowseLinger() {
+    if (lingerTimer) {
+      clearTimeout(lingerTimer);
+      lingerTimer = null;
+    }
+    lingerView = null;
+  }
+
+  function markBrowsePrompted(view) {
+    const v = view || activeBrowseView();
+    if (v) lingerPrompted.add(v);
+    cancelBrowseLinger();
+  }
+
+  function promptPaidFeature(data) {
+    markBrowsePrompted(data && data.view);
+    promptUpgrade(data);
+  }
+
+  function startBrowseLinger(view) {
+    cancelBrowseLinger();
+    if (view !== "forecast" && view !== "report") return;
+    if (cachedEntitlements && cachedEntitlements.isPro) return;
+    if (lingerPrompted.has(view)) return;
+    lingerView = view;
+    lingerTimer = setTimeout(() => {
+      lingerTimer = null;
+      if (lingerPrompted.has(view)) return;
+      if (activeBrowseView() !== view) return;
+      lingerPrompted.add(view);
+      promptUpgrade({
+        error:
+          view === "forecast"
+            ? `You've been looking at Forecast. Live numbers unlock with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`
+            : `You've been looking at the EOFY report. PDF, JSON export and accountant packs unlock with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+        code: "PRO_REQUIRED",
+        plan: "pro",
+        entitlements: cachedEntitlements,
+      });
+    }, BROWSE_LINGER_MS);
+  }
+
+  function fillForecastBrowseShell() {
+    if (cachedEntitlements && cachedEntitlements.isPro) return;
+    const progress = byId("forecast-progress");
+    if (progress && !progress.querySelector(".progress-bar") && !progress.dataset.browseShell) {
+      progress.dataset.browseShell = "1";
+      progress.innerHTML =
+        '<p class="muted">Live year progress unlocks with Pro. Browse the layout — Recalculate or stay on this tab for upgrade options.</p>';
+    }
+    const stats = byId("forecast-stats");
+    if (stats && !stats.querySelector(".stat-card") && !stats.dataset.browseShell) {
+      stats.dataset.browseShell = "1";
+      stats.innerHTML = `
+        <div class="stat-card income"><div class="label">Projected income</div><div class="value">—</div><div class="sub">Unlock with Pro</div></div>
+        <div class="stat-card expense"><div class="label">Projected deductions</div><div class="value">—</div><div class="sub">Unlock with Pro</div></div>
+        <div class="stat-card tax"><div class="label">Projected tax</div><div class="value">—</div><div class="sub">Unlock with Pro</div></div>
+        <div class="stat-card income"><div class="label">Projected net (after tax)</div><div class="value">—</div><div class="sub">Unlock with Pro</div></div>`;
+    }
+    const scenes = byId("forecast-scenarios");
+    if (scenes && !scenes.querySelector("table") && !scenes.dataset.browseShell) {
+      scenes.dataset.browseShell = "1";
+      scenes.innerHTML =
+        '<p class="muted">Conservative, Baseline and Optimistic scenarios are included with Pro.</p>';
+    }
+  }
+
+  function onBrowseViewChange(view) {
+    if (view === "forecast" || view === "report") {
+      startBrowseLinger(view);
+      if (view === "forecast") setTimeout(fillForecastBrowseShell, 280);
+    } else if (lingerView && lingerView !== view) {
+      cancelBrowseLinger();
+    }
+  }
+
+  function watchBrowseViews() {
+    const pairs = [
+      ["view-forecast", "forecast"],
+      ["view-report", "report"],
+    ];
+    pairs.forEach(([id, view]) => {
+      const el = byId(id);
+      if (!el || el.dataset.browseWatch) return;
+      el.dataset.browseWatch = "1";
+      new MutationObserver(() => {
+        if (el.classList.contains("active")) onBrowseViewChange(view);
+        else if (lingerView === view) cancelBrowseLinger();
+      }).observe(el, { attributes: true, attributeFilter: ["class"] });
+      if (el.classList.contains("active")) onBrowseViewChange(view);
+    });
+  }
+
+  function hasEofyPacks(ent) {
+    return Boolean(
+      ent && (ent.canShareAccountant || ent.canBasPack || ent.canYearCompare || ent.isProPlus)
+    );
+  }
+
+  function upgradePlanForPacks(ent) {
+    if (hasEofyPacks(ent)) return null;
+    if (ent && ent.product === "suite") return "pro_plus";
+    return "pro";
+  }
+
   function promptUpgrade(data) {
+    markBrowsePrompted(data && data.view);
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
     const ent = (data && data.entitlements) || cachedEntitlements || {};
@@ -2592,27 +2735,7 @@
     byId("billing-cancel")?.addEventListener("click", () => void cancelSubscription());
     byId("billing-resume")?.addEventListener("click", () => void resumeSubscription());
 
-    // Soft-gate Forecast nav: intercept before app.js switches view when free.
-    document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
-      if (btn.dataset.billingWired) return;
-      btn.dataset.billingWired = "1";
-      btn.addEventListener(
-        "click",
-        (e) => {
-          if (cachedEntitlements && cachedEntitlements.isPro) return;
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          promptUpgrade({
-            error: `Forecast is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}). You’re on the free plan — upgrade to unlock.`,
-            code: "PRO_REQUIRED",
-            entitlements: cachedEntitlements,
-          });
-        },
-        true
-      );
-    });
-
-    // Soft-gate JSON export (client-side blob from free /report).
+    // JSON export is a Pro feature click — tab browse stays free.
     const jsonBtn = byId("export-report");
     if (jsonBtn && !jsonBtn.dataset.billingWired) {
       jsonBtn.dataset.billingWired = "1";
@@ -2622,9 +2745,68 @@
           if (cachedEntitlements && cachedEntitlements.isPro) return;
           e.preventDefault();
           e.stopImmediatePropagation();
-          promptUpgrade({
+          promptPaidFeature({
             error: `JSON accountant export is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
             code: "PRO_REQUIRED",
+            entitlements: cachedEntitlements,
+          });
+        },
+        true
+      );
+    }
+
+    const manualForm = byId("manual-forecast-form");
+    if (manualForm && !manualForm.dataset.billingWired) {
+      manualForm.dataset.billingWired = "1";
+      manualForm.addEventListener(
+        "submit",
+        (e) => {
+          if (cachedEntitlements && cachedEntitlements.isPro) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          promptPaidFeature({
+            error: `Forecast recalculation is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+            code: "PRO_REQUIRED",
+            entitlements: cachedEntitlements,
+          });
+        },
+        true
+      );
+    }
+
+    const extraForm = byId("extra-entity-form");
+    if (extraForm && !extraForm.dataset.billingWired) {
+      extraForm.dataset.billingWired = "1";
+      extraForm.addEventListener(
+        "submit",
+        (e) => {
+          if (cachedEntitlements && cachedEntitlements.isProPlus) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          promptPaidFeature({
+            error: "An extra taxpayer entity is included with Pro+.",
+            code: "PRO_PLUS_REQUIRED",
+            plan: "pro_plus",
+            entitlements: cachedEntitlements,
+          });
+        },
+        true
+      );
+    }
+
+    const partnerForm = byId("partnership-seat-form");
+    if (partnerForm && !partnerForm.dataset.billingWired) {
+      partnerForm.dataset.billingWired = "1";
+      partnerForm.addEventListener(
+        "submit",
+        (e) => {
+          if (cachedEntitlements && cachedEntitlements.isProPlus) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          promptPaidFeature({
+            error: "A partnership seat is included with Pro+.",
+            code: "PRO_PLUS_REQUIRED",
+            plan: "pro_plus",
             entitlements: cachedEntitlements,
           });
         },
@@ -2687,7 +2869,21 @@
     const create = byId("accountant-share-create");
     if (create && !create.dataset.wired) {
       create.dataset.wired = "1";
-      create.addEventListener("click", async () => {
+      create.addEventListener("click", async (e) => {
+        const plan = upgradePlanForPacks(cachedEntitlements);
+        if (plan) {
+          e.preventDefault();
+          promptPaidFeature({
+            error:
+              plan === "pro_plus"
+                ? "Accountant share links are included with Pro+."
+                : `Accountant share links are included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+            code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
+            plan,
+            entitlements: cachedEntitlements,
+          });
+          return;
+        }
         try {
           const data = await apiPost("/accountant-share", {});
           const url = data.url ? `${window.location.origin}${data.url}` : "";
@@ -2725,7 +2921,21 @@
     const basBtn = byId("bas-pack-load");
     if (basBtn && !basBtn.dataset.wired) {
       basBtn.dataset.wired = "1";
-      basBtn.addEventListener("click", async () => {
+      basBtn.addEventListener("click", async (e) => {
+        const plan = upgradePlanForPacks(cachedEntitlements);
+        if (plan) {
+          e.preventDefault();
+          promptPaidFeature({
+            error:
+              plan === "pro_plus"
+                ? "BAS / GST quarterly packs are included with Pro+."
+                : `BAS / GST quarterly packs are included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+            code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
+            plan,
+            entitlements: cachedEntitlements,
+          });
+          return;
+        }
         const q = (byId("bas-quarter") || {}).value || "";
         try {
           const pack = await apiGet(`/bas${q ? `?quarter=${encodeURIComponent(q)}` : ""}`);
@@ -2747,7 +2957,21 @@
     const taxBtn = byId("tax-pack-load");
     if (taxBtn && !taxBtn.dataset.wired) {
       taxBtn.dataset.wired = "1";
-      taxBtn.addEventListener("click", async () => {
+      taxBtn.addEventListener("click", async (e) => {
+        const plan = upgradePlanForPacks(cachedEntitlements);
+        if (plan) {
+          e.preventDefault();
+          promptPaidFeature({
+            error:
+              plan === "pro_plus"
+                ? "Multi-year tax packs are included with Pro+."
+                : `Multi-year tax packs are included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+            code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
+            plan,
+            entitlements: cachedEntitlements,
+          });
+          return;
+        }
         try {
           const pack = await apiGet("/tax-pack?years=3");
           if (pack.error) throw new Error(pack.error);
@@ -4387,8 +4611,8 @@
     btn.addEventListener("click", async (e) => {
       if (cachedEntitlements && !cachedEntitlements.isPro) {
         e.preventDefault();
-        promptUpgrade({
-          error: `PDF export is included with Pro (${fallbackMonthlyPrice()}).`,
+        promptPaidFeature({
+          error: `PDF export is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
           code: "PRO_REQUIRED",
           entitlements: cachedEntitlements,
         });
@@ -4456,6 +4680,7 @@
     wireBilling();
     wireEofyProPlusTools();
     wirePdfDownload();
+    watchBrowseViews();
     handleBillingReturnQuery();
     void refreshTrialHints();
     try {
