@@ -80,6 +80,8 @@ services:
         value: "20"
       - key: BACKUP_ENABLED
         value: "1"
+      - key: BACKUP_AUTORESTORE
+        value: "1"
       - key: BACKUP_AT
         value: "17:00"
       - key: BACKUP_TIMEZONE
@@ -180,6 +182,8 @@ services:
       - key: RATE_LIMIT_LOGIN_MAX
         value: "20"
       - key: BACKUP_ENABLED
+        value: "1"
+      - key: BACKUP_AUTORESTORE
         value: "1"
       - key: BACKUP_AT
         value: "17:00"
