@@ -213,13 +213,16 @@ services:
         sync: false
       - key: AWS_REGION
         value: ap-southeast-2
-      # Stripe — Go Taxation Suite Pro. Use a separate Price from Taxation Hub.
+      # Stripe — Go Taxation Suite Pro ($10/mo or $110/yr AUD). Separate Prices
+      # from Driver Hub. Do not reuse STRIPE_PRICE_ID ($5/$60) on this service.
       # Webhook endpoint: /api/haulage/billing/webhook
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
-      - key: STRIPE_PRICE_ID
+      - key: STRIPE_PRICE_ID_SUITE
+        sync: false
+      - key: STRIPE_PRICE_ID_SUITE_YEARLY
         sync: false
     disk:
       name: gotax-data

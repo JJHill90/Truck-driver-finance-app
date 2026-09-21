@@ -4,6 +4,9 @@ const {
   FREE_SOFT_WARN_USED,
   PRO_PRICE_AUD,
   PRO_PRICE_YEARLY_AUD,
+  SUITE_PRO_PRICE_AUD,
+  SUITE_PRO_PRICE_YEARLY_AUD,
+  pricingForProduct,
   TRIAL_PRODUCT_LABEL,
   addTrialEnd,
   countUploadsThisMonth,
@@ -36,6 +39,17 @@ describe("entitlements", () => {
     expect(offer.trialLabel).toBe("Pro+");
     expect(offer.freeUploadsPerMonth).toBe(15);
     expect(offer.priceYearlyLabel).toBe("$60/year");
+    expect(offer.product).toBe("haulage");
+    const suiteOffer = trialOfferStatus("suite");
+    expect(suiteOffer.priceAud).toBe(10);
+    expect(suiteOffer.priceYearlyAud).toBe(110);
+    expect(suiteOffer.priceLabel).toBe("$10/month");
+    expect(suiteOffer.priceYearlyLabel).toBe("$110/year");
+    expect(suiteOffer.product).toBe("suite");
+    expect(SUITE_PRO_PRICE_AUD).toBe(10);
+    expect(SUITE_PRO_PRICE_YEARLY_AUD).toBe(110);
+    expect(pricingForProduct("suite").priceYearlyAud).toBe(110);
+    expect(pricingForProduct("haulage").priceAud).toBe(5);
   });
 
   it("soft-warns only after halfway free uploads, before the hard cap", () => {
@@ -196,6 +210,20 @@ describe("entitlements", () => {
     const proBlocked = proFeatureBlockedPayload("pdf", free);
     expect(proBlocked.code).toBe("PRO_REQUIRED");
     expect(proBlocked.feature).toBe("pdf");
+
+    const suiteEnt = resolveEntitlements(
+      { plan: "free", proTrialEndsAt: null },
+      { receipts: [] },
+      now,
+      { product: "suite" }
+    );
+    expect(suiteEnt.priceAud).toBe(10);
+    expect(suiteEnt.priceYearlyAud).toBe(110);
+    expect(suiteEnt.product).toBe("suite");
+    const suiteBlocked = uploadBlockedPayload(suiteEnt);
+    expect(suiteBlocked.error).toMatch(/\$10\/month/);
+    expect(suiteBlocked.error).toMatch(/\$110\/year/);
+    expect(suiteBlocked.error).not.toMatch(/\$5\/month/);
   });
 
   it("gives Pro unlimited uploads and export flags", () => {

@@ -375,10 +375,12 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
  `public/enhancements.js`. A general **Disclaimer** box at the bottom of
  Support states the app is not financial advice and is an assistance tool for
  receipts/entries — seek accredited tax, financial or legal advice.
-- **Freemium / Pro ($5/mo or $60/yr AUD).** Free plan: **15 uploads/month**
+- **Freemium / Pro.** Free plan: **15 uploads/month**
   (scans + manual receipts) + **1 on-screen EOFY report** (live `/summary` +
   `/report` in the app). Pro: unlimited uploads, PDF + JSON accountant
-  export, forecast. **New profiles start on Free** (self-register or
+  export, forecast. Driver Hub / Taxation Hub Pro is **$5/mo or $60/yr**;
+  Go Taxation Suite Pro is **$10/mo or $110/yr** (do not reuse the Driver Hub
+  Stripe Price ids). **New profiles start on Free** (self-register or
   admin-created). They pay for **Pro** via Profile → Plan → **Upgrade to Pro**
   (Stripe Checkout: monthly or yearly), or the primary mod grants complimentary
   **Pro+** (`planGrant: pro_plus`) — same entitlements as paid Pro, different
@@ -395,6 +397,7 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   `PRO_REQUIRED` (checked before OCR on scan/manual; PDF/forecast Pro-gated).
   Stripe Checkout + Customer Portal via `lib/billing-stripe.js`
   (`STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY`,
+  `STRIPE_PRICE_ID_SUITE`, `STRIPE_PRICE_ID_SUITE_YEARLY`,
   `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`); webhook at
   `POST /api/haulage/billing/webhook` (raw body) — a later paid Stripe
   activation clears a forced-Free grant. Public `GET /billing/trial` (alias

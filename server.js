@@ -411,9 +411,10 @@ function getActiveRecords(req) {
 
 /** Resolve freemium entitlements for the signed-in user (guests = free, no uploads). */
 function resolveReqEntitlements(req) {
-  if (!req.user) return entitlements.resolveEntitlements(null, null);
+  const product = productOf(req);
+  if (!req.user) return entitlements.resolveEntitlements(null, null, new Date(), { product });
   const user = auth.getUserRecord(req.user);
-  return entitlements.resolveEntitlements(user, getRecords(req));
+  return entitlements.resolveEntitlements(user, getRecords(req), new Date(), { product });
 }
 
 /** Soft gate: free plan monthly upload quota (402 + UPLOAD_LIMIT). */
@@ -922,7 +923,7 @@ api.post("/auth/recover/reset", (req, res) => {
 api.get("/alerts", (req, res) => {
   const alerts = buildAlerts(getActiveRecords(req), productOf(req));
   const user = req.user ? auth.getUser(req.user) : null;
-  if (user) alerts.push(...auth.accountAlerts(user));
+  if (user) alerts.push(...auth.accountAlerts(user, productOf(req)));
   res.json({ alerts, user: user || req.user || null });
 });
 
@@ -2974,18 +2975,18 @@ api.get("/billing/entitlements", (req, res) => {
   res.json({
     entitlements: resolveReqEntitlements(req),
     stripeConfigured: billingStripe.stripeConfigured(),
-    trialOffer: auth.getTrialOfferStatus(),
+    trialOffer: auth.getTrialOfferStatus(productOf(req)),
   });
 });
 
 /** Public: signup plan copy (new profiles start on Free). */
-api.get("/billing/trial", (_req, res) => {
-  res.json(auth.getTrialOfferStatus());
+api.get("/billing/trial", (req, res) => {
+  res.json(auth.getTrialOfferStatus(productOf(req)));
 });
 
 /** @deprecated Alias of /billing/trial (older clients). */
-api.get("/billing/founding", (_req, res) => {
-  res.json(auth.getTrialOfferStatus());
+api.get("/billing/founding", (req, res) => {
+  res.json(auth.getTrialOfferStatus(productOf(req)));
 });
 
 api.post("/billing/checkout", async (req, res) => {
@@ -3002,6 +3003,8 @@ api.post("/billing/checkout", async (req, res) => {
       user,
       req,
       interval,
+      product: productOf(req),
+      homePath: suite.publicHomePath(req),
       saveCustomerId: (customerId) => {
         auth.updateBilling(req.user, {
           stripeCustomerId: customerId,
@@ -3025,7 +3028,11 @@ api.post("/billing/portal", async (req, res) => {
   }
   try {
     const user = auth.getUserRecord(req.user);
-    const result = await billingStripe.createPortalSession({ user, req });
+    const result = await billingStripe.createPortalSession({
+      user,
+      req,
+      homePath: suite.publicHomePath(req),
+    });
     res.json(result);
   } catch (err) {
     const code = err && err.code;

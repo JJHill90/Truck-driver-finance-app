@@ -773,7 +773,7 @@
                 : 0;
             const msg =
               data.error ||
-              `Free plan upload limit reached (${rem} left this month). Upgrade to Pro ($5/month or $60/year) for unlimited scans.`;
+              `Free plan upload limit reached (${rem} left this month). Upgrade to Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}) for unlimited scans.`;
             if (typeof window.toast === "function") window.toast(msg);
             if (typeof window.haulagePromptUpgrade === "function") {
               window.haulagePromptUpgrade(data);
@@ -1566,6 +1566,14 @@
     return Boolean(document.body && document.body.classList.contains("gotax-suite"));
   }
 
+  function fallbackMonthlyPrice() {
+    return isGoTaxSuite() ? "$10/month" : "$5/month";
+  }
+
+  function fallbackYearlyPrice() {
+    return isGoTaxSuite() ? "$110/year" : "$60/year";
+  }
+
   /** Show Driver Hub login forms (signed out). */
   function showDriverHubLogin() {
     lockApp();
@@ -1732,8 +1740,8 @@
 
   function trialHintText(offer, { highlightRegister } = {}) {
     if (!offer) return "";
-    const price = offer.priceLabel || "$5/month";
-    const yearly = offer.priceYearlyLabel || "$60/year";
+    const price = offer.priceLabel || fallbackMonthlyPrice();
+    const yearly = offer.priceYearlyLabel || fallbackYearlyPrice();
     const uploads = offer.freeUploadsPerMonth || 15;
     const reports = offer.freeOnscreenReports || 1;
     const plus = offer.trialLabel || "Pro+";
@@ -2244,7 +2252,7 @@
 
     updatePlanBadges(ent);
 
-    const price = ent.priceLabel || "$5/month";
+    const price = ent.priceLabel || fallbackMonthlyPrice();
     const trialLabel = ent.trialLabel || "Pro+";
     let statusText = "Free plan";
     if (ent.isAdmin) statusText = "Primary mod — Pro access";
@@ -2283,7 +2291,7 @@
     }
 
     const priceHint = byId("billing-price-hint");
-    const yearly = ent.priceYearlyLabel || "$60/year";
+    const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
     if (priceHint) {
       priceHint.textContent = `Pro is the paid plan (${price} or ${yearly}). ${trialLabel} is complimentary full Pro access from the primary mod. Both unlock unlimited uploads, PDF export and forecast.`;
       priceHint.classList.toggle(
@@ -2339,19 +2347,19 @@
       pdfBtn.disabled = !pro;
       pdfBtn.title = pro
         ? "Download accountant-ready PDF"
-        : "Pro feature — upgrade for $5/month or $60/year";
+        : `Pro feature — upgrade for ${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}`;
       pdfBtn.classList.toggle("billing-locked", !pro);
     }
     if (jsonBtn) {
       jsonBtn.disabled = !pro;
       jsonBtn.title = pro
         ? "Export JSON for your accountant"
-        : "Pro feature — upgrade for $5/month or $60/year";
+        : `Pro feature — upgrade for ${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}`;
       jsonBtn.classList.toggle("billing-locked", !pro);
     }
     document.querySelectorAll('.nav-btn[data-view="forecast"]').forEach((btn) => {
       btn.classList.toggle("billing-locked", !pro);
-      btn.title = pro ? "" : "Forecast is included with Pro ($5/month or $60/year)";
+      btn.title = pro ? "" : `Forecast is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()})`;
     });
   }
 
@@ -2421,8 +2429,8 @@
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
     const ent = (data && data.entitlements) || cachedEntitlements || {};
-    const price = ent.priceLabel || "$5/month";
-    const yearly = ent.priceYearlyLabel || "$60/year";
+    const price = ent.priceLabel || fallbackMonthlyPrice();
+    const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
     const trialLabel = ent.trialLabel || "Pro+";
     const modal = document.createElement("div");
     modal.id = "enh-billing-modal";
@@ -2540,7 +2548,7 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           promptUpgrade({
-            error: "Forecast is included with Pro ($5/month or $60/year). You’re on the free plan — upgrade to unlock.",
+            error: `Forecast is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}). You’re on the free plan — upgrade to unlock.`,
             code: "PRO_REQUIRED",
             entitlements: cachedEntitlements,
           });
@@ -2560,7 +2568,7 @@
           e.preventDefault();
           e.stopImmediatePropagation();
           promptUpgrade({
-            error: "JSON accountant export is included with Pro ($5/month or $60/year).",
+            error: `JSON accountant export is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
             code: "PRO_REQUIRED",
             entitlements: cachedEntitlements,
           });
@@ -4191,7 +4199,7 @@
       if (cachedEntitlements && !cachedEntitlements.isPro) {
         e.preventDefault();
         promptUpgrade({
-          error: "PDF export is included with Pro ($5/month).",
+          error: `PDF export is included with Pro (${fallbackMonthlyPrice()}).`,
           code: "PRO_REQUIRED",
           entitlements: cachedEntitlements,
         });
@@ -8307,7 +8315,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro ($5/month or $60/year) is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ is complimentary full Pro access granted by the primary mod — same features as paid Pro, different badge. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        `Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}) is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ is complimentary full Pro access granted by the primary mod — same features as paid Pro, different badge. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.`,
         "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },
