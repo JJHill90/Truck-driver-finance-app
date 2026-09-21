@@ -1732,14 +1732,24 @@
 
   function trialHintText(offer, { highlightRegister } = {}) {
     if (!offer) return "";
-    const months = offer.trialMonths || 3;
-    const label = offer.trialLabel || "Pro+";
     const price = offer.priceLabel || "$5/month";
-    const base = `Every new profile includes ${months} months of ${label} (full Pro access).`;
-    if (highlightRegister) {
-      return `${base} Create your profile to start — or subscribe to Pro (${price}) from day one.`;
+    const yearly = offer.priceYearlyLabel || "$60/year";
+    const uploads = offer.freeUploadsPerMonth || 15;
+    const reports = offer.freeOnscreenReports || 1;
+    const plus = offer.trialLabel || "Pro+";
+    if (offer.open) {
+      const months = offer.trialMonths || 3;
+      const base = `Every new profile includes ${months} months of ${plus} (full Pro access).`;
+      if (highlightRegister) {
+        return `${base} Create your profile to start — or subscribe to Pro (${price}) from day one.`;
+      }
+      return `${base} Subscribe to Pro (${price}) anytime, including from day one.`;
     }
-    return `${base} Subscribe to Pro (${price}) anytime, including from day one.`;
+    const base = `New profiles start on Free (${uploads} uploads/month + ${reports} on-screen EOFY report).`;
+    if (highlightRegister) {
+      return `${base} Upgrade to Pro (${price} or ${yearly}) anytime, or ask the primary mod for complimentary ${plus} — same full access.`;
+    }
+    return `${base} Pro (${price} or ${yearly}) is the paid plan. ${plus} is complimentary full Pro access from the primary mod.`;
   }
 
   async function refreshTrialHints(opts = {}) {
@@ -2275,7 +2285,7 @@
     const priceHint = byId("billing-price-hint");
     const yearly = ent.priceYearlyLabel || "$60/year";
     if (priceHint) {
-      priceHint.textContent = `Pro is ${price} or ${yearly} (same full access as ${trialLabel}).`;
+      priceHint.textContent = `Pro is the paid plan (${price} or ${yearly}). ${trialLabel} is complimentary full Pro access from the primary mod. Both unlock unlimited uploads, PDF export and forecast.`;
       priceHint.classList.toggle(
         "hidden",
         Boolean(ent.isAdmin || (ent.isPro && ent.status !== "trialing" && ent.planGrant !== "pro_plus" && !ent.cancelAtPeriodEnd))
@@ -2283,7 +2293,7 @@
     }
 
     if (upgradeBtn) {
-      // Paid Pro checkout — available on Free and during Pro+ signup trial.
+      // Paid Pro checkout — available on Free (and leftover Pro+ signup trials).
       const paidLive =
         ent.hasStripeSubscription &&
         ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
@@ -3101,7 +3111,7 @@
               planGrant === "free" && !ent.isPro ? " disabled" : ""
             }>Downgrade to Free</button>
           </div>
-          <p class="muted span-2">Plan is the Driver Hub account plan — it applies to both Taxation Hub and Fuel Hub. Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast). Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
+          <p class="muted span-2">Plan is the Driver Hub account plan — it applies to both Taxation Hub and Fuel Hub. New profiles start on Free. Pro+ is complimentary full Pro access (unlimited uploads, PDF, forecast) — the same features as paid Pro. Free restores the 15 uploads/month + 1 on-screen report limits. You can switch either way at any time.</p>`;
 
     detail.classList.remove("hidden");
     detail.innerHTML = `
@@ -8297,7 +8307,7 @@
       title: "Profile",
       body: [
         "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
-        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. Plan shows Free (15 uploads/month + 1 on-screen EOFY report) or Pro ($5/month) with unlimited scans, PDF/JSON export and forecast — every new profile includes three months of Pro+ (full Pro access), then those Free limits apply again unless you subscribe; you can start paying from day one. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
+        "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro ($5/month or $60/year) is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ is complimentary full Pro access granted by the primary mod — same features as paid Pro, different badge. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
     },

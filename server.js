@@ -2978,7 +2978,7 @@ api.get("/billing/entitlements", (req, res) => {
   });
 });
 
-/** Public: universal Pro+ trial offer for signup copy. */
+/** Public: signup plan copy (new profiles start on Free). */
 api.get("/billing/trial", (_req, res) => {
   res.json(auth.getTrialOfferStatus());
 });

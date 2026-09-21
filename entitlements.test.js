@@ -4,7 +4,6 @@ const {
   FREE_SOFT_WARN_USED,
   PRO_PRICE_AUD,
   PRO_PRICE_YEARLY_AUD,
-  TRIAL_MONTHS,
   TRIAL_PRODUCT_LABEL,
   addTrialEnd,
   countUploadsThisMonth,
@@ -22,19 +21,20 @@ const {
 } = require("./lib/entitlements");
 
 describe("entitlements", () => {
-  it("locks Pro at $5/mo or $60/yr and a universal 3-month Pro+ trial", () => {
+  it("locks Pro at $5/mo or $60/yr and starts new profiles on Free", () => {
     expect(PRO_PRICE_AUD).toBe(5);
     expect(PRO_PRICE_YEARLY_AUD).toBe(60);
     expect(FREE_UPLOADS_PER_MONTH).toBe(15);
     expect(FREE_SOFT_WARN_USED).toBe(8);
     expect(FREE_ONSCREEN_REPORTS).toBe(1);
-    expect(TRIAL_MONTHS).toBe(3);
     expect(TRIAL_PRODUCT_LABEL).toBe("Pro+");
     const offer = trialOfferStatus();
-    expect(offer.open).toBe(true);
-    expect(offer.universal).toBe(true);
-    expect(offer.trialMonths).toBe(3);
+    expect(offer.open).toBe(false);
+    expect(offer.universal).toBe(false);
+    expect(offer.startsOn).toBe("free");
+    expect(offer.trialMonths).toBe(0);
     expect(offer.trialLabel).toBe("Pro+");
+    expect(offer.freeUploadsPerMonth).toBe(15);
     expect(offer.priceYearlyLabel).toBe("$60/year");
   });
 
@@ -100,17 +100,19 @@ describe("entitlements", () => {
     expect(isPro(user)).toBe(false);
   });
 
-  it("assigns a Pro+ trial to every new non-admin signup", () => {
+  it("does not assign a signup trial — new drivers stay Free", () => {
     const driver = { username: "dave", createdAt: "2026-08-12T00:00:00Z", isAdmin: false };
-    expect(assignSignupTrial(driver)).toBe(true);
-    expect(driver.proTrialEndsAt).toBeTruthy();
-    expect(isPro(driver, new Date("2026-08-12"))).toBe(true);
-    expect(isPro(driver, new Date("2026-12-01"))).toBe(false);
-
-    // Idempotent — does not overwrite an existing end date.
-    const prior = driver.proTrialEndsAt;
     expect(assignSignupTrial(driver)).toBe(false);
-    expect(driver.proTrialEndsAt).toBe(prior);
+    expect(driver.proTrialEndsAt).toBeUndefined();
+    expect(isPro(driver, new Date("2026-08-12"))).toBe(false);
+
+    const leftover = {
+      username: "pat",
+      proTrialEndsAt: addTrialEnd("2026-08-01T00:00:00Z"),
+    };
+    expect(assignSignupTrial(leftover)).toBe(false);
+    expect(leftover.proTrialEndsAt).toBeTruthy();
+    expect(isPro(leftover, new Date("2026-08-12"))).toBe(true);
 
     const admin = { username: "admin", isAdmin: true };
     expect(assignSignupTrial(admin)).toBe(false);
@@ -287,5 +289,30 @@ describe("entitlements", () => {
     expect(paid.displayPlan).toBe("Pro");
     expect(paid.cancelAtPeriodEnd).toBe(true);
     expect(paid.hasStripeSubscription).toBe(true);
+  });
+
+  it("gives paid Pro and admin Pro+ the same feature flags", () => {
+    const now = new Date("2026-08-15T12:00:00Z");
+    const paid = resolveEntitlements(
+      { subscriptionStatus: "active", currentPeriodEnd: "2026-09-15T00:00:00Z" },
+      { receipts: [] },
+      now
+    );
+    const complimentary = resolveEntitlements(
+      { planGrant: "pro_plus", plan: "pro" },
+      { receipts: [] },
+      now
+    );
+    expect(paid.displayPlan).toBe("Pro");
+    expect(complimentary.displayPlan).toBe("Pro+");
+    expect(paid.isPro).toBe(true);
+    expect(complimentary.isPro).toBe(true);
+    expect(paid.canUpload).toBe(true);
+    expect(complimentary.canUpload).toBe(true);
+    expect(paid.canExportPdf).toBe(complimentary.canExportPdf);
+    expect(paid.canExportJson).toBe(complimentary.canExportJson);
+    expect(paid.canUseForecast).toBe(complimentary.canUseForecast);
+    expect(paid.uploadsLimit).toBeNull();
+    expect(complimentary.uploadsLimit).toBeNull();
   });
 });
