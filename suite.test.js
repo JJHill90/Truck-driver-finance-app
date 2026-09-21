@@ -380,6 +380,9 @@ describe("suite occupation travel profile", () => {
     expect(names("john deere")).toContain("John Deere");
     expect(names("jcb")).toContain("JCB");
     expect(names("toyota").join(" ")).not.toMatch(/Pty Ltd/i);
+    expect(names("ato")[0]).toBe("Australian Taxation Office");
+    expect(names("ato")).not.toContain("Waikato District Council");
+    expect(names("cat").map((n) => n)).toContain("Caterpillar");
   });
 
   it("saves travel flags on the suite profile", () => {
