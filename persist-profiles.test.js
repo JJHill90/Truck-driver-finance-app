@@ -4,6 +4,7 @@ const path = require("path");
 const auth = require("./lib/auth");
 const backup = require("./lib/backup");
 const suite = require("./lib/suite");
+const dataDir = require("./lib/data-dir");
 
 const strongPass = "RoadSafe!99x";
 
@@ -150,5 +151,29 @@ describe("profile data survives a new build", () => {
     expect(users.users.demo.username).toBe("demo.driver");
     const suiteRow = JSON.parse(fs.readFileSync(path.join(tmp, "suite", "users", "pat.json"), "utf8"));
     expect(suiteRow.profile.name).toBe("Pat Suite");
+  });
+
+  it("writes Suite accounts through DATA_DIR so a Docker /app/data path is not used", () => {
+    const disk = path.join(tmp, "render-disk");
+    auth.setDataDirForTests(null);
+    backup.setDataDirForTests(null);
+    suite.setDataDirForTests(null);
+    dataDir.setDataDirForTests(null);
+    const prev = process.env.DATA_DIR;
+    process.env.DATA_DIR = disk;
+    try {
+      fs.mkdirSync(path.join(disk, "suite", "users"), { recursive: true });
+      const username = `disk_${Date.now().toString(36)}`;
+      auth.registerUser(username, strongPass, {}, `${username}@example.com`);
+      const dest = suite.recordsFileFor(username);
+      expect(dest.startsWith(path.resolve(disk))).toBe(true);
+      expect(fs.existsSync(path.join(disk, "users.json"))).toBe(true);
+      const users = JSON.parse(fs.readFileSync(path.join(disk, "users.json"), "utf8"));
+      expect(users.users[username] || users.users[username.toLowerCase()]).toBeTruthy();
+    } finally {
+      dataDir.setDataDirForTests(null);
+      if (prev == null) delete process.env.DATA_DIR;
+      else process.env.DATA_DIR = prev;
+    }
   });
 });

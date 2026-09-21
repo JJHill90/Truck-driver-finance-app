@@ -102,6 +102,7 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const dataDir = require("./lib/data-dir");
 const backup = require("./lib/backup");
 const mail = require("./lib/mail");
 const entitlements = require("./lib/entitlements");
@@ -946,6 +947,7 @@ api.get("/version", (req, res) => {
     prNumber: HAULAGE_PR_NUMBER,
     label: formatVersionLabel(HAULAGE_PR_NUMBER),
     ...product,
+    storage: dataDir.describeStorage(),
   });
 });
 
@@ -4032,6 +4034,10 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
+  const storage = dataDir.adoptAndBind();
+  console.log(
+    `Storage: ${storage.dataDir} (source=${storage.source}, mounted=${storage.mounted}, accounts=${storage.accountCount})`
+  );
   backup
     .restoreLatestIfStoreEmpty()
     .then((restored) => {
