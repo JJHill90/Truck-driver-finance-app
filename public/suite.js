@@ -413,7 +413,15 @@
         if (window.toast) window.toast(err.message || "Could not remove extra entity");
       }
     });
-    const fill = () => renderExtraEntity(currentProfile());
+    const fill = async () => {
+      try {
+        const data = await api("/records");
+        if (data && data.profile) renderExtraEntity(data.profile);
+        else renderExtraEntity(currentProfile());
+      } catch {
+        renderExtraEntity(currentProfile());
+      }
+    };
     fill();
     setTimeout(fill, 800);
     setTimeout(fill, 2000);
