@@ -2378,7 +2378,19 @@
 
   function applyProPlusGates(ent) {
     const plus = Boolean(ent && ent.isProPlus);
-    document.querySelectorAll("#eofy-pro-plus-tools .btn, #extra-entity-save, #partner-seat-invite").forEach((btn) => {
+    const eofyPacks = Boolean(
+      ent && (ent.canShareAccountant || ent.canBasPack || ent.canYearCompare || ent.isProPlus)
+    );
+    document.querySelectorAll("#eofy-pro-plus-tools .btn").forEach((btn) => {
+      if (!btn) return;
+      btn.classList.toggle("billing-locked", !eofyPacks);
+      if (!eofyPacks) {
+        btn.title = "Included with Pro on Taxation Hub (same price)";
+      } else {
+        btn.title = "";
+      }
+    });
+    document.querySelectorAll("#extra-entity-save, #partner-seat-invite").forEach((btn) => {
       if (!btn) return;
       btn.classList.toggle("billing-locked", !plus);
       if (!plus) btn.title = "Included with Pro+";
@@ -2634,7 +2646,7 @@
     panel.id = "eofy-pro-plus-tools";
     panel.innerHTML = `
       <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-      <p class="muted">Read-only share link and a multi-year tax pack for your agent.</p>
+      <p class="muted">Read-only share link, BAS/GST quarterly worksheet (1/11 of GST-inclusive totals), and a multi-year tax pack. Included with Pro on Taxation Hub — same price, no extra tier.</p>
       <div class="form-grid">
         <div class="span-2">
           <h3 class="profile-section-title">Accountant share link</h3>
@@ -2643,6 +2655,20 @@
             <button type="button" class="btn secondary small" id="accountant-share-copy">Copy link</button>
           </div>
           <p class="muted" id="accountant-share-url"></p>
+        </div>
+        <div class="span-2">
+          <h3 class="profile-section-title">BAS / GST quarterly pack</h3>
+          <div class="form-actions">
+            <select id="bas-quarter" aria-label="BAS quarter">
+              <option value="">Full year</option>
+              <option value="q1">Q1 Jul–Sep</option>
+              <option value="q2">Q2 Oct–Dec</option>
+              <option value="q3">Q3 Jan–Mar</option>
+              <option value="q4">Q4 Apr–Jun</option>
+            </select>
+            <button type="button" class="btn secondary" id="bas-pack-load">Load BAS / GST</button>
+          </div>
+          <div id="bas-pack-result" class="pro-plus-result muted"></div>
         </div>
         <div class="span-2">
           <h3 class="profile-section-title">Multi-year tax pack</h3>
