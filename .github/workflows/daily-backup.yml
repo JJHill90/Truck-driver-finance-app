@@ -70,3 +70,31 @@ jobs:
           path: backups/*.tar.gz
           if-no-files-found: error
           retention-days: 90
+
+      - name: Create and download Go Taxation Suite backup
+        if: steps.gate.outputs.run == 'true'
+        id: fetch_suite
+        env:
+          HAULAGE_BASE_URL: ${{ secrets.GOTAX_BASE_URL }}
+          HAULAGE_ADMIN_USERNAME: ${{ secrets.HAULAGE_ADMIN_USERNAME }} # pragma: allowlist secret
+          HAULAGE_ADMIN_PASSWORD: ${{ secrets.HAULAGE_ADMIN_PASSWORD }} # pragma: allowlist secret
+          OUT_DIR: backups/suite
+        run: |
+          if [ -z "$HAULAGE_BASE_URL" ]; then
+            echo "GOTAX_BASE_URL secret not set — skipping Suite off-site backup."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p backups/suite
+          chmod +x scripts/fetch-daily-backup.sh
+          bash scripts/fetch-daily-backup.sh
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Suite backup artifact
+        if: steps.gate.outputs.run == 'true' && steps.fetch_suite.outputs.skipped != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gotax-backup-${{ steps.fetch_suite.outputs.BACKUP_ID || github.run_id }}
+          path: backups/suite/*.tar.gz
+          if-no-files-found: ignore
+          retention-days: 90

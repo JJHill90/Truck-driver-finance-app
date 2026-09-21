@@ -117,4 +117,38 @@ describe("profile data survives a new build", () => {
     expect(result.restored).toBe(false);
     expect(result.reason).toBe("store-present");
   });
+
+  it("restores when a deploy left only the bootstrapped admin", async () => {
+    fs.writeFileSync(
+      path.join(tmp, "users.json"),
+      JSON.stringify({
+        users: {
+          pat: { username: "pat", isAdmin: false },
+          demo: { username: "demo.driver", isAdmin: false },
+        },
+      }, null, 2)
+    );
+    fs.writeFileSync(
+      path.join(tmp, "suite", "users", "pat.json"),
+      JSON.stringify({ profile: { name: "Pat Suite" } }, null, 2)
+    );
+    const made = await backup.createBackup({ reason: "before-admin-only", actor: "test" });
+    expect(made.id).toBeTruthy();
+
+    fs.writeFileSync(
+      path.join(tmp, "users.json"),
+      JSON.stringify({
+        users: { primary_mod: { username: "primary_mod", isAdmin: true } },
+      }, null, 2)
+    );
+    fs.rmSync(path.join(tmp, "suite", "users", "pat.json"), { force: true });
+
+    const restored = await backup.restoreLatestIfStoreEmpty();
+    expect(restored.restored).toBe(true);
+    const users = JSON.parse(fs.readFileSync(path.join(tmp, "users.json"), "utf8"));
+    expect(users.users.pat.username).toBe("pat");
+    expect(users.users.demo.username).toBe("demo.driver");
+    const suiteRow = JSON.parse(fs.readFileSync(path.join(tmp, "suite", "users", "pat.json"), "utf8"));
+    expect(suiteRow.profile.name).toBe("Pat Suite");
+  });
 });
