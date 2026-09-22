@@ -369,9 +369,11 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
  (`SMTP_HOST` + `MAIL_FROM` + usually `SMTP_USER`/`SMTP_PASS`) → **Resend**
  (`RESEND_API_KEY`). On success the developer inbox
  (`SUPPORT_EMAIL` / `support@godriverhub.com`) gets the enquiry and the user
- gets a confirmation email. If neither channel is configured, the UI delivers
- via **FormSubmit** in the browser (first use may require the inbox owner to
- click FormSubmit’s activation email). Help blurbs live in
+ gets a confirmation email. If neither channel is configured, the server
+ still saves the request and tries **FormSubmit** from the server
+ (`support@godriverhub.com`). Drivers never see a FormSubmit activation
+ prompt — the Support tab always confirms the request was received and offers
+ a mailto copy. Help blurbs live in
  `public/enhancements.js`. A general **Disclaimer** box at the bottom of
  Support states the app is not financial advice and is an assistance tool for
  receipts/entries — seek accredited tax, financial or legal advice.

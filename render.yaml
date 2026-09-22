@@ -42,7 +42,8 @@ services:
         sync: false
       # Outbound email — required for Support contact + recovery emails to leave
       # the server. Prefer Gmail SMTP (app password) OR Resend API key.
-      # Without either, the Support tab falls back to browser FormSubmit delivery.
+      # Without either, Support still saves the request and emails via FormSubmit
+      # from the server (activation stays in the developer inbox, not the UI).
       - key: APP_BASE_URL
         sync: false
       # Cross-origin allowlist for Play / iOS WebViews (comma-separated origins).

@@ -8815,25 +8815,29 @@
     supportEmail,
     userEmail,
     confirmationSent,
+    emailed,
     mailto,
   }) {
+    const inbox = supportEmail || "support@godriverhub.com";
     const wrap = document.createElement("div");
     wrap.className = "support-confirm-notice";
 
     const title = document.createElement("p");
     title.className = "support-confirm-title";
-    title.textContent = "Support request sent";
+    title.textContent = emailed ? "Support request sent" : "Support request received";
     wrap.appendChild(title);
 
     const line1 = document.createElement("p");
-    line1.textContent = `Your message has been sent to the developer (${supportEmail || "support@godriverhub.com"}).`;
+    line1.textContent = emailed
+      ? `Your message has been sent to the developer (${inbox}).`
+      : `Your message was saved. We’ll reply to ${userEmail} from ${inbox}.`;
     wrap.appendChild(line1);
 
     const line2 = document.createElement("p");
     if (confirmationSent) {
       line2.textContent = `A confirmation notice was also sent to ${userEmail}. Check your inbox (and spam) for “we received your support request”.`;
     } else {
-      line2.textContent = `We’ll reply to ${userEmail}. If you don’t hear back, follow up at ${supportEmail || "support@godriverhub.com"}.`;
+      line2.textContent = `We’ll reply to ${userEmail}. If you want a copy in your own sent mail, use the link below.`;
     }
     wrap.appendChild(line2);
 
@@ -8842,64 +8846,12 @@
       line3.className = "muted";
       const a = document.createElement("a");
       a.href = mailto;
-      a.textContent = "Open a copy in your email app";
+      a.textContent = emailed ? "Open a copy in your email app" : `Email ${inbox} now`;
       line3.appendChild(a);
       wrap.appendChild(line3);
     }
 
     setStatus(wrap, { isSuccess: true });
-  }
-
-  /**
-   * Browser-side delivery when the server has no SMTP/Resend credentials.
-   * FormSubmit emails the developer and can autorespond to the user.
-   * First use for an inbox may require the owner to click an activation email.
-   */
-  async function deliverViaFormSubmit({
-    name,
-    email,
-    phone,
-    message,
-    username,
-    supportEmail,
-    confirmationText,
-  }) {
-    const inbox = supportEmail || "support@godriverhub.com";
-    const endpoint = `https://formsubmit.co/ajax/${encodeURIComponent(inbox)}`;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        "Driver name": name,
-        "Reply email": email,
-        Phone: phone || "Not provided",
-        Username: username || "(guest / not signed in)",
-        Message: message,
-        _replyto: email,
-        _subject: `Driver Hub / Taxation Hub support — from ${name}`,
-        _template: "table",
-        _autoresponse:
-          confirmationText ||
-          `Hi ${name},\n\nThanks for contacting Driver Hub support. Your request has been sent to the developer (${inbox}). We’ll reply to this email as soon as we can.\n\n— Driver Hub`,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    // FormSubmit returns { success: "true"|"false", message } or similar.
-    const ok =
-      res.ok &&
-      data &&
-      data.success !== false &&
-      data.success !== "false" &&
-      !/activate|confirm your email/i.test(String(data.message || ""));
-    return {
-      sent: Boolean(ok),
-      confirmationSent: Boolean(ok),
-      activationRequired: /activate|confirm your email/i.test(String(data.message || "")),
-      raw: data,
-    };
   }
 
   async function onSubmit(e) {
@@ -8928,83 +8880,20 @@
         return;
       }
 
-      let emailed = Boolean(data.emailed);
-      let confirmationSent = Boolean(data.confirmationSent);
+      const emailed = Boolean(data.emailed);
+      const confirmationSent = Boolean(data.confirmationSent);
       const supportEmail = data.supportEmail || "support@godriverhub.com";
 
-      // If the server could not reach an SMTP/Resend channel, deliver from the
-      // browser so the developer inbox still receives the enquiry.
-      if (!emailed || data.needsClientDelivery) {
-        setStatus("Connecting to the support inbox…");
-        try {
-          const client = await deliverViaFormSubmit({
-            name,
-            email,
-            phone,
-            message,
-            username: data.username || null,
-            supportEmail,
-            confirmationText: data.confirmationText,
-          });
-          if (client.sent) {
-            emailed = true;
-            confirmationSent = Boolean(client.confirmationSent);
-          } else if (client.activationRequired) {
-            const wrap = document.createElement("div");
-            const p1 = document.createElement("p");
-            const strong = document.createElement("strong");
-            strong.textContent = "Almost there. ";
-            p1.appendChild(strong);
-            p1.appendChild(
-              document.createTextNode("The support inbox needs a one-time activation.")
-            );
-            wrap.appendChild(p1);
-            const p2 = document.createElement("p");
-            p2.className = "muted";
-            p2.textContent = `The developer (${supportEmail}) should check their email for a FormSubmit confirmation link, then try again. You can also email them directly:`;
-            wrap.appendChild(p2);
-            if (data.mailto) {
-              const a = document.createElement("a");
-              a.href = data.mailto;
-              a.textContent = supportEmail;
-              wrap.appendChild(a);
-            }
-            setStatus(wrap, { isError: true });
-            return;
-          }
-        } catch (clientErr) {
-          console.warn("Client support delivery failed", clientErr);
-        }
-      }
-
-      if (emailed) {
-        showDeliveryConfirmation({
-          supportEmail,
-          userEmail: email,
-          confirmationSent,
-          mailto: data.mailto,
-        });
-        form.reset();
-        return;
-      }
-
-      const wrap = document.createElement("div");
-      const p = document.createElement("p");
-      p.textContent =
-        "We couldn’t reach the support inbox automatically. Your message was saved on the server — please email the developer directly:";
-      wrap.appendChild(p);
-      if (data.mailto) {
-        const a = document.createElement("a");
-        a.href = data.mailto;
-        a.textContent = supportEmail;
-        wrap.appendChild(a);
-      } else {
-        const a = document.createElement("a");
-        a.href = `mailto:${supportEmail}`;
-        a.textContent = supportEmail;
-        wrap.appendChild(a);
-      }
-      setStatus(wrap, { isError: true });
+      // The request is already saved on the server. Never show FormSubmit
+      // activation (or a failed inbox) as an error — offer mailto as a copy.
+      showDeliveryConfirmation({
+        supportEmail,
+        userEmail: email,
+        confirmationSent,
+        emailed,
+        mailto: data.mailto || `mailto:${supportEmail}`,
+      });
+      form.reset();
     } catch {
       setStatus("Network error — please try again or email support@godriverhub.com.", {
         isError: true,
