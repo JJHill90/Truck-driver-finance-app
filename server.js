@@ -4278,9 +4278,8 @@ api.post("/support/contact", async (req, res) => {
     statusMessage =
       "Your support request has been sent to the developer. We’ll reply to the email you provided.";
   } else {
-    // Client may still deliver via FormSubmit; keep copy neutral.
     statusMessage =
-      "Your request was saved. Connecting to the support inbox…";
+      "Your request was saved. We’ll reply to the email you provided.";
   }
 
   res.json({
@@ -4290,7 +4289,7 @@ api.post("/support/contact", async (req, res) => {
     emailed,
     confirmationSent,
     channel: mailResult.channel || null,
-    needsClientDelivery: !emailed,
+    needsClientDelivery: false,
     supportEmail: inbox,
     mailto: support.mailtoHref({ name, email, phone, message, priority }),
     priority,

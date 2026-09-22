@@ -90,6 +90,12 @@ describe("mail.sendSupportEmail channels", () => {
   });
 
   it("returns sent:false when no mail channel is configured", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network disabled in test");
+      })
+    );
     const result = await mail.sendSupportEmail({
       name: "Sam",
       email: "sam@example.com",
@@ -100,6 +106,64 @@ describe("mail.sendSupportEmail channels", () => {
     expect(result.sent).toBe(false);
     expect(result.confirmationSent).toBe(false);
     expect(result.to).toBe(mail.DEFAULT_SUPPORT_EMAIL);
+  });
+
+  it("detects FormSubmit activation copy so the driver UI never shows it", () => {
+    expect(
+      mail.formSubmitActivationRequired(
+        "Make sure to activate your form to start receiving emails. Confirm your email."
+      )
+    ).toBe(true);
+    expect(mail.formSubmitActivationRequired("Your form was submitted successfully.")).toBe(false);
+  });
+
+  it("delivers via FormSubmit when SMTP and Resend are unset", async () => {
+    const calls = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, options) => {
+        calls.push({ url: String(url), body: JSON.parse(options.body) });
+        return {
+          ok: true,
+          json: async () => ({ success: true, message: "Your form was submitted" }),
+        };
+      })
+    );
+    const result = await mail.sendSupportEmail({
+      name: "Sam",
+      email: "sam@example.com",
+      phone: "",
+      message: "Hello",
+      username: "sam",
+    });
+    expect(result.sent).toBe(true);
+    expect(result.channel).toBe("formsubmit");
+    expect(result.confirmationSent).toBe(true);
+    expect(calls[0].url).toContain("formsubmit.co/ajax/support%40godriverhub.com");
+    expect(calls[0].body.Message).toBe("Hello");
+    expect(calls[0].body._replyto).toBe("sam@example.com");
+  });
+
+  it("does not treat a pending FormSubmit activation as a sent email", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          success: false,
+          message: "Make sure to activate your form. Confirm your email.",
+        }),
+      }))
+    );
+    const result = await mail.sendSupportEmail({
+      name: "Sam",
+      email: "sam@example.com",
+      phone: "",
+      message: "Hello",
+    });
+    expect(result.sent).toBe(false);
+    expect(result.activationRequired).toBe(true);
+    expect(result.channel).toBe("formsubmit");
   });
 
   it("sends developer + confirmation mail via Resend when configured", async () => {
