@@ -76,6 +76,53 @@ describe("BAS pack", () => {
     expect(pack.gstOnPurchases).toBe(20);
     expect(pack.netGst).toBe(80);
     expect(basPack.gstInclusive(110)).toBe(10);
+    expect(pack.boxes.map((b) => b.atoBox)).toEqual(["G1", "1A", "G11", "1B", "9"]);
+    expect(pack.boxes.find((b) => b.id === "G1").amount).toBe(1100);
+    expect(pack.boxes.find((b) => b.id === "1A").amount).toBe(100);
+    expect(pack.boxes.find((b) => b.id === "9").amount).toBe(80);
+    expect(pack.boxes.find((b) => b.id === "9").direction).toBe("pay");
+    expect(pack.officialForm).toBe(false);
+    expect(pack.documentKind).toBe("gst_activity_statement_worksheet");
+    expect(pack.dueDate).toBe("2026-10-28");
+    expect(pack.period.start).toBe("2026-07-01");
+    expect(pack.period.end).toBe("2026-09-30");
+    expect(pack.identity.abnFormatted).toBeNull();
+    expect(pack.note).toMatch(/not a lodged activity statement/i);
+  });
+
+  it("keeps GST-free rows in G1/G11 but out of 1A/1B", () => {
+    const pack = basPack.buildBasPack(
+      {
+        income: [
+          { date: "2026-08-15", amount: 1100 },
+          { date: "2026-08-20", amount: 550, gstFree: true },
+        ],
+        expenses: [{ date: "2026-08-16", amount: 110, gstExempt: true }],
+      },
+      {
+        name: "Alex Driver",
+        tradingName: "Alex Haulage",
+        abn: "51824753556",
+        entityType: "sole_trader",
+        gstRegistered: true,
+        financialYear: "2026-27",
+      },
+      { financialYear: "2026-27", quarter: "q1" }
+    );
+    expect(pack.sales).toBe(1650);
+    expect(pack.gstOnSales).toBe(100);
+    expect(pack.purchases).toBe(110);
+    expect(pack.gstOnPurchases).toBe(0);
+    expect(pack.gstFreeSales).toBe(550);
+    expect(pack.identity.abnFormatted).toBe("51 824 753 556");
+    expect(pack.identity.name).toBe("Alex Driver");
+  });
+
+  it("rolls a weekend statutory due date to the next business day", () => {
+    const due = basPack.periodForQuarter("q2", "2025-26");
+    expect(due.statutoryDueDate).toBe("2026-02-28");
+    expect(due.dueDate).toBe("2026-03-02");
+    expect(due.dueDateRolled).toBe(true);
   });
 });
 

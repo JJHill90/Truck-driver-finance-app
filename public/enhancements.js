@@ -2828,7 +2828,7 @@
     panel.id = "eofy-pro-plus-tools";
     panel.innerHTML = `
       <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-      <p class="muted">Read-only share link, BAS/GST quarterly worksheet (1/11 of GST-inclusive totals), and a multi-year tax pack. Included with Pro on Taxation Hub — same price, no extra tier.</p>
+      <p class="muted">Read-only share link, a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. Included with Pro on Taxation Hub — same price, no extra tier.</p>
       <div class="form-grid">
         <div class="span-2">
           <h3 class="profile-section-title">Accountant share link</h3>
@@ -2839,16 +2839,19 @@
           <p class="muted" id="accountant-share-url"></p>
         </div>
         <div class="span-2">
-          <h3 class="profile-section-title">BAS / GST quarterly pack</h3>
+          <h3 class="profile-section-title">BAS / GST activity statement</h3>
+          <p class="muted small">ATO-box worksheet (G1, 1A, G11, 1B, 9) you can download and use when lodging on the ATO Business Portal. Not a lodged BAS.</p>
           <div class="form-actions">
             <select id="bas-quarter" aria-label="BAS quarter">
-              <option value="">Full year</option>
               <option value="q1">Q1 Jul–Sep</option>
               <option value="q2">Q2 Oct–Dec</option>
               <option value="q3">Q3 Jan–Mar</option>
               <option value="q4">Q4 Apr–Jun</option>
+              <option value="">Full year</option>
             </select>
-            <button type="button" class="btn secondary" id="bas-pack-load">Load BAS / GST</button>
+            <button type="button" class="btn secondary" id="bas-pack-load">Show worksheet</button>
+            <button type="button" class="btn primary" id="bas-pack-pdf">Download PDF</button>
+            <button type="button" class="btn secondary" id="bas-pack-xls">Download Excel</button>
           </div>
           <div id="bas-pack-result" class="pro-plus-result muted"></div>
         </div>
@@ -2918,39 +2921,159 @@
         }
       });
     }
+    function currentBasQuarterId() {
+      const m = new Date().getMonth() + 1;
+      if (m >= 7 && m <= 9) return "q1";
+      if (m >= 10) return "q2";
+      if (m <= 3) return "q3";
+      return "q4";
+    }
+
+    const basQuarter = byId("bas-quarter");
+    if (basQuarter && !basQuarter.dataset.defaulted) {
+      basQuarter.dataset.defaulted = "1";
+      basQuarter.value = currentBasQuarterId();
+    }
+
+    function basQueryString() {
+      const q = (byId("bas-quarter") || {}).value || "";
+      const fySel = byId("fy-select");
+      const fy = fySel && fySel.value ? fySel.value : "";
+      const params = new URLSearchParams();
+      if (q) params.set("quarter", q);
+      if (fy) params.set("financialYear", fy);
+      const qs = params.toString();
+      return qs ? `?${qs}` : "";
+    }
+
+    function promptBasUpgrade(e) {
+      const plan = upgradePlanForPacks(cachedEntitlements);
+      if (!plan) return false;
+      if (e) e.preventDefault();
+      promptPaidFeature({
+        error:
+          plan === "pro_plus"
+            ? "BAS / GST activity statement worksheets are included with Pro+."
+            : `BAS / GST activity statement worksheets are included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+        code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
+        plan,
+        entitlements: cachedEntitlements,
+      });
+      return true;
+    }
+
+    function renderBasWorksheet(pack) {
+      const el = byId("bas-pack-result");
+      if (!el) return;
+      el.classList.remove("muted");
+      const id = pack.identity || {};
+      const period = pack.period || {};
+      const boxes = Array.isArray(pack.boxes) ? pack.boxes : [];
+      const boxRows = boxes
+        .map(
+          (b) =>
+            `<tr class="${b.id === "9" ? "bas-box-9" : ""}"><td>${esc(b.atoBox || b.id)}</td><td>${esc(b.label)}</td><td>${esc(moneyAud(b.amount))}</td></tr>`
+        )
+        .join("");
+      const qRows = Array.isArray(pack.quarterly)
+        ? pack.quarterly
+            .map((q) => {
+              const due = q.period && q.period.dueDateLabel ? q.period.dueDateLabel : "—";
+              return `<tr><td>${esc(q.shortLabel || q.label)}</td><td>${esc(due)}</td><td>${esc(moneyAud(q.sales))}</td><td>${esc(moneyAud(q.gstOnSales))}</td><td>${esc(moneyAud(q.netGst))}</td></tr>`;
+            })
+            .join("")
+        : "";
+      const steps = ((pack.lodgement && pack.lodgement.howToLodge) || [])
+        .map((step) => `<li>${esc(step)}</li>`)
+        .join("");
+      el.innerHTML = `
+        <div class="bas-worksheet">
+          <div class="bas-worksheet-banner">Not a lodged BAS. Copy these ATO boxes when you lodge on the ATO Business Portal or send the PDF/Excel file to your registered agent.</div>
+          <div class="bas-worksheet-meta">
+            <div><span>Entity</span><br>${esc(id.name || "—")}${id.tradingName ? ` · ${esc(id.tradingName)}` : ""}</div>
+            <div><span>ABN</span><br>${esc(id.abnFormatted || id.abn || "—")}</div>
+            <div><span>Period</span><br>${esc(pack.quarterLabel || "—")}${period.startLabel ? ` · ${esc(period.startLabel)}–${esc(period.endLabel)}` : ""}</div>
+            <div><span>Lodge by</span><br>${esc(period.dueDateLabel || "See quarterly table")}</div>
+          </div>
+          <table class="bas-worksheet-table">
+            <thead><tr><th>Box</th><th>Description</th><th>Amount</th></tr></thead>
+            <tbody>${boxRows}</tbody>
+          </table>
+          ${
+            qRows
+              ? `<table class="bas-worksheet-table"><thead><tr><th>Quarter</th><th>Lodge by</th><th>G1</th><th>1A</th><th>9</th></tr></thead><tbody>${qRows}</tbody></table>`
+              : ""
+          }
+          ${steps ? `<ol class="bas-worksheet-steps">${steps}</ol>` : ""}
+          <p class="bas-worksheet-note">${esc(pack.note || "")}</p>
+        </div>`;
+    }
+
+    async function downloadBasFile(path, fallbackName) {
+      const url = `${API}${path}${basQueryString()}`;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (res.status === 402) {
+        const data = await res.json().catch(() => ({}));
+        promptPaidFeature({
+          error: data.error || "BAS worksheets are included with a paid plan.",
+          code: data.code,
+          plan: data.plan || upgradePlanForPacks(cachedEntitlements) || "pro",
+          entitlements: data.entitlements || cachedEntitlements,
+        });
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Download failed");
+      }
+      const blob = await res.blob();
+      const match = /filename="([^"]+)"/i.exec(res.headers.get("content-disposition") || "");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = match ? match[1] : fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }
+
     const basBtn = byId("bas-pack-load");
     if (basBtn && !basBtn.dataset.wired) {
       basBtn.dataset.wired = "1";
       basBtn.addEventListener("click", async (e) => {
-        const plan = upgradePlanForPacks(cachedEntitlements);
-        if (plan) {
-          e.preventDefault();
-          promptPaidFeature({
-            error:
-              plan === "pro_plus"
-                ? "BAS / GST quarterly packs are included with Pro+."
-                : `BAS / GST quarterly packs are included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
-            code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
-            plan,
-            entitlements: cachedEntitlements,
-          });
-          return;
-        }
-        const q = (byId("bas-quarter") || {}).value || "";
+        if (promptBasUpgrade(e)) return;
         try {
-          const pack = await apiGet(`/bas${q ? `?quarter=${encodeURIComponent(q)}` : ""}`);
+          const pack = await apiGet(`/bas${basQueryString()}`);
           if (pack.error) throw new Error(pack.error);
-          const el = byId("bas-pack-result");
-          if (el) {
-            el.textContent = [
-              pack.quarterLabel,
-              `Sales ${moneyAud(pack.sales)} (GST ${moneyAud(pack.gstOnSales)})`,
-              `Purchases ${moneyAud(pack.purchases)} (GST ${moneyAud(pack.gstOnPurchases)})`,
-              `Net GST ${moneyAud(pack.netGst)}`,
-            ].join(" · ");
-          }
+          renderBasWorksheet(pack);
         } catch (err) {
-          if (window.toast) window.toast(err.message || "Could not load BAS pack");
+          if (window.toast) window.toast(err.message || "Could not load BAS worksheet");
+        }
+      });
+    }
+    const basPdfBtn = byId("bas-pack-pdf");
+    if (basPdfBtn && !basPdfBtn.dataset.wired) {
+      basPdfBtn.dataset.wired = "1";
+      basPdfBtn.addEventListener("click", async (e) => {
+        if (promptBasUpgrade(e)) return;
+        if (window.toast) window.toast("Preparing BAS PDF…");
+        try {
+          await downloadBasFile("/bas.pdf", "bas-worksheet.pdf");
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "BAS PDF download failed");
+        }
+      });
+    }
+    const basXlsBtn = byId("bas-pack-xls");
+    if (basXlsBtn && !basXlsBtn.dataset.wired) {
+      basXlsBtn.dataset.wired = "1";
+      basXlsBtn.addEventListener("click", async (e) => {
+        if (promptBasUpgrade(e)) return;
+        if (window.toast) window.toast("Preparing BAS Excel…");
+        try {
+          await downloadBasFile("/bas.xls", "bas-worksheet.xls");
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "BAS Excel download failed");
         }
       });
     }
@@ -8715,7 +8838,7 @@
       title: "EOFY Report",
       body: [
         "The EOFY performance statement rolls up the selected financial year’s income, expense deductions (by ATO-style schedules) and a tax estimate from your saved profile and ledgers. It updates as you add or change records — use it as a live working paper for you or your accountant, not as a lodged return.",
-        "Download FY report builds a PDF of the current statement; Export JSON is for backups or importing elsewhere. Check that your Profile salary, driver type and TFN flag look right before you share the report, and switch financial year in the top bar if you’re reviewing a prior year.",
+        "Download FY report builds a PDF of the current statement; Export JSON is for backups or importing elsewhere. Pro includes a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO. Check that your Profile salary, driver type and TFN flag look right before you share the report, and switch financial year in the top bar if you’re reviewing a prior year.",
       ],
     },
     forecast: {
@@ -8764,7 +8887,7 @@
     report: {
       title: "EOFY Report",
       body: [
-        "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link, a BAS/GST quarterly working pack for GST-registered sole traders, and a multi-year comparison for your agent.",
+        "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link, a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO, and a multi-year comparison for your agent.",
       ],
     },
     profile: {
