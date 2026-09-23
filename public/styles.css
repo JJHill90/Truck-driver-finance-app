@@ -1449,6 +1449,18 @@ tr.vending-machine-row {
 .pro-plus-pack { margin-bottom: 16px; }
 .pro-plus-pack .profile-section-title { margin: 8px 0 4px; }
 .pro-plus-result { margin-top: 10px; line-height: 1.5; }
+.bas-worksheet { color: var(--text); }
+.bas-worksheet-meta { display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 8px 0 12px; font-size: 0.9rem; }
+.bas-worksheet-meta span { color: var(--text-dim); }
+.bas-worksheet-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
+.bas-worksheet-table th,
+.bas-worksheet-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.bas-worksheet-table td:last-child,
+.bas-worksheet-table th:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.bas-worksheet-table tr.bas-box-9 td { font-weight: 700; }
+.bas-worksheet-note { font-size: 0.82rem; color: var(--text-dim); margin: 8px 0 0; }
+.bas-worksheet-steps { margin: 8px 0 0; padding-left: 1.2rem; font-size: 0.86rem; }
+.bas-worksheet-banner { background: #fef3c7; color: #92400e; border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; margin: 8px 0; }
 
 /* Modal */
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 50; }

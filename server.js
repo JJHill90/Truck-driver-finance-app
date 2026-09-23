@@ -4081,15 +4081,51 @@ api.get("/share/:token", (req, res) => {
   });
 });
 
-api.get("/bas", (req, res) => {
-  if (!assertProPlusFeature(req, res, "bas")) return;
+function buildReqBasPack(req) {
   const records = scopedSuiteRecords(getActiveRecords(req));
   const fy = req.query.financialYear || req.query.fy || records.profile.financialYear;
-  const pack = suite.basPack.buildBasPack(records, records.profile, {
+  return suite.basPack.buildBasPack(records, records.profile, {
     financialYear: fy,
     quarter: req.query.quarter,
   });
-  res.json(pack);
+}
+
+function basProductName(req) {
+  return productOf(req) === "suite" ? "suite" : "haulage";
+}
+
+api.get("/bas", (req, res) => {
+  if (!assertProPlusFeature(req, res, "bas")) return;
+  res.json(buildReqBasPack(req));
+});
+
+api.get("/bas.pdf", (req, res) => {
+  if (!assertProPlusFeature(req, res, "bas")) return;
+  const pack = buildReqBasPack(req);
+  const filename = suite.basExportFilename(pack, "pdf", basProductName(req));
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  const doc = suite.buildBasWorksheetPdf(pack);
+  doc.pipe(res);
+  doc.end();
+});
+
+api.get("/bas.xls", (req, res) => {
+  if (!assertProPlusFeature(req, res, "bas")) return;
+  const pack = buildReqBasPack(req);
+  const filename = suite.basExportFilename(pack, "xls", basProductName(req));
+  res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(suite.buildBasWorksheetExcel(pack));
+});
+
+api.get("/bas.csv", (req, res) => {
+  if (!assertProPlusFeature(req, res, "bas")) return;
+  const pack = buildReqBasPack(req);
+  const filename = suite.basExportFilename(pack, "csv", basProductName(req));
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(suite.buildBasWorksheetCsv(pack));
 });
 
 api.get("/tax-pack", (req, res) => {

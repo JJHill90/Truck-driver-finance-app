@@ -37,6 +37,9 @@ describe("browse-upgrade prompts", () => {
     expect(isBrowseSafePaymentGate("GET", "/api/haulage/fuelhub/forecast")).toBe(false);
     expect(isBrowseSafePaymentGate("POST", "/api/haulage/forecast")).toBe(false);
     expect(isBrowseSafePaymentGate("GET", "/api/haulage/bas")).toBe(false);
+    expect(isBrowseSafePaymentGate("GET", "/api/haulage/bas.pdf")).toBe(false);
+    expect(isBrowseSafePaymentGate("GET", "/api/haulage/bas.xls")).toBe(false);
+    expect(isBrowseSafePaymentGate("GET", "/api/haulage/bas.csv")).toBe(false);
     expect(isBrowseSafePaymentGate("POST", "/api/haulage/accountant-share")).toBe(false);
     expect(haulagePathFromUrl("https://example.test/api/haulage/forecast?fy=2025-26")).toBe("/forecast");
   });
