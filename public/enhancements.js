@@ -22,24 +22,6 @@
   const fmt = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
 
-  /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
-  function isNativeShell() {
-    try {
-      const cap = window.Capacitor;
-      if (cap && typeof cap.isNativePlatform === "function") {
-        return Boolean(cap.isNativePlatform());
-      }
-      if (cap && typeof cap.getPlatform === "function") {
-        const platform = cap.getPlatform();
-        return platform === "ios" || platform === "android";
-      }
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
-  window.haulageIsNativeShell = isNativeShell;
-
   function fmtDateShort(d) {
     if (!d) return "—";
     try {
@@ -1496,6 +1478,24 @@
   "use strict";
 
   const API = `${window.location.origin}/api/haulage`;
+
+  /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
+  function isNativeShell() {
+    try {
+      const cap = window.Capacitor;
+      if (cap && typeof cap.isNativePlatform === "function") {
+        return Boolean(cap.isNativePlatform());
+      }
+      if (cap && typeof cap.getPlatform === "function") {
+        const platform = cap.getPlatform();
+        return platform === "ios" || platform === "android";
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  window.haulageIsNativeShell = isNativeShell;
 
   function esc(s) {
     return String(s == null ? "" : s)

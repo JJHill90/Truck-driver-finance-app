@@ -9,7 +9,7 @@ describe("public legal pages", () => {
     expect(privacy).toMatch(/Privacy Policy/i);
     expect(privacy).toMatch(/photograph or upload receipts/i);
     expect(privacy).toMatch(/Delete account/i);
-    expect(privacy).toMatch(/not used for advertising/i);
+    expect(privacy).toMatch(/do not use receipt photos for advertising/i);
     expect(privacy).toMatch(/do not lodge a BAS or tax return/i);
   });
 
