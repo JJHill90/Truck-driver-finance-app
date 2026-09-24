@@ -14,14 +14,13 @@ Compile **only** this listing:
 
 Do not submit Driver Hub (`com.haulagefinance.app` / `mobile/`).
 
-Checked 24 September 2026 against the current repo and the live Suite host.
+Checked 24 September 2026 against the live Suite host after the merge to `main`.
 
 ## Verdict
 
-**Not ready to press Submit yet.** Product/legal work in the repo is in place.
-The live Privacy URL still 404s (this branch is not on `main`), there is no
-Suite-branded store icon, iOS has no Xcode project, and Play/App Store Console
-listing, signing, and review accounts are still on you.
+**Privacy and Terms are live.** Store-facing URLs return 200 on the Suite host
+(Suite-only copy, no Driver Hub). Remaining work is the store consoles: branded
+icon, signed AAB, Mac/iOS project, listing assets, and a reviewer demo account.
 
 ## Already done in the product
 
@@ -41,19 +40,17 @@ listing, signing, and review accounts are still on you.
 
 ## Must finish before Google or Apple will accept the app
 
-### 1. Deploy Privacy and Terms (blocker)
+### 1. Deploy Privacy and Terms — done
 
-Live check today:
+Live check after merge to `main`:
 
 - `https://go-taxation-suite.onrender.com/suite/` — **up**
-- `https://go-taxation-suite.onrender.com/privacy` — **404**
-- `https://go-taxation-suite.onrender.com/terms` — **404**
+- `https://go-taxation-suite.onrender.com/privacy` — **200** (Go Taxation Suite)
+- `https://go-taxation-suite.onrender.com/terms` — **200** (Go Taxation Suite)
 
-Both stores reject a missing Privacy Policy URL. Merge this branch to `main`,
-confirm the Suite Render service redeploys, then those two URLs must return 200
-with the Suite-only pages (no Driver Hub wording).
+Use those two HTTPS URLs in Play Console and App Store Connect.
 
-After deploy, also confirm in the Render dashboard for `go-taxation-suite`:
+Also confirm in the Render dashboard for `go-taxation-suite`:
 
 - `CORS_ALLOW_CAPACITOR=1`
 - `APP_BASE_URL=https://go-taxation-suite.onrender.com`
