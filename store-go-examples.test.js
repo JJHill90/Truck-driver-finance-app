@@ -3,11 +3,11 @@ const path = require("path");
 
 const EXAMPLES = path.join(__dirname, "mobile-suite", "store", "examples");
 const SLUGS = [
-  "1-soft-navy",
-  "2-login-watermark",
-  "3-sky-stacked",
-  "4-side-letters",
-  "5-inline-amber",
+  "1-home-18",
+  "2-home-26",
+  "3-home-12",
+  "4-home-sky",
+  "5-home-high",
 ];
 
 function pngInfo(filePath) {

@@ -1,22 +1,19 @@
-# Suite icon examples — Go in the background
+# Suite icon examples — home-screen opacity GO
 
-Five treatments of the navy document mark with **Go** behind it.
+The paper document stays **in its box**. Behind it, a wide low-opacity
+**GO** matches the Suite login (`lr-b`: Saira Condensed, white ~18%).
+
 These do **not** replace the current Play / App Store icons until one is chosen.
-
-Each folder has both store sizes:
-
-- `icon-play-512.png` — Google Play high-res (32-bit, opaque)
-- `icon-appstore-1024.png` — App Store (RGB, no alpha)
 
 | # | Folder | Treatment |
 |---|--------|-----------|
-| 1 | `1-soft-navy` | Stacked G / O in lifted navy |
-| 2 | `2-login-watermark` | Stacked G / O in paper-white, same idea as the Suite login |
-| 3 | `3-sky-stacked` | Stacked G / O in sky `#38BDF8` |
-| 4 | `4-side-letters` | Sky **G** top-left and **O** bottom-right |
-| 5 | `5-inline-amber` | Amber **GO** word behind the document |
+| 1 | `1-home-18` | Home-screen 18% white GO |
+| 2 | `2-home-26` | Stronger 26% white GO |
+| 3 | `3-home-12` | Softer 12% white GO, a little wider |
+| 4 | `4-home-sky` | 18% sky `#38BDF8` GO |
+| 5 | `5-home-high` | 18% white GO a bit higher, like the login |
 
-Regenerate:
+Each folder has Play 512 and App Store 1024.
 
 ```bash
 python3 mobile-suite/store/generate-go-examples.py

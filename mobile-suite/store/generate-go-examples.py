@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Preview five Go-background treatments for Play 512 + App Store 1024.
+"""Preview home-screen-style opacity GO behind a boxed document icon.
 
-Does not overwrite the current production icons. Pick one, then we can
-promote it into generate-icons.py.
+Matches Suite login look lr-b: wide Saira Condensed GO at low white opacity
+on the navy tile, with the paper document kept fully inside its box.
 
-Requires Pillow and the Saira Condensed files in store/fonts/ (OFL).
+Does not overwrite the current production icons.
 """
 from __future__ import annotations
 
@@ -19,48 +19,33 @@ FONTS = ROOT / "fonts"
 
 g = runpy.run_path(str(ROOT / "generate-icons.py"))
 NAVY = g["NAVY"]
-PAPER = g["PAPER"]
-SKY = g["SKY"]
-AMBER = g["AMBER"]
 draw_mark = g["draw_mark"]
-flatten = g["flatten"]
 save_png = g["save_png"]
-
-NAVY_LIFT = (55, 92, 128, 255)  # lifted navy so stacked GO reads on #0B1F33
-SKY_SOFT = (56, 189, 248, 130)
-WHITE_SOFT = (232, 238, 245, 92)
-AMBER_SOFT = (240, 162, 2, 150)
 
 
 def saira(size):
-    path = FONTS / "SairaCondensed-Black.ttf"
-    return ImageFont.truetype(str(path), size)
+    # Weight 800 matches the Suite login GO mark.
+    return ImageFont.truetype(str(FONTS / "SairaCondensed-ExtraBold.ttf"), size)
 
 
-def stacked_go(img, fill, *, scale=0.78, gap=0.70):
-    """Brand stacked G / O like the Suite login watermark."""
+def wide_go(img, fill, *, scale=0.52, x=0.50, y=0.50, tracking=0.0):
+    """Home-screen GO: one wide word, tight tracking, stays inside the tile."""
     size = img.size[0]
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    f = saira(int(size * scale))
-    cx = size / 2
-    cy = size / 2
-    draw.text((cx, cy - size * gap * 0.28), "G", font=f, fill=fill, anchor="mm")
-    draw.text((cx, cy + size * gap * 0.28), "O", font=f, fill=fill, anchor="mm")
+    f = saira(max(12, int(size * scale)))
+    g_w = f.getlength("G")
+    o_w = f.getlength("O")
+    gap = size * tracking if tracking else size * 0.018
+    total = g_w + o_w + gap
+    start = size * x - total / 2
+    draw.text((start, size * y), "G", font=f, fill=fill, anchor="lm")
+    draw.text((start + g_w + gap, size * y), "O", font=f, fill=fill, anchor="lm")
     return Image.alpha_composite(img, layer)
 
 
-def inline_go(img, fill, *, scale=0.62):
-    """Wide GO word sitting behind the document."""
-    size = img.size[0]
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    f = saira(int(size * scale))
-    draw.text((size / 2, size / 2), "GO", font=f, fill=fill, anchor="mm")
-    return Image.alpha_composite(img, layer)
-
-
-def add_mark(img, *, inset=0.20):
+def boxed_mark(img, *, inset=0.22):
+    """Document stays a complete rounded box inside the tile."""
     draw = ImageDraw.Draw(img)
     size = img.size[0]
     pad = int(size * inset)
@@ -68,48 +53,44 @@ def add_mark(img, *, inset=0.20):
     return img
 
 
-def example_soft_navy(size):
+def compose(size, *, alpha=46, scale=0.58, x=0.50, y=0.50, fill=None, inset=0.28):
     img = Image.new("RGBA", (size, size), NAVY)
-    img = stacked_go(img, NAVY_LIFT, scale=1.02, gap=0.62)
-    return add_mark(img, inset=0.24)
+    colour = fill if fill is not None else (255, 255, 255, alpha)
+    img = wide_go(img, colour, scale=scale, x=x, y=y)
+    return boxed_mark(img, inset=inset)
 
 
-def example_login_watermark(size):
-    img = Image.new("RGBA", (size, size), NAVY)
-    img = stacked_go(img, WHITE_SOFT, scale=1.00, gap=0.64)
-    return add_mark(img, inset=0.24)
+def example_home_18(size):
+    """lr-b: rgba(255,255,255,0.18) wide GO, document boxed."""
+    return compose(size, alpha=46, scale=0.60, y=0.40)
 
 
-def example_sky_stacked(size):
-    img = Image.new("RGBA", (size, size), NAVY)
-    img = stacked_go(img, SKY_SOFT, scale=1.00, gap=0.64)
-    return add_mark(img, inset=0.24)
+def example_home_26(size):
+    """lr-a: a bit stronger, 26% white."""
+    return compose(size, alpha=66, scale=0.60, y=0.40)
 
 
-def example_side_letters(size):
-    """G top-left and O bottom-right so the letters stay readable."""
-    img = Image.new("RGBA", (size, size), NAVY)
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    f = saira(int(size * 0.62))
-    draw.text((size * 0.22, size * 0.20), "G", font=f, fill=(56, 189, 248, 160), anchor="mm")
-    draw.text((size * 0.78, size * 0.80), "O", font=f, fill=(56, 189, 248, 160), anchor="mm")
-    img = Image.alpha_composite(img, layer)
-    return add_mark(img, inset=0.22)
+def example_home_12(size):
+    """lr-c: softer 12% white, a little wider GO."""
+    return compose(size, alpha=31, scale=0.64, y=0.40)
 
 
-def example_inline_amber(size):
-    img = Image.new("RGBA", (size, size), NAVY)
-    img = inline_go(img, AMBER_SOFT, scale=0.86)
-    return add_mark(img, inset=0.24)
+def example_home_sky(size):
+    """Same wide GO, sky tint at home-screen opacity."""
+    return compose(size, fill=(56, 189, 248, 56), scale=0.60, y=0.40)
+
+
+def example_home_high(size):
+    """Login placement: more of the GO shows above the boxed document."""
+    return compose(size, alpha=46, scale=0.62, y=0.36)
 
 
 EXAMPLES = [
-    ("1-soft-navy", "Soft navy stacked GO", example_soft_navy),
-    ("2-login-watermark", "Login watermark stacked GO", example_login_watermark),
-    ("3-sky-stacked", "Sky stacked GO", example_sky_stacked),
-    ("4-side-letters", "Sky G / O beside the document", example_side_letters),
-    ("5-inline-amber", "Amber GO word behind the document", example_inline_amber),
+    ("1-home-18", "Home screen 18% white GO, document in the box", example_home_18),
+    ("2-home-26", "Stronger 26% white GO, document in the box", example_home_26),
+    ("3-home-12", "Softer 12% white GO, a little wider", example_home_12),
+    ("4-home-sky", "18% sky GO, document in the box", example_home_sky),
+    ("5-home-high", "18% white GO high like the login, document boxed", example_home_high),
 ]
 
 
@@ -132,16 +113,22 @@ def contact_sheet(paths, dest, tile=256, label_h=36):
 
 
 def main():
+    # Drop the previous (cropped-letter) set so only this direction is shown.
+    if OUT.exists():
+        for child in OUT.iterdir():
+            if child.is_dir() and child.name[0].isdigit():
+                for f in child.glob("*"):
+                    f.unlink()
+                child.rmdir()
+
     play_row = []
     store_row = []
     for slug, title, fn in EXAMPLES:
         folder = OUT / slug
-        play = fn(512)
-        appstore = fn(1024)
         play_path = folder / "icon-play-512.png"
         store_path = folder / "icon-appstore-1024.png"
-        save_png(play, play_path, mode="opaque-rgba")
-        save_png(appstore, store_path, mode="rgb")
+        save_png(fn(512), play_path, mode="opaque-rgba")
+        save_png(fn(1024), store_path, mode="rgb")
         (folder / "README.txt").write_text(f"{title}\nPlay 512 + App Store 1024\n", encoding="utf8")
         play_row.append((slug.split("-", 1)[0], play_path))
         store_row.append((slug.split("-", 1)[0], store_path))
