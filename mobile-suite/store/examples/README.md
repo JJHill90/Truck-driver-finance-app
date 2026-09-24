@@ -4,8 +4,8 @@ Same chosen layout (outlined page, opacity **GO** clipped inside the box,
 fold + lines). These six mix **blue / white / black / orange** on the
 tile, GO, fold, and lines.
 
-Production Play / App Store icons stay on the current navy + paper look
-until one of these is chosen.
+**Chosen:** option 6, with a blue fold and an orange bottom line. That
+treatment is now the official Play / App Store / launcher icon.
 
 | # | Folder | Tile | Page | Fold | Lines | GO |
 |---|--------|------|------|------|-------|-----|
@@ -14,7 +14,7 @@ until one of these is chosen.
 | 3 | `3-blue-page` | black | blue | orange | white + orange | white |
 | 4 | `4-orange-tile` | orange | white | blue | black + blue | black |
 | 5 | `5-sky-tile` | blue | white | orange | black + orange | black |
-| 6 | `6-white-tile` | white | black | orange | white + blue | blue |
+| 6 | `6-white-tile` | white | black | **blue** | white + **orange** | blue |
 
 ```bash
 python3 mobile-suite/store/generate-go-examples.py

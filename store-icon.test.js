@@ -18,9 +18,10 @@ function pngInfo(filePath) {
 }
 
 describe("Go Taxation Suite store / launcher icon", () => {
-  it("keeps a navy document SVG source (sky fold, amber underline)", () => {
+  it("keeps a white-tile black page SVG source (blue fold, amber underline)", () => {
     const svg = fs.readFileSync(path.join(STORE, "icon.svg"), "utf8");
-    expect(svg).toMatch(/#0B1F33/i);
+    expect(svg).toMatch(/#FFFFFF/i);
+    expect(svg).toMatch(/#080A0E/i);
     expect(svg).toMatch(/#38BDF8/i);
     expect(svg).toMatch(/#F0A202/i);
     expect(svg).toMatch(/clipPath/);
@@ -93,10 +94,11 @@ describe("Go Taxation Suite store / launcher icon", () => {
 
     expect(launcher).toMatch(/@drawable\/ic_launcher_foreground/);
     expect(round).toMatch(/@drawable\/ic_launcher_foreground/);
-    expect(bg).toMatch(/#0B1F33/i);
-    expect(fg).toMatch(/#E8EEF5/);
+    expect(bg).toMatch(/#FFFFFF/i);
+    expect(fg).toMatch(/#080A0E/);
     expect(fg).toMatch(/#38BDF8/);
     expect(fg).toMatch(/#F0A202/);
+    expect(fg).toMatch(/#FFFFFF/);
     expect(fgV24).toMatch(/#38BDF8/);
     expect(fg).not.toMatch(/capacitor/i);
     expect(html).toMatch(/rel="apple-touch-icon"[^>]+href="\/suite\/icon-512\.png"/);

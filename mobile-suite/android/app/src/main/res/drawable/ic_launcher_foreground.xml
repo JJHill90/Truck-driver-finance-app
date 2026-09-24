@@ -4,18 +4,18 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Safe-zone document mark for the adaptive icon. -->
+    <!-- Safe-zone document mark: black page, blue fold, orange underline. -->
     <path
-        android:fillColor="#E8EEF5"
+        android:fillColor="#080A0E"
         android:pathData="M34,28 h32 a10,10 0 0 1 10,10 v40 a10,10 0 0 1 -10,10 H32 a10,10 0 0 1 -10,-10 V38 a10,10 0 0 1 10,-10 z" />
     <path
         android:fillColor="#38BDF8"
         android:pathData="M60,28 L76,44 H60 Z" />
     <path
-        android:fillColor="#0B1F33"
+        android:fillColor="#FFFFFF"
         android:pathData="M36,58 h32 a3,3 0 0 1 0,6 H36 a3,3 0 0 1 0,-6 z" />
     <path
-        android:fillColor="#0B1F33"
+        android:fillColor="#FFFFFF"
         android:pathData="M36,68 h24 a3,3 0 0 1 0,6 H36 a3,3 0 0 1 0,-6 z" />
     <path
         android:fillColor="#F0A202"

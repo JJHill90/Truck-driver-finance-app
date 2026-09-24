@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Generate Go Taxation Suite launcher and store icons (navy + sky document).
+"""Generate Go Taxation Suite launcher and store icons.
+
+Chosen look: white tile, black page, blue fold, white lines, orange
+underline, opacity GO clipped inside the box (option 6, fold/line tweak).
 
 Requires Pillow:  python3 -m pip install Pillow
 """
@@ -15,6 +18,19 @@ INK = (11, 31, 51, 255)
 PAPER = (232, 238, 245, 255)
 SKY = (56, 189, 248, 255)
 AMBER = (240, 162, 2, 255)
+BLACK = (8, 10, 14, 255)
+WHITE = (255, 255, 255, 255)
+
+# Option 6 + requested fold/line swap: blue fold, orange bottom line.
+THEME_CHOSEN = {
+    "bg": WHITE,
+    "paper": BLACK,
+    "outline": SKY,
+    "fold": SKY,
+    "line": WHITE,
+    "accent": AMBER,
+    "go": (56, 189, 248, 96),
+}
 
 LEGACY = {
     "mdpi": 48,
@@ -153,21 +169,10 @@ def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER, outline=
 
 
 def compose(size, *, background=True, round_clip=False):
-    img = Image.new("RGBA", (size, size), NAVY if background else (0, 0, 0, 0))
-    # Adaptive / store safe zone: keep the mark inside the inner ~66%.
-    inset = int(size * (0.22 if not background else 0.18))
-    box = (inset, inset, size - inset, size - inset)
-    img = paint_boxed_mark(img, box)
-    if round_clip:
-        mask = Image.new("L", (size, size), 0)
-        ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
-        rounded = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        rounded.paste(img, mask=mask)
-        return rounded
-    return img
+    return compose_theme(size, THEME_CHOSEN, background=background, round_clip=round_clip)
 
 
-def flatten(img, bg=NAVY):
+def flatten(img, bg=WHITE):
     out = Image.new("RGB", img.size, bg[:3])
     out.paste(img, mask=img.split()[-1])
     return out
@@ -188,27 +193,28 @@ def font(path, size, fallback="DejaVuSans.ttf"):
 def feature_graphic():
     """Play Console feature graphic: 1024 × 500, opaque RGB."""
     w, h = 1024, 500
-    img = Image.new("RGBA", (w, h), NAVY)
-    draw = ImageDraw.Draw(img)
-
-    # Soft sky wash on the right so the tile does not look flat.
-    wash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    ImageDraw.Draw(wash).ellipse((520, -180, 1240, 420), fill=(56, 189, 248, 38))
-    img = Image.alpha_composite(img, wash)
-    draw = ImageDraw.Draw(img)
-
+    img = Image.new("RGBA", (w, h), WHITE)
     mark_box = (72, 86, 72 + 328, 86 + 328)
-    img = paint_boxed_mark(img, mark_box)
+    img = paint_boxed_mark(
+        img,
+        mark_box,
+        paper=THEME_CHOSEN["paper"],
+        fold=THEME_CHOSEN["fold"],
+        line=THEME_CHOSEN["line"],
+        accent=THEME_CHOSEN["accent"],
+        go=THEME_CHOSEN["go"],
+        outline=THEME_CHOSEN["outline"],
+    )
     draw = ImageDraw.Draw(img)
 
     title = font(FONT_BOLD, 46)
     suite_font = font(FONT_BOLD, 54)
     tag = font(FONT_MED, 22)
-    draw.text((448, 128), "Go Taxation", fill=PAPER, font=title)
+    draw.text((448, 128), "Go Taxation", fill=NAVY, font=title)
     draw.text((448, 188), "Suite", fill=SKY, font=suite_font)
     draw.rounded_rectangle((448, 266, 448 + 72, 272), radius=3, fill=AMBER)
-    draw.text((448, 296), "Record receipts. Prepare working papers.", fill=PAPER, font=tag)
-    draw.text((448, 334), "Not advice. You lodge with the ATO.", fill=(186, 200, 214, 255), font=tag)
+    draw.text((448, 296), "Record receipts. Prepare working papers.", fill=NAVY, font=tag)
+    draw.text((448, 334), "Not advice. You lodge with the ATO.", fill=(90, 104, 118, 255), font=tag)
     return img
 
 

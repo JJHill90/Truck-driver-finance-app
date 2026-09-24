@@ -99,14 +99,14 @@ PALETTES = [
     ),
     (
         "6-white-tile",
-        "White tile, black page, orange fold, white lines, blue GO",
+        "White tile, black page, blue fold, white lines, orange underline, blue GO",
         {
             "bg": WHITE,
             "paper": BLACK,
             "outline": BLUE,
-            "fold": ORANGE,
+            "fold": BLUE,
             "line": WHITE,
-            "accent": BLUE,
+            "accent": ORANGE,
             "go": go(BLUE, 96),
         },
     ),
