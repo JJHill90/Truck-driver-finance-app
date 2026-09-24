@@ -34,6 +34,15 @@ See [`docs/store-listing.md`](../docs/store-listing.md). Signing keys and
 store consoles are not in this repo. Subscriptions stay on the **website**
 (Stripe) — do not wire in-app checkout in this shell.
 
+## Store / launcher icon
+
+Navy document mark (sky fold). Masters and a regenerate script:
+
+- `store/icon-play-512.png` — Play high-res
+- `store/icon-appstore-1024.png` — App Store (opaque)
+- `store/icon.svg` — source
+- `python3 store/generate-icons.py` — writes those plus Android mipmaps
+
 ## Honest store copy
 
 Record receipts and prepare Australian tax working papers. Not tax advice

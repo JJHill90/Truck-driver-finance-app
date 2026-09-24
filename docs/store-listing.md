@@ -18,9 +18,9 @@ Checked 24 September 2026 against the live Suite host after the merge to `main`.
 
 ## Verdict
 
-**Privacy and Terms are live.** Store-facing URLs return 200 on the Suite host
-(Suite-only copy, no Driver Hub). Remaining work is the store consoles: branded
-icon, signed AAB, Mac/iOS project, listing assets, and a reviewer demo account.
+**Privacy, Terms, and the Suite icon are in.** Store-facing URLs return 200.
+Remaining work is the store consoles: signed AAB, Mac/iOS project, listing
+screenshots, and a reviewer demo account.
 
 ## Already done in the product
 
@@ -37,6 +37,7 @@ icon, signed AAB, Mac/iOS project, listing assets, and a reviewer demo account.
 | Auto-renew / cancel / no fake Restore IAP | Done | Terms + Profile Plan copy |
 | Honest tax wording (not a lodged BAS) | Done | Privacy, Terms, Support, BAS worksheet |
 | Website account deletion instructions | Done | `/privacy` |
+| Suite store / launcher icon | Done | `mobile-suite/store/` + Android mipmaps |
 
 ## Must finish before Google or Apple will accept the app
 
@@ -55,15 +56,15 @@ Also confirm in the Render dashboard for `go-taxation-suite`:
 - `CORS_ALLOW_CAPACITOR=1`
 - `APP_BASE_URL=https://go-taxation-suite.onrender.com`
 
-### 2. Suite icon (blocker for a serious listing)
+### 2. Suite icon — done
 
-The Android launcher is still the default Capacitor “X” mark, not the Suite
-document mark. Before a store build, replace it with a unique Go Taxation Suite
-icon (navy/sky document, no truck):
+Navy document mark (sky fold, amber underline). No truck, not the Capacitor X.
 
-- Play: 512×512 PNG
-- App Store: 1024×1024 PNG (no alpha)
-- Android adaptive icons under `mobile-suite/android/app/src/main/res/mipmap-*`
+- Play: `mobile-suite/store/icon-play-512.png`
+- App Store (no alpha): `mobile-suite/store/icon-appstore-1024.png`
+- Source SVG: `mobile-suite/store/icon.svg`
+- Android adaptive + legacy mipmaps in `mobile-suite/android/app/src/main/res/`
+- Regenerate: `python3 mobile-suite/store/generate-icons.py`
 
 ### 3. Google Play (your console + a signed AAB)
 
