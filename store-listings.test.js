@@ -37,6 +37,23 @@ describe("Suite store listing assets", () => {
     expect(plist).toMatch(/<false\/>/);
   });
 
+  it("ships an iOS privacy manifest and is iPhone-only for first submission", () => {
+    const manifest = fs.readFileSync(
+      path.join(__dirname, "mobile-suite", "ios", "App", "App", "PrivacyInfo.xcprivacy"),
+      "utf8"
+    );
+    const pbx = fs.readFileSync(
+      path.join(__dirname, "mobile-suite", "ios", "App", "App.xcodeproj", "project.pbxproj"),
+      "utf8"
+    );
+    expect(manifest).toMatch(/NSPrivacyTracking/);
+    expect(manifest).toMatch(/<false\/>/);
+    expect(manifest).toMatch(/NSPrivacyAccessedAPICategoryUserDefaults/);
+    expect(pbx).toMatch(/PrivacyInfo\.xcprivacy/);
+    expect(pbx).toMatch(/TARGETED_DEVICE_FAMILY = 1;/);
+    expect(pbx).not.toMatch(/TARGETED_DEVICE_FAMILY = "1,2"/);
+  });
+
   it("has Play and App Store phone screenshots at required sizes", () => {
     const playDir = path.join(STORE, "screenshots", "play-1080x1920");
     const iosDir = path.join(STORE, "screenshots", "appstore-1290x2796");

@@ -4383,6 +4383,10 @@ function sendProductLegalPage(kind) {
 app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
 app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
 app.get(
+  ["/support", "/support.html", "/suite/support", "/suite/support.html"],
+  sendLegalPage("support.html")
+);
+app.get(
   ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
   sendProductLegalPage("privacy")
 );
