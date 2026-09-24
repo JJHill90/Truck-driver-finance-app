@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Preview home-screen-style opacity GO with a boxed document icon.
+"""Preview colour-scheme variants of the chosen in-box GO icon.
 
-Examples 1–4 keep GO behind the paper (review leftovers). Example 5 is the
-chosen look: same option 5 GO, clipped inside the white outlined box via
-generate-icons.compose.
-
-Official store icons are written by generate-icons.py.
+Same option-5 layout (navy-style tile → outlined page → opacity GO clipped
+inside the box → fold / lines). Only the blue / white / black / orange
+assignments change. Does not overwrite production store icons.
 """
 from __future__ import annotations
 
@@ -19,84 +17,103 @@ OUT = ROOT / "examples"
 FONTS = ROOT / "fonts"
 
 g = runpy.run_path(str(ROOT / "generate-icons.py"))
-NAVY = g["NAVY"]
-draw_mark = g["draw_mark"]
 save_png = g["save_png"]
-official_compose = g["compose"]
+compose_theme = g["compose_theme"]
+
+BLACK = (8, 10, 14, 255)
+WHITE = (255, 255, 255, 255)
+BLUE = (56, 189, 248, 255)
+ORANGE = (240, 162, 2, 255)
+PAGE = (245, 247, 250, 255)
 
 
-def saira(size):
-    # Weight 800 matches the Suite login GO mark.
-    return ImageFont.truetype(str(FONTS / "SairaCondensed-ExtraBold.ttf"), size)
+def go(rgb, alpha):
+    return (rgb[0], rgb[1], rgb[2], alpha)
 
 
-def wide_go(img, fill, *, scale=0.52, x=0.50, y=0.50, tracking=0.0):
-    """Home-screen GO: one wide word, tight tracking, stays inside the tile."""
-    size = img.size[0]
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    f = saira(max(12, int(size * scale)))
-    g_w = f.getlength("G")
-    o_w = f.getlength("O")
-    gap = size * tracking if tracking else size * 0.018
-    total = g_w + o_w + gap
-    start = size * x - total / 2
-    draw.text((start, size * y), "G", font=f, fill=fill, anchor="lm")
-    draw.text((start + g_w + gap, size * y), "O", font=f, fill=fill, anchor="lm")
-    return Image.alpha_composite(img, layer)
-
-
-def boxed_mark(img, *, inset=0.22):
-    """Document stays a complete rounded box inside the tile."""
-    draw = ImageDraw.Draw(img)
-    size = img.size[0]
-    pad = int(size * inset)
-    draw_mark(draw, (pad, pad, size - pad, size - pad))
-    return img
-
-
-def compose(size, *, alpha=46, scale=0.58, x=0.50, y=0.50, fill=None, inset=0.28):
-    img = Image.new("RGBA", (size, size), NAVY)
-    colour = fill if fill is not None else (255, 255, 255, alpha)
-    img = wide_go(img, colour, scale=scale, x=x, y=y)
-    return boxed_mark(img, inset=inset)
-
-
-def example_home_18(size):
-    """lr-b: rgba(255,255,255,0.18) wide GO, document boxed."""
-    return compose(size, alpha=46, scale=0.60, y=0.40)
-
-
-def example_home_26(size):
-    """lr-a: a bit stronger, 26% white."""
-    return compose(size, alpha=66, scale=0.60, y=0.40)
-
-
-def example_home_12(size):
-    """lr-c: softer 12% white, a little wider GO."""
-    return compose(size, alpha=31, scale=0.64, y=0.40)
-
-
-def example_home_sky(size):
-    """Same wide GO, sky tint at home-screen opacity."""
-    return compose(size, fill=(56, 189, 248, 56), scale=0.60, y=0.40)
-
-
-def example_home_high(size):
-    """Chosen look: option 5 GO, clipped inside the white outlined box."""
-    return official_compose(size, background=True)
-
-
-EXAMPLES = [
-    ("1-home-18", "Home screen 18% white GO, document in the box", example_home_18),
-    ("2-home-26", "Stronger 26% white GO, document in the box", example_home_26),
-    ("3-home-12", "Softer 12% white GO, a little wider", example_home_12),
-    ("4-home-sky", "18% sky GO, document in the box", example_home_sky),
-    ("5-home-high", "Option 5 GO inside the white outlined box (chosen)", example_home_high),
+PALETTES = [
+    (
+        "1-orange-fold",
+        "Black tile, white page, orange fold, blue lines, blue GO",
+        {
+            "bg": BLACK,
+            "paper": PAGE,
+            "outline": WHITE,
+            "fold": ORANGE,
+            "line": BLUE,
+            "accent": ORANGE,
+            "go": go(BLUE, 72),
+        },
+    ),
+    (
+        "2-orange-go",
+        "Black tile, white page, blue fold, black lines, orange GO",
+        {
+            "bg": BLACK,
+            "paper": PAGE,
+            "outline": WHITE,
+            "fold": BLUE,
+            "line": BLACK,
+            "accent": ORANGE,
+            "go": go(ORANGE, 78),
+        },
+    ),
+    (
+        "3-blue-page",
+        "Black tile, blue page, orange fold, white lines, white GO",
+        {
+            "bg": BLACK,
+            "paper": BLUE,
+            "outline": WHITE,
+            "fold": ORANGE,
+            "line": WHITE,
+            "accent": ORANGE,
+            "go": go(WHITE, 96),
+        },
+    ),
+    (
+        "4-orange-tile",
+        "Orange tile, white page, blue fold, black lines, black GO",
+        {
+            "bg": ORANGE,
+            "paper": PAGE,
+            "outline": WHITE,
+            "fold": BLUE,
+            "line": BLACK,
+            "accent": BLUE,
+            "go": go(BLACK, 56),
+        },
+    ),
+    (
+        "5-sky-tile",
+        "Blue tile, white page, orange fold, black lines, black GO",
+        {
+            "bg": BLUE,
+            "paper": PAGE,
+            "outline": WHITE,
+            "fold": ORANGE,
+            "line": BLACK,
+            "accent": ORANGE,
+            "go": go(BLACK, 56),
+        },
+    ),
+    (
+        "6-white-tile",
+        "White tile, black page, orange fold, white lines, blue GO",
+        {
+            "bg": WHITE,
+            "paper": BLACK,
+            "outline": BLUE,
+            "fold": ORANGE,
+            "line": WHITE,
+            "accent": BLUE,
+            "go": go(BLUE, 96),
+        },
+    ),
 ]
 
 
-def contact_sheet(paths, dest, tile=256, label_h=36):
+def contact_sheet(paths, dest, tile=220, label_h=36):
     cols = len(paths)
     sheet = Image.new("RGB", (tile * cols, tile + label_h), (7, 16, 28))
     draw = ImageDraw.Draw(sheet)
@@ -115,7 +132,6 @@ def contact_sheet(paths, dest, tile=256, label_h=36):
 
 
 def main():
-    # Drop the previous (cropped-letter) set so only this direction is shown.
     if OUT.exists():
         for child in OUT.iterdir():
             if child.is_dir() and child.name[0].isdigit():
@@ -125,19 +141,19 @@ def main():
 
     play_row = []
     store_row = []
-    for slug, title, fn in EXAMPLES:
+    for slug, title, theme in PALETTES:
         folder = OUT / slug
         play_path = folder / "icon-play-512.png"
         store_path = folder / "icon-appstore-1024.png"
-        save_png(fn(512), play_path, mode="opaque-rgba")
-        save_png(fn(1024), store_path, mode="rgb")
+        save_png(compose_theme(512, theme), play_path, mode="opaque-rgba")
+        save_png(compose_theme(1024, theme), store_path, mode="rgb")
         (folder / "README.txt").write_text(f"{title}\nPlay 512 + App Store 1024\n", encoding="utf8")
         play_row.append((slug.split("-", 1)[0], play_path))
         store_row.append((slug.split("-", 1)[0], store_path))
         print(f"wrote {folder}")
 
-    contact_sheet(play_row, OUT / "sheet-play-512.png", tile=220)
-    contact_sheet(store_row, OUT / "sheet-appstore-1024.png", tile=220)
+    contact_sheet(play_row, OUT / "sheet-play-512.png", tile=200)
+    contact_sheet(store_row, OUT / "sheet-appstore-1024.png", tile=200)
     print("wrote contact sheets")
 
 

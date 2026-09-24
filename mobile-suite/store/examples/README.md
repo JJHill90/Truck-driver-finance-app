@@ -1,25 +1,21 @@
-# Suite icon examples — home-screen opacity GO
+# Suite icon colour examples
 
-Option **5** is the chosen store icon. Layering is navy tile → white
-outlined paper box → opacity **GO** (clipped inside the box) → sky fold
-and lines. That matches Suite login `lr-b` (Saira Condensed, ~18%)
-without letting the letters sit outside the page.
+Same chosen layout (outlined page, opacity **GO** clipped inside the box,
+fold + lines). These six mix **blue / white / black / orange** on the
+tile, GO, fold, and lines.
 
-Examples 1–4 keep the earlier “GO behind the document” previews for
-comparison. They do not ship as Play / App Store icons.
+Production Play / App Store icons stay on the current navy + paper look
+until one of these is chosen.
 
-| # | Folder | Treatment |
-|---|--------|-----------|
-| 1 | `1-home-18` | Home-screen 18% white GO behind the box |
-| 2 | `2-home-26` | Stronger 26% white GO behind the box |
-| 3 | `3-home-12` | Softer 12% white GO, a little wider |
-| 4 | `4-home-sky` | 18% sky `#38BDF8` GO behind the box |
-| 5 | `5-home-high` | **Chosen:** option 5 GO inside the white outlined box |
-
-Official Play 512 / App Store 1024 are generated from
-`generate-icons.py` (`compose` → `paint_boxed_mark`).
+| # | Folder | Tile | Page | Fold | Lines | GO |
+|---|--------|------|------|------|-------|-----|
+| 1 | `1-orange-fold` | black | white | orange | blue + orange | blue |
+| 2 | `2-orange-go` | black | white | blue | black + orange | orange |
+| 3 | `3-blue-page` | black | blue | orange | white + orange | white |
+| 4 | `4-orange-tile` | orange | white | blue | black + blue | black |
+| 5 | `5-sky-tile` | blue | white | orange | black + orange | black |
+| 6 | `6-white-tile` | white | black | orange | white + blue | blue |
 
 ```bash
-python3 mobile-suite/store/generate-icons.py
 python3 mobile-suite/store/generate-go-examples.py
 ```

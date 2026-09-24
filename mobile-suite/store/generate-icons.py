@@ -42,12 +42,13 @@ def box_radius(box):
     return max(8, int((box[2] - box[0]) * 0.11))
 
 
-def draw_paper_box(draw, box, paper=PAPER):
+def draw_paper_box(draw, box, paper=PAPER, outline=(255, 255, 255, 255)):
     radius = box_radius(box)
     draw.rounded_rectangle(box, radius=radius, fill=paper)
-    # Bright edge so the page reads as a white outlined box on navy.
-    stroke = max(2, int((box[2] - box[0]) * 0.028))
-    draw.rounded_rectangle(box, radius=radius, outline=(255, 255, 255, 255), width=stroke)
+    # Bright edge so the page reads as an outlined box on the tile.
+    if outline:
+        stroke = max(2, int((box[2] - box[0]) * 0.028))
+        draw.rounded_rectangle(box, radius=radius, outline=outline, width=stroke)
 
 
 def draw_mark_details(draw, box, fold=SKY, line=INK, accent=AMBER):
@@ -102,18 +103,52 @@ def draw_go_inside_box(img, box, fill=GO_ON_PAPER, *, scale=0.62, y_frac=0.36):
     return Image.alpha_composite(img, clipped)
 
 
-def paint_boxed_mark(img, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER, go=GO_ON_PAPER):
+def paint_boxed_mark(
+    img,
+    box,
+    paper=PAPER,
+    fold=SKY,
+    line=INK,
+    accent=AMBER,
+    go=GO_ON_PAPER,
+    outline=(255, 255, 255, 255),
+):
     """Layering: navy → white box → opacity GO inside the box → fold / lines."""
     draw = ImageDraw.Draw(img)
-    draw_paper_box(draw, box, paper=paper)
+    draw_paper_box(draw, box, paper=paper, outline=outline)
     img = draw_go_inside_box(img, box, fill=go)
     draw = ImageDraw.Draw(img)
     draw_mark_details(draw, box, fold=fold, line=line, accent=accent)
     return img
 
 
-def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER):
-    draw_paper_box(draw, box, paper=paper)
+def compose_theme(size, theme, *, background=True, round_clip=False):
+    """Same option-5 layout with a caller-supplied colour palette."""
+    tile = theme["bg"] if background else (0, 0, 0, 0)
+    img = Image.new("RGBA", (size, size), tile)
+    inset = int(size * (0.22 if not background else 0.18))
+    box = (inset, inset, size - inset, size - inset)
+    img = paint_boxed_mark(
+        img,
+        box,
+        paper=theme["paper"],
+        fold=theme["fold"],
+        line=theme["line"],
+        accent=theme["accent"],
+        go=theme["go"],
+        outline=theme.get("outline", (255, 255, 255, 255)),
+    )
+    if round_clip:
+        mask = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+        rounded = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        rounded.paste(img, mask=mask)
+        return rounded
+    return img
+
+
+def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER, outline=(255, 255, 255, 255)):
+    draw_paper_box(draw, box, paper=paper, outline=outline)
     draw_mark_details(draw, box, fold=fold, line=line, accent=accent)
 
 

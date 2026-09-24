@@ -3,11 +3,12 @@ const path = require("path");
 
 const EXAMPLES = path.join(__dirname, "mobile-suite", "store", "examples");
 const SLUGS = [
-  "1-home-18",
-  "2-home-26",
-  "3-home-12",
-  "4-home-sky",
-  "5-home-high",
+  "1-orange-fold",
+  "2-orange-go",
+  "3-blue-page",
+  "4-orange-tile",
+  "5-sky-tile",
+  "6-white-tile",
 ];
 
 function pngInfo(filePath) {
@@ -21,8 +22,8 @@ function pngInfo(filePath) {
 }
 
 describe("Suite Go-background icon examples", () => {
-  it("keeps five Play 512 + App Store 1024 pairs for review", () => {
-    expect(SLUGS).toHaveLength(5);
+  it("keeps six colour-scheme Play 512 + App Store 1024 pairs for review", () => {
+    expect(SLUGS).toHaveLength(6);
     for (const slug of SLUGS) {
       const play = pngInfo(path.join(EXAMPLES, slug, "icon-play-512.png"));
       const store = pngInfo(path.join(EXAMPLES, slug, "icon-appstore-1024.png"));
