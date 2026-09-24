@@ -74,7 +74,8 @@ const {
 } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
-const { ocrPdfViaRaster, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
+const { ocrPdfViaRaster, pdfResultNeedsOcr, shouldRasterPdf } = require("./lib/pdf-ocr");
+const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
   applyHistoricalRates,
   centsPerKmForYear,
@@ -3462,9 +3463,10 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       }
 
       // Scanned / photo PDFs have no text layer, so the text-based extractor
-      // above finds no dollar totals. Rasterise the pages and OCR the images so
-      // those documents read like a photographed receipt/payslip.
-      if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+      // above finds no dollar totals. Rasterise those pages and OCR the images.
+      // Digital PDFs with a real text layer stay on the fast path — raster
+      // Tesseract is what makes payslip scans feel stuck for minutes.
+      if (shouldRasterPdf(ocrResult, ocrPurpose, ocrResult.rawText)) {
         try {
           const rasterOcr = await ocrPdfViaRaster(imageBase64, { purpose: ocrPurpose });
           if (rasterOcr && !pdfResultNeedsOcr(rasterOcr, ocrPurpose)) {
@@ -3512,6 +3514,8 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
         } catch (e) {
           console.warn("PDF image OCR fallback failed:", e.message);
         }
+      } else if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+        console.info("PDF scan: skip raster OCR (usable text layer, no labelled total)");
       }
     }
 
@@ -4424,6 +4428,9 @@ function bootListen() {
     }
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
+    warmLocalOcrWorker()
+      .then(() => console.log("OCR: Tesseract worker ready (eng cached on data disk)"))
+      .catch((err) => console.warn("OCR: Tesseract warm failed:", err.message));
     backup.startBackupScheduler({
       flushFn: flushAllCachedRecordsToDisk,
       onComplete: notifyBackupComplete,
