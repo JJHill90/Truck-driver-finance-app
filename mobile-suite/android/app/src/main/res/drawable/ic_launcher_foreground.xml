@@ -4,6 +4,7 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Safe-zone document mark for the adaptive icon. -->
     <path
         android:fillColor="#E8EEF5"
         android:pathData="M34,28 h32 a10,10 0 0 1 10,10 v40 a10,10 0 0 1 -10,10 H32 a10,10 0 0 1 -10,-10 V38 a10,10 0 0 1 10,-10 z" />
