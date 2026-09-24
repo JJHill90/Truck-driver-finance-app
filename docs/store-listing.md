@@ -10,62 +10,63 @@ Compile **only** this listing:
 | Native project | `mobile-suite/` |
 | Privacy (no login) | `https://go-taxation-suite.onrender.com/privacy` |
 | Terms (no login) | `https://go-taxation-suite.onrender.com/terms` |
-| Support | `support@godriverhub.com` |
+| Support (no login) | `https://go-taxation-suite.onrender.com/support` |
+| Support email | `support@godriverhub.com` |
 
 Do not submit Driver Hub (`com.haulagefinance.app` / `mobile/`).
 
-Checked 24 September 2026 against the live Suite host after the merge to `main`.
+Checked 24 September 2026 against the live Suite host and this branch
+(official icon = colour option 6: white tile, black page, blue fold,
+orange bottom line, opacity GO inside the box).
 
 ## Verdict
 
-**Privacy and Terms are live.** Store-facing URLs return 200 on the Suite host
-(Suite-only copy, no Driver Hub). Remaining work is the store consoles: branded
-icon, signed AAB, Mac/iOS project, listing assets, and a reviewer demo account.
+**Ready to start the store consoles.** Product, legal pages, icon,
+screenshots, iOS project, and reviewer bootstrap are in the repo.
+
+Still required **outside this repo** before a reviewer can approve:
+
+1. Signed Play AAB (Android Studio + your keystore).
+2. Xcode archive on a Mac (signing team + TestFlight).
+3. Set `SUITE_REVIEWER_USERNAME` + `SUITE_REVIEWER_PASSWORD` on the
+   Render service `go-taxation-suite`, then paste those credentials in
+   review notes.
+4. Land this branch on `main` so Render serves the new `/suite/icon-512.png`
+   and `/support` page. Privacy and Terms are already live on `main`.
 
 ## Already done in the product
 
 | Requirement | Status | Where |
 |-------------|--------|--------|
 | Own name, id, and `/suite/` URL | Done | `mobile-suite/capacitor.config.json` |
-| Android project, `targetSdk` 35 | Done | `mobile-suite/android/` |
-| Camera + photo permissions + rationale | Done | AndroidManifest + `strings.xml` `camera_rationale` |
-| iOS usage strings ready to paste | Done | `mobile-suite/ios-info.plist.additions.xml` |
-| Public Privacy + Terms (Suite only) | Done in repo | `public/privacy.html`, `public/terms.html` |
-| In-app account deletion (Apple 5.1.1(v)) | Done | Profile → Delete account; `POST /auth/account/delete` |
-| WebView CORS / `SameSite=None` cookies | Done in Blueprint | `CORS_ALLOW_CAPACITOR=1` on `go-taxation-suite` |
+| Android `targetSdk` 35, camera optional | Done | `mobile-suite/android/` |
+| iPhone-only (no iPad screenshot set needed) | Done | `TARGETED_DEVICE_FAMILY = 1` |
+| iOS camera / photos / export-compliance | Done | `Info.plist` + `ios-info.plist.additions.xml` |
+| iOS privacy manifest | Done | `mobile-suite/ios/App/App/PrivacyInfo.xcprivacy` |
+| Public Privacy + Terms (Suite only) | Live | `/privacy` and `/terms` return 200 |
+| Public Support URL (Apple requires one) | In repo | `public/support.html` → `/support` |
+| In-app account deletion (Apple 5.1.1(v)) | Done | Profile → Delete account |
+| Capacitor CORS / `SameSite=None` cookies | Done | `CORS_ALLOW_CAPACITOR=1` on Suite |
 | Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
-| Auto-renew / cancel / no fake Restore IAP | Done | Terms + Profile Plan copy |
-| Honest tax wording (not a lodged BAS) | Done | Privacy, Terms, Support, BAS worksheet |
-| Website account deletion instructions | Done | `/privacy` |
+| Honest tax wording | Done | Privacy, Terms, Support, BAS worksheet |
+| Official store / launcher icon | Done | Option 6 + blue fold + orange underline |
+| Play feature graphic 1024×500 | Done | `mobile-suite/store/feature-graphic-1024x500.png` |
+| Phone screenshots (Play + App Store 6.7") | Done | `mobile-suite/store/screenshots/` |
+| Reviewer demo bootstrap | Done | `SUITE_REVIEWER_*` → `lib/reviewer-demo.js` |
 
-## Must finish before Google or Apple will accept the app
+## Official icon
 
-### 1. Deploy Privacy and Terms — done
+White tile, black page, blue outline, opacity blue **GO** clipped inside
+the page, blue fold, white mid-lines, orange bottom line.
 
-Live check after merge to `main`:
+- Play: `mobile-suite/store/icon-play-512.png` (512, opaque RGBA)
+- App Store (no alpha): `mobile-suite/store/icon-appstore-1024.png`
+- Web / apple-touch: `public/suite/icon-512.png`
+- Regenerate: `python3 mobile-suite/store/generate-icons.py`
 
-- `https://go-taxation-suite.onrender.com/suite/` — **up**
-- `https://go-taxation-suite.onrender.com/privacy` — **200** (Go Taxation Suite)
-- `https://go-taxation-suite.onrender.com/terms` — **200** (Go Taxation Suite)
+## Must finish in the consoles
 
-Use those two HTTPS URLs in Play Console and App Store Connect.
-
-Also confirm in the Render dashboard for `go-taxation-suite`:
-
-- `CORS_ALLOW_CAPACITOR=1`
-- `APP_BASE_URL=https://go-taxation-suite.onrender.com`
-
-### 2. Suite icon (blocker for a serious listing)
-
-The Android launcher is still the default Capacitor “X” mark, not the Suite
-document mark. Before a store build, replace it with a unique Go Taxation Suite
-icon (navy/sky document, no truck):
-
-- Play: 512×512 PNG
-- App Store: 1024×1024 PNG (no alpha)
-- Android adaptive icons under `mobile-suite/android/app/src/main/res/mipmap-*`
-
-### 3. Google Play (your console + a signed AAB)
+### Google Play
 
 On a machine with Android Studio:
 
@@ -76,58 +77,50 @@ npx cap sync android
 npx cap open android
 ```
 
-Then **Build → Generate Signed Bundle**. Keep the keystore **out of git**.
+**Build → Generate Signed Bundle.** Keep the keystore **out of git**.
 
-In Play Console create **one** app `com.gotaxation.suite` and complete:
+Then in Play Console for `com.gotaxation.suite`:
 
-1. Upload the AAB to Internal testing, then Production.
+1. Upload the AAB (Internal testing, then Production).
 2. Privacy policy = `https://go-taxation-suite.onrender.com/privacy`
-3. Data safety (paste answers below)
-4. Photo/video permission declaration: camera and photos are for receipt capture only; not required to use the app (Upload file works)
-5. IARC content rating (finance / tools — typically everyone / PEGI 3)
-6. Store listing: short + full description below, phone screenshots, 1024×500 feature graphic
+3. Data safety (answers below)
+4. Photo/video permission: camera and photos are for receipt capture only;
+   not required (file upload works)
+5. IARC content rating (finance / tools — typically Everyone / PEGI 3)
+6. Store listing: copy below. Screenshots:
+   `mobile-suite/store/screenshots/play-1080x1920/`. Feature graphic:
+   `mobile-suite/store/feature-graphic-1024x500.png`.
 7. Category: **Business** or **Finance**
-8. Contact: `support@godriverhub.com`
+8. Contact: `support@godriverhub.com` and
+   `https://go-taxation-suite.onrender.com/support`
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
-### 4. Apple App Store (Mac required)
-
-This Linux tree has **no** `mobile-suite/ios/` Xcode project.
-
-On a Mac:
+### Apple App Store (Mac required)
 
 ```bash
 cd mobile-suite
 npm install
-npx cap add ios
 npx cap sync ios
+npx cap open ios
 ```
 
-Paste `ios-info.plist.additions.xml` into `ios/App/App/Info.plist`. Add:
-
-```xml
-<key>ITSAppUsesNonExemptEncryption</key>
-<false/>
-```
-
-(HTTPS login only — no custom crypto.)
-
-Then Xcode team signing → Archive → TestFlight → App Store.
+Xcode team signing → Archive → TestFlight → App Store.
 
 In App Store Connect:
 
 1. Privacy Policy URL = `https://go-taxation-suite.onrender.com/privacy`
-2. App Privacy nutrition labels (below)
-3. Account deletion: in-app **and** described on `/privacy` (5.1.1(v))
-4. Age rating: 4+ (no UGC chat, no gambling)
-5. Category: Business / Finance
-6. Review notes: this is a **login / reader-style** client. Subscriptions are
-   purchased on the website (Stripe). The app does not offer IAP and hides
-   Upgrade. Provide a demo username + password for reviewers.
-7. Export compliance: HTTPS only, non-exempt encryption = No
+2. Support URL = `https://go-taxation-suite.onrender.com/support`
+3. App Privacy nutrition labels (below)
+4. Account deletion: in-app **and** described on `/privacy` (5.1.1(v))
+5. Age rating: 4+ (no UGC chat, no gambling)
+6. Category: Business / Finance
+7. Devices: **iPhone** (iPad is off so you do not need 13" iPad shots)
+8. Review notes: login client; subscriptions are Stripe on the website;
+   no IAP; demo username + password from Render `SUITE_REVIEWER_*`
+9. Export compliance: HTTPS only, non-exempt encryption = No
 
-### 5. Listing copy (paste)
+## Listing copy (paste)
 
 **Name:** Go Taxation Suite
 
@@ -157,7 +150,7 @@ password), or email support@godriverhub.com.
 
 **Keywords (Apple):** tax, BAS, GST, ATO, receipts, sole trader, PAYG, Australia
 
-### 6. Data safety / App Privacy answers
+## Data safety / App Privacy answers
 
 Collect / linked to identity / not used for advertising or tracking:
 
@@ -176,26 +169,29 @@ Collect / linked to identity / not used for advertising or tracking:
 
 Payments: Stripe on the **website** only. Card numbers are not stored in this app.
 
-### 7. Reviewer demo account
+## Reviewer demo account
 
-Create a throwaway Suite user on the **production** Suite host (not Driver Hub)
-and put it in Play / App Review notes, for example:
+On **go-taxation-suite** in Render set:
+
+- `SUITE_REVIEWER_USERNAME` — e.g. `suite.reviewer`
+- `SUITE_REVIEWER_PASSWORD` — a strong password you choose (never commit it)
+- `SUITE_REVIEWER_EMAIL` — optional; defaults to `support+reviewer@godriverhub.com`
+
+The next boot creates a non-admin complimentary Pro+ profile with a small
+PAYG sample ledger. It does not reset an existing password.
+
+Paste in Play / App Review notes:
 
 - URL: `https://go-taxation-suite.onrender.com/suite/`
-- Username / password: (you create these)
+- Username / password: the env values you set
 - How to delete: Profile → Delete account → type DELETE
 
 Do not give reviewers the primary mod login.
 
-## Residual policy risk (read this)
+## Residual policy risk
 
-Pro features are digital (uploads, PDF, BAS worksheet). We hide Stripe checkout
-inside the native shell and treat the app as a login client. That matches the
-stores’ “buy on the website, use in the app” pattern, but a reviewer can still
-ask for Apple IAP or Play Billing later. If they do, do not turn Stripe checkout
-back on in the app — add store IAP or keep the app login-only.
+Pro features are digital. Stripe checkout is hidden in the native shell.
+Reviewers can still ask for Apple IAP or Play Billing. If they do, do not
+turn Stripe checkout back on in the app.
 
-## Honest tax wording (stores and ATO)
-
-Use the description above. Do **not** say “official BAS”, “we lodge your return”,
-or “ATO approved”.
+Do **not** say “official BAS”, “we lodge your return”, or “ATO approved”.

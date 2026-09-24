@@ -13,8 +13,8 @@ folder only packages a WebView + Play Store / sideload build.
 
 - Node 20+
 - Android Studio (Android SDK + a device or emulator)
-- For iOS: a Mac with Xcode — run `npx cap add ios`, then paste
-  `ios-info.plist.additions.xml` into `ios/App/App/Info.plist`
+- For iOS: a Mac with Xcode — `npx cap sync ios && npx cap open ios`.
+  Camera / export-compliance keys are already in `ios/App/App/Info.plist`.
 
 ## Quick start (Android)
 
@@ -33,6 +33,17 @@ so session cookies work (`SameSite=None; Secure`).
 See [`docs/store-listing.md`](../docs/store-listing.md). Signing keys and
 store consoles are not in this repo. Subscriptions stay on the **website**
 (Stripe) — do not wire in-app checkout in this shell.
+
+## Store / launcher icon
+
+Navy document mark (sky fold). Masters and a regenerate script:
+
+- `store/icon-play-512.png` — Play high-res
+- `store/icon-appstore-1024.png` — App Store (opaque)
+- `store/feature-graphic-1024x500.png` — Play feature graphic
+- `store/screenshots/` — Play 1080×1920 and App Store 1290×2796 phone shots
+- `store/icon.svg` — source
+- `python3 store/generate-icons.py` — writes icons, feature graphic, iOS AppIcon
 
 ## Honest store copy
 
