@@ -5,7 +5,7 @@ Requires Pillow:  python3 -m pip install Pillow
 """
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 ANDROID_RES = ROOT.parent / "android" / "app" / "src" / "main" / "res"
@@ -82,6 +82,44 @@ def flatten(img, bg=NAVY):
     return out
 
 
+FONT_BOLD = Path("/usr/share/fonts/truetype/noto/NotoSansDisplay-Bold.ttf")
+FONT_SEMI = Path("/usr/share/fonts/truetype/noto/NotoSansDisplay-Bold.ttf")
+FONT_MED = Path("/usr/share/fonts/truetype/noto/NotoSansDisplay-Regular.ttf")
+
+
+def font(path, size, fallback="DejaVuSans.ttf"):
+    try:
+        return ImageFont.truetype(str(path), size)
+    except OSError:
+        return ImageFont.truetype(fallback, size)
+
+
+def feature_graphic():
+    """Play Console feature graphic: 1024 × 500, opaque RGB."""
+    w, h = 1024, 500
+    img = Image.new("RGBA", (w, h), NAVY)
+    draw = ImageDraw.Draw(img)
+
+    # Soft sky wash on the right so the tile does not look flat.
+    wash = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(wash).ellipse((520, -180, 1240, 420), fill=(56, 189, 248, 38))
+    img = Image.alpha_composite(img, wash)
+    draw = ImageDraw.Draw(img)
+
+    mark_box = (72, 86, 72 + 328, 86 + 328)
+    draw_mark(draw, mark_box)
+
+    title = font(FONT_BOLD, 46)
+    suite_font = font(FONT_BOLD, 54)
+    tag = font(FONT_MED, 22)
+    draw.text((448, 128), "Go Taxation", fill=PAPER, font=title)
+    draw.text((448, 188), "Suite", fill=SKY, font=suite_font)
+    draw.rounded_rectangle((448, 266, 448 + 72, 272), radius=3, fill=AMBER)
+    draw.text((448, 296), "Record receipts. Prepare working papers.", fill=PAPER, font=tag)
+    draw.text((448, 334), "Not advice. You lodge with the ATO.", fill=(186, 200, 214, 255), font=tag)
+    return img
+
+
 def save_png(img, path, *, mode="rgba"):
     path.parent.mkdir(parents=True, exist_ok=True)
     if mode == "rgb":
@@ -113,7 +151,13 @@ def main():
         folder = ANDROID_RES / f"mipmap-{density}"
         save_png(compose(size, background=False), folder / "ic_launcher_foreground.png")
 
-    print("wrote store + Android launcher icons")
+    save_png(feature_graphic(), ROOT / "feature-graphic-1024x500.png", mode="rgb")
+
+    ios_icon = ROOT.parent / "ios" / "App" / "App" / "Assets.xcassets" / "AppIcon.appiconset"
+    if ios_icon.exists():
+        save_png(appstore, ios_icon / "AppIcon-512@2x.png", mode="rgb")
+
+    print("wrote store + Android launcher icons + feature graphic")
 
 
 if __name__ == "__main__":

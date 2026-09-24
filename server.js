@@ -108,6 +108,7 @@ const mail = require("./lib/mail");
 const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
 const accountDelete = require("./lib/account-delete");
+const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
@@ -4456,6 +4457,7 @@ function bootListen() {
   if (process.env.NODE_ENV === "test") return;
   auth.reloadSessionsFromDisk();
   const admin = auth.ensureAdminBootstrap();
+  const reviewer = reviewerDemo.ensureReviewerDemo();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
       console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
@@ -4464,6 +4466,9 @@ function bootListen() {
       console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
     }
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
+    if (reviewer && reviewer.ready) {
+      console.log(`Store reviewer demo: ${reviewer.username} (not admin; complimentary Pro+)`);
+    }
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     backup.startBackupScheduler({
       flushFn: flushAllCachedRecordsToDisk,

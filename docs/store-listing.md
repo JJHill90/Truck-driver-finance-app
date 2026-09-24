@@ -18,9 +18,10 @@ Checked 24 September 2026 against the live Suite host after the merge to `main`.
 
 ## Verdict
 
-**Privacy, Terms, and the Suite icon are in.** Store-facing URLs return 200.
-Remaining work is the store consoles: signed AAB, Mac/iOS project, listing
-screenshots, and a reviewer demo account.
+**Privacy, Terms, icon, feature graphic, listing screenshots, iOS project,
+and reviewer-account bootstrap are in the repo.** Remaining work is the
+store consoles: signed AAB, Xcode archive on a Mac, and setting the
+reviewer password on Render.
 
 ## Already done in the product
 
@@ -38,6 +39,10 @@ screenshots, and a reviewer demo account.
 | Honest tax wording (not a lodged BAS) | Done | Privacy, Terms, Support, BAS worksheet |
 | Website account deletion instructions | Done | `/privacy` |
 | Suite store / launcher icon | Done | `mobile-suite/store/` + Android mipmaps |
+| Play feature graphic 1024×500 | Done | `mobile-suite/store/feature-graphic-1024x500.png` |
+| Phone screenshots (Play + App Store) | Done | `mobile-suite/store/screenshots/` |
+| iOS Xcode project + camera / export keys | Done | `mobile-suite/ios/` + `ios-info.plist.additions.xml` |
+| Reviewer demo account bootstrap | Done | `SUITE_REVIEWER_*` env → `lib/reviewer-demo.js` |
 
 ## Must finish before Google or Apple will accept the app
 
@@ -86,7 +91,9 @@ In Play Console create **one** app `com.gotaxation.suite` and complete:
 3. Data safety (paste answers below)
 4. Photo/video permission declaration: camera and photos are for receipt capture only; not required to use the app (Upload file works)
 5. IARC content rating (finance / tools — typically everyone / PEGI 3)
-6. Store listing: short + full description below, phone screenshots, 1024×500 feature graphic
+6. Store listing: short + full description below. Phone screenshots live in
+   `mobile-suite/store/screenshots/play-1080x1920/`. Feature graphic:
+   `mobile-suite/store/feature-graphic-1024x500.png`.
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com`
 
@@ -94,27 +101,23 @@ Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
 ### 4. Apple App Store (Mac required)
 
-This Linux tree has **no** `mobile-suite/ios/` Xcode project.
+`mobile-suite/ios/` is already in the repo (`com.gotaxation.suite`). Info.plist
+already has camera / photo-library usage strings and
+`ITSAppUsesNonExemptEncryption = false` (HTTPS login only — no custom crypto).
+The same keys are in `ios-info.plist.additions.xml` if you ever re-add the
+platform.
 
 On a Mac:
 
 ```bash
 cd mobile-suite
 npm install
-npx cap add ios
 npx cap sync ios
+npx cap open ios
 ```
 
-Paste `ios-info.plist.additions.xml` into `ios/App/App/Info.plist`. Add:
-
-```xml
-<key>ITSAppUsesNonExemptEncryption</key>
-<false/>
-```
-
-(HTTPS login only — no custom crypto.)
-
-Then Xcode team signing → Archive → TestFlight → App Store.
+Then Xcode team signing → Archive → TestFlight → App Store. CocoaPods /
+`xcodebuild` are not available in this Linux tree — run those on the Mac.
 
 In App Store Connect:
 
@@ -179,11 +182,18 @@ Payments: Stripe on the **website** only. Card numbers are not stored in this ap
 
 ### 7. Reviewer demo account
 
-Create a throwaway Suite user on the **production** Suite host (not Driver Hub)
-and put it in Play / App Review notes, for example:
+On the **go-taxation-suite** Render service set:
+
+- `SUITE_REVIEWER_USERNAME` — e.g. `suite.reviewer`
+- `SUITE_REVIEWER_PASSWORD` — a strong password you choose (never commit it)
+- `SUITE_REVIEWER_EMAIL` — optional; defaults to `support+reviewer@godriverhub.com`
+
+The next boot creates a **non-admin** complimentary Pro+ profile with a small
+PAYG sample ledger (`lib/reviewer-demo.js`). It does not reset an existing
+password. Paste those credentials in Play / App Review notes:
 
 - URL: `https://go-taxation-suite.onrender.com/suite/`
-- Username / password: (you create these)
+- Username / password: the env values you set
 - How to delete: Profile → Delete account → type DELETE
 
 Do not give reviewers the primary mod login.

@@ -35,6 +35,9 @@ describe("Go Taxation Suite store / launcher icon", () => {
 
     const web = pngInfo(path.join(ROOT, "public", "suite", "icon-512.png"));
     expect(web).toMatchObject({ width: 512, height: 512, colorType: 6 });
+
+    const feature = pngInfo(path.join(STORE, "feature-graphic-1024x500.png"));
+    expect(feature).toMatchObject({ width: 1024, height: 500, colorType: 2 });
   });
 
   it("writes Android legacy and adaptive-foreground mipmaps at density sizes", () => {
