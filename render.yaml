@@ -51,8 +51,9 @@ services:
       # capacitor://localhost,https://your-custom-domain.com
       - key: CORS_ORIGINS
         sync: false
+      # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
       - key: CORS_ALLOW_CAPACITOR
-        sync: false
+        value: "1"
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM
@@ -160,8 +161,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
       - key: CORS_ALLOW_CAPACITOR
-        sync: false
+        value: "1"
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM

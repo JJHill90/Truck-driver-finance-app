@@ -107,6 +107,7 @@ const backup = require("./lib/backup");
 const mail = require("./lib/mail");
 const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
+const accountDelete = require("./lib/account-delete");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
@@ -895,6 +896,31 @@ api.post("/auth/change-password", (req, res) => {
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/account/delete", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to delete your account." });
+    return;
+  }
+  const { password, confirm } = req.body || {};
+  try {
+    const result = await accountDelete.deleteOwnAccount({
+      username: req.user,
+      password,
+      confirm,
+      recordsCache,
+    });
+    clearSessionCookie(res, req);
+    res.json({
+      ok: true,
+      username: result.username,
+      billing: result.billing || null,
+      message: "Your account and stored records have been permanently deleted.",
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message, code: err.code || null });
   }
 });
 
@@ -2482,7 +2508,7 @@ api.post("/admin/users", (req, res) => {
   }
 });
 
-api.delete("/admin/users/:username", (req, res) => {
+api.delete("/admin/users/:username", async (req, res) => {
   if (!requireAdmin(req, res)) return;
   const targetName = req.params.username;
   if (auth.usernameKey(targetName) === auth.usernameKey(req.user)) {
@@ -2495,27 +2521,14 @@ api.delete("/admin/users/:username", (req, res) => {
       res.status(404).json({ error: "User not found." });
       return;
     }
-    const recordsFile = auth.recordsFileFor(target.username);
-    let records = null;
-    if (recordsCache.has(target.username)) {
-      records = recordsCache.get(target.username);
-    } else if (fs.existsSync(recordsFile)) {
-      records = storage.loadRecords(recordsFile);
-    }
-    if (records) {
-      for (const r of records.receipts || []) {
-        if (r.imagePath) storage.deleteReceiptFile(r.imagePath);
-      }
-    }
-    auth.deleteUser(target.username);
-    recordsCache.delete(target.username);
-    recordsCache.delete(`suite:${target.username}`);
-    if (fs.existsSync(recordsFile)) fs.unlinkSync(recordsFile);
-    const suiteFile = suite.recordsFileFor(target.username);
-    if (fs.existsSync(suiteFile)) fs.unlinkSync(suiteFile);
-    res.json({ ok: true, username: target.username });
+    const result = await accountDelete.wipeAccount({
+      username: target.username,
+      recordsCache,
+      cancelBilling: true,
+    });
+    res.json({ ok: true, username: result.username, billing: result.billing || null });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
@@ -4349,6 +4362,34 @@ function redirectSuiteToSibling(req, res, next) {
   const pathPart = rest.startsWith("/suite") ? rest.slice("/suite".length) || "/" : "/";
   res.redirect(302, `${origin}/suite${pathPart === "/" ? "/" : pathPart}`);
 }
+
+function sendLegalPage(fileName) {
+  return (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, fileName));
+  };
+}
+function sendProductLegalPage(kind) {
+  const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
+  const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
+  return (req, res) => {
+    const pathName = String((req.originalUrl || req.path || "").split("?")[0]);
+    // Store-facing /privacy and /terms are Go Taxation Suite only.
+    let file = suiteFile;
+    if (pathName.startsWith("/haulage")) file = hubFile;
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
+app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
+app.get(
+  ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
+  sendProductLegalPage("privacy")
+);
+app.get(
+  ["/haulage/terms", "/haulage/terms.html", "/suite/terms", "/suite/terms.html"],
+  sendProductLegalPage("terms")
+);
+app.get(["/legal.css"], sendLegalPage("legal.css"));
 
 app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));

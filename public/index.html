@@ -102,6 +102,13 @@
           </div>
           <p id="title-hub-message" class="title-auth-message" role="status"></p>
         </div>
+        <p class="legal-footer title-legal">
+          <a href="/haulage/privacy">Privacy</a>
+          ·
+          <a href="/haulage/terms">Terms</a>
+          ·
+          Assistance tool — not tax advice and not an official ATO lodgement.
+        </p>
         <p class="app-version-footer title-version" data-app-version>Version 1.33</p>
       </div>
     </div>
@@ -202,6 +209,7 @@
                     <button type="button" class="btn primary" id="pick-receipt-camera">Scan with camera</button>
                     <button type="button" class="btn secondary" id="pick-receipt">Upload file</button>
                   </div>
+                  <p class="muted small camera-rationale">The camera is used only to photograph receipts and payslips you choose to save. You can refuse the permission and upload a file instead.</p>
                   <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
                 </div>
                 <div id="receipt-preview" class="preview hidden"></div>
@@ -624,7 +632,8 @@
                   <button type="button" class="btn secondary small hidden" id="billing-resume">Keep Pro renewing</button>
                   <button type="button" class="btn secondary small hidden" id="billing-manage">Manage billing</button>
                 </div>
-                <p class="muted span-2" id="billing-price-hint">Pro is the paid plan ($5/month or $60/year). Pro+ is complimentary full Pro access from the primary mod.</p>
+                <p class="muted span-2" id="billing-price-hint">Pro is the paid plan ($5/month or $60/year AUD). It auto-renews until you cancel. Cancel from this page or Manage billing (Stripe Customer Portal) — you keep Pro until the paid period ends. Website billing only; this is not an App Store or Play purchase.</p>
+                <p class="muted span-2 hidden" id="billing-store-note">Subscriptions are sold on the website (Stripe), not as an in-app purchase. Open Profile → Plan in a browser to subscribe, cancel, or update your card. There is no Restore purchases button because this app does not use Apple or Google IAP.</p>
                 <p id="billing-message" class="muted span-2" role="status"></p>
               </div>
               <div class="profile-security form-grid">
@@ -647,6 +656,20 @@
                 <p id="auth-new-password-strength" class="muted span-2" role="status"></p>
                 <div class="span-2 form-actions">
                   <button type="button" class="btn secondary small" id="auth-change-password">Change password</button>
+                </div>
+                <div id="auth-delete-block" class="span-2 profile-delete-block">
+                <h3 class="span-2 profile-section-title">Delete account</h3>
+                <p class="muted span-2 profile-security-hint">Permanently deletes this login, ledgers, receipt files and any website subscription (Stripe is cancelled immediately). Type DELETE and your password. The primary mod account cannot be deleted here.</p>
+                <label>Password
+                  <input id="auth-delete-password" type="password" autocomplete="current-password" placeholder="Current password" />
+                </label>
+                <label>Type DELETE to confirm
+                  <input id="auth-delete-confirm" type="text" autocomplete="off" placeholder="DELETE" />
+                </label>
+                <p id="auth-delete-message" class="muted span-2" role="status"></p>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn danger small" id="auth-delete-account">Delete my account</button>
+                </div>
                 </div>
               </div>
               <div class="form-grid profile-presets">
@@ -818,9 +841,19 @@
                 for any such matters.
               </p>
               <p>
+                This is not an official ATO product. Worksheets and EOFY reports are
+                working papers you (or your registered agent) use when lodging — the app
+                does not lodge a BAS or tax return.
+              </p>
+              <p>
                 For the most accurate saving of receipts, income and expense entries, use a
                 stable internet or cellular connection while you work. Interrupted uploads
                 or saves can leave incomplete records until you reconnect and try again.
+              </p>
+              <p>
+                <a href="/haulage/privacy">Privacy policy</a>
+                ·
+                <a href="/haulage/terms">Terms of use</a>
               </p>
             </div>
           </div>
