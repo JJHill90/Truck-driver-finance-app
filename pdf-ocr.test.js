@@ -1,5 +1,10 @@
 const PDFDocument = require("pdfkit");
-const { renderPdfPagesToPng, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
+const {
+  renderPdfPagesToPng,
+  pdfResultNeedsOcr,
+  hasUsablePdfTextLayer,
+  shouldRasterPdf,
+} = require("./lib/pdf-ocr");
 
 function makePdf(lines) {
   return new Promise((resolve) => {
@@ -27,6 +32,42 @@ describe("pdfResultNeedsOcr", () => {
     expect(pdfResultNeedsOcr({ amount: null, grossTotal: null }, "income")).toBe(true);
     expect(pdfResultNeedsOcr({ grossTotal: 2500 }, "income")).toBe(false);
     expect(pdfResultNeedsOcr({ netPay: 2000 }, "income")).toBe(false);
+  });
+});
+
+describe("hasUsablePdfTextLayer", () => {
+  it("rejects empty text and page chrome", () => {
+    expect(hasUsablePdfTextLayer("")).toBe(false);
+    expect(hasUsablePdfTextLayer("-- 1 of 1 --")).toBe(false);
+    expect(hasUsablePdfTextLayer("Page 1 of 2")).toBe(false);
+  });
+
+  it("accepts a digital payslip text layer", () => {
+    const text = `BETTS TRANSPORT PAYSLIP
+Pay period 03/06/2026 to 09/06/2026
+Employee A DRIVER ordinary time overtime travel
+Gross Pay 3043.00 Net Pay 2431.00 PAYG withheld`;
+    expect(hasUsablePdfTextLayer(text)).toBe(true);
+  });
+});
+
+describe("shouldRasterPdf", () => {
+  it("skips raster when a digital payslip has text but no labelled total", () => {
+    const text = `BETTS TRANSPORT PAYSLIP
+Pay period 03/06/2026 to 09/06/2026
+Employee A DRIVER ordinary time overtime travel
+See attached breakdown for this payment`;
+    expect(shouldRasterPdf({ amount: null, grossTotal: null }, "income", text)).toBe(false);
+  });
+
+  it("still rasters scanned PDFs with only page markers", () => {
+    expect(shouldRasterPdf({ amount: null }, "income", "-- 1 of 1 --")).toBe(true);
+    expect(shouldRasterPdf({ amount: null }, "expense", "")).toBe(true);
+  });
+
+  it("does not raster when a total was already read", () => {
+    expect(shouldRasterPdf({ grossTotal: 2500 }, "income", "")).toBe(false);
+    expect(shouldRasterPdf({ amount: 50.05 }, "expense", "")).toBe(false);
   });
 });
 
