@@ -1,34 +1,32 @@
-# Store listings — Driver Hub and Go Taxation Suite
+# Store listing — Go Taxation Suite
 
-This repo is **store-ready**. Uploading the binaries still needs your Apple
-Developer and Google Play Console accounts, signing keys, and a Mac for iOS.
-A Linux cloud agent cannot finish TestFlight or Play Console publish.
-
-## Two listings (do not reuse one app id)
+Compile **Go Taxation Suite only** for Google Play and the App Store.
 
 | Listing | Application id | Loads | Native project |
 |---------|----------------|-------|----------------|
-| **Driver Hub** | `com.haulagefinance.app` | hosted `/haulage/` | `mobile/` |
 | **Go Taxation Suite** | `com.gotaxation.suite` | `https://go-taxation-suite.onrender.com/suite/` | `mobile-suite/` |
 
-Set Driver Hub `mobile/capacitor.config.json` `server.url` to the real
-production origin before a release build (the committed value is a placeholder).
-Suite already points at the public Render host.
+Do not submit Driver Hub (`com.haulagefinance.app` / `mobile/`) unless you later
+decide to list that product separately. Privacy and Terms used for the stores
+are Suite-only (no Driver Hub, Taxation Hub, or Fuel Hub).
 
-## Privacy Policy URL (both stores)
+Uploading the binaries still needs your Apple Developer and Google Play Console
+accounts, signing keys, and a Mac for iOS.
 
-After this deploy, the pages are public (no login):
+## Privacy Policy URL (Play and App Store)
+
+After this deploy, the Suite pages are public (no login):
 
 - `https://go-taxation-suite.onrender.com/privacy`
 - `https://go-taxation-suite.onrender.com/terms`
-- Same paths on the Driver Hub host: `https://<driver-hub-host>/privacy`
+- Aliases: `/suite/privacy` and `/suite/terms` on the Suite host
 
 Play Console → App content → Privacy policy, and App Store Connect → App
 Privacy → Privacy Policy URL, must use those HTTPS URLs.
 
 ## Account deletion (Apple 5.1.1(v) + Play data safety)
 
-Signed-in drivers: **Profile → Delete account** (type `DELETE` + password).
+Signed-in users: **Profile → Delete account** (type `DELETE` + password).
 API: `POST /api/haulage/auth/account/delete`. Also described on `/privacy`.
 Primary mod cannot self-delete.
 
@@ -55,11 +53,10 @@ Paid plans are **website Stripe only** in this version — not Apple IAP or
 Play Billing. Native shells hide “Upgrade to Pro” checkout and show that
 auto-renewal, price, and cancel live on the website Profile → Plan.
 
-| Product | Plan | AUD |
-|---------|------|-----|
-| Driver Hub | Pro | $5/mo or $60/yr |
-| Go Taxation Suite | Pro | $10/mo or $110/yr |
-| Go Taxation Suite | Pro+ | $18/mo or $190/yr |
+| Plan | AUD |
+|------|-----|
+| Pro | $10/mo or $110/yr |
+| Pro+ | $18/mo or $190/yr |
 
 Cancel: website Profile → Cancel subscription (access until period end) or
 Manage billing (Stripe portal). Deleting the account cancels Stripe immediately.
@@ -79,26 +76,26 @@ Do **not** say “official BAS”, “we lodge your return”, or “ATO approve
 
 ## What you do next (cannot be done in this environment)
 
-### Google Play (both apps)
+### Google Play (Go Taxation Suite)
 
-1. Create two apps in Play Console with the application ids above.
-2. On a machine with Android Studio: `cd mobile && npm install && npx cap sync android`
+1. Create one app in Play Console: `com.gotaxation.suite`.
+2. On a machine with Android Studio: `cd mobile-suite && npm install && npx cap sync android`
    then **Build → Generate Signed Bundle** (your keystore, not in git).
-   Repeat in `mobile-suite/`.
-3. Upload each AAB to Internal testing, then Production.
-4. Fill Data safety, Privacy policy URL, camera permission declaration.
+3. Upload the AAB to Internal testing, then Production.
+4. Privacy policy URL: `https://go-taxation-suite.onrender.com/privacy`.
+   Fill Data safety and the camera permission declaration.
 
-### Apple App Store (both apps)
+### Apple App Store (Go Taxation Suite)
 
-1. On a Mac: `cd mobile && npm install && npx cap add ios && npx cap sync ios`
-   then paste `ios-info.plist.additions.xml` into `Info.plist`. Repeat for
-   `mobile-suite`.
+1. On a Mac: `cd mobile-suite && npm install && npx cap add ios && npx cap sync ios`
+   then paste `mobile-suite/ios-info.plist.additions.xml` into `Info.plist`.
 2. Xcode signing (your Apple Development / Distribution team).
 3. Archive → TestFlight → App Store.
-4. App Privacy + account-deletion URL (`/privacy`) + 5.1.1(v) in-app delete.
+4. App Privacy + account-deletion URL (`https://go-taxation-suite.onrender.com/privacy`)
+   + 5.1.1(v) in-app delete (Profile → Delete account).
 
 ## Render env (already in Blueprint)
 
-Confirm both `haulage-finance` and `go-taxation-suite` have
-`CORS_ALLOW_CAPACITOR=1` after this deploy. Set `APP_BASE_URL` to each
-service’s public HTTPS origin so Stripe portal return links work on the web.
+Confirm `go-taxation-suite` has `CORS_ALLOW_CAPACITOR=1` after this deploy. Set
+`APP_BASE_URL` to the Suite public HTTPS origin so Stripe portal return links
+work on the web.

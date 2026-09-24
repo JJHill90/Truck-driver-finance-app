@@ -4368,15 +4368,26 @@ function sendLegalPage(fileName) {
     res.sendFile(path.join(PUBLIC_DIR, fileName));
   };
 }
-app.get(["/privacy", "/privacy.html"], sendLegalPage("privacy.html"));
-app.get(["/terms", "/terms.html"], sendLegalPage("terms.html"));
+function sendProductLegalPage(kind) {
+  const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
+  const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
+  return (req, res) => {
+    const pathName = String((req.originalUrl || req.path || "").split("?")[0]);
+    // Store-facing /privacy and /terms are Go Taxation Suite only.
+    let file = suiteFile;
+    if (pathName.startsWith("/haulage")) file = hubFile;
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
+app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
 app.get(
   ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
-  sendLegalPage("privacy.html")
+  sendProductLegalPage("privacy")
 );
 app.get(
   ["/haulage/terms", "/haulage/terms.html", "/suite/terms", "/suite/terms.html"],
-  sendLegalPage("terms.html")
+  sendProductLegalPage("terms")
 );
 app.get(["/legal.css"], sendLegalPage("legal.css"));
 
