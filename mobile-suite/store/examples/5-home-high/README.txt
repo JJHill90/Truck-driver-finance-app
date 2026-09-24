@@ -1,2 +1,2 @@
-18% white GO high like the login, document boxed
+Option 5 GO inside the white outlined box (chosen)
 Play 512 + App Store 1024

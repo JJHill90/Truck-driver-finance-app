@@ -23,7 +23,17 @@ describe("Go Taxation Suite store / launcher icon", () => {
     expect(svg).toMatch(/#0B1F33/i);
     expect(svg).toMatch(/#38BDF8/i);
     expect(svg).toMatch(/#F0A202/i);
+    expect(svg).toMatch(/clipPath/);
+    expect(svg).toMatch(/>GO</);
     expect(svg).not.toMatch(/truck/i);
+  });
+
+  it("clips option 5 GO inside the white outlined box", () => {
+    const src = fs.readFileSync(path.join(STORE, "generate-icons.py"), "utf8");
+    expect(src).toMatch(/Layering: navy → white box → opacity GO inside the box → fold \/ lines/);
+    expect(src).toMatch(/def draw_go_inside_box/);
+    expect(src).toMatch(/def paint_boxed_mark/);
+    expect(src).toMatch(/rounded_rectangle\(box, radius=box_radius\(box\), fill=255\)/);
   });
 
   it("ships Play 512 (32-bit) and App Store 1024 (no alpha)", () => {

@@ -1,8 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <clipPath id="page">
+      <rect x="184" y="184" width="656" height="656" rx="72"/>
+    </clipPath>
+  </defs>
   <rect width="1024" height="1024" fill="#0B1F33"/>
-  <rect x="292" y="236" width="440" height="552" rx="48" fill="#E8EEF5"/>
-  <path d="M572 236 L732 396 H572 Z" fill="#38BDF8"/>
-  <rect x="364" y="524" width="296" height="36" rx="18" fill="#0B1F33"/>
-  <rect x="364" y="608" width="220" height="36" rx="18" fill="#0B1F33"/>
-  <rect x="364" y="692" width="256" height="36" rx="18" fill="#F0A202"/>
+  <!-- White outlined paper box -->
+  <rect x="184" y="184" width="656" height="656" rx="72" fill="#E8EEF5"/>
+  <!-- Option 5 opacity GO, clipped inside the box -->
+  <g clip-path="url(#page)" fill="#0B1F33" fill-opacity="0.18" font-family="Saira Condensed, sans-serif" font-weight="800" font-size="407">
+    <text x="512" y="420" text-anchor="middle" dominant-baseline="middle">GO</text>
+  </g>
+  <rect x="184" y="184" width="656" height="656" rx="72" fill="none" stroke="#FFFFFF" stroke-width="18"/>
+  <path d="M604 184 L840 328 H604 Z" fill="#38BDF8"/>
+  <rect x="289" y="459" width="446" height="36" rx="18" fill="#0B1F33"/>
+  <rect x="289" y="538" width="328" height="36" rx="18" fill="#0B1F33"/>
+  <rect x="289" y="617" width="380" height="36" rx="18" fill="#F0A202"/>
 </svg>

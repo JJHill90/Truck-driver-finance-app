@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Preview home-screen-style opacity GO behind a boxed document icon.
+"""Preview home-screen-style opacity GO with a boxed document icon.
 
-Matches Suite login look lr-b: wide Saira Condensed GO at low white opacity
-on the navy tile, with the paper document kept fully inside its box.
+Examples 1–4 keep GO behind the paper (review leftovers). Example 5 is the
+chosen look: same option 5 GO, clipped inside the white outlined box via
+generate-icons.compose.
 
-Does not overwrite the current production icons.
+Official store icons are written by generate-icons.py.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ g = runpy.run_path(str(ROOT / "generate-icons.py"))
 NAVY = g["NAVY"]
 draw_mark = g["draw_mark"]
 save_png = g["save_png"]
+official_compose = g["compose"]
 
 
 def saira(size):
@@ -81,8 +83,8 @@ def example_home_sky(size):
 
 
 def example_home_high(size):
-    """Login placement: more of the GO shows above the boxed document."""
-    return compose(size, alpha=46, scale=0.62, y=0.36)
+    """Chosen look: option 5 GO, clipped inside the white outlined box."""
+    return official_compose(size, background=True)
 
 
 EXAMPLES = [
@@ -90,7 +92,7 @@ EXAMPLES = [
     ("2-home-26", "Stronger 26% white GO, document in the box", example_home_26),
     ("3-home-12", "Softer 12% white GO, a little wider", example_home_12),
     ("4-home-sky", "18% sky GO, document in the box", example_home_sky),
-    ("5-home-high", "18% white GO high like the login, document boxed", example_home_high),
+    ("5-home-high", "Option 5 GO inside the white outlined box (chosen)", example_home_high),
 ]
 
 

@@ -32,17 +32,31 @@ FOREGROUND = {
 }
 
 
-def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER):
+SAIRA_EXTRABOLD = Path(__file__).resolve().parent / "fonts" / "SairaCondensed-ExtraBold.ttf"
+# Home-screen lr-b GO is ~18% white on navy. On the paper box that becomes
+# the same navy at ~18% so the letters read as a watermark inside the page.
+GO_ON_PAPER = (11, 31, 51, 46)
+
+
+def box_radius(box):
+    return max(8, int((box[2] - box[0]) * 0.11))
+
+
+def draw_paper_box(draw, box, paper=PAPER):
+    radius = box_radius(box)
+    draw.rounded_rectangle(box, radius=radius, fill=paper)
+    # Bright edge so the page reads as a white outlined box on navy.
+    stroke = max(2, int((box[2] - box[0]) * 0.028))
+    draw.rounded_rectangle(box, radius=radius, outline=(255, 255, 255, 255), width=stroke)
+
+
+def draw_mark_details(draw, box, fold=SKY, line=INK, accent=AMBER):
     x0, y0, x1, y1 = box
     w = x1 - x0
     h = y1 - y0
-    radius = max(8, int(w * 0.11))
-    draw.rounded_rectangle(box, radius=radius, fill=paper)
-
     fold_w = int(w * 0.36)
     fold_h = int(h * 0.22)
     fx = x1 - fold_w
-    # Turned page corner (sky triangle).
     draw.polygon([(fx, y0), (x1, y0 + fold_h), (fx, y0 + fold_h)], fill=fold)
 
     pad_x = int(w * 0.16)
@@ -61,12 +75,54 @@ def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER):
         )
 
 
+def draw_go_inside_box(img, box, fill=GO_ON_PAPER, *, scale=0.62, y_frac=0.36):
+    """Option 5 GO, clipped so it cannot sit outside the white outlined box."""
+    x0, y0, x1, y1 = box
+    bw = x1 - x0
+    bh = y1 - y0
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    try:
+        face = ImageFont.truetype(str(SAIRA_EXTRABOLD), max(12, int(bw * scale)))
+    except OSError:
+        face = ImageFont.truetype("/usr/share/fonts/truetype/noto/NotoSansDisplay-Bold.ttf", max(12, int(bw * scale)))
+    g_w = face.getlength("G")
+    o_w = face.getlength("O")
+    gap = bw * 0.018
+    total = g_w + o_w + gap
+    start = (x0 + x1) / 2 - total / 2
+    cy = y0 + bh * y_frac
+    draw.text((start, cy), "G", font=face, fill=fill, anchor="lm")
+    draw.text((start + g_w + gap, cy), "O", font=face, fill=fill, anchor="lm")
+
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius=box_radius(box), fill=255)
+    clipped = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    clipped.paste(layer, mask=mask)
+    return Image.alpha_composite(img, clipped)
+
+
+def paint_boxed_mark(img, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER, go=GO_ON_PAPER):
+    """Layering: navy → white box → opacity GO inside the box → fold / lines."""
+    draw = ImageDraw.Draw(img)
+    draw_paper_box(draw, box, paper=paper)
+    img = draw_go_inside_box(img, box, fill=go)
+    draw = ImageDraw.Draw(img)
+    draw_mark_details(draw, box, fold=fold, line=line, accent=accent)
+    return img
+
+
+def draw_mark(draw, box, paper=PAPER, fold=SKY, line=INK, accent=AMBER):
+    draw_paper_box(draw, box, paper=paper)
+    draw_mark_details(draw, box, fold=fold, line=line, accent=accent)
+
+
 def compose(size, *, background=True, round_clip=False):
     img = Image.new("RGBA", (size, size), NAVY if background else (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
     # Adaptive / store safe zone: keep the mark inside the inner ~66%.
     inset = int(size * (0.22 if not background else 0.18))
-    draw_mark(draw, (inset, inset, size - inset, size - inset))
+    box = (inset, inset, size - inset, size - inset)
+    img = paint_boxed_mark(img, box)
     if round_clip:
         mask = Image.new("L", (size, size), 0)
         ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
@@ -107,7 +163,8 @@ def feature_graphic():
     draw = ImageDraw.Draw(img)
 
     mark_box = (72, 86, 72 + 328, 86 + 328)
-    draw_mark(draw, mark_box)
+    img = paint_boxed_mark(img, mark_box)
+    draw = ImageDraw.Draw(img)
 
     title = font(FONT_BOLD, 46)
     suite_font = font(FONT_BOLD, 54)
