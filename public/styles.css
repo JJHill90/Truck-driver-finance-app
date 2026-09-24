@@ -415,6 +415,28 @@ button.title-hub-logout:hover {
   font-size: 0.78rem;
   margin: 0;
 }
+.profile-delete-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.legal-footer {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+.legal-footer a {
+  color: #8ec8ff;
+}
+.camera-rationale {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+}
 .profile-presets {
   margin-top: 4px;
   padding-top: 12px;

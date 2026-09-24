@@ -22,6 +22,24 @@
   const fmt = (n) =>
     new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
 
+  /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
+  function isNativeShell() {
+    try {
+      const cap = window.Capacitor;
+      if (cap && typeof cap.isNativePlatform === "function") {
+        return Boolean(cap.isNativePlatform());
+      }
+      if (cap && typeof cap.getPlatform === "function") {
+        const platform = cap.getPlatform();
+        return platform === "ios" || platform === "android";
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  window.haulageIsNativeShell = isNativeShell;
+
   function fmtDateShort(d) {
     if (!d) return "—";
     try {
@@ -2075,6 +2093,7 @@
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
       applyProfilePresetsToExpenseForms({ forceWorkUse: true });
+      byId("auth-delete-block")?.classList.toggle("hidden", Boolean(user.isAdmin));
       void refreshBillingPanel();
     } else {
       outEl.classList.remove("hidden");
@@ -2182,6 +2201,7 @@
     byId("billing-resume")?.classList.add("hidden");
     byId("billing-manage")?.classList.add("hidden");
     byId("billing-price-hint")?.classList.add("hidden");
+    byId("billing-store-note")?.classList.add("hidden");
     updatePlanBadges(null);
   }
 
@@ -2330,12 +2350,18 @@
       );
     }
 
+    const nativeShell = isNativeShell();
+    const storeNote = byId("billing-store-note");
+    if (storeNote) storeNote.classList.toggle("hidden", !nativeShell);
+
     if (upgradeBtn) {
-      // Paid Pro checkout — available on Free (and leftover Pro+ signup trials).
+      // Paid Pro checkout — website only. Native shells must not start Stripe
+      // (Apple 3.1.1 / Play Billing). Subscribe from a browser.
       const paidLive =
         ent.hasStripeSubscription &&
         ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
-      const hideUpgrade = ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
+      const hideUpgrade =
+        nativeShell || ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
       if (hideUpgrade) {
         upgradeBtn.classList.add("hidden");
       } else {
@@ -2345,7 +2371,7 @@
     }
     const plusBtn = byId("billing-upgrade-plus");
     if (plusBtn) {
-      const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus;
+      const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus && !nativeShell;
       plusBtn.classList.toggle("hidden", !canBuyPlus);
     }
 
@@ -2611,6 +2637,14 @@
     markBrowsePrompted(data && data.view);
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
+    if (isNativeShell()) {
+      const msg =
+        (data && data.error ? `${data.error} ` : "") +
+        "Subscribe on the website (Stripe). This app listing does not sell in-app purchases.";
+      if (window.toast) window.toast(msg);
+      setBillingMessage(msg, true);
+      return;
+    }
     const ent = (data && data.entitlements) || cachedEntitlements || {};
     const price = ent.priceLabel || fallbackMonthlyPrice();
     const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
@@ -2660,6 +2694,13 @@
   window.haulagePromptUpgrade = promptUpgrade;
 
   async function startCheckout(interval = "month", plan = "pro") {
+    if (isNativeShell()) {
+      setBillingMessage(
+        "Subscribe on the website (Stripe). This app listing does not sell in-app purchases.",
+        true
+      );
+      return;
+    }
     const period = interval === "year" ? "year" : "month";
     const tier = plan === "pro_plus" ? "pro_plus" : "pro";
     setBillingMessage(
@@ -4626,6 +4667,33 @@
           renderAlerts(alertData.alerts, alertData.user);
         } catch (e) {
           if (window.toast) window.toast(e.message);
+        }
+      });
+    }
+    const deleteAccount = byId("auth-delete-account");
+    if (deleteAccount) {
+      deleteAccount.addEventListener("click", async () => {
+        const password = (byId("auth-delete-password") || {}).value || "";
+        const confirmWord = (byId("auth-delete-confirm") || {}).value || "";
+        const msg = byId("auth-delete-message");
+        if (String(confirmWord).trim().toUpperCase() !== "DELETE") {
+          if (msg) msg.textContent = "Type DELETE to confirm.";
+          if (window.toast) window.toast("Type DELETE to confirm account deletion");
+          return;
+        }
+        const ok = window.confirm(
+          "Delete this account permanently?\n\nYour login, ledgers, receipts and website subscription will be removed. This cannot be undone."
+        );
+        if (!ok) return;
+        if (msg) msg.textContent = "Deleting account…";
+        try {
+          await apiPost("/auth/account/delete", { password, confirm: confirmWord });
+          resetReviewShown();
+          setSelectedHubApp("");
+          window.location.reload();
+        } catch (e) {
+          if (msg) msg.textContent = e.message || "Could not delete account.";
+          if (window.toast) window.toast(e.message || "Could not delete account");
         }
       });
     }

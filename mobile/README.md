@@ -73,19 +73,23 @@ native Camera can be wired later without changing the backend.
 4. Upload to Play Console → Internal testing track.
 5. Keep `server.url` on production HTTPS before store builds.
 
-## iOS (later)
+## iOS
 
-On a Mac:
+On a Mac (Xcode + signing). This Linux tree does not include a generated
+Xcode project:
 
 ```bash
 cd mobile
 npx cap add ios
 npx cap sync ios
-npx cap open ios
 ```
 
-Then TestFlight via Xcode / App Store Connect. App id:
-`com.haulagefinance.app`.
+Paste `ios-info.plist.additions.xml` into `ios/App/App/Info.plist` (camera
+and photo-library usage strings), then `npx cap open ios` → Archive →
+TestFlight. App id: `com.haulagefinance.app`.
+
+Go Taxation Suite is a **second listing** under `mobile-suite/`
+(`com.gotaxation.suite` → `/suite/`). See `docs/store-listing.md`.
 
 ## Repo layout
 
