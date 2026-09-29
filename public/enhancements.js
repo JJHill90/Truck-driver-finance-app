@@ -11447,6 +11447,9 @@
     "Tax brackets",
   ];
 
+  let supportInbox = "support@godriverhub.com";
+  let welcomed = false;
+
   function esc(s) {
     return String(s || "")
       .replace(/&/g, "&amp;")
@@ -11540,10 +11543,25 @@
       if (e.key === "Escape" && isOpen()) setOpen(false);
     });
 
-    addBot(
-      "Ask a general tax or allowance question. I only answer from the ATO rates and category notes loaded in this app. If I cannot answer, I will give you support@godriverhub.com and a short prompt to send."
-    );
+    if (!welcomed) {
+      welcomed = true;
+      loadInbox().then(() => {
+        addBot(
+          `Ask a general tax or allowance question. I only answer from the ATO rates and category notes loaded in this app. If I cannot answer, I will give you ${supportInbox} and a short prompt to send.`
+        );
+      });
+    }
     return root;
+  }
+
+  async function loadInbox() {
+    try {
+      const res = await fetch(`${apiBase()}/support/info`, { credentials: "same-origin" });
+      const data = await res.json();
+      if (data && data.email) supportInbox = data.email;
+    } catch {
+      /* keep default */
+    }
   }
 
   function isOpen() {
@@ -11604,13 +11622,13 @@
       const data = await res.json().catch(() => ({}));
       if (pending) pending.remove();
       if (!res.ok || !data.ok) {
-        addBot(data.error || "Could not look that up. Email support@godriverhub.com.");
+        addBot(data.error || `Could not look that up. Email ${supportInbox}.`);
         return;
       }
       addBot(data.answer, data.handoff);
     } catch {
       if (pending) pending.remove();
-      addBot("Network error. Email support@godriverhub.com and mention this topic.");
+      addBot(`Network error. Email ${supportInbox} and mention this topic.`);
     } finally {
       if (sendBtn) sendBtn.disabled = false;
     }
