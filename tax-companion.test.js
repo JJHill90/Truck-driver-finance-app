@@ -91,4 +91,15 @@ describe("tax companion", () => {
     expect(hub).toMatch(/companion\.js/);
     expect(suite).toMatch(/companion\.js/);
   });
+
+  it("uses the Suite companion welcome blurb", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const src = fs.readFileSync(path.join(__dirname, "public/companion.js"), "utf8");
+    expect(src).toMatch(
+      /Hi I'm the companion chat for \$\{brand\}, I can answer any general taxation questions regarding expenses, income, or allowances/
+    );
+    expect(src).toMatch(/I can quick search anything related to ATO policies/);
+    expect(src).toMatch(/link support@godriverhub\.com/);
+  });
 });
