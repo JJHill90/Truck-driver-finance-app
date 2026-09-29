@@ -3022,150 +3022,192 @@ tr.vending-machine-row {
   .fuelhub-stats { grid-template-columns: 1fr; }
 }
 
-/* --- Taxation companion chat -------------------------------------------- */
-.tax-chat {
+/* --- Tax companion (bottom-right chat) --------------------------------- */
+.tax-companion {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
   z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
-  font-family: var(--font-ui);
+  pointer-events: none;
 }
-body.auth-locked .tax-chat,
-body.fuelhub-open .tax-chat {
+body.auth-locked .tax-companion,
+body.fuelhub-open .tax-companion {
   display: none !important;
 }
-.tax-chat-panel {
-  width: min(400px, calc(100vw - 28px));
+.tax-companion-fab,
+.tax-companion-panel,
+.tax-companion-form,
+.tax-companion-chip,
+.tax-companion-close {
+  pointer-events: auto;
+}
+.tax-companion-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #1a1205;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tax-companion-fab:hover,
+.tax-companion-fab:focus-visible {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  outline: none;
+}
+.tax-companion-fab.is-open {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tax-companion-panel {
+  width: min(380px, calc(100vw - 28px));
   max-height: min(560px, calc(100dvh - 96px));
   display: flex;
   flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
-.tax-chat-panel.hidden { display: none !important; }
-.tax-chat-head {
+.tax-companion-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   padding: 12px 14px 10px;
-  background: var(--panel-2);
   border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
 }
-.tax-chat-head h2 {
+.tax-companion-title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
+  font-family: var(--font-brand);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.tax-chat-head p {
+.tax-companion-sub {
   margin: 2px 0 0;
   font-size: 0.75rem;
   color: var(--text-dim);
 }
-.tax-chat-close {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+.tax-companion-close {
   background: transparent;
-  color: var(--text);
+  border: 0;
+  color: var(--text-dim);
+  font-size: 1.4rem;
+  line-height: 1;
   cursor: pointer;
+  padding: 0 2px;
 }
-.tax-chat-log {
-  flex: 1;
-  min-height: 180px;
-  overflow: auto;
+.tax-companion-close:hover { color: var(--text); }
+.tax-companion-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
   padding: 12px 14px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-content: start;
+  min-height: 180px;
 }
-.tax-chat-msg {
-  max-width: 95%;
+.tax-companion-msg {
+  max-width: 92%;
   padding: 8px 11px;
   border-radius: 12px;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.86rem;
 }
-.tax-chat-msg p { margin: 0 0 0.55em; }
-.tax-chat-msg p:last-child { margin-bottom: 0; }
-.tax-chat-msg a { color: var(--hub-accent); }
-.tax-chat-msg.user {
-  justify-self: end;
-  background: rgba(62, 176, 255, 0.16);
-  border: 1px solid rgba(62, 176, 255, 0.35);
-}
-.tax-chat-msg.bot {
-  justify-self: start;
-  background: rgba(0, 0, 0, 0.18);
+.tax-companion-msg p { margin: 0; }
+.tax-companion-msg p + p { margin-top: 6px; }
+.tax-companion-msg.is-bot {
+  align-self: flex-start;
+  background: var(--bg-2);
   border: 1px solid var(--border);
 }
-.tax-chat-msg.bot.handoff {
-  border-color: var(--accent);
+.tax-companion-msg.is-user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
 }
-.tax-chat-chips {
+.tax-companion-msg.is-busy { color: var(--text-dim); font-style: italic; }
+.tax-companion-topic {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px !important;
+}
+.tax-companion-sources,
+.tax-companion-fallback {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.tax-companion-msg a { color: var(--accent); }
+.tax-companion-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 0 14px 8px;
+  padding: 0 12px 8px;
+  pointer-events: auto;
 }
-.tax-chat-chips button {
-  border: 1px solid var(--border);
-  background: var(--panel-2);
+.tax-companion-chip {
+  font: inherit;
+  font-size: 0.72rem;
   color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 0.74rem;
+  padding: 4px 9px;
   cursor: pointer;
 }
-.tax-chat-form {
-  display: flex;
+.tax-companion-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tax-companion-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 8px;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--border);
+  align-items: end;
 }
-.tax-chat-form input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--border);
-  background: var(--bg-2);
+.tax-companion-form textarea {
+  font: inherit;
   color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
-  font: inherit;
+  resize: none;
+  min-height: 44px;
 }
-.tax-chat-form button {
-  flex: none;
+.tax-companion-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
 }
-.tax-chat-launch {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
+.tax-companion-send {
+  height: 40px;
+  padding: 0 14px;
+}
+.tax-companion .visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
   border: 0;
-  background: var(--accent);
-  color: #1a1205;
-  box-shadow: 0 8px 22px rgba(245, 158, 11, 0.35);
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  line-height: 1.05;
-  text-align: center;
-  padding: 8px;
-}
-.tax-chat-launch:hover { background: var(--accent-strong); }
-.tax-chat-launch[aria-expanded="true"] { background: var(--hub-accent); color: #041018; }
-@media (max-width: 640px) {
-  .tax-chat { right: 10px; bottom: 10px; }
-  .tax-chat-panel { max-height: min(72dvh, calc(100dvh - 80px)); }
 }
