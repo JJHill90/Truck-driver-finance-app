@@ -129,6 +129,7 @@ const fuelReceipts = require("./lib/fuel-receipts");
 const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
 const yearCompare = require("./lib/year-compare");
+const taxCompanion = require("./lib/tax-companion");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -723,6 +724,7 @@ const OPEN_WRITE_PATHS = new Set([
   "/auth/password-strength",
   "/expenses/preview",
   "/support/contact",
+  "/companion/ask",
 ]);
 api.use((req, res, next) => {
   const method = (req.method || "GET").toUpperCase();
@@ -4270,6 +4272,18 @@ api.delete("/profile/extra-entity/:id", (req, res) => {
 });
 
 // --- Support contact -----------------------------------------------------
+// --- Tax companion (ATO-backed FAQ) --------------------------------------
+api.post("/companion/ask", (req, res) => {
+  const question = req.body && req.body.question;
+  const fy = req.body && req.body.financialYear;
+  const result = taxCompanion.answerQuestion(question, {
+    product: req.product,
+    email: support.supportInbox(),
+    financialYear: typeof fy === "string" ? fy : undefined,
+  });
+  res.json(result);
+});
+
 api.get("/support/info", (req, res) => {
   const ent = req.user ? resolveReqEntitlements(req) : null;
   res.json({

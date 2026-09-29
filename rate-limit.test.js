@@ -66,6 +66,16 @@ describe("rate-limit", () => {
       }
     );
     expect(next).toBe(true);
+
+    next = false;
+    mw(
+      { method: "POST", path: "/companion/ask", headers: {}, ip: "8.8.8.8", body: {} },
+      res,
+      () => {
+        next = true;
+      }
+    );
+    expect(next).toBe(true);
   });
 
   it("clientIp prefers x-forwarded-for", () => {
