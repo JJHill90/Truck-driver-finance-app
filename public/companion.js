@@ -58,7 +58,7 @@
 
   function welcomeText() {
     const brand = isSuite() ? "Go Taxation Suite" : "Taxation Hub";
-    return `Ask a general ${brand} question about expenses, income, or allowances. I answer from ATO rates this app already uses — not tax advice, and I do not lodge. If I cannot answer, I will link support@godriverhub.com so you can contact support for that topic.`;
+    return `Hi I'm the companion chat for ${brand}, I can answer any general taxation questions regarding expenses, income, or allowances. I can quick search anything related to ATO policies — not tax advice, and I do not lodge. If I cannot answer, I will link support@godriverhub.com so you can contact support for that topic.`;
   }
 
   function mount() {
