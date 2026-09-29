@@ -102,6 +102,7 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const supportChat = require("./lib/support-chat");
 const dataDir = require("./lib/data-dir");
 const backup = require("./lib/backup");
 const mail = require("./lib/mail");
@@ -723,6 +724,7 @@ const OPEN_WRITE_PATHS = new Set([
   "/auth/password-strength",
   "/expenses/preview",
   "/support/contact",
+  "/support/chat",
 ]);
 api.use((req, res, next) => {
   const method = (req.method || "GET").toUpperCase();
@@ -4346,6 +4348,24 @@ api.post("/support/contact", async (req, res) => {
     message: statusMessage,
     error: mailResult.error || null,
   });
+});
+
+api.post("/support/chat", (req, res) => {
+  const message = req.body && req.body.message;
+  const fy =
+    (req.body && req.body.financialYear) ||
+    (req.query && req.query.fy) ||
+    getCurrentFinancialYear();
+  const result = supportChat.answerQuestion(message, {
+    product: productOf(req),
+    financialYear: fy,
+    supportEmail: support.supportInbox(),
+  });
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  res.json(result);
 });
 
 app.use("/api/haulage", api);

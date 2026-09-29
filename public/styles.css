@@ -3021,3 +3021,151 @@ tr.vending-machine-row {
   .fuelhub-card { padding: 12px; }
   .fuelhub-stats { grid-template-columns: 1fr; }
 }
+
+/* --- Taxation companion chat -------------------------------------------- */
+.tax-chat {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  font-family: var(--font-ui);
+}
+body.auth-locked .tax-chat,
+body.fuelhub-open .tax-chat {
+  display: none !important;
+}
+.tax-chat-panel {
+  width: min(400px, calc(100vw - 28px));
+  max-height: min(560px, calc(100dvh - 96px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.tax-chat-panel.hidden { display: none !important; }
+.tax-chat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 10px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.tax-chat-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.tax-chat-head p {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.tax-chat-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.tax-chat-log {
+  flex: 1;
+  min-height: 180px;
+  overflow: auto;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.tax-chat-msg {
+  max-width: 95%;
+  padding: 8px 11px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.tax-chat-msg p { margin: 0 0 0.55em; }
+.tax-chat-msg p:last-child { margin-bottom: 0; }
+.tax-chat-msg a { color: var(--hub-accent); }
+.tax-chat-msg.user {
+  justify-self: end;
+  background: rgba(62, 176, 255, 0.16);
+  border: 1px solid rgba(62, 176, 255, 0.35);
+}
+.tax-chat-msg.bot {
+  justify-self: start;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border);
+}
+.tax-chat-msg.bot.handoff {
+  border-color: var(--accent);
+}
+.tax-chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+.tax-chat-chips button {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.tax-chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+.tax-chat-form input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.tax-chat-form button {
+  flex: none;
+}
+.tax-chat-launch {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  color: #1a1205;
+  box-shadow: 0 8px 22px rgba(245, 158, 11, 0.35);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-align: center;
+  padding: 8px;
+}
+.tax-chat-launch:hover { background: var(--accent-strong); }
+.tax-chat-launch[aria-expanded="true"] { background: var(--hub-accent); color: #041018; }
+@media (max-width: 640px) {
+  .tax-chat { right: 10px; bottom: 10px; }
+  .tax-chat-panel { max-height: min(72dvh, calc(100dvh - 80px)); }
+}
