@@ -11434,3 +11434,222 @@
     start();
   }
 })();
+
+/* --- Taxation companion chat (ATO-table answers + support handoff) ------- */
+(function () {
+  "use strict";
+
+  const SUGGESTIONS = [
+    "Meal allowance rates",
+    "Travel allowance caps",
+    "Car cents per km",
+    "Do I need a receipt?",
+    "Tax brackets",
+  ];
+
+  let supportInbox = "support@godriverhub.com";
+  let welcomed = false;
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function formatChatHtml(text) {
+    return String(text || "")
+      .split(/\n{2,}/)
+      .map((block) => {
+        const lines = esc(block).replace(/\n/g, "<br>");
+        const linked = lines.replace(
+          /([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/gi,
+          '<a href="mailto:$1">$1</a>'
+        );
+        return `<p>${linked}</p>`;
+      })
+      .join("");
+  }
+
+  function currentFy() {
+    const sel = document.getElementById("fy-select");
+    if (sel && sel.value) return sel.value;
+    try {
+      if (typeof state !== "undefined" && state && state.financialYear) return state.financialYear;
+    } catch {
+      /* ignore */
+    }
+    return "";
+  }
+
+  function apiBase() {
+    if (typeof API === "string" && API) return API;
+    return `${window.location.origin}/api/haulage`;
+  }
+
+  function shouldShowBubble() {
+    const body = document.body;
+    if (!body || body.classList.contains("auth-locked")) return false;
+    if (body.classList.contains("fuelhub-open")) return false;
+    return Boolean(document.querySelector(".app-shell"));
+  }
+
+  function ensureChat() {
+    let root = document.getElementById("tax-chat");
+    if (root) return root;
+    root = document.createElement("div");
+    root.id = "tax-chat";
+    root.className = "tax-chat hidden";
+    root.innerHTML = `
+      <div id="tax-chat-panel" class="tax-chat-panel hidden" role="dialog" aria-labelledby="tax-chat-title" aria-modal="false">
+        <div class="tax-chat-head">
+          <div>
+            <h2 id="tax-chat-title">Taxation companion</h2>
+            <p>ATO-table answers for expenses, income and allowances. Not personal advice.</p>
+          </div>
+          <button type="button" class="tax-chat-close" id="tax-chat-close" aria-label="Close chat">×</button>
+        </div>
+        <div id="tax-chat-log" class="tax-chat-log" aria-live="polite"></div>
+        <div class="tax-chat-chips" id="tax-chat-chips"></div>
+        <form class="tax-chat-form" id="tax-chat-form">
+          <input type="text" id="tax-chat-input" maxlength="500" autocomplete="off" placeholder="Ask about meals, travel, cars, receipts…" />
+          <button type="submit" class="btn primary small" id="tax-chat-send">Send</button>
+        </form>
+      </div>
+      <button type="button" class="tax-chat-launch" id="tax-chat-launch" aria-expanded="false" aria-controls="tax-chat-panel">
+        Chat
+      </button>
+    `;
+    document.body.appendChild(root);
+
+    const chips = root.querySelector("#tax-chat-chips");
+    SUGGESTIONS.forEach((label) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", () => sendQuestion(label));
+      chips.appendChild(btn);
+    });
+
+    root.querySelector("#tax-chat-launch").addEventListener("click", togglePanel);
+    root.querySelector("#tax-chat-close").addEventListener("click", () => setOpen(false));
+    root.querySelector("#tax-chat-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = root.querySelector("#tax-chat-input");
+      sendQuestion(input.value);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isOpen()) setOpen(false);
+    });
+
+    if (!welcomed) {
+      welcomed = true;
+      loadInbox().then(() => {
+        addBot(
+          `Ask a general tax or allowance question. I only answer from the ATO rates and category notes loaded in this app. If I cannot answer, I will give you ${supportInbox} and a short prompt to send.`
+        );
+      });
+    }
+    return root;
+  }
+
+  async function loadInbox() {
+    try {
+      const res = await fetch(`${apiBase()}/support/info`, { credentials: "same-origin" });
+      const data = await res.json();
+      if (data && data.email) supportInbox = data.email;
+    } catch {
+      /* keep default */
+    }
+  }
+
+  function isOpen() {
+    const panel = document.getElementById("tax-chat-panel");
+    return Boolean(panel && !panel.classList.contains("hidden"));
+  }
+
+  function setOpen(open) {
+    const root = ensureChat();
+    const panel = root.querySelector("#tax-chat-panel");
+    const launch = root.querySelector("#tax-chat-launch");
+    panel.classList.toggle("hidden", !open);
+    launch.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      const input = root.querySelector("#tax-chat-input");
+      if (input) input.focus();
+    }
+  }
+
+  function togglePanel() {
+    setOpen(!isOpen());
+  }
+
+  function addMsg(role, text, extraClass) {
+    const log = document.getElementById("tax-chat-log");
+    if (!log) return;
+    const div = document.createElement("div");
+    div.className = `tax-chat-msg ${role}${extraClass ? ` ${extraClass}` : ""}`;
+    div.innerHTML = formatChatHtml(text);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function addBot(text, handoff) {
+    addMsg("bot", text, handoff ? "handoff" : "");
+  }
+
+  async function sendQuestion(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return;
+    const input = document.getElementById("tax-chat-input");
+    if (input) input.value = "";
+    setOpen(true);
+    addMsg("user", text);
+    const sendBtn = document.getElementById("tax-chat-send");
+    if (sendBtn) sendBtn.disabled = true;
+    addBot("Looking up the ATO tables in this app…");
+    const log = document.getElementById("tax-chat-log");
+    const pending = log && log.lastElementChild;
+    try {
+      const fy = currentFy();
+      const res = await fetch(`${apiBase()}/support/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ message: text, financialYear: fy || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (pending) pending.remove();
+      if (!res.ok || !data.ok) {
+        addBot(data.error || `Could not look that up. Email ${supportInbox}.`);
+        return;
+      }
+      addBot(data.answer, data.handoff);
+    } catch {
+      if (pending) pending.remove();
+      addBot(`Network error. Email ${supportInbox} and mention this topic.`);
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
+  function syncVisibility() {
+    const root = ensureChat();
+    root.classList.toggle("hidden", !shouldShowBubble());
+    if (!shouldShowBubble()) setOpen(false);
+  }
+
+  function start() {
+    syncVisibility();
+    const mo = new MutationObserver(syncVisibility);
+    mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
