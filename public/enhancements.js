@@ -812,7 +812,9 @@
         if (res.status === 402 && isHaulageApiUrl(url)) {
           const data = await res.clone().json();
           const method = fetchRequestMethod(args, options);
-          if (isBrowseSafePaymentGate(method, url)) {
+          if (window.__haulageTourActive) {
+            /* first-run walkthrough — do not pop the Pro gate */
+          } else if (isBrowseSafePaymentGate(method, url)) {
             /* let Free users look through the tab */
           } else if (
             data &&
@@ -1651,6 +1653,7 @@
     setSelectedHubApp("taxationhub");
     unlockApp();
     showAuthState(user || null);
+    window.dispatchEvent(new CustomEvent("haulage:taxationhub-open"));
   }
 
   function openFuelHub() {
@@ -1972,6 +1975,7 @@
       } catch {
         /* ignore */
       }
+      window.dispatchEvent(new CustomEvent("haulage:auth-logout"));
       resetReviewShown();
       setSelectedHubApp("");
       window.location.reload();
@@ -2549,6 +2553,7 @@
 
   function startBrowseLinger(view) {
     cancelBrowseLinger();
+    if (window.__haulageTourActive) return;
     if (view !== "forecast" && view !== "report") return;
     if (cachedEntitlements && cachedEntitlements.isPro) return;
     if (lingerPrompted.has(view)) return;
@@ -2634,6 +2639,7 @@
   }
 
   function promptUpgrade(data) {
+    if (window.__haulageTourActive) return;
     markBrowsePrompted(data && data.view);
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
@@ -4650,6 +4656,7 @@
         } catch {
           /* ignore */
         }
+        window.dispatchEvent(new CustomEvent("haulage:auth-logout"));
         resetReviewShown();
         setSelectedHubApp("");
         window.location.reload();
@@ -4884,7 +4891,7 @@
         }
         // Driver Hub: signed-in users pick an app unless one is already open.
         const selectedApp = getSelectedHubApp();
-        if (selectedApp === "taxationhub") {
+        if (selectedApp === "taxationhub" || me.user.needsFirstRunTour) {
           openTaxationHub(me.user);
           if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
@@ -11426,6 +11433,351 @@
     if (form) {
       new MutationObserver(bindManualForm).observe(form, { childList: true, subtree: true });
     }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- First-run coach-mark tour (self-register, one session) -------------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let steps = [];
+  let index = 0;
+  let root = null;
+  let spot = null;
+  let card = null;
+  let username = "";
+  let reconcileBtn = null;
+  let reconcileWasHidden = true;
+
+  function sessionKey(name) {
+    return `haulage-first-run-tour:${name || "anon"}`;
+  }
+
+  function readSession(name) {
+    try {
+      const raw = sessionStorage.getItem(sessionKey(name));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.index === "number") return parsed;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function writeSession(name, idx) {
+    try {
+      sessionStorage.setItem(sessionKey(name), JSON.stringify({ index: idx }));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function clearSession(name) {
+    try {
+      if (name) sessionStorage.removeItem(sessionKey(name));
+      Object.keys(sessionStorage)
+        .filter((k) => k.startsWith("haulage-first-run-tour:"))
+        .forEach((k) => sessionStorage.removeItem(k));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function fetchSteps() {
+    try {
+      const res = await fetch(`${API}/first-run-tour`, { credentials: "same-origin" });
+      const data = await res.json();
+      return Array.isArray(data.steps) ? data.steps : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function resolveSteps(all) {
+    return (all || []).filter((step) => !step.optional || document.querySelector(step.target));
+  }
+
+  function ensureDom() {
+    if (root) return;
+    root = document.createElement("div");
+    root.id = "first-run-tour";
+    root.className = "first-run-tour";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-labelledby", "first-run-tour-title");
+    root.innerHTML = `
+      <div class="first-run-tour-spot" aria-hidden="true"></div>
+      <div class="first-run-tour-card">
+        <p class="first-run-tour-kicker" id="first-run-tour-kicker"></p>
+        <h3 id="first-run-tour-title"></h3>
+        <p id="first-run-tour-body"></p>
+        <div class="form-actions">
+          <button type="button" class="btn primary" id="first-run-tour-next">Next</button>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    spot = root.querySelector(".first-run-tour-spot");
+    card = root.querySelector(".first-run-tour-card");
+    root.querySelector("#first-run-tour-next").addEventListener("click", () => next());
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") e.preventDefault();
+      if (e.key === "Tab") {
+        e.preventDefault();
+        root.querySelector("#first-run-tour-next")?.focus();
+      }
+    });
+    root.addEventListener("click", (e) => {
+      if (e.target === root || e.target.classList.contains("first-run-tour-spot")) {
+        root.querySelector("#first-run-tour-next")?.focus();
+      }
+    });
+  }
+
+  let demoBox = null;
+
+  function cleanupPrepare() {
+    if (reconcileBtn) {
+      reconcileBtn.classList.remove("tour-preview");
+      if (reconcileBtn.dataset.tourCreated === "1") reconcileBtn.remove();
+      else reconcileBtn.hidden = reconcileWasHidden;
+      reconcileBtn = null;
+    }
+    if (demoBox) {
+      const demo = demoBox.querySelector(".first-run-tour-demo");
+      if (demo) {
+        demo.remove();
+        demoBox.classList.add("hidden");
+      }
+      demoBox.classList.remove("tour-preview");
+      demoBox = null;
+    }
+  }
+
+  function showScanDemo(boxId, html) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    demoBox = box;
+    box.classList.remove("hidden");
+    box.classList.add("tour-preview");
+    if (!box.querySelector(".scan-confirm")) {
+      box.insertAdjacentHTML("beforeend", html);
+    }
+  }
+
+  function showReconcile(listId) {
+    const list = document.getElementById(listId);
+    const panel = list && list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    let btn = header.querySelector(".ledger-reconcile-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn ledger-reconcile-btn";
+      btn.textContent = "Reconcile entries";
+      btn.dataset.tourCreated = "1";
+      const actions = header.querySelector(".ledger-header-actions");
+      if (actions) actions.insertBefore(btn, actions.firstChild);
+      else header.appendChild(btn);
+    }
+    reconcileBtn = btn;
+    reconcileWasHidden = btn.hidden;
+    btn.hidden = false;
+    btn.classList.add("tour-preview");
+  }
+
+  function prepare(step) {
+    cleanupPrepare();
+    if (step.view && typeof globalThis.setView === "function") {
+      globalThis.setView(step.view);
+    }
+    if (step.prepare === "open-guide") {
+      const guide = document.querySelector(".receipt-photo-guide");
+      if (guide) guide.open = true;
+    }
+    if (step.prepare === "show-reconcile") {
+      showReconcile(step.view === "income" ? "income-list" : "expense-list");
+    }
+    if (step.prepare === "show-scan-confirm") {
+      showScanDemo(
+        "scan-result",
+        `<div class="scan-confirm first-run-tour-demo">
+          <h3>Approve scanned total?</h3>
+          <p class="muted">Check the overall total, then approve. Line items are only for checking.</p>
+          <label class="scan-confirm-amount-label">Total amount ($)
+            <input type="number" value="42.50" readonly tabindex="-1" />
+          </label>
+          <div class="scan-confirm-actions">
+            <button type="button" class="btn primary" tabindex="-1">Yes — approve &amp; save</button>
+            <button type="button" class="btn secondary" tabindex="-1">Edit details first</button>
+            <button type="button" class="btn secondary" tabindex="-1">Discard</button>
+          </div>
+        </div>`
+      );
+    }
+    if (step.prepare === "show-income-confirm") {
+      showScanDemo(
+        "income-scan-result",
+        `<div class="scan-confirm first-run-tour-demo">
+          <h3>Approve remittance / payslip?</h3>
+          <p class="muted">Net pay is the figure we save. Tap a detected total if the reader picked the wrong one.</p>
+          <label class="scan-confirm-amount-label">Amount / net ($)
+            <input type="number" value="1840.00" readonly tabindex="-1" />
+          </label>
+          <div class="scan-confirm-actions">
+            <button type="button" class="btn primary" tabindex="-1">Approve &amp; save</button>
+            <button type="button" class="btn secondary" tabindex="-1">Discard</button>
+          </div>
+        </div>`
+      );
+    }
+  }
+
+  function place() {
+    const step = steps[index];
+    if (!step || !spot || !card) return;
+    let target = document.querySelector(step.target);
+    let r = target ? target.getBoundingClientRect() : null;
+    if (!target || !r || r.width < 8 || r.height < 8) {
+      target = document.querySelector("#page-title");
+      r = target.getBoundingClientRect();
+    }
+    const pad = 8;
+    const top = Math.max(8, r.top - pad);
+    const left = Math.max(8, r.left - pad);
+    const width = Math.min(window.innerWidth - left - 8, r.width + pad * 2);
+    const height = Math.min(window.innerHeight - top - 8, r.height + pad * 2);
+    spot.style.top = `${top}px`;
+    spot.style.left = `${left}px`;
+    spot.style.width = `${Math.max(40, width)}px`;
+    spot.style.height = `${Math.max(32, height)}px`;
+
+    const cardW = Math.min(340, window.innerWidth - 24);
+    let cardTop = top + height + 12;
+    let cardLeft = left;
+    if (cardTop + 180 > window.innerHeight) cardTop = Math.max(12, top - 188);
+    if (cardLeft + cardW > window.innerWidth - 12) cardLeft = Math.max(12, window.innerWidth - cardW - 12);
+    card.style.top = `${cardTop}px`;
+    card.style.left = `${cardLeft}px`;
+    card.style.width = `${cardW}px`;
+
+    target.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function paint() {
+    const step = steps[index];
+    if (!step) {
+      finish();
+      return;
+    }
+    prepare(step);
+    const kicker = root.querySelector("#first-run-tour-kicker");
+    const title = root.querySelector("#first-run-tour-title");
+    const body = root.querySelector("#first-run-tour-body");
+    const nextBtn = root.querySelector("#first-run-tour-next");
+    const last = index >= steps.length - 1;
+    kicker.textContent = `First look · ${index + 1} of ${steps.length}`;
+    title.textContent = step.title;
+    body.textContent = step.body;
+    nextBtn.textContent = last ? "Start using the app" : "Next";
+    nextBtn.focus();
+    requestAnimationFrame(() => {
+      place();
+      requestAnimationFrame(place);
+      setTimeout(place, 80);
+    });
+  }
+
+  function next() {
+    if (index >= steps.length - 1) {
+      finish();
+      return;
+    }
+    index += 1;
+    writeSession(username, index);
+    paint();
+  }
+
+  function finish() {
+    cleanupPrepare();
+    window.__haulageTourActive = false;
+    document.body.classList.remove("first-run-tour-active");
+    clearSession(username);
+    if (root) root.remove();
+    root = null;
+    spot = null;
+    card = null;
+    if (typeof globalThis.setView === "function") globalThis.setView("dashboard");
+  }
+
+  async function markDoneOnServer() {
+    try {
+      const res = await fetch(`${API}/auth/first-run-tour`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.user) window.__haulageUser = data.user;
+    } catch {
+      /* still run locally */
+    }
+  }
+
+  async function begin(user) {
+    if (window.__haulageTourActive) return;
+    username = (user && user.username) || "";
+    steps = resolveSteps(await fetchSteps());
+    if (!steps.length) return;
+    const saved = readSession(username);
+    index = saved && saved.index < steps.length ? saved.index : 0;
+    writeSession(username, index);
+    window.__haulageTourActive = true;
+    document.body.classList.add("first-run-tour-active");
+    ensureDom();
+    if (!saved) void markDoneOnServer();
+    paint();
+  }
+
+  function maybeStart() {
+    const user = window.__haulageUser;
+    const fuelhub = document.body.classList.contains("fuelhub-open");
+    const locked = document.body.classList.contains("auth-locked");
+    const saved = user ? readSession(user.username) : null;
+    const ok = Boolean(
+      !fuelhub &&
+        !locked &&
+        ((user && user.needsFirstRunTour) || saved)
+    );
+    if (!ok) return;
+    void begin(user);
+  }
+
+  function onResize() {
+    if (window.__haulageTourActive) place();
+  }
+
+  function start() {
+    window.addEventListener("haulage:taxationhub-open", () => setTimeout(maybeStart, 80));
+    window.addEventListener("haulage:auth-logout", () => {
+      clearSession(username);
+      window.__haulageTourActive = false;
+      document.body.classList.remove("first-run-tour-active");
+      if (root) root.remove();
+      root = null;
+    });
+    window.addEventListener("resize", onResize);
+    setTimeout(maybeStart, 200);
+    setTimeout(maybeStart, 800);
   }
 
   if (document.readyState === "loading") {

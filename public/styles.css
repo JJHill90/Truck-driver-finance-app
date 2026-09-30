@@ -3211,3 +3211,69 @@ body.fuelhub-open .tax-companion {
   white-space: nowrap;
   border: 0;
 }
+
+/* --- First-run coach marks ------------------------------------------------ */
+body.first-run-tour-active {
+  overflow: hidden;
+}
+body.first-run-tour-active .tax-companion-fab,
+body.first-run-tour-active .tax-companion-panel {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.first-run-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  pointer-events: auto;
+}
+.first-run-tour-spot {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(6, 12, 24, 0.72), 0 0 0 6px rgba(245, 158, 11, 0.35);
+  pointer-events: none;
+  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+.first-run-tour-card {
+  position: absolute;
+  z-index: 1;
+  width: min(340px, calc(100vw - 24px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+}
+.first-run-tour-kicker {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.first-run-tour-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+.first-run-tour-card p {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.first-run-tour-card .form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ledger-reconcile-btn.tour-preview {
+  display: inline-flex !important;
+}
+.scan-box.tour-preview {
+  display: block !important;
+}
+.first-run-tour-demo {
+  pointer-events: none;
+}
