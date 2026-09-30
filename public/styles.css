@@ -3217,7 +3217,8 @@ body.first-run-tour-active {
   overflow: hidden;
 }
 body.first-run-tour-active .tax-companion-fab,
-body.first-run-tour-active .tax-companion-panel {
+body.first-run-tour-active .tax-companion-panel,
+body.first-run-tour-active .enh-alerts {
   visibility: hidden !important;
   pointer-events: none !important;
 }

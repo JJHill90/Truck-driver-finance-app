@@ -11542,8 +11542,10 @@
   }
 
   let demoBox = null;
+  let targetEl = null;
 
   function cleanupPrepare() {
+    targetEl = null;
     if (reconcileBtn) {
       reconcileBtn.classList.remove("tour-preview");
       if (reconcileBtn.dataset.tourCreated === "1") reconcileBtn.remove();
@@ -11604,7 +11606,10 @@
       if (guide) guide.open = true;
     }
     if (step.prepare === "show-reconcile") {
-      showReconcile(step.view === "income" ? "income-list" : "expense-list");
+      const listId = step.view === "income" ? "income-list" : "expense-list";
+      showReconcile(listId);
+      const list = document.getElementById(listId);
+      targetEl = (list && list.closest(".panel")) || list;
     }
     if (step.prepare === "show-scan-confirm") {
       showScanDemo(
@@ -11644,7 +11649,7 @@
   function place() {
     const step = steps[index];
     if (!step || !spot || !card) return;
-    let target = document.querySelector(step.target);
+    let target = targetEl || document.querySelector(step.target);
     let r = target ? target.getBoundingClientRect() : null;
     if (!target || !r || r.width < 8 || r.height < 8) {
       target = document.querySelector("#page-title");
@@ -11661,10 +11666,18 @@
     spot.style.height = `${Math.max(32, height)}px`;
 
     const cardW = Math.min(340, window.innerWidth - 24);
-    let cardTop = top + height + 12;
-    let cardLeft = left;
-    if (cardTop + 180 > window.innerHeight) cardTop = Math.max(12, top - 188);
-    if (cardLeft + cardW > window.innerWidth - 12) cardLeft = Math.max(12, window.innerWidth - cardW - 12);
+    const spaceRight = window.innerWidth - (left + width);
+    let cardLeft;
+    let cardTop;
+    if (spaceRight > cardW + 20 && height > 80) {
+      cardLeft = Math.min(left + width + 12, window.innerWidth - cardW - 12);
+      cardTop = Math.max(12, top);
+    } else {
+      cardTop = top + height + 12;
+      cardLeft = left;
+      if (cardTop + 180 > window.innerHeight) cardTop = Math.max(12, top - 188);
+      if (cardLeft + cardW > window.innerWidth - 12) cardLeft = Math.max(12, window.innerWidth - cardW - 12);
+    }
     card.style.top = `${cardTop}px`;
     card.style.left = `${cardLeft}px`;
     card.style.width = `${cardW}px`;
