@@ -3279,7 +3279,7 @@ body.first-run-tour-active .enh-alerts {
   position: fixed;
   inset: 0;
   z-index: 140;
-  pointer-events: auto;
+  pointer-events: none;
 }
 .first-run-tour-spot {
   position: absolute;
@@ -3288,6 +3288,16 @@ body.first-run-tour-active .enh-alerts {
   box-shadow: 0 0 0 9999px rgba(6, 12, 24, 0.72), 0 0 0 6px rgba(245, 158, 11, 0.35);
   pointer-events: none;
   transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
+  animation: first-run-pulse 1.4s ease-in-out infinite;
+}
+@keyframes first-run-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 9999px rgba(6, 12, 24, 0.72), 0 0 0 6px rgba(245, 158, 11, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 9999px rgba(6, 12, 24, 0.72), 0 0 0 11px rgba(245, 158, 11, 0.62);
+  }
 }
 .first-run-tour-card {
   position: absolute;
@@ -3299,6 +3309,7 @@ body.first-run-tour-active .enh-alerts {
   padding: 14px 16px 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   color: var(--text);
+  pointer-events: auto;
 }
 .first-run-tour-kicker {
   margin: 0 0 6px;
@@ -3330,4 +3341,8 @@ body.first-run-tour-active .enh-alerts {
 }
 .first-run-tour-demo {
   pointer-events: none;
+}
+.first-run-tour-demo .first-run-tour-press,
+.ledger-reconcile-btn.first-run-tour-press {
+  pointer-events: auto;
 }

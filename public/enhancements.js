@@ -11534,11 +11534,6 @@
         root.querySelector("#first-run-tour-next")?.focus();
       }
     });
-    root.addEventListener("click", (e) => {
-      if (e.target === root || e.target.classList.contains("first-run-tour-spot")) {
-        root.querySelector("#first-run-tour-next")?.focus();
-      }
-    });
   }
 
   let demoBox = null;
@@ -11593,7 +11588,8 @@
     reconcileBtn = btn;
     reconcileWasHidden = btn.hidden;
     btn.hidden = false;
-    btn.classList.add("tour-preview");
+    btn.classList.add("tour-preview", "first-run-tour-press");
+    btn.dataset.tourAdvance = "1";
   }
 
   function prepare(step) {
@@ -11621,7 +11617,7 @@
             <input type="number" value="42.50" readonly tabindex="-1" />
           </label>
           <div class="scan-confirm-actions">
-            <button type="button" class="btn primary" tabindex="-1">Yes — approve &amp; save</button>
+            <button type="button" class="btn primary first-run-tour-press" data-tour-advance="1">Yes — approve &amp; save</button>
             <button type="button" class="btn secondary" tabindex="-1">Edit details first</button>
             <button type="button" class="btn secondary" tabindex="-1">Discard</button>
           </div>
@@ -11638,7 +11634,7 @@
             <input type="number" value="1840.00" readonly tabindex="-1" />
           </label>
           <div class="scan-confirm-actions">
-            <button type="button" class="btn primary" tabindex="-1">Approve &amp; save</button>
+            <button type="button" class="btn primary first-run-tour-press" data-tour-advance="1">Approve &amp; save</button>
             <button type="button" class="btn secondary" tabindex="-1">Discard</button>
           </div>
         </div>`
@@ -11700,7 +11696,7 @@
     kicker.textContent = `First look · ${index + 1} of ${steps.length}`;
     title.textContent = step.title;
     body.textContent = step.body;
-    nextBtn.textContent = last ? "Start using the app" : "Next";
+    nextBtn.textContent = last ? "Start using the app" : step.press ? "Or tap Next" : "Next";
     nextBtn.focus();
     requestAnimationFrame(() => {
       place();
@@ -11728,7 +11724,53 @@
     root = null;
     spot = null;
     card = null;
+    document.removeEventListener("click", onDocClick, true);
     if (typeof globalThis.setView === "function") globalThis.setView("dashboard");
+  }
+
+  function currentTarget() {
+    const step = steps[index];
+    if (!step) return null;
+    return targetEl || document.querySelector(step.target);
+  }
+
+  function isTourPressEl(el) {
+    return Boolean(el && el.closest && el.closest("[data-tour-advance='1'], .first-run-tour-press"));
+  }
+
+  function onDocClick(e) {
+    if (!window.__haulageTourActive) return;
+    if (e.target.closest && e.target.closest("#first-run-tour-card")) return;
+    const step = steps[index];
+    const target = currentTarget();
+    const inTarget = target && (target === e.target || target.contains(e.target));
+    if (inTarget || isTourPressEl(e.target)) {
+      const demo = Boolean(
+        step &&
+          (step.prepare === "show-scan-confirm" ||
+            step.prepare === "show-income-confirm" ||
+            step.prepare === "show-reconcile" ||
+            isTourPressEl(e.target))
+      );
+      if (demo) {
+        e.preventDefault();
+        e.stopPropagation();
+        next();
+        return;
+      }
+      if (step && step.press) {
+        setTimeout(() => {
+          if (window.__haulageTourActive) next();
+        }, 40);
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      next();
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   async function markDoneOnServer() {
@@ -11757,6 +11799,8 @@
     window.__haulageTourActive = true;
     document.body.classList.add("first-run-tour-active");
     ensureDom();
+    document.removeEventListener("click", onDocClick, true);
+    document.addEventListener("click", onDocClick, true);
     if (!saved) void markDoneOnServer();
     paint();
   }
@@ -11779,14 +11823,29 @@
     if (window.__haulageTourActive) place();
   }
 
+  function beaconDone() {
+    try {
+      const body = new Blob([JSON.stringify({ status: "done" })], { type: "application/json" });
+      if (navigator.sendBeacon) navigator.sendBeacon(`${API}/auth/first-run-tour`, body);
+      else void markDoneOnServer();
+    } catch {
+      void markDoneOnServer();
+    }
+  }
+
   function start() {
     window.addEventListener("haulage:taxationhub-open", () => setTimeout(maybeStart, 80));
     window.addEventListener("haulage:auth-logout", () => {
+      beaconDone();
       clearSession(username);
       window.__haulageTourActive = false;
       document.body.classList.remove("first-run-tour-active");
+      document.removeEventListener("click", onDocClick, true);
       if (root) root.remove();
       root = null;
+    });
+    window.addEventListener("pagehide", () => {
+      if (window.__haulageTourActive || readSession(username)) beaconDone();
     });
     window.addEventListener("resize", onResize);
     setTimeout(maybeStart, 200);

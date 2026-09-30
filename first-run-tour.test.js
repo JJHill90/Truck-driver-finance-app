@@ -43,7 +43,19 @@ describe("first-run tour", () => {
       "income",
     ]);
     expect(steps.some((s) => s.id === "rep-export")).toBe(true);
+    expect(steps.some((s) => s.id === "dash-nights")).toBe(true);
     expect(steps.find((s) => s.id === "exp-confirm").target).toBe("#scan-result");
+    expect(steps.filter((s) => s.press).map((s) => s.id)).toEqual([
+      "dash-welcome",
+      "exp-nav",
+      "exp-confirm",
+      "exp-ledger",
+      "inc-nav",
+      "inc-confirm",
+      "inc-ledger",
+      "rep-nav",
+      "car-nav",
+    ]);
     expect(tour.listSteps({ product: "haulage" })[0].title).toMatch(/Taxation Hub/);
     expect(steps[0].title).toMatch(/Go Taxation Suite/);
     expect(steps.every((s) => String(s.body || "").length <= 160)).toBe(true);
