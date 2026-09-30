@@ -103,11 +103,14 @@ const {
   stripChequeTokens,
 } = require("./lib/income-labels");
 const support = require("./lib/support");
+const supportChat = require("./lib/support-chat");
 const dataDir = require("./lib/data-dir");
 const backup = require("./lib/backup");
 const mail = require("./lib/mail");
 const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
+const accountDelete = require("./lib/account-delete");
+const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
@@ -129,6 +132,9 @@ const fuelReceipts = require("./lib/fuel-receipts");
 const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
 const yearCompare = require("./lib/year-compare");
+const taxCompanion = require("./lib/tax-companion");
+const firstRunTour = require("./lib/first-run-tour");
+const recurringExpenses = require("./lib/recurring-expenses");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -341,6 +347,121 @@ function persist(req, meta = {}) {
     reason: meta.reason || "auto",
     actor: sessionUsername(req) || req.user || null,
   });
+}
+
+function catchUpRecurring(req, records) {
+  return recurringExpenses.materializeDue(records, {
+    addExpense: (recs, payload) => storage.addExpense(recs, payload),
+    stampBody: (payload) => {
+      if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, payload);
+    },
+  });
+}
+
+function applyRecurringFromBody(records, body, firstExpense) {
+  if (!recurringExpenses.wantsRecurring(body)) return null;
+  const startDate = body.recurringStartDate || body.startDate || (firstExpense && firstExpense.date) || body.date;
+  const firstPosted =
+    firstExpense && String(firstExpense.date || "").slice(0, 10) === String(startDate || "").slice(0, 10)
+      ? String(firstExpense.date).slice(0, 10)
+      : null;
+  const made = recurringExpenses.createTemplate(
+    records,
+    { ...body, recurringStartDate: startDate },
+    { firstPostedDate: firstPosted, sourceExpenseId: firstExpense && firstExpense.id }
+  );
+  if (made.ok && firstExpense) recurringExpenses.stampOccurrence(firstExpense, made.template);
+  return made;
+}
+
+function stampManualExpenseFlags(entry, body) {
+  if (!entry || !body) return entry;
+  if (body.cashTransaction != null) entry.cashTransaction = Boolean(body.cashTransaction);
+  if (body.noReceipt != null) entry.noReceipt = Boolean(body.noReceipt);
+  if (body.vendingMachine != null) entry.vendingMachine = Boolean(body.vendingMachine);
+  return entry;
+}
+
+/** Create a fixed-cost template and post due rows (no dummy receipt, no upload quota). */
+function handleRecurringExpenseCreate(req, records, body) {
+  const today = recurringExpenses.todayYmd();
+  const recStart = String(body.recurringStartDate || body.date || "").slice(0, 10);
+  if (recStart && recStart > today) {
+    const made = applyRecurringFromBody(records, { ...body, date: recStart }, null);
+    if (!made || !made.ok) {
+      return {
+        status: 400,
+        json: { error: (made && made.error) || "Could not save the recurring expense." },
+      };
+    }
+    persist(req);
+    return {
+      status: 200,
+      json: {
+        entry: null,
+        deferred: true,
+        recurring: recurringExpenses.presentTemplate(made.template),
+        analysis: expenseAnalysis(req, {
+          ...body,
+          date: recStart,
+          amount: body.amount,
+          category: body.category,
+        }),
+      },
+    };
+  }
+  if (recStart) body.date = recStart;
+  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  const entry = storage.addExpense(records, body);
+  stampManualExpenseFlags(entry, body);
+  if (productOf(req) === "suite" && body.category === "home_office_hours") {
+    const hours = Number(body.hours || body.homeOfficeHours || 0);
+    if (hours > 0) entry.hours = hours;
+  }
+  rememberVendor(records, {
+    name: body.vendor || entry.vendor,
+    abn: body.vendorAbn || entry.vendorAbn,
+    category: body.category || entry.category,
+  });
+  const made = applyRecurringFromBody(records, body, entry);
+  if (made && !made.ok) {
+    records.expenses = (records.expenses || []).filter((e) => e && e.id !== entry.id);
+    return { status: 400, json: { error: made.error } };
+  }
+  catchUpRecurring(req, records);
+  persist(req);
+  return {
+    status: 200,
+    json: {
+      entry,
+      deferred: false,
+      recurring: made && made.ok ? recurringExpenses.presentTemplate(made.template) : null,
+      analysis: expenseAnalysis(req, entry),
+    },
+  };
+}
+
+function startRecurringCatchupScheduler() {
+  if (process.env.NODE_ENV === "test") return;
+  const timer = setInterval(() => {
+    for (const [key, records] of recordsCache.entries()) {
+      const parsed = suite.parseCacheKey(key);
+      if (!parsed.user) continue;
+      const result = recurringExpenses.materializeDue(records, {
+        addExpense: (recs, payload) => storage.addExpense(recs, payload),
+        stampBody: (payload) => {
+          if (parsed.product === "suite") suite.extraEntity.stampActiveEntity(records, payload);
+        },
+      });
+      if (result.created.length) {
+        persistUserRecords(parsed.user, records, fileForUser(parsed.user, parsed.product), {
+          reason: "recurring-catchup",
+          actor: "scheduler",
+        });
+      }
+    }
+  }, 60_000);
+  if (typeof timer.unref === "function") timer.unref();
 }
 
 /** Write every in-memory records cache entry to disk before a full-store backup. */
@@ -723,6 +844,8 @@ const OPEN_WRITE_PATHS = new Set([
   "/auth/password-strength",
   "/expenses/preview",
   "/support/contact",
+  "/support/chat",
+  "/companion/ask",
 ]);
 api.use((req, res, next) => {
   const method = (req.method || "GET").toUpperCase();
@@ -855,10 +978,30 @@ api.post("/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+api.get("/first-run-tour", (req, res) => {
+  res.json({
+    steps: firstRunTour.listSteps({ product: productOf(req) }),
+  });
+});
+
 api.get("/auth/me", (req, res) => {
   const user = req.user ? auth.getUser(req.user) : null;
   const ent = user ? resolveReqEntitlements(req) : null;
   res.json({ user, entitlements: ent });
+});
+
+api.post("/auth/first-run-tour", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to update the first-run tour." });
+    return;
+  }
+  const status = String((req.body && req.body.status) || "done").toLowerCase();
+  try {
+    const user = auth.setFirstRunTour(req.user, status === "pending" ? "pending" : "done");
+    res.json({ user, ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 api.post("/auth/presets", (req, res) => {
@@ -896,6 +1039,31 @@ api.post("/auth/change-password", (req, res) => {
     res.json({ user });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+api.post("/auth/account/delete", async (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to delete your account." });
+    return;
+  }
+  const { password, confirm } = req.body || {};
+  try {
+    const result = await accountDelete.deleteOwnAccount({
+      username: req.user,
+      password,
+      confirm,
+      recordsCache,
+    });
+    clearSessionCookie(res, req);
+    res.json({
+      ok: true,
+      username: result.username,
+      billing: result.billing || null,
+      message: "Your account and stored records have been permanently deleted.",
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message, code: err.code || null });
   }
 });
 
@@ -2483,7 +2651,7 @@ api.post("/admin/users", (req, res) => {
   }
 });
 
-api.delete("/admin/users/:username", (req, res) => {
+api.delete("/admin/users/:username", async (req, res) => {
   if (!requireAdmin(req, res)) return;
   const targetName = req.params.username;
   if (auth.usernameKey(targetName) === auth.usernameKey(req.user)) {
@@ -2496,27 +2664,14 @@ api.delete("/admin/users/:username", (req, res) => {
       res.status(404).json({ error: "User not found." });
       return;
     }
-    const recordsFile = auth.recordsFileFor(target.username);
-    let records = null;
-    if (recordsCache.has(target.username)) {
-      records = recordsCache.get(target.username);
-    } else if (fs.existsSync(recordsFile)) {
-      records = storage.loadRecords(recordsFile);
-    }
-    if (records) {
-      for (const r of records.receipts || []) {
-        if (r.imagePath) storage.deleteReceiptFile(r.imagePath);
-      }
-    }
-    auth.deleteUser(target.username);
-    recordsCache.delete(target.username);
-    recordsCache.delete(`suite:${target.username}`);
-    if (fs.existsSync(recordsFile)) fs.unlinkSync(recordsFile);
-    const suiteFile = suite.recordsFileFor(target.username);
-    if (fs.existsSync(suiteFile)) fs.unlinkSync(suiteFile);
-    res.json({ ok: true, username: target.username });
+    const result = await accountDelete.wipeAccount({
+      username: target.username,
+      recordsCache,
+      cancelBilling: true,
+    });
+    res.json({ ok: true, username: result.username, billing: result.billing || null });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(err.status || 400).json({ error: err.message });
   }
 });
 
@@ -2653,7 +2808,8 @@ api.get("/records", (req, res) => {
   const full = getRecords(req);
   const descBackfill = backfillIncomeDescriptions(full);
   const overnightBackfill = backfillOvernightDays(full);
-  if (descBackfill.updated > 0 || overnightBackfill.updated > 0) persist(req);
+  const recCatch = catchUpRecurring(req, full);
+  if (descBackfill.updated > 0 || overnightBackfill.updated > 0 || recCatch.created.length) persist(req);
   const records = withActiveLedger(full);
   const activeIncome = records.income || [];
   const activeExpenses = records.expenses || [];
@@ -2682,6 +2838,7 @@ api.get("/records", (req, res) => {
     ),
     receipts,
     vendors: storage.listVendors(full),
+    recurringExpenses: recurringExpenses.listActive(full).map((t) => recurringExpenses.presentTemplate(t)),
   });
 });
 
@@ -3194,7 +3351,13 @@ api.post("/expenses", (req, res) => {
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  if (recurringExpenses.wantsRecurring(body)) {
+    const result = handleRecurringExpenseCreate(req, records, body);
+    res.status(result.status).json(result.json);
+    return;
+  }
   const entry = storage.addExpense(records, body);
+  stampManualExpenseFlags(entry, body);
   if (productOf(req) === "suite" && body.category === "home_office_hours") {
     const hours = Number(body.hours || body.homeOfficeHours || 0);
     if (hours > 0) entry.hours = hours;
@@ -3206,6 +3369,27 @@ api.post("/expenses", (req, res) => {
   });
   persist(req);
   res.json({ entry, analysis: expenseAnalysis(req, entry) });
+});
+
+api.get("/recurring-expenses", (req, res) => {
+  const records = getRecords(req);
+  const recCatch = catchUpRecurring(req, records);
+  if (recCatch.created.length) persist(req);
+  res.json({
+    recurringExpenses: recurringExpenses.listActive(records).map((t) => recurringExpenses.presentTemplate(t)),
+    posted: recCatch.created.length,
+  });
+});
+
+api.post("/recurring-expenses/:id/stop", (req, res) => {
+  const records = getRecords(req);
+  const stopped = recurringExpenses.stopTemplate(records, req.params.id);
+  if (!stopped) {
+    res.status(404).json({ error: "Fixed cost not found." });
+    return;
+  }
+  persist(req);
+  res.json({ ok: true, recurring: recurringExpenses.presentTemplate(stopped) });
 });
 
 api.put("/expenses/:id", (req, res) => {
@@ -3756,7 +3940,6 @@ api.post("/receipts/manual", (req, res) => {
     });
     return;
   }
-  if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
@@ -3764,6 +3947,12 @@ api.post("/receipts/manual", (req, res) => {
     const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
     applyExpensePresets(body, account);
   }
+  if (recurringExpenses.wantsRecurring(body)) {
+    const result = handleRecurringExpenseCreate(req, records, body);
+    res.status(result.status).json(result.json);
+    return;
+  }
+  if (!assertCanUpload(req, res)) return;
   const { expense, receipt } = storage.addManualReceipt(records, body);
   // Cash / no-receipt / vending flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
@@ -4261,6 +4450,18 @@ api.delete("/profile/extra-entity/:id", (req, res) => {
 });
 
 // --- Support contact -----------------------------------------------------
+// --- Tax companion (ATO-backed FAQ) --------------------------------------
+api.post("/companion/ask", (req, res) => {
+  const question = req.body && req.body.question;
+  const fy = req.body && req.body.financialYear;
+  const result = taxCompanion.answerQuestion(question, {
+    product: req.product,
+    email: support.supportInbox(),
+    financialYear: typeof fy === "string" ? fy : undefined,
+  });
+  res.json(result);
+});
+
 api.get("/support/info", (req, res) => {
   const ent = req.user ? resolveReqEntitlements(req) : null;
   res.json({
@@ -4339,6 +4540,24 @@ api.post("/support/contact", async (req, res) => {
   });
 });
 
+api.post("/support/chat", (req, res) => {
+  const message = req.body && req.body.message;
+  const fy =
+    (req.body && req.body.financialYear) ||
+    (req.query && req.query.fy) ||
+    getCurrentFinancialYear();
+  const result = supportChat.answerQuestion(message, {
+    product: productOf(req),
+    financialYear: fy,
+    supportEmail: support.supportInbox(),
+  });
+  if (!result.ok) {
+    res.status(400).json(result);
+    return;
+  }
+  res.json(result);
+});
+
 app.use("/api/haulage", api);
 
 // --- Go Taxation Suite (general PAYG / sole trader / partnership) ----------
@@ -4353,6 +4572,38 @@ function redirectSuiteToSibling(req, res, next) {
   const pathPart = rest.startsWith("/suite") ? rest.slice("/suite".length) || "/" : "/";
   res.redirect(302, `${origin}/suite${pathPart === "/" ? "/" : pathPart}`);
 }
+
+function sendLegalPage(fileName) {
+  return (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, fileName));
+  };
+}
+function sendProductLegalPage(kind) {
+  const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
+  const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
+  return (req, res) => {
+    const pathName = String((req.originalUrl || req.path || "").split("?")[0]);
+    // Store-facing /privacy and /terms are Go Taxation Suite only.
+    let file = suiteFile;
+    if (pathName.startsWith("/haulage")) file = hubFile;
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
+app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
+app.get(
+  ["/support", "/support.html", "/suite/support", "/suite/support.html"],
+  sendLegalPage("support.html")
+);
+app.get(
+  ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
+  sendProductLegalPage("privacy")
+);
+app.get(
+  ["/haulage/terms", "/haulage/terms.html", "/suite/terms", "/suite/terms.html"],
+  sendProductLegalPage("terms")
+);
+app.get(["/legal.css"], sendLegalPage("legal.css"));
 
 app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));
@@ -4419,6 +4670,7 @@ function bootListen() {
   if (process.env.NODE_ENV === "test") return;
   auth.reloadSessionsFromDisk();
   const admin = auth.ensureAdminBootstrap();
+  const reviewer = reviewerDemo.ensureReviewerDemo();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
       console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
@@ -4427,6 +4679,9 @@ function bootListen() {
       console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
     }
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
+    if (reviewer && reviewer.ready) {
+      console.log(`Store reviewer demo: ${reviewer.username} (not admin; complimentary Pro+)`);
+    }
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
     warmLocalOcrWorker()
       .then(() => console.log("OCR: Tesseract worker ready (eng cached on data disk)"))
@@ -4435,6 +4690,7 @@ function bootListen() {
       flushFn: flushAllCachedRecordsToDisk,
       onComplete: notifyBackupComplete,
     });
+    startRecurringCatchupScheduler();
   });
 }
 

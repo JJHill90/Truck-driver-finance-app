@@ -812,7 +812,9 @@
         if (res.status === 402 && isHaulageApiUrl(url)) {
           const data = await res.clone().json();
           const method = fetchRequestMethod(args, options);
-          if (isBrowseSafePaymentGate(method, url)) {
+          if (window.__haulageTourActive) {
+            /* first-run walkthrough — do not pop the Pro gate */
+          } else if (isBrowseSafePaymentGate(method, url)) {
             /* let Free users look through the tab */
           } else if (
             data &&
@@ -1479,6 +1481,24 @@
 
   const API = `${window.location.origin}/api/haulage`;
 
+  /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
+  function isNativeShell() {
+    try {
+      const cap = window.Capacitor;
+      if (cap && typeof cap.isNativePlatform === "function") {
+        return Boolean(cap.isNativePlatform());
+      }
+      if (cap && typeof cap.getPlatform === "function") {
+        const platform = cap.getPlatform();
+        return platform === "ios" || platform === "android";
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  window.haulageIsNativeShell = isNativeShell;
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;")
@@ -1633,6 +1653,7 @@
     setSelectedHubApp("taxationhub");
     unlockApp();
     showAuthState(user || null);
+    window.dispatchEvent(new CustomEvent("haulage:taxationhub-open"));
   }
 
   function openFuelHub() {
@@ -1954,6 +1975,7 @@
       } catch {
         /* ignore */
       }
+      window.dispatchEvent(new CustomEvent("haulage:auth-logout"));
       resetReviewShown();
       setSelectedHubApp("");
       window.location.reload();
@@ -2075,6 +2097,7 @@
       if (byId("preset-workuse")) byId("preset-workuse").value = presets.defaultWorkUsePercent ?? "";
       if (byId("preset-category")) byId("preset-category").value = presets.defaultCategory ?? "";
       applyProfilePresetsToExpenseForms({ forceWorkUse: true });
+      byId("auth-delete-block")?.classList.toggle("hidden", Boolean(user.isAdmin));
       void refreshBillingPanel();
     } else {
       outEl.classList.remove("hidden");
@@ -2182,6 +2205,7 @@
     byId("billing-resume")?.classList.add("hidden");
     byId("billing-manage")?.classList.add("hidden");
     byId("billing-price-hint")?.classList.add("hidden");
+    byId("billing-store-note")?.classList.add("hidden");
     updatePlanBadges(null);
   }
 
@@ -2330,12 +2354,18 @@
       );
     }
 
+    const nativeShell = isNativeShell();
+    const storeNote = byId("billing-store-note");
+    if (storeNote) storeNote.classList.toggle("hidden", !nativeShell);
+
     if (upgradeBtn) {
-      // Paid Pro checkout — available on Free (and leftover Pro+ signup trials).
+      // Paid Pro checkout — website only. Native shells must not start Stripe
+      // (Apple 3.1.1 / Play Billing). Subscribe from a browser.
       const paidLive =
         ent.hasStripeSubscription &&
         ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
-      const hideUpgrade = ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
+      const hideUpgrade =
+        nativeShell || ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
       if (hideUpgrade) {
         upgradeBtn.classList.add("hidden");
       } else {
@@ -2345,7 +2375,7 @@
     }
     const plusBtn = byId("billing-upgrade-plus");
     if (plusBtn) {
-      const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus;
+      const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus && !nativeShell;
       plusBtn.classList.toggle("hidden", !canBuyPlus);
     }
 
@@ -2523,6 +2553,7 @@
 
   function startBrowseLinger(view) {
     cancelBrowseLinger();
+    if (window.__haulageTourActive) return;
     if (view !== "forecast" && view !== "report") return;
     if (cachedEntitlements && cachedEntitlements.isPro) return;
     if (lingerPrompted.has(view)) return;
@@ -2608,9 +2639,18 @@
   }
 
   function promptUpgrade(data) {
+    if (window.__haulageTourActive) return;
     markBrowsePrompted(data && data.view);
     const existing = document.getElementById("enh-billing-modal");
     if (existing) existing.remove();
+    if (isNativeShell()) {
+      const msg =
+        (data && data.error ? `${data.error} ` : "") +
+        "Subscribe on the website (Stripe). This app listing does not sell in-app purchases.";
+      if (window.toast) window.toast(msg);
+      setBillingMessage(msg, true);
+      return;
+    }
     const ent = (data && data.entitlements) || cachedEntitlements || {};
     const price = ent.priceLabel || fallbackMonthlyPrice();
     const yearly = ent.priceYearlyLabel || fallbackYearlyPrice();
@@ -2660,6 +2700,13 @@
   window.haulagePromptUpgrade = promptUpgrade;
 
   async function startCheckout(interval = "month", plan = "pro") {
+    if (isNativeShell()) {
+      setBillingMessage(
+        "Subscribe on the website (Stripe). This app listing does not sell in-app purchases.",
+        true
+      );
+      return;
+    }
     const period = interval === "year" ? "year" : "month";
     const tier = plan === "pro_plus" ? "pro_plus" : "pro";
     setBillingMessage(
@@ -4609,6 +4656,7 @@
         } catch {
           /* ignore */
         }
+        window.dispatchEvent(new CustomEvent("haulage:auth-logout"));
         resetReviewShown();
         setSelectedHubApp("");
         window.location.reload();
@@ -4626,6 +4674,33 @@
           renderAlerts(alertData.alerts, alertData.user);
         } catch (e) {
           if (window.toast) window.toast(e.message);
+        }
+      });
+    }
+    const deleteAccount = byId("auth-delete-account");
+    if (deleteAccount) {
+      deleteAccount.addEventListener("click", async () => {
+        const password = (byId("auth-delete-password") || {}).value || "";
+        const confirmWord = (byId("auth-delete-confirm") || {}).value || "";
+        const msg = byId("auth-delete-message");
+        if (String(confirmWord).trim().toUpperCase() !== "DELETE") {
+          if (msg) msg.textContent = "Type DELETE to confirm.";
+          if (window.toast) window.toast("Type DELETE to confirm account deletion");
+          return;
+        }
+        const ok = window.confirm(
+          "Delete this account permanently?\n\nYour login, ledgers, receipts and website subscription will be removed. This cannot be undone."
+        );
+        if (!ok) return;
+        if (msg) msg.textContent = "Deleting account…";
+        try {
+          await apiPost("/auth/account/delete", { password, confirm: confirmWord });
+          resetReviewShown();
+          setSelectedHubApp("");
+          window.location.reload();
+        } catch (e) {
+          if (msg) msg.textContent = e.message || "Could not delete account.";
+          if (window.toast) window.toast(e.message || "Could not delete account");
         }
       });
     }
@@ -4816,7 +4891,7 @@
         }
         // Driver Hub: signed-in users pick an app unless one is already open.
         const selectedApp = getSelectedHubApp();
-        if (selectedApp === "taxationhub") {
+        if (selectedApp === "taxationhub" || me.user.needsFirstRunTour) {
           openTaxationHub(me.user);
           if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
@@ -11358,6 +11433,699 @@
     if (form) {
       new MutationObserver(bindManualForm).observe(form, { childList: true, subtree: true });
     }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- First-run coach-mark tour (self-register, one session) -------------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let steps = [];
+  let index = 0;
+  let root = null;
+  let spot = null;
+  let card = null;
+  let username = "";
+  let reconcileBtn = null;
+  let reconcileWasHidden = true;
+
+  function sessionKey(name) {
+    return `haulage-first-run-tour:${name || "anon"}`;
+  }
+
+  function readSession(name) {
+    try {
+      const raw = sessionStorage.getItem(sessionKey(name));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.index === "number") return parsed;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function writeSession(name, idx) {
+    try {
+      sessionStorage.setItem(sessionKey(name), JSON.stringify({ index: idx }));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function clearSession(name) {
+    try {
+      if (name) sessionStorage.removeItem(sessionKey(name));
+      Object.keys(sessionStorage)
+        .filter((k) => k.startsWith("haulage-first-run-tour:"))
+        .forEach((k) => sessionStorage.removeItem(k));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function fetchSteps() {
+    try {
+      const res = await fetch(`${API}/first-run-tour`, { credentials: "same-origin" });
+      const data = await res.json();
+      return Array.isArray(data.steps) ? data.steps : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function resolveSteps(all) {
+    return (all || []).filter((step) => !step.optional || document.querySelector(step.target));
+  }
+
+  function ensureDom() {
+    if (root) return;
+    root = document.createElement("div");
+    root.id = "first-run-tour";
+    root.className = "first-run-tour";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-labelledby", "first-run-tour-title");
+    root.innerHTML = `
+      <div class="first-run-tour-spot" aria-hidden="true"></div>
+      <div class="first-run-tour-card">
+        <p class="first-run-tour-kicker" id="first-run-tour-kicker"></p>
+        <h3 id="first-run-tour-title"></h3>
+        <p id="first-run-tour-body"></p>
+        <div class="form-actions">
+          <button type="button" class="btn primary" id="first-run-tour-next">Next</button>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    spot = root.querySelector(".first-run-tour-spot");
+    card = root.querySelector(".first-run-tour-card");
+    root.querySelector("#first-run-tour-next").addEventListener("click", () => next());
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") e.preventDefault();
+      if (e.key === "Tab") {
+        e.preventDefault();
+        root.querySelector("#first-run-tour-next")?.focus();
+      }
+    });
+    root.addEventListener("click", (e) => {
+      if (e.target === root || e.target.classList.contains("first-run-tour-spot")) {
+        root.querySelector("#first-run-tour-next")?.focus();
+      }
+    });
+  }
+
+  let demoBox = null;
+  let targetEl = null;
+
+  function cleanupPrepare() {
+    targetEl = null;
+    if (reconcileBtn) {
+      reconcileBtn.classList.remove("tour-preview");
+      if (reconcileBtn.dataset.tourCreated === "1") reconcileBtn.remove();
+      else reconcileBtn.hidden = reconcileWasHidden;
+      reconcileBtn = null;
+    }
+    if (demoBox) {
+      const demo = demoBox.querySelector(".first-run-tour-demo");
+      if (demo) {
+        demo.remove();
+        demoBox.classList.add("hidden");
+      }
+      demoBox.classList.remove("tour-preview");
+      demoBox = null;
+    }
+  }
+
+  function showScanDemo(boxId, html) {
+    const box = document.getElementById(boxId);
+    if (!box) return;
+    demoBox = box;
+    box.classList.remove("hidden");
+    box.classList.add("tour-preview");
+    if (!box.querySelector(".scan-confirm")) {
+      box.insertAdjacentHTML("beforeend", html);
+    }
+  }
+
+  function showReconcile(listId) {
+    const list = document.getElementById(listId);
+    const panel = list && list.closest(".panel");
+    const header = panel && panel.querySelector(".panel-header");
+    if (!header) return;
+    let btn = header.querySelector(".ledger-reconcile-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn ledger-reconcile-btn";
+      btn.textContent = "Reconcile entries";
+      btn.dataset.tourCreated = "1";
+      const actions = header.querySelector(".ledger-header-actions");
+      if (actions) actions.insertBefore(btn, actions.firstChild);
+      else header.appendChild(btn);
+    }
+    reconcileBtn = btn;
+    reconcileWasHidden = btn.hidden;
+    btn.hidden = false;
+    btn.classList.add("tour-preview");
+  }
+
+  function prepare(step) {
+    cleanupPrepare();
+    if (step.view && typeof globalThis.setView === "function") {
+      globalThis.setView(step.view);
+    }
+    if (step.prepare === "open-guide") {
+      const guide = document.querySelector(".receipt-photo-guide");
+      if (guide) guide.open = true;
+    }
+    if (step.prepare === "show-reconcile") {
+      const listId = step.view === "income" ? "income-list" : "expense-list";
+      showReconcile(listId);
+      const list = document.getElementById(listId);
+      targetEl = (list && list.closest(".panel")) || list;
+    }
+    if (step.prepare === "show-scan-confirm") {
+      showScanDemo(
+        "scan-result",
+        `<div class="scan-confirm first-run-tour-demo">
+          <h3>Approve scanned total?</h3>
+          <p class="muted">Check the overall total, then approve. Line items are only for checking.</p>
+          <label class="scan-confirm-amount-label">Total amount ($)
+            <input type="number" value="42.50" readonly tabindex="-1" />
+          </label>
+          <div class="scan-confirm-actions">
+            <button type="button" class="btn primary" tabindex="-1">Yes — approve &amp; save</button>
+            <button type="button" class="btn secondary" tabindex="-1">Edit details first</button>
+            <button type="button" class="btn secondary" tabindex="-1">Discard</button>
+          </div>
+        </div>`
+      );
+    }
+    if (step.prepare === "show-income-confirm") {
+      showScanDemo(
+        "income-scan-result",
+        `<div class="scan-confirm first-run-tour-demo">
+          <h3>Approve remittance / payslip?</h3>
+          <p class="muted">Net pay is the figure we save. Tap a detected total if the reader picked the wrong one.</p>
+          <label class="scan-confirm-amount-label">Amount / net ($)
+            <input type="number" value="1840.00" readonly tabindex="-1" />
+          </label>
+          <div class="scan-confirm-actions">
+            <button type="button" class="btn primary" tabindex="-1">Approve &amp; save</button>
+            <button type="button" class="btn secondary" tabindex="-1">Discard</button>
+          </div>
+        </div>`
+      );
+    }
+  }
+
+  function place() {
+    const step = steps[index];
+    if (!step || !spot || !card) return;
+    let target = targetEl || document.querySelector(step.target);
+    let r = target ? target.getBoundingClientRect() : null;
+    if (!target || !r || r.width < 8 || r.height < 8) {
+      target = document.querySelector("#page-title");
+      r = target.getBoundingClientRect();
+    }
+    const pad = 8;
+    const top = Math.max(8, r.top - pad);
+    const left = Math.max(8, r.left - pad);
+    const width = Math.min(window.innerWidth - left - 8, r.width + pad * 2);
+    const height = Math.min(window.innerHeight - top - 8, r.height + pad * 2);
+    spot.style.top = `${top}px`;
+    spot.style.left = `${left}px`;
+    spot.style.width = `${Math.max(40, width)}px`;
+    spot.style.height = `${Math.max(32, height)}px`;
+
+    const cardW = Math.min(340, window.innerWidth - 24);
+    const spaceRight = window.innerWidth - (left + width);
+    let cardLeft;
+    let cardTop;
+    if (spaceRight > cardW + 20 && height > 80) {
+      cardLeft = Math.min(left + width + 12, window.innerWidth - cardW - 12);
+      cardTop = Math.max(12, top);
+    } else {
+      cardTop = top + height + 12;
+      cardLeft = left;
+      if (cardTop + 180 > window.innerHeight) cardTop = Math.max(12, top - 188);
+      if (cardLeft + cardW > window.innerWidth - 12) cardLeft = Math.max(12, window.innerWidth - cardW - 12);
+    }
+    card.style.top = `${cardTop}px`;
+    card.style.left = `${cardLeft}px`;
+    card.style.width = `${cardW}px`;
+
+    target.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function paint() {
+    const step = steps[index];
+    if (!step) {
+      finish();
+      return;
+    }
+    prepare(step);
+    const kicker = root.querySelector("#first-run-tour-kicker");
+    const title = root.querySelector("#first-run-tour-title");
+    const body = root.querySelector("#first-run-tour-body");
+    const nextBtn = root.querySelector("#first-run-tour-next");
+    const last = index >= steps.length - 1;
+    kicker.textContent = `First look · ${index + 1} of ${steps.length}`;
+    title.textContent = step.title;
+    body.textContent = step.body;
+    nextBtn.textContent = last ? "Start using the app" : "Next";
+    nextBtn.focus();
+    requestAnimationFrame(() => {
+      place();
+      requestAnimationFrame(place);
+      setTimeout(place, 80);
+    });
+  }
+
+  function next() {
+    if (index >= steps.length - 1) {
+      finish();
+      return;
+    }
+    index += 1;
+    writeSession(username, index);
+    paint();
+  }
+
+  function finish() {
+    cleanupPrepare();
+    window.__haulageTourActive = false;
+    document.body.classList.remove("first-run-tour-active");
+    clearSession(username);
+    if (root) root.remove();
+    root = null;
+    spot = null;
+    card = null;
+    if (typeof globalThis.setView === "function") globalThis.setView("dashboard");
+  }
+
+  async function markDoneOnServer() {
+    try {
+      const res = await fetch(`${API}/auth/first-run-tour`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.user) window.__haulageUser = data.user;
+    } catch {
+      /* still run locally */
+    }
+  }
+
+  async function begin(user) {
+    if (window.__haulageTourActive) return;
+    username = (user && user.username) || "";
+    steps = resolveSteps(await fetchSteps());
+    if (!steps.length) return;
+    const saved = readSession(username);
+    index = saved && saved.index < steps.length ? saved.index : 0;
+    writeSession(username, index);
+    window.__haulageTourActive = true;
+    document.body.classList.add("first-run-tour-active");
+    ensureDom();
+    if (!saved) void markDoneOnServer();
+    paint();
+  }
+
+  function maybeStart() {
+    const user = window.__haulageUser;
+    const fuelhub = document.body.classList.contains("fuelhub-open");
+    const locked = document.body.classList.contains("auth-locked");
+    const saved = user ? readSession(user.username) : null;
+    const ok = Boolean(
+      !fuelhub &&
+        !locked &&
+        ((user && user.needsFirstRunTour) || saved)
+    );
+    if (!ok) return;
+    void begin(user);
+  }
+
+  function onResize() {
+    if (window.__haulageTourActive) place();
+  }
+
+  function start() {
+    window.addEventListener("haulage:taxationhub-open", () => setTimeout(maybeStart, 80));
+    window.addEventListener("haulage:auth-logout", () => {
+      clearSession(username);
+      window.__haulageTourActive = false;
+      document.body.classList.remove("first-run-tour-active");
+      if (root) root.remove();
+      root = null;
+    });
+    window.addEventListener("resize", onResize);
+    setTimeout(maybeStart, 200);
+    setTimeout(maybeStart, 800);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Recurring fixed-cost expenses (manual ledger) ----------------------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let lastExpenseCount = 0;
+  let pollTimer = null;
+  let midnightTimer = null;
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(
+      Number(n) || 0
+    );
+  }
+
+  function fmtDate(d) {
+    if (!d) return "—";
+    if (typeof window.fmtDate === "function") return window.fmtDate(d);
+    return new Date(`${d}T12:00:00`).toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function localToday() {
+    if (typeof window.localToday === "function") return window.localToday();
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+  }
+
+  function categoryName(id) {
+    if (typeof window.categoryLabel === "function") return window.categoryLabel(id);
+    return String(id || "").replace(/_/g, " ");
+  }
+
+  function recBox() {
+    return document.getElementById("manual-recurring-box");
+  }
+  function recCheck() {
+    return document.getElementById("manual-recurring");
+  }
+  function recFields() {
+    return document.getElementById("manual-recurring-fields");
+  }
+  function recStart() {
+    return document.getElementById("manual-recurring-start");
+  }
+  function recFreq() {
+    return document.getElementById("manual-recurring-frequency");
+  }
+
+  function syncRecurringFields() {
+    const checked = Boolean(recCheck() && recCheck().checked);
+    const fields = recFields();
+    if (fields) fields.classList.toggle("hidden", !checked);
+    if (!checked) return;
+    const start = recStart();
+    const dateEl = document.querySelector("#manual-receipt-form [name=date]");
+    if (start && !start.value) {
+      start.value = (dateEl && dateEl.value) || localToday();
+    }
+    const noReceipt = document.getElementById("manual-no-receipt");
+    if (noReceipt && !noReceipt.checked) noReceipt.checked = true;
+  }
+
+  function bindRecurringForm() {
+    const check = recCheck();
+    if (!check || check.dataset.recurringBound === "1") return;
+    check.dataset.recurringBound = "1";
+    check.addEventListener("change", syncRecurringFields);
+    const form = document.getElementById("manual-receipt-form");
+    if (form && !form.dataset.recurringResetBound) {
+      form.dataset.recurringResetBound = "1";
+      form.addEventListener("reset", () => {
+        setTimeout(() => {
+          if (recCheck()) recCheck().checked = false;
+          if (recFreq()) recFreq().value = "weekly";
+          if (recStart()) recStart().value = "";
+          syncRecurringFields();
+        }, 0);
+      });
+    }
+    syncRecurringFields();
+  }
+
+  function wrapApprovalState() {
+    if (typeof globalThis.setManualFormApprovalState !== "function") return;
+    if (globalThis.setManualFormApprovalState.__haulageRecurringWrapped) return;
+    const prev = globalThis.setManualFormApprovalState;
+    function wrapped(pending) {
+      const result = prev.apply(this, arguments);
+      const box = recBox();
+      if (box) box.classList.toggle("hidden", Boolean(pending));
+      if (pending && recCheck()) {
+        recCheck().checked = false;
+        syncRecurringFields();
+      }
+      return result;
+    }
+    wrapped.__haulageRecurringWrapped = true;
+    globalThis.setManualFormApprovalState = wrapped;
+  }
+
+  function wrapAfterExpenseSaved() {
+    if (typeof globalThis.afterExpenseSaved !== "function") return;
+    if (globalThis.afterExpenseSaved.__haulageRecurringWrapped) return;
+    const prev = globalThis.afterExpenseSaved;
+    async function wrapped(entry, message) {
+      const rec = globalThis.__haulageLastRecurringSave;
+      const pending = globalThis.__haulagePendingRecurring;
+      globalThis.__haulageLastRecurringSave = null;
+      globalThis.__haulagePendingRecurring = null;
+      const t = (rec && rec.recurring) || pending;
+      if (t) {
+        const freq = t.frequencyLabel || t.frequency || "recurring";
+        const start = t.startDate;
+        if ((rec && rec.deferred) || !entry) {
+          message = `Fixed cost scheduled — first ${String(freq).toLowerCase()} post on ${fmtDate(
+            start
+          )}`;
+        } else {
+          message = `Fixed cost saved — ${String(freq).toLowerCase()} from ${fmtDate(start)}`;
+        }
+      }
+      await prev.call(this, entry, message);
+      renderFromState();
+    }
+    wrapped.__haulageRecurringWrapped = true;
+    globalThis.afterExpenseSaved = wrapped;
+  }
+
+  function renderList(items) {
+    const el = document.getElementById("recurring-expenses-list");
+    if (!el) return;
+    const list = Array.isArray(items) ? items.filter((t) => t && t.active !== false) : [];
+    if (!list.length) {
+      el.innerHTML =
+        '<p class="muted">No recurring fixed costs yet. Tick <strong>Recurring fixed cost</strong> when you save a manual expense.</p>';
+      return;
+    }
+    el.innerHTML = `<div class="recurring-fixed-list">${list
+      .map((t) => {
+        const title = esc(t.description || t.vendor || categoryName(t.category) || "Fixed cost");
+        const vendor = t.vendor ? ` · ${esc(t.vendor)}` : "";
+        const due = t.awaitingFirst
+          ? `First post ${fmtDate(t.nextDue || t.startDate)}`
+          : `Next ${fmtDate(t.nextDue)}`;
+        const last = t.lastPostedDate ? ` · Last posted ${fmtDate(t.lastPostedDate)}` : "";
+        return `<div class="recurring-fixed-item" data-recurring-id="${esc(t.id)}">
+          <div>
+            <strong>${title}</strong>${vendor}
+            <p class="recurring-fixed-meta">${money(t.amount)} · ${esc(
+              t.frequencyLabel || t.frequency
+            )} · ${due}${last}</p>
+          </div>
+          <button type="button" class="btn secondary small" data-stop-recurring="${esc(
+            t.id
+          )}">Stop</button>
+        </div>`;
+      })
+      .join("")}</div>`;
+    el.querySelectorAll("[data-stop-recurring]").forEach((btn) => {
+      btn.addEventListener("click", () => stopTemplate(btn.getAttribute("data-stop-recurring")));
+    });
+  }
+
+  function renderFromState() {
+    const records = typeof state !== "undefined" ? state.records : null;
+    renderList((records && records.recurringExpenses) || []);
+  }
+
+  async function stopTemplate(id) {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API}/recurring-expenses/${encodeURIComponent(id)}/stop`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not stop this fixed cost.");
+      if (typeof window.toast === "function") window.toast("Stopped — no further automatic posts");
+      if (typeof window.refreshAll === "function") await window.refreshAll();
+      else renderFromState();
+    } catch (err) {
+      if (typeof window.toast === "function") {
+        window.toast(err.message || "Could not stop this fixed cost.");
+      }
+    }
+  }
+
+  async function pollCatchup() {
+    try {
+      const res = await fetch(`${API}/records`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const next = (data && data.expenses) || [];
+      const grew = next.length > lastExpenseCount && lastExpenseCount > 0;
+      lastExpenseCount = next.length;
+      if (typeof state !== "undefined" && state.records) {
+        state.records.recurringExpenses = data.recurringExpenses || [];
+      }
+      renderList(data.recurringExpenses || []);
+      if (grew && typeof window.refreshAll === "function") {
+        await window.refreshAll();
+      } else if (grew) {
+        if (typeof state !== "undefined") state.records = data;
+        if (typeof window.renderExpenseList === "function") window.renderExpenseList();
+        if (typeof window.renderExpenseTotals === "function") window.renderExpenseTotals();
+      }
+    } catch {
+      /* ignore polling errors */
+    }
+  }
+
+  function msUntilNextSydneyMidnight() {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Australia/Sydney",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(new Date());
+      const grab = (t) => Number(parts.find((p) => p.type === t)?.value || 0);
+      const h = grab("hour");
+      const m = grab("minute");
+      const s = grab("second");
+      const elapsed = ((h * 60 + m) * 60 + s) * 1000;
+      return 24 * 60 * 60 * 1000 - elapsed + 1500;
+    } catch {
+      return 60 * 60 * 1000;
+    }
+  }
+
+  function scheduleMidnightPoll() {
+    if (midnightTimer) clearTimeout(midnightTimer);
+    midnightTimer = setTimeout(() => {
+      midnightTimer = null;
+      void pollCatchup();
+      scheduleMidnightPoll();
+    }, msUntilNextSydneyMidnight());
+  }
+
+  function wrapFetch() {
+    if (window.fetch.__haulageRecurringWrapped) return;
+    const orig = window.fetch;
+    window.fetch = async function (...args) {
+      const res = await orig.apply(this, args);
+      try {
+        const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+        const options = args[1] || {};
+        const method = String(options.method || "GET").toUpperCase();
+        if (
+          url &&
+          method === "POST" &&
+          (/\/receipts\/manual(\?|$)/.test(String(url)) || /\/expenses(\?|$)/.test(String(url)))
+        ) {
+          res
+            .clone()
+            .json()
+            .then((data) => {
+              if (data && data.recurring) globalThis.__haulageLastRecurringSave = data;
+            })
+            .catch(() => {});
+        }
+        if (url && /\/records(\?|$)/.test(String(url))) {
+          res
+            .clone()
+            .json()
+            .then((data) => {
+              if (!data) return;
+              lastExpenseCount = Array.isArray(data.expenses)
+                ? data.expenses.length
+                : lastExpenseCount;
+              if (Array.isArray(data.recurringExpenses)) renderList(data.recurringExpenses);
+            })
+            .catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+      return res;
+    };
+    window.fetch.__haulageRecurringWrapped = true;
+  }
+
+  function start() {
+    bindRecurringForm();
+    wrapApprovalState();
+    wrapAfterExpenseSaved();
+    wrapFetch();
+    renderFromState();
+    scheduleMidnightPoll();
+    if (!pollTimer) {
+      pollTimer = setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        void pollCatchup();
+      }, 60_000);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") void pollCatchup();
+    });
+    window.addEventListener("haulage:new-week", () => void pollCatchup());
+    const form = document.getElementById("manual-receipt-form");
+    if (form) {
+      new MutationObserver(bindRecurringForm).observe(form, { childList: true, subtree: true });
+    }
+    setTimeout(wrapAfterExpenseSaved, 0);
+    setTimeout(wrapAfterExpenseSaved, 500);
+    setTimeout(wrapApprovalState, 0);
   }
 
   if (document.readyState === "loading") {

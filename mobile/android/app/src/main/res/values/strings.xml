@@ -4,4 +4,5 @@
     <string name="title_activity_main">Driver Hub</string>
     <string name="package_name">com.haulagefinance.app</string>
     <string name="custom_url_scheme">com.haulagefinance.app</string>
+    <string name="camera_rationale">Driver Hub uses the camera to photograph work receipts and payslips so they can be saved to your tax records. Photos stay in your account and are not used for advertising. You can refuse and upload a file instead.</string>
 </resources>

@@ -184,21 +184,32 @@ on load — including prompts when email is missing or the password is older tha
 - `COOKIE_SECURE` — force `Secure` on session cookies (on by default when
   `NODE_ENV=production`). Cross-origin sessions use `SameSite=None; Secure`.
 
-### Google Play / iOS (Capacitor shell)
+### Google Play / iOS (Capacitor shells)
 
-Native packaging lives under [`mobile/`](mobile/README.md): a Capacitor 7
-Android project that loads the hosted app at
-`https://haulage-finance.onrender.com/haulage/` (same-origin API — no CORS
-needed for the default config).
+Two listings with separate application ids (do not reuse one app):
+
+| App | Id | Folder | Loads |
+|-----|----|--------|-------|
+| Driver Hub | `com.haulagefinance.app` | [`mobile/`](mobile/README.md) | hosted `/haulage/` |
+| Go Taxation Suite | `com.gotaxation.suite` | [`mobile-suite/`](mobile-suite/README.md) | hosted `/suite/` |
+
+Public **Privacy** / **Terms** (store URLs, no login): `/privacy` and `/terms`
+on each host. Drivers delete their own account under Profile (Apple 5.1.1(v)).
+Native shells hide Stripe checkout — subscribe on the website. Remaining Play /
+TestFlight steps: [`docs/store-listing.md`](docs/store-listing.md).
+
+Capacitor 7 Android projects load the hosted app. Driver Hub default is the
+production `/haulage/` origin (same-origin API — no CORS needed for that config).
 
 ```bash
 cd mobile && npm install && npx cap sync android && npx cap open android
+cd ../mobile-suite && npm install && npx cap sync android && npx cap open android
 ```
 
 If a native shell instead calls the hosted API from another origin
 (`capacitor://localhost`, etc.):
 
-1. Set `CORS_ORIGINS` (and/or `CORS_ALLOW_CAPACITOR=1`) on Render.
+1. Set `CORS_ORIGINS` (and/or keep `CORS_ALLOW_CAPACITOR=1`) on Render.
 2. Call the API with `credentials: "include"` (not `"same-origin"`).
 3. Point the client at your HTTPS API base (e.g. `https://your-app.onrender.com/api/haulage`).
 

@@ -415,6 +415,28 @@ button.title-hub-logout:hover {
   font-size: 0.78rem;
   margin: 0;
 }
+.profile-delete-block {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.legal-footer {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+.legal-footer a {
+  color: #8ec8ff;
+}
+.camera-rationale {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+}
 .profile-presets {
   margin-top: 4px;
   padding-top: 12px;
@@ -1401,6 +1423,59 @@ tr.vending-machine-row {
   color: #1e3338;
   background: #c5d4d8;
   border-color: #8aa3a9;
+}
+.tag.tag-recurring {
+  color: #1e3a5f;
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+.recurring-fixed-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recurring-fixed-box > .checkbox {
+  margin: 0;
+}
+.recurring-fixed-box .muted.small {
+  margin: 0;
+}
+.recurring-fixed-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.recurring-fixed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recurring-fixed-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+}
+.recurring-fixed-item .recurring-fixed-meta {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin: 4px 0 0;
+}
+@media (max-width: 640px) {
+  .recurring-fixed-fields {
+    grid-template-columns: 1fr;
+  }
+  .recurring-fixed-item {
+    grid-template-columns: 1fr;
+  }
 }
 #report-content tr.vending-machine-row,
 .report-expense-ledger tr.vending-machine-row {
@@ -2998,4 +3073,261 @@ tr.vending-machine-row {
   .fuelhub-shell .main { padding: 8px 10px 24px; }
   .fuelhub-card { padding: 12px; }
   .fuelhub-stats { grid-template-columns: 1fr; }
+}
+
+/* --- Tax companion (bottom-right chat) --------------------------------- */
+.tax-companion {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+body.auth-locked .tax-companion,
+body.fuelhub-open .tax-companion {
+  display: none !important;
+}
+.tax-companion-fab,
+.tax-companion-panel,
+.tax-companion-form,
+.tax-companion-chip,
+.tax-companion-close {
+  pointer-events: auto;
+}
+.tax-companion-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #1a1205;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tax-companion-fab:hover,
+.tax-companion-fab:focus-visible {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  outline: none;
+}
+.tax-companion-fab.is-open {
+  background: var(--panel-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tax-companion-panel {
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(560px, calc(100dvh - 96px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.tax-companion-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.tax-companion-title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tax-companion-sub {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.tax-companion-close {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.tax-companion-close:hover { color: var(--text); }
+.tax-companion-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 180px;
+}
+.tax-companion-msg {
+  max-width: 92%;
+  padding: 8px 11px;
+  border-radius: 12px;
+  font-size: 0.86rem;
+}
+.tax-companion-msg p { margin: 0; }
+.tax-companion-msg p + p { margin-top: 6px; }
+.tax-companion-msg.is-bot {
+  align-self: flex-start;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+.tax-companion-msg.is-user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.tax-companion-msg.is-busy { color: var(--text-dim); font-style: italic; }
+.tax-companion-topic {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px !important;
+}
+.tax-companion-sources,
+.tax-companion-fallback {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.tax-companion-msg a { color: var(--accent); }
+.tax-companion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 8px;
+  pointer-events: auto;
+}
+.tax-companion-chip {
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.tax-companion-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tax-companion-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  align-items: end;
+}
+.tax-companion-form textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  resize: none;
+  min-height: 44px;
+}
+.tax-companion-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.tax-companion-send {
+  height: 40px;
+  padding: 0 14px;
+}
+.tax-companion .visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- First-run coach marks ------------------------------------------------ */
+body.first-run-tour-active {
+  overflow: hidden;
+}
+body.first-run-tour-active .tax-companion-fab,
+body.first-run-tour-active .tax-companion-panel,
+body.first-run-tour-active .enh-alerts {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.first-run-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  pointer-events: auto;
+}
+.first-run-tour-spot {
+  position: absolute;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(6, 12, 24, 0.72), 0 0 0 6px rgba(245, 158, 11, 0.35);
+  pointer-events: none;
+  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+.first-run-tour-card {
+  position: absolute;
+  z-index: 1;
+  width: min(340px, calc(100vw - 24px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+}
+.first-run-tour-kicker {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.first-run-tour-card h3 {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+.first-run-tour-card p {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.first-run-tour-card .form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ledger-reconcile-btn.tour-preview {
+  display: inline-flex !important;
+}
+.scan-box.tour-preview {
+  display: block !important;
+}
+.first-run-tour-demo {
+  pointer-events: none;
 }

@@ -1,0 +1,30 @@
+{
+  "appId": "com.gotaxation.suite",
+  "appName": "Go Taxation Suite",
+  "webDir": "www",
+  "server": {
+    "url": "https://go-taxation-suite.onrender.com/suite/",
+    "cleartext": false,
+    "allowNavigation": [
+      "https://go-taxation-suite.onrender.com/*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0b1f33"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#0b1f33",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#0b1f33"
+    },
+    "Camera": {
+      "saveToGallery": false
+    }
+  }
+}

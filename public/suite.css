@@ -669,3 +669,21 @@ body.login-concept-page .concept-stage .title-screen {
   inset: 0;
   display: flex !important;
 }
+
+body.gotax-suite .tax-companion-fab {
+  background: var(--navy-btn);
+  border-color: var(--navy-btn);
+  color: #f4f8ff;
+}
+body.gotax-suite .tax-companion-fab:hover,
+body.gotax-suite .tax-companion-fab:focus-visible {
+  background: var(--navy-btn-hover);
+  border-color: var(--navy-btn-hover);
+}
+body.gotax-suite .tax-companion-topic {
+  color: var(--hub-accent);
+}
+body.gotax-suite .tax-companion-chip:hover {
+  border-color: var(--hub-accent);
+  color: var(--hub-accent);
+}

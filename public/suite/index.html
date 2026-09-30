@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/suite/suite-mark.svg" />
+    <link rel="apple-touch-icon" href="/suite/icon-512.png" />
     <title>Go Taxation Suite</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,8 +12,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=pro-plus-1" />
-    <link rel="stylesheet" href="./suite.css?v=pro-plus-1" />
+    <link rel="stylesheet" href="./styles.css?v=first-run-2" />
+    <link rel="stylesheet" href="./suite.css?v=companion-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
       try {
@@ -129,6 +130,13 @@
           </div>
           <p id="title-hub-message" class="title-auth-message" role="status"></p>
         </div>
+        <p class="legal-footer title-legal">
+          <a href="/suite/privacy">Privacy</a>
+          ·
+          <a href="/suite/terms">Terms</a>
+          ·
+          Assistance tool — not tax advice and not an official ATO lodgement.
+        </p>
         <p class="app-version-footer title-version" data-app-version>Version 1.33</p>
       </div>
     </div>
@@ -229,6 +237,7 @@
                     <button type="button" class="btn primary" id="pick-receipt-camera">Scan with camera</button>
                     <button type="button" class="btn secondary" id="pick-receipt">Upload file</button>
                   </div>
+                  <p class="muted small camera-rationale">The camera is used only to photograph receipts and payslips you choose to save. You can refuse the permission and upload a file instead.</p>
                   <input type="file" id="receipt-file" accept="image/*,application/pdf" hidden />
                 </div>
                 <div id="receipt-preview" class="preview hidden"></div>
@@ -264,6 +273,28 @@
                       No receipt
                     </label>
                   </div>
+                  <div class="span-2 recurring-fixed-box" id="manual-recurring-box">
+                    <label class="checkbox">
+                      <input type="checkbox" name="recurring" id="manual-recurring" />
+                      Recurring fixed cost
+                    </label>
+                    <p class="muted small">Posts this amount on each due date (for example weekly super). Reconcile later against a statement — no receipt required.</p>
+                    <div class="recurring-fixed-fields hidden" id="manual-recurring-fields">
+                      <label>How often
+                        <select name="recurringFrequency" id="manual-recurring-frequency">
+                          <option value="daily">Daily</option>
+                          <option value="weekly" selected>Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </label>
+                      <label>Start date
+                        <input type="date" name="recurringStartDate" id="manual-recurring-start" />
+                      </label>
+                    </div>
+                  </div>
                   <div class="span-2 form-actions">
                     <button type="submit" class="btn primary">Save expense</button>
                   </div>
@@ -292,6 +323,12 @@
             <div class="panel">
               <div class="panel-header"><h2>Expense receipt photos</h2></div>
               <div id="receipt-gallery" class="receipt-gallery"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>Fixed costs</h2></div>
+              <p class="muted">Recurring expenses post automatically as each due date arrives (Australia/Sydney calendar). Stop a series any time — posted rows stay on the ledger to reconcile.</p>
+              <div id="recurring-expenses-list"></div>
             </div>
 
             <div class="panel">
@@ -693,7 +730,8 @@
                   <button type="button" class="btn secondary small hidden" id="billing-resume">Keep Pro renewing</button>
                   <button type="button" class="btn secondary small hidden" id="billing-manage">Manage billing</button>
                 </div>
-                <p class="muted span-2" id="billing-price-hint">Pro is $10/month or $110/year. Pro+ is $18/month or $190/year and adds accountant share, extra entity, partnership seat, BAS pack, cloud OCR and priority support.</p>
+                <p class="muted span-2" id="billing-price-hint">Pro is $10/month or $110/year AUD; Pro+ is $18/month or $190/year. Paid plans auto-renew until you cancel. Cancel from this page or Manage billing (Stripe Customer Portal) — you keep access until the paid period ends. Website billing only; this is not an App Store or Play purchase.</p>
+                <p class="muted span-2 hidden" id="billing-store-note">Subscriptions are sold on the website (Stripe), not as an in-app purchase. Open Profile → Plan in a browser to subscribe, cancel, or update your card. There is no Restore purchases button because this app does not use Apple or Google IAP.</p>
                 <p id="billing-message" class="muted span-2" role="status"></p>
               </div>
               <div class="profile-security form-grid">
@@ -716,6 +754,20 @@
                 <p id="auth-new-password-strength" class="muted span-2" role="status"></p>
                 <div class="span-2 form-actions">
                   <button type="button" class="btn secondary small" id="auth-change-password">Change password</button>
+                </div>
+                <div id="auth-delete-block" class="span-2 profile-delete-block">
+                <h3 class="span-2 profile-section-title">Delete account</h3>
+                <p class="muted span-2 profile-security-hint">Permanently deletes this login, ledgers, receipt files and any website subscription (Stripe is cancelled immediately). Type DELETE and your password. The primary mod account cannot be deleted here.</p>
+                <label>Password
+                  <input id="auth-delete-password" type="password" autocomplete="current-password" placeholder="Current password" />
+                </label>
+                <label>Type DELETE to confirm
+                  <input id="auth-delete-confirm" type="text" autocomplete="off" placeholder="DELETE" />
+                </label>
+                <p id="auth-delete-message" class="muted span-2" role="status"></p>
+                <div class="span-2 form-actions">
+                  <button type="button" class="btn danger small" id="auth-delete-account">Delete my account</button>
+                </div>
                 </div>
               </div>
               <div class="form-grid profile-presets">
@@ -946,9 +998,19 @@
                 for any such matters.
               </p>
               <p>
+                This is not an official ATO product. The BAS screen is an ATO-box worksheet
+                you can download and copy when you lodge — the app does not lodge a BAS or
+                tax return.
+              </p>
+              <p>
                 For the most accurate saving of receipts, income and expense entries, use a
                 stable internet or cellular connection while you work. Interrupted uploads
                 or saves can leave incomplete records until you reconnect and try again.
+              </p>
+              <p>
+                <a href="/suite/privacy">Privacy policy</a>
+                ·
+                <a href="/suite/terms">Terms of use</a>
               </p>
             </div>
           </div>
@@ -1017,8 +1079,9 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=support-mail-1"></script>
+    <script src="./enhancements.js?v=first-run-2"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=pro-plus-2"></script>
+    <script src="./companion.js?v=companion-2"></script>
   </body>
 </html>

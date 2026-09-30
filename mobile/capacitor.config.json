@@ -13,10 +13,18 @@
     "allowMixedContent": false,
     "backgroundColor": "#0b1f33"
   },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#0b1f33",
+    "preferredContentMode": "mobile"
+  },
   "plugins": {
     "SplashScreen": {
       "launchAutoHide": true,
       "backgroundColor": "#0b1f33"
+    },
+    "Camera": {
+      "saveToGallery": false
     }
   }
 }

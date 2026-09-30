@@ -222,6 +222,14 @@ describe("auth primary mod / admin", () => {
       expect(made.isPro).toBe(false);
       expect(made.displayPlan).toBe("Free");
       expect(made.proTrialEndsAt).toBeNull();
+      expect(first.needsFirstRunTour).toBe(false);
+      expect(driver.needsFirstRunTour).toBe(true);
+      expect(driver.firstRunTour).toBe("pending");
+      expect(made.needsFirstRunTour).toBe(false);
+      expect(made.firstRunTour).toBe("done");
+      const finished = auth.setFirstRunTour("free_driver", "done");
+      expect(finished.needsFirstRunTour).toBe(false);
+      expect(auth.getUser("free_driver").firstRunTour).toBe("done");
     } finally {
       auth.setDataDirForTests(null);
       fs.rmSync(tmp, { recursive: true, force: true });

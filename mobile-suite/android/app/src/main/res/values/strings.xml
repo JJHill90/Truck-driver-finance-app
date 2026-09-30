@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Go Taxation Suite</string>
+    <string name="title_activity_main">Go Taxation Suite</string>
+    <string name="package_name">com.gotaxation.suite</string>
+    <string name="custom_url_scheme">com.gotaxation.suite</string>
+    <string name="camera_rationale">Go Taxation Suite uses the camera to photograph receipts and payslips so they can be saved to your tax records. Photos stay in your account and are not used for advertising. You can refuse and upload a file instead.</string>
+</resources>
