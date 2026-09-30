@@ -551,6 +551,14 @@
                 if (freqEl && freqEl.value) bodyObj.recurringFrequency = freqEl.value;
                 const startVal = (startEl && startEl.value) || (dateEl && dateEl.value) || "";
                 if (startVal) bodyObj.recurringStartDate = startVal;
+                const freqLabel =
+                  (freqEl && freqEl.options && freqEl.selectedIndex >= 0
+                    ? freqEl.options[freqEl.selectedIndex].textContent
+                    : "") || bodyObj.recurringFrequency || "recurring";
+                globalThis.__haulagePendingRecurring = {
+                  frequencyLabel: String(freqLabel).trim(),
+                  startDate: startVal,
+                };
               }
             }
           }
@@ -11582,16 +11590,19 @@
     const prev = globalThis.afterExpenseSaved;
     async function wrapped(entry, message) {
       const rec = globalThis.__haulageLastRecurringSave;
-      if (rec && rec.recurring) {
-        globalThis.__haulageLastRecurringSave = null;
-        const t = rec.recurring;
+      const pending = globalThis.__haulagePendingRecurring;
+      globalThis.__haulageLastRecurringSave = null;
+      globalThis.__haulagePendingRecurring = null;
+      const t = (rec && rec.recurring) || pending;
+      if (t) {
         const freq = t.frequencyLabel || t.frequency || "recurring";
-        if (rec.deferred) {
+        const start = t.startDate;
+        if ((rec && rec.deferred) || !entry) {
           message = `Fixed cost scheduled — first ${String(freq).toLowerCase()} post on ${fmtDate(
-            t.startDate
+            start
           )}`;
         } else {
-          message = `Fixed cost saved — ${String(freq).toLowerCase()} from ${fmtDate(t.startDate)}`;
+          message = `Fixed cost saved — ${String(freq).toLowerCase()} from ${fmtDate(start)}`;
         }
       }
       await prev.call(this, entry, message);
