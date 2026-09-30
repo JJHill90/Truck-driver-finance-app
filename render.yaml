@@ -157,6 +157,15 @@ services:
         sync: false
       - key: HAULAGE_ADMIN_PASSWORD # pragma: allowlist secret
         sync: false
+      # Optional Play / App Store reviewer login (non-admin, complimentary Pro+).
+      # Set a strong password in the dashboard; never commit it. Paste the same
+      # username + password into store review notes.
+      - key: SUITE_REVIEWER_USERNAME
+        sync: false
+      - key: SUITE_REVIEWER_PASSWORD
+        sync: false
+      - key: SUITE_REVIEWER_EMAIL
+        sync: false
       - key: APP_BASE_URL
         sync: false
       - key: CORS_ORIGINS

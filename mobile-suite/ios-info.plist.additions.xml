@@ -8,3 +8,5 @@
 <string>Allow access to your photo library so you can upload an existing receipt or payslip photo to your tax records.</string>
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>Allow saving a captured receipt photo to your library if you choose to keep a copy on the device.</string>
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>

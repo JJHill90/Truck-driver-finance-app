@@ -6,7 +6,9 @@
   "scripts": {
     "sync": "npx cap sync",
     "sync:android": "npx cap sync android",
+    "sync:ios": "npx cap sync ios",
     "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios",
     "add:android": "npx cap add android",
     "add:ios": "npx cap add ios"
   },
@@ -16,6 +18,7 @@
     "@capacitor/camera": "^7.0.5",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/core": "^7.6.8",
-    "@capacitor/filesystem": "^7.1.8"
+    "@capacitor/filesystem": "^7.1.8",
+    "@capacitor/ios": "^7.6.9"
   }
 }

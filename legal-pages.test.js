@@ -3,6 +3,7 @@ const path = require("path");
 
 const privacy = fs.readFileSync(path.join(__dirname, "public/privacy.html"), "utf8");
 const terms = fs.readFileSync(path.join(__dirname, "public/terms.html"), "utf8");
+const support = fs.readFileSync(path.join(__dirname, "public/support.html"), "utf8");
 const hubPrivacy = fs.readFileSync(path.join(__dirname, "public/privacy-driverhub.html"), "utf8");
 
 describe("public legal pages", () => {
@@ -33,6 +34,15 @@ describe("public legal pages", () => {
     expect(terms).not.toMatch(/Taxation Hub/i);
     expect(terms).not.toMatch(/Fuel Hub/i);
     expect(terms).not.toMatch(/\$5 \/ month or \$60 \/ year/);
+  });
+
+  it("Suite support page is store-safe and Suite-only", () => {
+    expect(support).toMatch(/Support — Go Taxation Suite|Support<\/h1>/);
+    expect(support).toMatch(/support@godriverhub.com/);
+    expect(support).toMatch(/Delete account/i);
+    expect(support).not.toMatch(/Driver Hub/i);
+    expect(support).not.toMatch(/Taxation Hub/i);
+    expect(support).not.toMatch(/Fuel Hub/i);
   });
 
   it("Driver Hub keeps a separate privacy page for the website footer", () => {
