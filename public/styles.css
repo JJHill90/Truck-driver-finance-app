@@ -1424,6 +1424,59 @@ tr.vending-machine-row {
   background: #c5d4d8;
   border-color: #8aa3a9;
 }
+.tag.tag-recurring {
+  color: #1e3a5f;
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+.recurring-fixed-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recurring-fixed-box > .checkbox {
+  margin: 0;
+}
+.recurring-fixed-box .muted.small {
+  margin: 0;
+}
+.recurring-fixed-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.recurring-fixed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recurring-fixed-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+}
+.recurring-fixed-item .recurring-fixed-meta {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin: 4px 0 0;
+}
+@media (max-width: 640px) {
+  .recurring-fixed-fields {
+    grid-template-columns: 1fr;
+  }
+  .recurring-fixed-item {
+    grid-template-columns: 1fr;
+  }
+}
 #report-content tr.vending-machine-row,
 .report-expense-ledger tr.vending-machine-row {
   background: rgba(140, 170, 176, 0.35);
