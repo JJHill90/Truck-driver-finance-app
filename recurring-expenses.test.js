@@ -104,6 +104,10 @@ describe("recurring expenses", () => {
     expect(view.awaitingFirst).toBe(true);
     expect(view.frequencyLabel).toBe("Weekly");
     expect(made.template.notes).toMatch(/weekly/i);
+    rec.materializeDue(records, { addExpense, today: "2026-11-01" });
+    const after = rec.presentTemplate(records.recurringExpenses[0], "2026-11-01");
+    expect(after.awaitingFirst).toBe(false);
+    expect(after.lastPostedDate).toBe("2026-11-01");
   });
 
   it("skips a date that already has a matching ledger row", () => {
