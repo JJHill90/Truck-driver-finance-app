@@ -131,6 +131,7 @@ const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
 const yearCompare = require("./lib/year-compare");
 const taxCompanion = require("./lib/tax-companion");
+const firstRunTour = require("./lib/first-run-tour");
 const recurringExpenses = require("./lib/recurring-expenses");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
@@ -975,10 +976,30 @@ api.post("/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+api.get("/first-run-tour", (req, res) => {
+  res.json({
+    steps: firstRunTour.listSteps({ product: productOf(req) }),
+  });
+});
+
 api.get("/auth/me", (req, res) => {
   const user = req.user ? auth.getUser(req.user) : null;
   const ent = user ? resolveReqEntitlements(req) : null;
   res.json({ user, entitlements: ent });
+});
+
+api.post("/auth/first-run-tour", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to update the first-run tour." });
+    return;
+  }
+  const status = String((req.body && req.body.status) || "done").toLowerCase();
+  try {
+    const user = auth.setFirstRunTour(req.user, status === "pending" ? "pending" : "done");
+    res.json({ user, ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 api.post("/auth/presets", (req, res) => {
