@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=companion-1" />
+    <link rel="stylesheet" href="./styles.css?v=recurring-1" />
     <link rel="stylesheet" href="./suite.css?v=companion-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
@@ -272,6 +272,28 @@
                       No receipt
                     </label>
                   </div>
+                  <div class="span-2 recurring-fixed-box" id="manual-recurring-box">
+                    <label class="checkbox">
+                      <input type="checkbox" name="recurring" id="manual-recurring" />
+                      Recurring fixed cost
+                    </label>
+                    <p class="muted small">Posts this amount on each due date (for example weekly super). Reconcile later against a statement — no receipt required.</p>
+                    <div class="recurring-fixed-fields hidden" id="manual-recurring-fields">
+                      <label>How often
+                        <select name="recurringFrequency" id="manual-recurring-frequency">
+                          <option value="daily">Daily</option>
+                          <option value="weekly" selected>Weekly</option>
+                          <option value="fortnightly">Fortnightly</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </label>
+                      <label>Start date
+                        <input type="date" name="recurringStartDate" id="manual-recurring-start" />
+                      </label>
+                    </div>
+                  </div>
                   <div class="span-2 form-actions">
                     <button type="submit" class="btn primary">Save expense</button>
                   </div>
@@ -300,6 +322,12 @@
             <div class="panel">
               <div class="panel-header"><h2>Expense receipt photos</h2></div>
               <div id="receipt-gallery" class="receipt-gallery"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header"><h2>Fixed costs</h2></div>
+              <p class="muted">Recurring expenses post automatically as each due date arrives (Australia/Sydney calendar). Stop a series any time — posted rows stay on the ledger to reconcile.</p>
+              <div id="recurring-expenses-list"></div>
             </div>
 
             <div class="panel">
@@ -1050,7 +1078,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=companion-1"></script>
+    <script src="./enhancements.js?v=recurring-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=pro-plus-2"></script>
     <script src="./companion.js?v=companion-2"></script>

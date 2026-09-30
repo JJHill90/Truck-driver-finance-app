@@ -535,6 +535,32 @@
             if (cashEl) bodyObj.cashTransaction = Boolean(cashEl.checked);
             if (noReceiptEl) bodyObj.noReceipt = Boolean(noReceiptEl.checked);
             if (vendingEl) bodyObj.vendingMachine = Boolean(vendingEl.checked);
+            const recEl = document.querySelector(
+              "#manual-receipt-form [name=recurring], #manual-recurring"
+            );
+            if (recEl) {
+              bodyObj.recurring = Boolean(recEl.checked);
+              if (recEl.checked) {
+                const freqEl = document.querySelector(
+                  "#manual-receipt-form [name=recurringFrequency], #manual-recurring-frequency"
+                );
+                const startEl = document.querySelector(
+                  "#manual-receipt-form [name=recurringStartDate], #manual-recurring-start"
+                );
+                const dateEl = document.querySelector("#manual-receipt-form [name=date]");
+                if (freqEl && freqEl.value) bodyObj.recurringFrequency = freqEl.value;
+                const startVal = (startEl && startEl.value) || (dateEl && dateEl.value) || "";
+                if (startVal) bodyObj.recurringStartDate = startVal;
+                const freqLabel =
+                  (freqEl && freqEl.options && freqEl.selectedIndex >= 0
+                    ? freqEl.options[freqEl.selectedIndex].textContent
+                    : "") || bodyObj.recurringFrequency || "recurring";
+                globalThis.__haulagePendingRecurring = {
+                  frequencyLabel: String(freqLabel).trim(),
+                  startDate: startVal,
+                };
+              }
+            }
           }
 
           const presets = (window.__haulageUser && window.__haulageUser.presets) || {};
@@ -6636,6 +6662,14 @@
         detailCell.appendChild(document.createTextNode(" "));
         detailCell.appendChild(tag);
       }
+      if (entry.recurringOccurrence && !detailCell.querySelector(".tag-recurring")) {
+        const tag = document.createElement("span");
+        tag.className = "tag tag-recurring";
+        tag.textContent = "Fixed cost";
+        tag.title = "Posted from a recurring fixed-cost schedule";
+        detailCell.appendChild(document.createTextNode(" "));
+        detailCell.appendChild(tag);
+      }
     });
   }
 
@@ -8484,6 +8518,7 @@
             if (e.vendingMachine) flags.push('<span class="tag tag-vending">Vending</span>');
             if (e.cashTransaction) flags.push('<span class="tag tag-cash">Cash</span>');
             if (e.noReceipt) flags.push('<span class="tag tag-no-receipt">No receipt</span>');
+            if (e.recurringOccurrence) flags.push('<span class="tag tag-recurring">Fixed cost</span>');
             const cls = e.vendingMachine ? "vending-machine-row" : "";
             return `<tr class="${cls}">
               <td>${esc(e.date || "")}</td>
@@ -11426,6 +11461,341 @@
     if (form) {
       new MutationObserver(bindManualForm).observe(form, { childList: true, subtree: true });
     }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Recurring fixed-cost expenses (manual ledger) ----------------------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let lastExpenseCount = 0;
+  let pollTimer = null;
+  let midnightTimer = null;
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(
+      Number(n) || 0
+    );
+  }
+
+  function fmtDate(d) {
+    if (!d) return "—";
+    if (typeof window.fmtDate === "function") return window.fmtDate(d);
+    return new Date(`${d}T12:00:00`).toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function localToday() {
+    if (typeof window.localToday === "function") return window.localToday();
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate()
+    ).padStart(2, "0")}`;
+  }
+
+  function categoryName(id) {
+    if (typeof window.categoryLabel === "function") return window.categoryLabel(id);
+    return String(id || "").replace(/_/g, " ");
+  }
+
+  function recBox() {
+    return document.getElementById("manual-recurring-box");
+  }
+  function recCheck() {
+    return document.getElementById("manual-recurring");
+  }
+  function recFields() {
+    return document.getElementById("manual-recurring-fields");
+  }
+  function recStart() {
+    return document.getElementById("manual-recurring-start");
+  }
+  function recFreq() {
+    return document.getElementById("manual-recurring-frequency");
+  }
+
+  function syncRecurringFields() {
+    const checked = Boolean(recCheck() && recCheck().checked);
+    const fields = recFields();
+    if (fields) fields.classList.toggle("hidden", !checked);
+    if (!checked) return;
+    const start = recStart();
+    const dateEl = document.querySelector("#manual-receipt-form [name=date]");
+    if (start && !start.value) {
+      start.value = (dateEl && dateEl.value) || localToday();
+    }
+    const noReceipt = document.getElementById("manual-no-receipt");
+    if (noReceipt && !noReceipt.checked) noReceipt.checked = true;
+  }
+
+  function bindRecurringForm() {
+    const check = recCheck();
+    if (!check || check.dataset.recurringBound === "1") return;
+    check.dataset.recurringBound = "1";
+    check.addEventListener("change", syncRecurringFields);
+    const form = document.getElementById("manual-receipt-form");
+    if (form && !form.dataset.recurringResetBound) {
+      form.dataset.recurringResetBound = "1";
+      form.addEventListener("reset", () => {
+        setTimeout(() => {
+          if (recCheck()) recCheck().checked = false;
+          if (recFreq()) recFreq().value = "weekly";
+          if (recStart()) recStart().value = "";
+          syncRecurringFields();
+        }, 0);
+      });
+    }
+    syncRecurringFields();
+  }
+
+  function wrapApprovalState() {
+    if (typeof globalThis.setManualFormApprovalState !== "function") return;
+    if (globalThis.setManualFormApprovalState.__haulageRecurringWrapped) return;
+    const prev = globalThis.setManualFormApprovalState;
+    function wrapped(pending) {
+      const result = prev.apply(this, arguments);
+      const box = recBox();
+      if (box) box.classList.toggle("hidden", Boolean(pending));
+      if (pending && recCheck()) {
+        recCheck().checked = false;
+        syncRecurringFields();
+      }
+      return result;
+    }
+    wrapped.__haulageRecurringWrapped = true;
+    globalThis.setManualFormApprovalState = wrapped;
+  }
+
+  function wrapAfterExpenseSaved() {
+    if (typeof globalThis.afterExpenseSaved !== "function") return;
+    if (globalThis.afterExpenseSaved.__haulageRecurringWrapped) return;
+    const prev = globalThis.afterExpenseSaved;
+    async function wrapped(entry, message) {
+      const rec = globalThis.__haulageLastRecurringSave;
+      const pending = globalThis.__haulagePendingRecurring;
+      globalThis.__haulageLastRecurringSave = null;
+      globalThis.__haulagePendingRecurring = null;
+      const t = (rec && rec.recurring) || pending;
+      if (t) {
+        const freq = t.frequencyLabel || t.frequency || "recurring";
+        const start = t.startDate;
+        if ((rec && rec.deferred) || !entry) {
+          message = `Fixed cost scheduled — first ${String(freq).toLowerCase()} post on ${fmtDate(
+            start
+          )}`;
+        } else {
+          message = `Fixed cost saved — ${String(freq).toLowerCase()} from ${fmtDate(start)}`;
+        }
+      }
+      await prev.call(this, entry, message);
+      renderFromState();
+    }
+    wrapped.__haulageRecurringWrapped = true;
+    globalThis.afterExpenseSaved = wrapped;
+  }
+
+  function renderList(items) {
+    const el = document.getElementById("recurring-expenses-list");
+    if (!el) return;
+    const list = Array.isArray(items) ? items.filter((t) => t && t.active !== false) : [];
+    if (!list.length) {
+      el.innerHTML =
+        '<p class="muted">No recurring fixed costs yet. Tick <strong>Recurring fixed cost</strong> when you save a manual expense.</p>';
+      return;
+    }
+    el.innerHTML = `<div class="recurring-fixed-list">${list
+      .map((t) => {
+        const title = esc(t.description || t.vendor || categoryName(t.category) || "Fixed cost");
+        const vendor = t.vendor ? ` · ${esc(t.vendor)}` : "";
+        const due = t.awaitingFirst
+          ? `First post ${fmtDate(t.nextDue || t.startDate)}`
+          : `Next ${fmtDate(t.nextDue)}`;
+        const last = t.lastPostedDate ? ` · Last posted ${fmtDate(t.lastPostedDate)}` : "";
+        return `<div class="recurring-fixed-item" data-recurring-id="${esc(t.id)}">
+          <div>
+            <strong>${title}</strong>${vendor}
+            <p class="recurring-fixed-meta">${money(t.amount)} · ${esc(
+              t.frequencyLabel || t.frequency
+            )} · ${due}${last}</p>
+          </div>
+          <button type="button" class="btn secondary small" data-stop-recurring="${esc(
+            t.id
+          )}">Stop</button>
+        </div>`;
+      })
+      .join("")}</div>`;
+    el.querySelectorAll("[data-stop-recurring]").forEach((btn) => {
+      btn.addEventListener("click", () => stopTemplate(btn.getAttribute("data-stop-recurring")));
+    });
+  }
+
+  function renderFromState() {
+    const records = typeof state !== "undefined" ? state.records : null;
+    renderList((records && records.recurringExpenses) || []);
+  }
+
+  async function stopTemplate(id) {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API}/recurring-expenses/${encodeURIComponent(id)}/stop`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not stop this fixed cost.");
+      if (typeof window.toast === "function") window.toast("Stopped — no further automatic posts");
+      if (typeof window.refreshAll === "function") await window.refreshAll();
+      else renderFromState();
+    } catch (err) {
+      if (typeof window.toast === "function") {
+        window.toast(err.message || "Could not stop this fixed cost.");
+      }
+    }
+  }
+
+  async function pollCatchup() {
+    try {
+      const res = await fetch(`${API}/records`, { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const next = (data && data.expenses) || [];
+      const grew = next.length > lastExpenseCount && lastExpenseCount > 0;
+      lastExpenseCount = next.length;
+      if (typeof state !== "undefined" && state.records) {
+        state.records.recurringExpenses = data.recurringExpenses || [];
+      }
+      renderList(data.recurringExpenses || []);
+      if (grew && typeof window.refreshAll === "function") {
+        await window.refreshAll();
+      } else if (grew) {
+        if (typeof state !== "undefined") state.records = data;
+        if (typeof window.renderExpenseList === "function") window.renderExpenseList();
+        if (typeof window.renderExpenseTotals === "function") window.renderExpenseTotals();
+      }
+    } catch {
+      /* ignore polling errors */
+    }
+  }
+
+  function msUntilNextSydneyMidnight() {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Australia/Sydney",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(new Date());
+      const grab = (t) => Number(parts.find((p) => p.type === t)?.value || 0);
+      const h = grab("hour");
+      const m = grab("minute");
+      const s = grab("second");
+      const elapsed = ((h * 60 + m) * 60 + s) * 1000;
+      return 24 * 60 * 60 * 1000 - elapsed + 1500;
+    } catch {
+      return 60 * 60 * 1000;
+    }
+  }
+
+  function scheduleMidnightPoll() {
+    if (midnightTimer) clearTimeout(midnightTimer);
+    midnightTimer = setTimeout(() => {
+      midnightTimer = null;
+      void pollCatchup();
+      scheduleMidnightPoll();
+    }, msUntilNextSydneyMidnight());
+  }
+
+  function wrapFetch() {
+    if (window.fetch.__haulageRecurringWrapped) return;
+    const orig = window.fetch;
+    window.fetch = async function (...args) {
+      const res = await orig.apply(this, args);
+      try {
+        const url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
+        const options = args[1] || {};
+        const method = String(options.method || "GET").toUpperCase();
+        if (
+          url &&
+          method === "POST" &&
+          (/\/receipts\/manual(\?|$)/.test(String(url)) || /\/expenses(\?|$)/.test(String(url)))
+        ) {
+          res
+            .clone()
+            .json()
+            .then((data) => {
+              if (data && data.recurring) globalThis.__haulageLastRecurringSave = data;
+            })
+            .catch(() => {});
+        }
+        if (url && /\/records(\?|$)/.test(String(url))) {
+          res
+            .clone()
+            .json()
+            .then((data) => {
+              if (!data) return;
+              lastExpenseCount = Array.isArray(data.expenses)
+                ? data.expenses.length
+                : lastExpenseCount;
+              if (Array.isArray(data.recurringExpenses)) renderList(data.recurringExpenses);
+            })
+            .catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+      return res;
+    };
+    window.fetch.__haulageRecurringWrapped = true;
+  }
+
+  function start() {
+    bindRecurringForm();
+    wrapApprovalState();
+    wrapAfterExpenseSaved();
+    wrapFetch();
+    renderFromState();
+    scheduleMidnightPoll();
+    if (!pollTimer) {
+      pollTimer = setInterval(() => {
+        if (document.visibilityState === "hidden") return;
+        void pollCatchup();
+      }, 60_000);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") void pollCatchup();
+    });
+    window.addEventListener("haulage:new-week", () => void pollCatchup());
+    const form = document.getElementById("manual-receipt-form");
+    if (form) {
+      new MutationObserver(bindRecurringForm).observe(form, { childList: true, subtree: true });
+    }
+    setTimeout(wrapAfterExpenseSaved, 0);
+    setTimeout(wrapAfterExpenseSaved, 500);
+    setTimeout(wrapApprovalState, 0);
   }
 
   if (document.readyState === "loading") {

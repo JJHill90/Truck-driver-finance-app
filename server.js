@@ -131,6 +131,7 @@ const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
 const yearCompare = require("./lib/year-compare");
 const taxCompanion = require("./lib/tax-companion");
+const recurringExpenses = require("./lib/recurring-expenses");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -343,6 +344,121 @@ function persist(req, meta = {}) {
     reason: meta.reason || "auto",
     actor: sessionUsername(req) || req.user || null,
   });
+}
+
+function catchUpRecurring(req, records) {
+  return recurringExpenses.materializeDue(records, {
+    addExpense: (recs, payload) => storage.addExpense(recs, payload),
+    stampBody: (payload) => {
+      if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, payload);
+    },
+  });
+}
+
+function applyRecurringFromBody(records, body, firstExpense) {
+  if (!recurringExpenses.wantsRecurring(body)) return null;
+  const startDate = body.recurringStartDate || body.startDate || (firstExpense && firstExpense.date) || body.date;
+  const firstPosted =
+    firstExpense && String(firstExpense.date || "").slice(0, 10) === String(startDate || "").slice(0, 10)
+      ? String(firstExpense.date).slice(0, 10)
+      : null;
+  const made = recurringExpenses.createTemplate(
+    records,
+    { ...body, recurringStartDate: startDate },
+    { firstPostedDate: firstPosted, sourceExpenseId: firstExpense && firstExpense.id }
+  );
+  if (made.ok && firstExpense) recurringExpenses.stampOccurrence(firstExpense, made.template);
+  return made;
+}
+
+function stampManualExpenseFlags(entry, body) {
+  if (!entry || !body) return entry;
+  if (body.cashTransaction != null) entry.cashTransaction = Boolean(body.cashTransaction);
+  if (body.noReceipt != null) entry.noReceipt = Boolean(body.noReceipt);
+  if (body.vendingMachine != null) entry.vendingMachine = Boolean(body.vendingMachine);
+  return entry;
+}
+
+/** Create a fixed-cost template and post due rows (no dummy receipt, no upload quota). */
+function handleRecurringExpenseCreate(req, records, body) {
+  const today = recurringExpenses.todayYmd();
+  const recStart = String(body.recurringStartDate || body.date || "").slice(0, 10);
+  if (recStart && recStart > today) {
+    const made = applyRecurringFromBody(records, { ...body, date: recStart }, null);
+    if (!made || !made.ok) {
+      return {
+        status: 400,
+        json: { error: (made && made.error) || "Could not save the recurring expense." },
+      };
+    }
+    persist(req);
+    return {
+      status: 200,
+      json: {
+        entry: null,
+        deferred: true,
+        recurring: recurringExpenses.presentTemplate(made.template),
+        analysis: expenseAnalysis(req, {
+          ...body,
+          date: recStart,
+          amount: body.amount,
+          category: body.category,
+        }),
+      },
+    };
+  }
+  if (recStart) body.date = recStart;
+  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  const entry = storage.addExpense(records, body);
+  stampManualExpenseFlags(entry, body);
+  if (productOf(req) === "suite" && body.category === "home_office_hours") {
+    const hours = Number(body.hours || body.homeOfficeHours || 0);
+    if (hours > 0) entry.hours = hours;
+  }
+  rememberVendor(records, {
+    name: body.vendor || entry.vendor,
+    abn: body.vendorAbn || entry.vendorAbn,
+    category: body.category || entry.category,
+  });
+  const made = applyRecurringFromBody(records, body, entry);
+  if (made && !made.ok) {
+    records.expenses = (records.expenses || []).filter((e) => e && e.id !== entry.id);
+    return { status: 400, json: { error: made.error } };
+  }
+  catchUpRecurring(req, records);
+  persist(req);
+  return {
+    status: 200,
+    json: {
+      entry,
+      deferred: false,
+      recurring: made && made.ok ? recurringExpenses.presentTemplate(made.template) : null,
+      analysis: expenseAnalysis(req, entry),
+    },
+  };
+}
+
+function startRecurringCatchupScheduler() {
+  if (process.env.NODE_ENV === "test") return;
+  const timer = setInterval(() => {
+    for (const [key, records] of recordsCache.entries()) {
+      const parsed = suite.parseCacheKey(key);
+      if (!parsed.user) continue;
+      const result = recurringExpenses.materializeDue(records, {
+        addExpense: (recs, payload) => storage.addExpense(recs, payload),
+        stampBody: (payload) => {
+          if (parsed.product === "suite") suite.extraEntity.stampActiveEntity(records, payload);
+        },
+      });
+      if (result.created.length) {
+        persistUserRecords(parsed.user, records, fileForUser(parsed.user, parsed.product), {
+          reason: "recurring-catchup",
+          actor: "scheduler",
+        });
+      }
+    }
+  }, 60_000);
+  if (typeof timer.unref === "function") timer.unref();
 }
 
 /** Write every in-memory records cache entry to disk before a full-store backup. */
@@ -2669,7 +2785,8 @@ api.get("/records", (req, res) => {
   const full = getRecords(req);
   const descBackfill = backfillIncomeDescriptions(full);
   const overnightBackfill = backfillOvernightDays(full);
-  if (descBackfill.updated > 0 || overnightBackfill.updated > 0) persist(req);
+  const recCatch = catchUpRecurring(req, full);
+  if (descBackfill.updated > 0 || overnightBackfill.updated > 0 || recCatch.created.length) persist(req);
   const records = withActiveLedger(full);
   const activeIncome = records.income || [];
   const activeExpenses = records.expenses || [];
@@ -2698,6 +2815,7 @@ api.get("/records", (req, res) => {
     ),
     receipts,
     vendors: storage.listVendors(full),
+    recurringExpenses: recurringExpenses.listActive(full).map((t) => recurringExpenses.presentTemplate(t)),
   });
 });
 
@@ -3210,7 +3328,13 @@ api.post("/expenses", (req, res) => {
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  if (recurringExpenses.wantsRecurring(body)) {
+    const result = handleRecurringExpenseCreate(req, records, body);
+    res.status(result.status).json(result.json);
+    return;
+  }
   const entry = storage.addExpense(records, body);
+  stampManualExpenseFlags(entry, body);
   if (productOf(req) === "suite" && body.category === "home_office_hours") {
     const hours = Number(body.hours || body.homeOfficeHours || 0);
     if (hours > 0) entry.hours = hours;
@@ -3222,6 +3346,27 @@ api.post("/expenses", (req, res) => {
   });
   persist(req);
   res.json({ entry, analysis: expenseAnalysis(req, entry) });
+});
+
+api.get("/recurring-expenses", (req, res) => {
+  const records = getRecords(req);
+  const recCatch = catchUpRecurring(req, records);
+  if (recCatch.created.length) persist(req);
+  res.json({
+    recurringExpenses: recurringExpenses.listActive(records).map((t) => recurringExpenses.presentTemplate(t)),
+    posted: recCatch.created.length,
+  });
+});
+
+api.post("/recurring-expenses/:id/stop", (req, res) => {
+  const records = getRecords(req);
+  const stopped = recurringExpenses.stopTemplate(records, req.params.id);
+  if (!stopped) {
+    res.status(404).json({ error: "Fixed cost not found." });
+    return;
+  }
+  persist(req);
+  res.json({ ok: true, recurring: recurringExpenses.presentTemplate(stopped) });
 });
 
 api.put("/expenses/:id", (req, res) => {
@@ -3769,7 +3914,6 @@ api.post("/receipts/manual", (req, res) => {
     });
     return;
   }
-  if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
   if (body.category) body.category = normalizeExpenseCategoryId(body.category);
@@ -3777,6 +3921,12 @@ api.post("/receipts/manual", (req, res) => {
     const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
     applyExpensePresets(body, account);
   }
+  if (recurringExpenses.wantsRecurring(body)) {
+    const result = handleRecurringExpenseCreate(req, records, body);
+    res.status(result.status).json(result.json);
+    return;
+  }
+  if (!assertCanUpload(req, res)) return;
   const { expense, receipt } = storage.addManualReceipt(records, body);
   // Cash / no-receipt / vending flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
@@ -4503,6 +4653,7 @@ function bootListen() {
       flushFn: flushAllCachedRecordsToDisk,
       onComplete: notifyBackupComplete,
     });
+    startRecurringCatchupScheduler();
   });
 }
 
