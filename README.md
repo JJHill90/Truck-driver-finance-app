@@ -64,9 +64,9 @@ npm install
 npm start
 ```
 
-Then open **http://localhost:3000/haulage/** (the root path `/` redirects there).
-**Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/**.
-To mimic the dedicated Render host locally: `APP_PRODUCT=suite npm start` — root `/` then redirects to `/suite/`.
+Then open **http://localhost:3000/** for the public overview (screenshots and store placeholders), or **http://localhost:3000/haulage/** for the Driver Hub app.
+**Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/** (overview: `/welcome-suite`).
+To mimic the dedicated Render host locally: `APP_PRODUCT=suite npm start` — root `/` then shows the Suite overview; the app stays at `/suite/`.
 
 ## Scripts
 
@@ -114,6 +114,8 @@ public/
   fuelhub.js            Fuel Hub UI
   styles.css            Styles
   truck.svg             Icon
+  welcome-*.html        Public overview (screenshots + app / store links)
+  welcome.css / .js
 public/suite/           Go Taxation Suite shell (same tabs as Taxation Hub)
 data/                   Runtime store + receipts (git-ignored)
 ```

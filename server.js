@@ -135,6 +135,7 @@ const yearCompare = require("./lib/year-compare");
 const taxCompanion = require("./lib/tax-companion");
 const firstRunTour = require("./lib/first-run-tour");
 const recurringExpenses = require("./lib/recurring-expenses");
+const storeLinks = require("./lib/store-links");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -4592,10 +4593,6 @@ function sendProductLegalPage(kind) {
 app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
 app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
 app.get(
-  ["/support", "/support.html", "/suite/support", "/suite/support.html"],
-  sendLegalPage("support.html")
-);
-app.get(
   ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
   sendProductLegalPage("privacy")
 );
@@ -4604,6 +4601,64 @@ app.get(
   sendProductLegalPage("terms")
 );
 app.get(["/legal.css"], sendLegalPage("legal.css"));
+
+const WELCOME_SHOTS_DIR = path.join(
+  __dirname,
+  "mobile-suite",
+  "store",
+  "screenshots",
+  "play-1080x1920"
+);
+const WELCOME_HUB_SHOTS_DIR = path.join(PUBLIC_DIR, "welcome-hub-shots");
+
+function sendWelcomePage(kind) {
+  return (req, res) => {
+    const suitePage =
+      kind === "suite" ||
+      (kind !== "haulage" && (suite.productOf(req) === "suite" || suite.isStandaloneSuite()));
+    const file = suitePage ? "welcome-suite.html" : "welcome-driverhub.html";
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+
+function sendWelcomeSupport(kind) {
+  return (req, res) => {
+    const suitePage =
+      kind === "suite" ||
+      (kind !== "haulage" && (suite.productOf(req) === "suite" || suite.isStandaloneSuite()));
+    const file = suitePage ? "welcome-support-suite.html" : "welcome-support-driverhub.html";
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+
+app.get(["/welcome.css"], sendLegalPage("welcome.css"));
+app.get(["/welcome.js"], sendLegalPage("welcome.js"));
+app.get("/truck.svg", sendLegalPage("truck.svg"));
+app.get("/welcome.json", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(storeLinks.linksForProduct(suite.productOf(req)));
+});
+app.use(
+  "/welcome/shots",
+  express.static(WELCOME_SHOTS_DIR, { index: false, fallthrough: false, maxAge: "7d" })
+);
+app.use(
+  "/welcome/hub-shots",
+  express.static(WELCOME_HUB_SHOTS_DIR, { index: false, fallthrough: false, maxAge: "7d" })
+);
+app.get(["/welcome-suite", "/welcome-suite.html"], sendWelcomePage("suite"));
+app.get(["/welcome-driverhub", "/welcome-driverhub.html"], sendWelcomePage("haulage"));
+app.get(["/welcome", "/welcome.html"], sendWelcomePage());
+app.get(["/welcome-support-suite"], sendWelcomeSupport("suite"));
+app.get(["/welcome-support-driverhub"], sendWelcomeSupport("haulage"));
+app.get(["/support", "/support.html"], sendWelcomeSupport());
+app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
+app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {
+  if (suite.isStandaloneSuite()) return next();
+  sendWelcomeSupport("haulage")(req, res);
+});
 
 app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));
@@ -4634,7 +4689,7 @@ if (suite.isStandaloneSuite()) {
   app.use("/haulage", express.static(PUBLIC_DIR));
   app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 }
-app.get("/", (_req, res) => res.redirect(302, suite.publicHomePath()));
+app.get("/", sendWelcomePage());
 
 // Error handler -> friendly JSON (413 for oversized uploads).
 app.use((err, _req, res, _next) => {
@@ -4673,8 +4728,10 @@ function bootListen() {
   const reviewer = reviewerDemo.ensureReviewerDemo();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
+      console.log(`Go Taxation Suite overview at http://localhost:${PORT}/`);
       console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
     } else {
+      console.log(`Driver Hub overview at http://localhost:${PORT}/`);
       console.log(`Driver Hub / Taxation Hub / Fuel Hub running at http://localhost:${PORT}/haulage/`);
       console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
     }

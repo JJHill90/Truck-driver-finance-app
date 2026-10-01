@@ -4,6 +4,7 @@ const path = require("path");
 const privacy = fs.readFileSync(path.join(__dirname, "public/privacy.html"), "utf8");
 const terms = fs.readFileSync(path.join(__dirname, "public/terms.html"), "utf8");
 const support = fs.readFileSync(path.join(__dirname, "public/support.html"), "utf8");
+const welcomeSupport = fs.readFileSync(path.join(__dirname, "public/welcome-support-suite.html"), "utf8");
 const hubPrivacy = fs.readFileSync(path.join(__dirname, "public/privacy-driverhub.html"), "utf8");
 
 describe("public legal pages", () => {
@@ -43,6 +44,18 @@ describe("public legal pages", () => {
     expect(support).not.toMatch(/Driver Hub/i);
     expect(support).not.toMatch(/Taxation Hub/i);
     expect(support).not.toMatch(/Fuel Hub/i);
+  });
+
+  it("Suite website support is store-safe, with contact form and FAQ", () => {
+    expect(welcomeSupport).toMatch(/Support — Go Taxation Suite|Support<\/h1>/);
+    expect(welcomeSupport).toMatch(/support@godriverhub.com/);
+    expect(welcomeSupport).toMatch(/Delete account/i);
+    expect(welcomeSupport).toMatch(/id="support-contact-form"/);
+    expect(welcomeSupport).toMatch(/FAQ/);
+    expect(welcomeSupport).toMatch(/How each tab works/);
+    expect(welcomeSupport).not.toMatch(/Driver Hub/i);
+    expect(welcomeSupport).not.toMatch(/Taxation Hub/i);
+    expect(welcomeSupport).not.toMatch(/Fuel Hub/i);
   });
 
   it("Driver Hub keeps a separate privacy page for the website footer", () => {

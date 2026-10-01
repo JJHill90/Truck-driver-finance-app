@@ -8,6 +8,7 @@ Compile **only** this listing:
 | Application id | `com.gotaxation.suite` |
 | Loads | `https://go-taxation-suite.onrender.com/suite/` |
 | Native project | `mobile-suite/` |
+| Marketing site (no login) | `https://go-taxation-suite.onrender.com/` |
 | Privacy (no login) | `https://go-taxation-suite.onrender.com/privacy` |
 | Terms (no login) | `https://go-taxation-suite.onrender.com/terms` |
 | Support (no login) | `https://go-taxation-suite.onrender.com/support` |
@@ -44,7 +45,8 @@ Still required **outside this repo** before a reviewer can approve:
 | iOS camera / photos / export-compliance | Done | `Info.plist` + `ios-info.plist.additions.xml` |
 | iOS privacy manifest | Done | `mobile-suite/ios/App/App/PrivacyInfo.xcprivacy` |
 | Public Privacy + Terms (Suite only) | Live | `/privacy` and `/terms` return 200 |
-| Public Support URL (Apple requires one) | In repo | `public/support.html` → `/support` |
+| Public Support URL (Apple requires one) | In repo | `/support` (contact form, tab guides, FAQ) |
+| Public marketing overview | In repo | `/` + `/welcome` (app + store buttons) |
 | In-app account deletion (Apple 5.1.1(v)) | Done | Profile → Delete account |
 | Capacitor CORS / `SameSite=None` cookies | Done | `CORS_ALLOW_CAPACITOR=1` on Suite |
 | Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
@@ -90,6 +92,9 @@ Then in Play Console for `com.gotaxation.suite`:
 6. Store listing: copy below. Screenshots:
    `mobile-suite/store/screenshots/play-1080x1920/`. Feature graphic:
    `mobile-suite/store/feature-graphic-1024x500.png`.
+   Marketing URL: `https://go-taxation-suite.onrender.com/`
+   After the listing is live, set `SUITE_PLAY_STORE_URL` on the Suite Render
+   service so the overview Play button goes live.
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com` and
    `https://go-taxation-suite.onrender.com/support`
@@ -111,14 +116,17 @@ In App Store Connect:
 
 1. Privacy Policy URL = `https://go-taxation-suite.onrender.com/privacy`
 2. Support URL = `https://go-taxation-suite.onrender.com/support`
-3. App Privacy nutrition labels (below)
-4. Account deletion: in-app **and** described on `/privacy` (5.1.1(v))
-5. Age rating: 4+ (no UGC chat, no gambling)
-6. Category: Business / Finance
-7. Devices: **iPhone** (iPad is off so you do not need 13" iPad shots)
-8. Review notes: login client; subscriptions are Stripe on the website;
+3. Marketing URL = `https://go-taxation-suite.onrender.com/`
+   After the listing is live, set `SUITE_APP_STORE_URL` on the Suite Render
+   service so the overview App Store button goes live.
+4. App Privacy nutrition labels (below)
+5. Account deletion: in-app **and** described on `/privacy` (5.1.1(v))
+6. Age rating: 4+ (no UGC chat, no gambling)
+7. Category: Business / Finance
+8. Devices: **iPhone** (iPad is off so you do not need 13" iPad shots)
+9. Review notes: login client; subscriptions are Stripe on the website;
    no IAP; demo username + password from Render `SUITE_REVIEWER_*`
-9. Export compliance: HTTPS only, non-exempt encryption = No
+10. Export compliance: HTTPS only, non-exempt encryption = No
 
 ## Listing copy (paste)
 

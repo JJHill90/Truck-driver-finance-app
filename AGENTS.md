@@ -21,16 +21,23 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
 ## Cursor Cloud specific instructions
 
 - Single service. Start with `npm start` (or `npm run dev` for `node --watch`).
-  Listens on port `3000` bound to `0.0.0.0`; open the UI at
-  **`http://localhost:3000/haulage/`** (root `/` 302-redirects there). `PORT`
-  overrides the port. **Go Taxation Suite** (general PAYG / sole trader /
-  partnership tax, same tabs as Taxation Hub) is at
-  **`http://localhost:3000/suite/`**. Suite records live under `data/suite/`;
+  Listens on port `3000` bound to `0.0.0.0`. Root **`http://localhost:3000/`**
+  is a public overview (screenshots + “open the app” + App Store / Play
+  placeholders). The Driver Hub app is at
+  **`http://localhost:3000/haulage/`**. `PORT` overrides the port.
+  **Go Taxation Suite** (general PAYG / sole trader / partnership tax, same
+  tabs as Taxation Hub) is at **`http://localhost:3000/suite/`** (overview
+  also at `/welcome-suite`). Suite records live under `data/suite/`;
   ATO logic is in `lib/suite/` (not the truck-driver occupation tables).
   A dedicated Render host sets `APP_PRODUCT=suite` (service `go-taxation-suite`
-  in `render.yaml`, disk `gotax-data`): `/` and `/haulage` redirect to `/suite/`,
-  every `/api/haulage` request uses the general ATO engine, and accounts stay on
-  that service’s own disk — not the Driver Hub `haulage-data` disk.
+  in `render.yaml`, disk `gotax-data`): `/` is the Suite overview, `/haulage`
+  redirects to `/suite/`, every `/api/haulage` request uses the general ATO
+  engine, and accounts stay on that service’s own disk — not the Driver Hub
+  `haulage-data` disk. Native shells still load `/suite/` or `/haulage/`.
+  When Play / App Store listings exist, set `SUITE_PLAY_STORE_URL` /
+  `SUITE_APP_STORE_URL` (Suite host) or `DRIVERHUB_PLAY_STORE_URL` /
+  `DRIVERHUB_APP_STORE_URL` (Driver Hub host); until then the buttons stay
+  “Coming soon”.
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
   shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session

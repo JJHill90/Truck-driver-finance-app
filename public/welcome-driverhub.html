@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver Hub — tax records and diesel planning for truck drivers</title>
+    <meta
+      name="description"
+      content="Driver Hub is the login for Taxation Hub and Fuel Hub. Track work expenses, scan receipts, and plan diesel fills. Not tax advice."
+    />
+    <meta property="og:title" content="Driver Hub" />
+    <meta
+      property="og:description"
+      content="One login for Taxation Hub and Fuel Hub. Try it in the browser — App Store and Google Play listings are on the way."
+    />
+    <meta property="og:image" content="/welcome/shots/02-dashboard.png" />
+    <link rel="icon" type="image/svg+xml" href="/truck.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/welcome.css" />
+  </head>
+  <body class="welcome-page welcome-hub">
+    <header class="welcome-bar">
+      <img class="welcome-mark" src="/truck.svg" width="40" height="40" alt="" />
+      <div class="welcome-brand">Driver <span>Hub</span></div>
+      <div class="welcome-bar-spacer"></div>
+      <nav class="welcome-nav" aria-label="Website">
+        <a href="/welcome-driverhub" aria-current="page">Overview</a>
+        <a href="/welcome-support-driverhub">Support</a>
+      </nav>
+      <a class="btn primary" data-welcome-app href="/haulage/">Open the app</a>
+    </header>
+
+    <main class="welcome-main">
+      <section class="hero">
+        <h1>One login for tax records and diesel planning.</h1>
+        <p class="hero-lead">
+          Driver Hub is the door to Taxation Hub (work expenses, payslips, live EOFY working paper)
+          and Fuel Hub (truck-access diesel, NHVR corridors, and fill planning). Same profile, no
+          account copy.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" data-welcome-app href="/haulage/">Try it in the browser</a>
+          <div class="store-row">
+            <a class="store-btn" id="welcome-appstore" aria-disabled="true">
+              <span class="store-btn-kicker">Coming soon on the</span>
+              App Store
+            </a>
+            <a class="store-btn" id="welcome-play" aria-disabled="true">
+              <span class="store-btn-kicker">Coming soon on</span>
+              Google Play
+            </a>
+          </div>
+        </div>
+        <p class="store-note" id="welcome-store-note">
+          App Store and Google Play listings are on the way. Open the web app to look around today.
+        </p>
+      </section>
+
+      <section class="features" aria-label="What you can do">
+        <article class="feature">
+          <h2>Taxation Hub</h2>
+          <p>Scan receipts and payslips, keep ledgers, and watch a live EOFY working paper.</p>
+        </article>
+        <article class="feature">
+          <h2>Fuel Hub</h2>
+          <p>Plan fills from load, tank and NHVR truck-access sites — not car shortcuts.</p>
+        </article>
+        <article class="feature">
+          <h2>One Driver Hub profile</h2>
+          <p>Name, employer, licence class and work vehicle feed both apps from the same login.</p>
+        </article>
+        <article class="feature">
+          <h2>Free to start</h2>
+          <p>15 uploads a month and one on-screen report. Pro is sold on the website via Stripe.</p>
+        </article>
+      </section>
+
+      <section class="shots">
+        <h2>A quick look</h2>
+        <div class="shot-row">
+          <figure>
+            <img src="/welcome/hub-shots/01-login.png" alt="Driver Hub login screen" width="180" height="360" />
+            <figcaption>Driver Hub login</figcaption>
+          </figure>
+          <figure>
+            <img src="/welcome/shots/02-dashboard.png" alt="Taxation Hub dashboard snapshot" width="180" height="360" />
+            <figcaption>Taxation Hub</figcaption>
+          </figure>
+          <figure>
+            <img src="/welcome/shots/03-expenses.png" alt="Expenses with receipt scan" width="180" height="360" />
+            <figcaption>Expenses</figcaption>
+          </figure>
+          <figure>
+            <img src="/welcome/shots/05-report.png" alt="EOFY working paper" width="180" height="360" />
+            <figcaption>EOFY report</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <p class="disclaimer">
+        Not tax advice and not an official ATO product. The app does not lodge a BAS or tax return.
+        You (or your registered agent) lodge with the ATO.
+      </p>
+    </main>
+
+    <footer class="welcome-foot">
+      <a href="/haulage/privacy">Privacy</a>
+      ·
+      <a href="/haulage/terms">Terms</a>
+      ·
+      <a href="/welcome-support-driverhub">Support</a>
+      ·
+      <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>
+    </footer>
+    <script src="/welcome.js"></script>
+  </body>
+</html>
