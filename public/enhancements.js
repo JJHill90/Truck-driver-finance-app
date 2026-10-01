@@ -11515,7 +11515,7 @@
     root.setAttribute("aria-labelledby", "first-run-tour-title");
     root.innerHTML = `
       <div class="first-run-tour-spot" aria-hidden="true"></div>
-      <div class="first-run-tour-card">
+      <div class="first-run-tour-card" id="first-run-tour-card">
         <p class="first-run-tour-kicker" id="first-run-tour-kicker"></p>
         <h3 id="first-run-tour-title"></h3>
         <p id="first-run-tour-body"></p>
@@ -11740,7 +11740,7 @@
 
   function onDocClick(e) {
     if (!window.__haulageTourActive) return;
-    if (e.target.closest && e.target.closest("#first-run-tour-card")) return;
+    if (e.target.closest && e.target.closest(".first-run-tour-card, #first-run-tour-next")) return;
     const step = steps[index];
     const target = currentTarget();
     const inTarget = target && (target === e.target || target.contains(e.target));
