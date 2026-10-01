@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Support — Driver Hub</title>
+    <meta
+      name="description"
+      content="Help, FAQ and contact for Driver Hub, Taxation Hub and Fuel Hub. Email support@godriverhub.com. Not tax advice."
+    />
+    <link rel="icon" type="image/svg+xml" href="/truck.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/welcome.css" />
+  </head>
+  <body class="welcome-page welcome-hub">
+    <header class="welcome-bar">
+      <img class="welcome-mark" src="/truck.svg" width="40" height="40" alt="" />
+      <div class="welcome-brand">Driver <span>Hub</span></div>
+      <div class="welcome-bar-spacer"></div>
+      <nav class="welcome-nav" aria-label="Website">
+        <a href="/welcome-driverhub">Overview</a>
+        <a href="/welcome-support-driverhub" aria-current="page">Support</a>
+      </nav>
+      <a class="btn primary" data-welcome-app href="/haulage/">Open the app</a>
+    </header>
+
+    <main class="welcome-main">
+      <section class="hero">
+        <h1>Support</h1>
+        <p class="hero-lead">
+          Same help as in the app: how each tab works, common questions, and a contact form.
+          We reply to the email you enter. You can also write
+          <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>.
+        </p>
+      </section>
+
+      <div class="support-layout">
+        <section class="support-panel" aria-labelledby="contact-heading">
+          <h2 id="contact-heading">Contact support</h2>
+          <p>
+            Have a question or hit a snag? Send a message and we’ll get back to you. Your request
+            goes to support@godriverhub.com, and you’ll get a confirmation notice on the email you
+            enter below.
+          </p>
+          <form id="support-contact-form" class="welcome-form">
+            <label>Name
+              <input type="text" name="name" id="support-name" autocomplete="name" required placeholder="Your name" />
+            </label>
+            <label>Email
+              <input type="email" name="email" id="support-email" autocomplete="email" required placeholder="Reply-to address" />
+            </label>
+            <label class="span-2">Phone number
+              <input type="tel" name="phone" id="support-phone" autocomplete="tel" placeholder="Optional — for a call back" />
+            </label>
+            <label class="span-2">Message
+              <textarea name="message" id="support-message" rows="6" required placeholder="Describe your question or issue…"></textarea>
+            </label>
+            <div class="span-2">
+              <button type="submit" class="btn primary" id="support-send">Send message</button>
+            </div>
+          </form>
+          <div id="support-contact-status" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="support-panel" aria-labelledby="help-heading">
+          <h2 id="help-heading">How each tab works</h2>
+          <p>Tap a topic for a short guide. Use these when you’re getting started or need a refresher.</p>
+          <div id="support-help-topics" class="support-help-topics" role="tablist" aria-label="Help topics">
+            <button type="button" class="btn secondary support-help-btn active" data-help-topic="dashboard">Dashboard</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="expenses">Expenses</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="income">Income</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="car-expenses">Car Expenses</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="report">EOFY Report</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="forecast">Forecast</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="fuelhub">Fuel Hub</button>
+            <button type="button" class="btn secondary support-help-btn" data-help-topic="profile">Profile</button>
+          </div>
+          <article id="support-help-panel" class="support-help-panel" aria-live="polite">
+            <h3 id="support-help-title">Dashboard</h3>
+            <div id="support-help-body"></div>
+          </article>
+        </section>
+      </div>
+
+      <section class="welcome-faq" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">FAQ</h2>
+
+        <details>
+          <summary>What’s the difference between Driver Hub, Taxation Hub and Fuel Hub?</summary>
+          <p>
+            Driver Hub is the login. After you sign in you pick Taxation Hub (receipts, income, live
+            EOFY working paper) or Fuel Hub (diesel planning on NHVR corridors). One profile — name,
+            employer, licence class, work vehicle — is shared. There is no account copy.
+          </p>
+        </details>
+        <details>
+          <summary>How do I create an account or reset my password?</summary>
+          <p>
+            Use Create Driver Hub profile, or Forgot username / password on the login screen. Recovery
+            is sent to the email on the profile. You can also email support@godriverhub.com.
+          </p>
+        </details>
+        <details>
+          <summary>Why is my scan in the gallery but not in the ledger?</summary>
+          <p>
+            A photo or PDF is saved as soon as you scan. The income or expense row is created only when
+            you tap Approve &amp; save. If a thumbnail says Needs approval, use Finish approval — or
+            Discard if you did not mean to keep it.
+          </p>
+        </details>
+        <details>
+          <summary>The app says a possible duplicate was detected</summary>
+          <p>
+            We match date, vendor and amount so the same docket is not saved twice. Cancel if it is
+            already in the ledger. Continue only if it really is a second receipt.
+          </p>
+        </details>
+        <details>
+          <summary>I’ve hit the free upload limit</summary>
+          <p>
+            Free includes 15 uploads a month and one on-screen EOFY report. Driver Hub / Taxation Hub
+            Pro is $5 / month or $60 / year via Profile → Plan (Stripe on the website — not an in-app
+            purchase). The primary mod can also grant complimentary Pro+.
+          </p>
+        </details>
+        <details>
+          <summary>Does the app lodge my tax return or BAS?</summary>
+          <p>
+            No. This is not tax advice and not an official ATO product. EOFY reports are working papers
+            you (or your registered agent) use when lodging with the ATO.
+          </p>
+        </details>
+        <details>
+          <summary>The scan total looks wrong</summary>
+          <p>
+            Expense scans prefer the overall TOTAL. Income scans prefer net pay when that wording is
+            present. You can tap another detected amount before you approve, or enter the figure
+            manually. A clear photo of the top of the slip and the date helps OCR.
+          </p>
+        </details>
+        <details>
+          <summary>Fuel Hub isn’t using my tank size</summary>
+          <p>
+            Register the truck on Fuel Hub → Profile (sample codes XN93DX, YN16BQ, YN17BQ, or a custom
+            class) and mark it active. Driver type plus work vehicle from the shared profile still set
+            combination and L/100 km. ATO work cars stay on Taxation Hub car claims.
+          </p>
+        </details>
+        <details>
+          <summary>Licence class changed when I typed salary</summary>
+          <p>
+            Profile licence class (LR/MR → HR → HC → MC) follows annual salary. That is separate from
+            ATO travel salary bands, which the tax calculator still derives from salary for allowance
+            caps.
+          </p>
+        </details>
+        <details>
+          <summary>How do I delete my account?</summary>
+          <p>
+            In the app: Profile → Delete account, type DELETE and your password. Or email
+            support@godriverhub.com. See the <a href="/haulage/privacy">Privacy Policy</a>.
+          </p>
+        </details>
+        <details>
+          <summary>A save or upload stopped halfway</summary>
+          <p>
+            Use a stable internet or cellular connection. Interrupted uploads can leave an incomplete
+            record until you reconnect and try again. Check the gallery for Needs approval.
+          </p>
+        </details>
+      </section>
+
+      <section class="support-disclaimer" aria-label="General disclaimer">
+        <h2>Disclaimer</h2>
+        <p>
+          This app and its creators do not provide financial advice of any kind. Nothing shown here is
+          intended as tax, financial or legal advice, and the information, estimates and categories do
+          not fully factor your personal financial circumstances, entitlements or obligations. This app
+          is an assistance tool to help you save receipts and file income and expense entries for
+          general convenience. Figures and summaries are indicative only and may be incomplete. It is
+          not a substitute for professional advice. Please seek advice from an accredited tax, financial
+          or legal professional for any such matters.
+        </p>
+        <p>
+          This is not an official ATO product. Worksheets and EOFY reports are working papers you
+          (or your registered agent) use when lodging — the app does not lodge a BAS or tax return.
+        </p>
+      </section>
+    </main>
+
+    <footer class="welcome-foot">
+      <a href="/haulage/privacy">Privacy</a>
+      ·
+      <a href="/haulage/terms">Terms</a>
+      ·
+      <a href="/welcome-driverhub">Overview</a>
+      ·
+      <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>
+    </footer>
+    <script src="/welcome.js"></script>
+  </body>
+</html>

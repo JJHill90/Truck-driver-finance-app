@@ -4593,10 +4593,6 @@ function sendProductLegalPage(kind) {
 app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
 app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
 app.get(
-  ["/support", "/support.html", "/suite/support", "/suite/support.html"],
-  sendLegalPage("support.html")
-);
-app.get(
   ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
   sendProductLegalPage("privacy")
 );
@@ -4626,6 +4622,17 @@ function sendWelcomePage(kind) {
   };
 }
 
+function sendWelcomeSupport(kind) {
+  return (req, res) => {
+    const suitePage =
+      kind === "suite" ||
+      (kind !== "haulage" && (suite.productOf(req) === "suite" || suite.isStandaloneSuite()));
+    const file = suitePage ? "welcome-support-suite.html" : "welcome-support-driverhub.html";
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(PUBLIC_DIR, file));
+  };
+}
+
 app.get(["/welcome.css"], sendLegalPage("welcome.css"));
 app.get(["/welcome.js"], sendLegalPage("welcome.js"));
 app.get("/truck.svg", sendLegalPage("truck.svg"));
@@ -4644,6 +4651,14 @@ app.use(
 app.get(["/welcome-suite", "/welcome-suite.html"], sendWelcomePage("suite"));
 app.get(["/welcome-driverhub", "/welcome-driverhub.html"], sendWelcomePage("haulage"));
 app.get(["/welcome", "/welcome.html"], sendWelcomePage());
+app.get(["/welcome-support-suite"], sendWelcomeSupport("suite"));
+app.get(["/welcome-support-driverhub"], sendWelcomeSupport("haulage"));
+app.get(["/support", "/support.html"], sendWelcomeSupport());
+app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
+app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {
+  if (suite.isStandaloneSuite()) return next();
+  sendWelcomeSupport("haulage")(req, res);
+});
 
 app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));

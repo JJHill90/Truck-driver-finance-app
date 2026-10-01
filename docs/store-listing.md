@@ -45,7 +45,7 @@ Still required **outside this repo** before a reviewer can approve:
 | iOS camera / photos / export-compliance | Done | `Info.plist` + `ios-info.plist.additions.xml` |
 | iOS privacy manifest | Done | `mobile-suite/ios/App/App/PrivacyInfo.xcprivacy` |
 | Public Privacy + Terms (Suite only) | Live | `/privacy` and `/terms` return 200 |
-| Public Support URL (Apple requires one) | In repo | `public/support.html` → `/support` |
+| Public Support URL (Apple requires one) | In repo | `/support` (contact form, tab guides, FAQ) |
 | Public marketing overview | In repo | `/` + `/welcome` (app + store buttons) |
 | In-app account deletion (Apple 5.1.1(v)) | Done | Profile → Delete account |
 | Capacitor CORS / `SameSite=None` cookies | Done | `CORS_ALLOW_CAPACITOR=1` on Suite |
