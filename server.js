@@ -74,7 +74,8 @@ const {
 } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
-const { ocrPdfViaRaster, pdfResultNeedsOcr } = require("./lib/pdf-ocr");
+const { ocrPdfViaRaster, pdfResultNeedsOcr, shouldRasterPdf } = require("./lib/pdf-ocr");
+const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
   applyHistoricalRates,
   centsPerKmForYear,
@@ -109,6 +110,7 @@ const mail = require("./lib/mail");
 const entitlements = require("./lib/entitlements");
 const billingStripe = require("./lib/billing-stripe");
 const accountDelete = require("./lib/account-delete");
+const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
@@ -3645,9 +3647,10 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       }
 
       // Scanned / photo PDFs have no text layer, so the text-based extractor
-      // above finds no dollar totals. Rasterise the pages and OCR the images so
-      // those documents read like a photographed receipt/payslip.
-      if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+      // above finds no dollar totals. Rasterise those pages and OCR the images.
+      // Digital PDFs with a real text layer stay on the fast path — raster
+      // Tesseract is what makes payslip scans feel stuck for minutes.
+      if (shouldRasterPdf(ocrResult, ocrPurpose, ocrResult.rawText)) {
         try {
           const rasterOcr = await ocrPdfViaRaster(imageBase64, { purpose: ocrPurpose });
           if (rasterOcr && !pdfResultNeedsOcr(rasterOcr, ocrPurpose)) {
@@ -3695,6 +3698,8 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
         } catch (e) {
           console.warn("PDF image OCR fallback failed:", e.message);
         }
+      } else if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+        console.info("PDF scan: skip raster OCR (usable text layer, no labelled total)");
       }
     }
 
@@ -4587,6 +4592,10 @@ function sendProductLegalPage(kind) {
 app.get(["/privacy", "/privacy.html"], sendProductLegalPage("privacy"));
 app.get(["/terms", "/terms.html"], sendProductLegalPage("terms"));
 app.get(
+  ["/support", "/support.html", "/suite/support", "/suite/support.html"],
+  sendLegalPage("support.html")
+);
+app.get(
   ["/haulage/privacy", "/haulage/privacy.html", "/suite/privacy", "/suite/privacy.html"],
   sendProductLegalPage("privacy")
 );
@@ -4661,6 +4670,7 @@ function bootListen() {
   if (process.env.NODE_ENV === "test") return;
   auth.reloadSessionsFromDisk();
   const admin = auth.ensureAdminBootstrap();
+  const reviewer = reviewerDemo.ensureReviewerDemo();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
       console.log(`Go Taxation Suite (standalone) running at http://localhost:${PORT}/suite/`);
@@ -4669,7 +4679,13 @@ function bootListen() {
       console.log(`Go Taxation Suite (general ATO) running at http://localhost:${PORT}/suite/`);
     }
     if (admin) console.log(`Primary mod: ${admin.username} (admin panel on Profile tab)`);
+    if (reviewer && reviewer.ready) {
+      console.log(`Store reviewer demo: ${reviewer.username} (not admin; complimentary Pro+)`);
+    }
     console.log(openai ? "OCR: OpenAI + local Tesseract" : "OCR: local Tesseract / manual fallback (set OPENAI_API_KEY for cloud OCR)");
+    warmLocalOcrWorker()
+      .then(() => console.log("OCR: Tesseract worker ready (eng cached on data disk)"))
+      .catch((err) => console.warn("OCR: Tesseract warm failed:", err.message));
     backup.startBackupScheduler({
       flushFn: flushAllCachedRecordsToDisk,
       onComplete: notifyBackupComplete,
