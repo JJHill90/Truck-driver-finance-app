@@ -225,8 +225,14 @@ describe("auth primary mod / admin", () => {
       expect(first.needsFirstRunTour).toBe(false);
       expect(driver.needsFirstRunTour).toBe(true);
       expect(driver.firstRunTour).toBe("pending");
-      expect(made.needsFirstRunTour).toBe(false);
-      expect(made.firstRunTour).toBe("done");
+      expect(made.needsFirstRunTour).toBe(true);
+      expect(made.firstRunTour).toBe("pending");
+      const data = auth.loadUsers();
+      const madeKey = auth.usernameKey("admin_made");
+      data.users[madeKey].firstRunTour = "done";
+      delete data.users[madeKey].firstRunTourCompletedAt;
+      auth.saveUsers(data);
+      expect(auth.getUser("admin_made").needsFirstRunTour).toBe(true);
       const finished = auth.setFirstRunTour("free_driver", "done");
       expect(finished.needsFirstRunTour).toBe(false);
       expect(auth.getUser("free_driver").firstRunTour).toBe("done");

@@ -1,19 +1,23 @@
 const tour = require("./lib/first-run-tour");
 
 describe("first-run tour", () => {
-  it("flags self-register as pending and admin-created as done", () => {
+  it("flags self-register and admin-created profiles as pending", () => {
     const self = tour.applyOnSelfRegister({ username: "alex" });
     expect(self.firstRunTour).toBe("pending");
     expect(tour.isPending(self)).toBe(true);
     const made = tour.applyOnAdminCreate({ username: "sam" });
-    expect(made.firstRunTour).toBe("done");
-    expect(tour.isPending(made)).toBe(false);
+    expect(made.firstRunTour).toBe("pending");
+    expect(tour.isPending(made)).toBe(true);
   });
 
-  it("does not tour admins or users with no pending flag", () => {
+  it("does not tour admins or existing users with no first-run flag", () => {
     expect(tour.isPending({ isAdmin: true, firstRunTour: "pending" })).toBe(false);
     expect(tour.isPending({ username: "old" })).toBe(false);
     expect(tour.isPending({ needsFirstRunTour: true })).toBe(true);
+    expect(tour.isPending({ firstRunTour: "done" })).toBe(true);
+    expect(tour.isPending({ firstRunTour: "done", firstRunTourCompletedAt: "2026-10-01T00:00:00Z" })).toBe(
+      false
+    );
   });
 
   it("starts on first tax-hub open, resumes an in-session tour, and ignores Fuel Hub", () => {
