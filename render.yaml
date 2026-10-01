@@ -54,6 +54,11 @@ services:
       # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
       - key: CORS_ALLOW_CAPACITOR
         value: "1"
+      # Public overview store buttons (https only). Leave unset until listings exist.
+      - key: DRIVERHUB_PLAY_STORE_URL
+        sync: false
+      - key: DRIVERHUB_APP_STORE_URL
+        sync: false
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM
@@ -125,8 +130,9 @@ services:
       sizeGB: 1
 
   # Second Render service — Go Taxation Suite on its own URL and disk.
-  # Root `/` and `/haulage` redirect to `/suite/`. Accounts are NOT shared with
-  # haulage-finance (separate persistent disk). Same GitHub repo / branch.
+  # Root `/` is the public overview; `/haulage` redirects to `/suite/`.
+  # Accounts are NOT shared with haulage-finance (separate persistent disk).
+  # Same GitHub repo / branch.
   - type: web
     name: go-taxation-suite
     runtime: node
@@ -173,6 +179,11 @@ services:
       # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
       - key: CORS_ALLOW_CAPACITOR
         value: "1"
+      # Public overview store buttons (https only). Leave unset until listings exist.
+      - key: SUITE_PLAY_STORE_URL
+        sync: false
+      - key: SUITE_APP_STORE_URL
+        sync: false
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM
