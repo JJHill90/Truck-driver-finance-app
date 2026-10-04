@@ -3346,3 +3346,74 @@ body.first-run-tour-active .enh-alerts {
 .ledger-reconcile-btn.first-run-tour-press {
   pointer-events: auto;
 }
+
+/* --- Bank statement CSV import ------------------------------------------ */
+.csv-import-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.csv-import-drop.drag-over {
+  border-color: var(--accent);
+  background: rgba(245, 158, 11, 0.08);
+}
+.csv-import-drop .btn { margin-top: 10px; }
+.csv-import-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+.csv-import-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.csv-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.csv-import-table th,
+.csv-import-table td {
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.csv-import-table th {
+  background: var(--bg-2);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.csv-import-table input[type="text"],
+.csv-import-table input[type="date"],
+.csv-import-table input[type="number"],
+.csv-import-table select {
+  width: 100%;
+  min-width: 7rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+.csv-import-table input[type="number"] { min-width: 5.5rem; }
+.csv-import-table input[type="date"] { min-width: 8.5rem; }
+.csv-import-row--skip { opacity: 0.55; }
+.csv-import-dup {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+.csv-import-warn {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+.csv-import-actions { margin-top: 12px; }

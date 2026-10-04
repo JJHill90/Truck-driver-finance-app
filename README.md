@@ -337,5 +337,6 @@ finishes. Set `BACKUP_ENABLED=0` to disable the in-app scheduler.
 
 `GET /standards`, `GET /records`, `GET /summary`, `GET /report`, `GET /forecast`,
 `PUT /profile`, `POST|DELETE /expenses`, `POST /expenses/preview`,
-`POST|DELETE /income`, `POST /receipts/scan`, `POST /receipts/manual`,
+`POST|DELETE /income`, `POST /csv/preview`, `POST /csv/import`,
+`POST /receipts/scan`, `POST /receipts/manual`,
 `POST /receipts/:id/confirm`, `GET /receipts/:id/image`, `GET /receipts/:id/file`.

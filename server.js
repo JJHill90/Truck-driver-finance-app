@@ -136,6 +136,7 @@ const taxCompanion = require("./lib/tax-companion");
 const firstRunTour = require("./lib/first-run-tour");
 const recurringExpenses = require("./lib/recurring-expenses");
 const storeLinks = require("./lib/store-links");
+const csvImport = require("./lib/csv-import");
 
 const CAR_CLAIM_ID_SET = new Set(CAR_CLAIM_CATEGORY_IDS);
 
@@ -822,6 +823,61 @@ function optionalScanMultipart(req, res, next) {
     }
     next();
   });
+}
+
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: csvImport.MAX_BYTES, files: 1 },
+});
+
+function optionalCsvMultipart(req, res, next) {
+  const ct = String(req.headers["content-type"] || "");
+  if (!ct.includes("multipart/form-data")) {
+    next();
+    return;
+  }
+  csvUpload.single("file")(req, res, (err) => {
+    if (err) {
+      const msg =
+        err.code === "LIMIT_FILE_SIZE"
+          ? "CSV is too large (max 1 MB)."
+          : err.message || "Upload failed.";
+      res.status(err.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({ error: msg });
+      return;
+    }
+    next();
+  });
+}
+
+function extractCsvText(req) {
+  if (req.file && req.file.buffer) {
+    return {
+      text: req.file.buffer.toString("utf8"),
+      filename: req.file.originalname || "statement.csv",
+    };
+  }
+  const body = req.body || {};
+  return {
+    text: String(body.csv || body.text || ""),
+    filename: String(body.filename || "statement.csv"),
+  };
+}
+
+function csvMenusFor(req) {
+  if (productOf(req) === "suite") {
+    const records = getRecords(req);
+    const entity = suite.normalizeEntityType(
+      records.profile?.entityType || records.profile?.driverType
+    );
+    return {
+      expenseCategories: suite.listMenuCategories(entity),
+      incomeTypes: suite.listMenuIncomeTypes(entity),
+    };
+  }
+  return {
+    expenseCategories: listMenuCategories(),
+    incomeTypes: listMenuIncomeTypes(),
+  };
 }
 
 // Resolve product (Taxation Hub vs Go Taxation Suite) then the signed-in user.
@@ -3500,6 +3556,74 @@ api.post("/expenses/:id/restore", (req, res) => {
   if (!result.alreadyActive) persist(req);
   res.json({ ok: true, entry: result.entry, alreadyActive: Boolean(result.alreadyActive) });
 });
+
+// --- Bank statement CSV import (review, then income / expense) -----------
+api.post("/csv/preview", optionalCsvMultipart, (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to import a bank statement." });
+    return;
+  }
+  const { text, filename } = extractCsvText(req);
+  const records = getRecords(req);
+  const preview = csvImport.previewCsv(text, { records, filename });
+  if (!preview.ok) {
+    res.status(preview.status || 400).json({
+      error: preview.error,
+      code: preview.code,
+      headers: preview.headers,
+      skipped: preview.skipped,
+    });
+    return;
+  }
+  res.json({ ...preview, ...csvMenusFor(req) });
+});
+
+api.post("/csv/import", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Log in to import a bank statement." });
+    return;
+  }
+  const records = getRecords(req);
+  const isSuite = productOf(req) === "suite";
+  const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+  const entityType = isSuite
+    ? suite.normalizeEntityType(records.profile?.entityType || records.profile?.driverType)
+    : null;
+  const result = csvImport.importRows((req.body || {}).rows, {
+    records,
+    addExpense: (recs, payload) => {
+      const body = { ...payload };
+      if (isSuite) suite.extraEntity.stampActiveEntity(recs, body);
+      if (account) applyExpensePresets(body, account);
+      const entry = storage.addExpense(recs, body);
+      stampManualExpenseFlags(entry, { noReceipt: true });
+      entry.source = "csv_import";
+      rememberVendor(recs, {
+        name: body.vendor || entry.vendor,
+        category: body.category || entry.category,
+      });
+      return entry;
+    },
+    addIncome: (recs, payload) => {
+      const body = sanitizeIncomeFields({ ...payload });
+      if (isSuite) suite.extraEntity.stampActiveEntity(recs, body);
+      const entry = storage.addIncome(recs, body);
+      entry.source = "csv_import";
+      return entry;
+    },
+    normalizeExpenseCategory: (id) =>
+      isSuite ? suite.normalizeExpenseCategoryId(id) : normalizeExpenseCategoryId(id),
+    normalizeIncomeType: (id) =>
+      isSuite ? suite.normalizeIncomeTypeId(id, entityType) : normalizeIncomeTypeId(id),
+  });
+  if (!result.ok) {
+    res.status(result.status || 400).json({ error: result.error, code: result.code });
+    return;
+  }
+  if (result.imported.expenses + result.imported.income > 0) persist(req);
+  res.json(result);
+});
+
 api.post("/income", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
