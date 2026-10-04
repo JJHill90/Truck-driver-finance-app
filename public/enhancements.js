@@ -12434,7 +12434,15 @@
           data.imported?.expenses === 1 ? "" : "s"
         } and ${data.imported?.income || 0} income line${data.imported?.income === 1 ? "" : "s"}.`
       );
-      if (n > 0) setTimeout(() => window.location.reload(), 600);
+      if (n > 0) {
+        try {
+          localStorage.setItem("haulage-ledger-week-expense", "all");
+          localStorage.setItem("haulage-gallery-week-expense", "all");
+        } catch {
+          /* ignore quota / private mode */
+        }
+        setTimeout(() => window.location.reload(), 600);
+      }
     } catch (err) {
       setStatus(panel, (err && err.message) || "Import failed.", true);
     }
