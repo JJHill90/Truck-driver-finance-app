@@ -268,6 +268,15 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   `missingLinkedLedger`. Income/Expenses show a banner plus gallery
   “Finish approval” / “Discard” / “Restore” (`POST /income|:expenses/:id/restore`).
   Confirm is idempotent for already-linked or soft-deleted income.
+- **Bank statement CSV import.** Expenses and Income each have **Import bank
+  statement (CSV)**. `POST /csv/preview` (JSON `csv`/`text` or multipart `file`)
+  parses AU bank exports (Date + signed Amount, or Debit/Credit; comma /
+  semicolon / tab) via `lib/csv-import.js`, then `POST /csv/import` writes the
+  reviewed rows. Login required; guests 403. Debits default to expenses, credits
+  to income — the driver flips purpose/category, unticks personal transfers, and
+  confirms possible duplicates. Rows save as `source: csv_import` / `noReceipt`
+  and do **not** count toward the Free 15-upload cap (no receipt file is stored).
+  Cap is 400 rows / 1 MB. Not an ATO lodge.
 - **Expenses tab** covers general work receipts (scan/manual, totals, receipt
   gallery + ledger). **Car Expenses** is a separate sidebar item under Income
   (`#view-car-expenses`): ATO D1 cents/km or logbook, plus fuel / repairs /

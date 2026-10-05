@@ -8891,13 +8891,13 @@
       title: "Expenses",
       body: [
         "Expenses is for general work receipts (meals, accommodation, tools, and similar). Before uploading, open Recommended best way to scan your receipts, or tap Scan with camera for a live amber frame so you can fit the top of the slip and the date. Upload a photo or PDF with Upload file — you must be signed in. Approve the overall total before it’s saved; other line amounts are informational only.",
-        "Manual entry covers cash claims and “no receipt” ticks. The expense ledger and receipt gallery filter by financial year and week so large lists stay scannable. Vehicle & fuel / ATO car claims live under the separate Car Expenses item in the sidebar (under Income).",
+        "Manual entry covers cash claims and “no receipt” ticks. Import bank statement (CSV) reads Date / Description / Amount (or Debit and Credit) from CommBank, NAB, ANZ, Westpac, ING and similar exports. Review each line — flip income vs expense, pick a category, and leave personal transfers unticked — then Import selected. CSV lines do not use a monthly scan credit and are saved as no-receipt entries. The expense ledger and receipt gallery filter by financial year and week so large lists stay scannable. Vehicle & fuel / ATO car claims live under the separate Car Expenses item in the sidebar (under Income).",
       ],
     },
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
@@ -8946,7 +8946,7 @@
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
@@ -12185,6 +12185,303 @@
     setTimeout(wrapAfterExpenseSaved, 0);
     setTimeout(wrapAfterExpenseSaved, 500);
     setTimeout(wrapApprovalState, 0);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Bank statement CSV import (review, then income / expenses) ---------- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  const state = new WeakMap();
+
+  function csvEsc(str) {
+    return String(str == null ? "" : str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function optionList(items, selected) {
+    return (items || [])
+      .map((item) => {
+        const id = item.id || item;
+        const label = item.label || item.id || item;
+        const sel = id === selected ? " selected" : "";
+        return `<option value="${csvEsc(id)}"${sel}>${csvEsc(label)}</option>`;
+      })
+      .join("");
+  }
+
+  function setStatus(panel, msg, isError) {
+    const el = panel.querySelector("[data-csv-status]");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.classList.toggle("hidden", !msg);
+    el.style.color = isError ? "var(--red)" : "";
+  }
+
+  function collectRows(panel) {
+    const st = state.get(panel);
+    if (!st) return [];
+    const body = panel.querySelector("[data-csv-tbody]");
+    if (!body) return [];
+    return [...body.querySelectorAll("tr")].map((tr, i) => {
+      const src = st.rows[i] || {};
+      const purpose = tr.querySelector("[data-csv-purpose]")?.value || src.purpose;
+      return {
+        include: Boolean(tr.querySelector("[data-csv-include]")?.checked),
+        purpose,
+        date: tr.querySelector("[data-csv-date]")?.value || src.date,
+        amount: tr.querySelector("[data-csv-amount]")?.value || src.amount,
+        vendor: tr.querySelector("[data-csv-vendor]")?.value || src.vendor,
+        description: tr.querySelector("[data-csv-desc]")?.value || src.description,
+        category: tr.querySelector("[data-csv-category]")?.value || src.category,
+        type: tr.querySelector("[data-csv-type]")?.value || src.type,
+        workUsePercent: 100,
+        noReceipt: true,
+        duplicate: Boolean(src.duplicate),
+        forceDuplicate: Boolean(tr.querySelector("[data-csv-force]")?.checked),
+      };
+    });
+  }
+
+  function renderReview(panel, preview) {
+    const host = panel.querySelector("[data-csv-review]");
+    if (!host) return;
+    const cats = preview.expenseCategories || [];
+    const types = preview.incomeTypes || [];
+    const rows = preview.rows || [];
+    state.set(panel, { rows, cats, types });
+    const warn = (preview.warnings || []).map((w) => `<p class="muted small">${csvEsc(w)}</p>`).join("");
+    host.innerHTML = `
+      <div class="csv-import-toolbar">
+        <button type="button" class="btn secondary small" data-csv-all>Select all</button>
+        <button type="button" class="btn secondary small" data-csv-none>Select none</button>
+        <button type="button" class="btn secondary small" data-csv-work>Select non-duplicates</button>
+        <span class="muted small">${rows.length} line${rows.length === 1 ? "" : "s"} · ${
+          preview.counts?.expenses || 0
+        } expense · ${preview.counts?.income || 0} income${
+          preview.counts?.duplicates ? ` · ${preview.counts.duplicates} possible duplicate` : ""
+        }</span>
+      </div>
+      ${warn}
+      <div class="csv-import-table-wrap">
+        <table class="csv-import-table">
+          <thead>
+            <tr>
+              <th>Include</th>
+              <th>Date</th>
+              <th>Payee / vendor</th>
+              <th>Amount</th>
+              <th>Income or expense</th>
+              <th>Category / type</th>
+              <th>Bank line</th>
+            </tr>
+          </thead>
+          <tbody data-csv-tbody>
+            ${rows
+              .map((row, i) => {
+                const expenseOpts = optionList(cats, row.category);
+                const incomeOpts = optionList(types, row.type);
+                return `<tr class="${row.include ? "" : "csv-import-row--skip"}" data-csv-index="${i}">
+                  <td>
+                    <input type="checkbox" data-csv-include${row.include ? " checked" : ""} />
+                    ${
+                      row.duplicate
+                        ? `<label class="csv-import-dup"><input type="checkbox" data-csv-force /> Import anyway</label>`
+                        : ""
+                    }
+                  </td>
+                  <td><input type="date" data-csv-date value="${csvEsc(row.date || "")}" /></td>
+                  <td><input type="text" data-csv-vendor value="${csvEsc(row.vendor || "")}" /></td>
+                  <td><input type="number" min="0" step="0.01" data-csv-amount value="${csvEsc(row.amount)}" /></td>
+                  <td>
+                    <select data-csv-purpose>
+                      <option value="expense"${row.purpose === "expense" ? " selected" : ""}>Expense</option>
+                      <option value="income"${row.purpose === "income" ? " selected" : ""}>Income</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select data-csv-category${row.purpose === "income" ? " hidden" : ""}>${expenseOpts}</select>
+                    <select data-csv-type${row.purpose === "expense" ? " hidden" : ""}>${incomeOpts}</select>
+                  </td>
+                  <td>
+                    <input type="text" data-csv-desc value="${csvEsc(row.description || "")}" />
+                    ${row.warning ? `<span class="csv-import-warn">${csvEsc(row.warning)}</span>` : ""}
+                  </td>
+                </tr>`;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+      <div class="csv-import-actions form-actions">
+        <button type="button" class="btn primary" data-csv-import>Import selected</button>
+      </div>`;
+    host.classList.remove("hidden");
+  }
+
+  function bindRowChrome(panel) {
+    const host = panel.querySelector("[data-csv-review]");
+    if (!host) return;
+    host.addEventListener("change", (ev) => {
+      const tr = ev.target.closest("tr");
+      if (!tr) return;
+      if (ev.target.matches("[data-csv-purpose]")) {
+        const income = ev.target.value === "income";
+        const cat = tr.querySelector("[data-csv-category]");
+        const typ = tr.querySelector("[data-csv-type]");
+        if (cat) cat.hidden = income;
+        if (typ) typ.hidden = !income;
+      }
+      if (ev.target.matches("[data-csv-include]")) {
+        tr.classList.toggle("csv-import-row--skip", !ev.target.checked);
+      }
+    });
+    host.addEventListener("click", (ev) => {
+      const tbody = host.querySelector("[data-csv-tbody]");
+      if (!tbody) return;
+      if (ev.target.closest("[data-csv-all]")) {
+        tbody.querySelectorAll("[data-csv-include]").forEach((box) => {
+          box.checked = true;
+          box.closest("tr")?.classList.remove("csv-import-row--skip");
+        });
+      }
+      if (ev.target.closest("[data-csv-none]")) {
+        tbody.querySelectorAll("[data-csv-include]").forEach((box) => {
+          box.checked = false;
+          box.closest("tr")?.classList.add("csv-import-row--skip");
+        });
+      }
+      if (ev.target.closest("[data-csv-work]")) {
+        tbody.querySelectorAll("tr").forEach((tr) => {
+          const box = tr.querySelector("[data-csv-include]");
+          const force = tr.querySelector("[data-csv-force]");
+          const on = !force;
+          if (box) box.checked = on;
+          tr.classList.toggle("csv-import-row--skip", !on);
+        });
+      }
+    });
+  }
+
+  async function previewFile(panel, file) {
+    if (!file) return;
+    setStatus(panel, "Reading CSV…");
+    const body = new FormData();
+    body.append("file", file, file.name || "statement.csv");
+    try {
+      const res = await fetch(`${API}/csv/preview`, {
+        method: "POST",
+        credentials: "include",
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 || res.status === 401) {
+        setStatus(panel, data.error || "Sign in on the Profile tab before importing a statement.", true);
+        return;
+      }
+      if (!res.ok || !data.ok) {
+        setStatus(panel, data.error || "Could not read that CSV.", true);
+        return;
+      }
+      renderReview(panel, data);
+      setStatus(
+        panel,
+        `${data.filename || file.name}: ${data.counts.total} lines ready to review. Untick personal spend, then import selected.`
+      );
+    } catch (err) {
+      setStatus(panel, (err && err.message) || "Could not reach the server.", true);
+    }
+  }
+
+  async function importSelected(panel) {
+    const rows = collectRows(panel);
+    const selected = rows.filter((r) => r.include);
+    if (!selected.length) {
+      setStatus(panel, "Tick at least one line to import.", true);
+      return;
+    }
+    setStatus(panel, `Importing ${selected.length} line${selected.length === 1 ? "" : "s"}…`);
+    try {
+      const res = await fetch(`${API}/csv/import`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 || res.status === 401) {
+        setStatus(panel, data.error || "Sign in on the Profile tab before importing a statement.", true);
+        return;
+      }
+      if (!res.ok || !data.ok) {
+        setStatus(panel, data.error || "Import failed.", true);
+        return;
+      }
+      const n = (data.imported?.expenses || 0) + (data.imported?.income || 0);
+      setStatus(
+        panel,
+        `Imported ${data.imported?.expenses || 0} expense${
+          data.imported?.expenses === 1 ? "" : "s"
+        } and ${data.imported?.income || 0} income line${data.imported?.income === 1 ? "" : "s"}.`
+      );
+      if (n > 0) {
+        try {
+          localStorage.setItem("haulage-ledger-week-expense", "all");
+          localStorage.setItem("haulage-gallery-week-expense", "all");
+        } catch {
+          /* ignore quota / private mode */
+        }
+        setTimeout(() => window.location.reload(), 600);
+      }
+    } catch (err) {
+      setStatus(panel, (err && err.message) || "Import failed.", true);
+    }
+  }
+
+  function bindPanel(panel) {
+    const pick = panel.querySelector("[data-csv-pick]");
+    const input = panel.querySelector("[data-csv-file]");
+    const drop = panel.querySelector("[data-csv-drop]");
+    pick?.addEventListener("click", () => input?.click());
+    input?.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      void previewFile(panel, file);
+      input.value = "";
+    });
+    ["dragenter", "dragover"].forEach((name) => {
+      drop?.addEventListener(name, (ev) => {
+        ev.preventDefault();
+        drop.classList.add("drag-over");
+      });
+    });
+    ["dragleave", "drop"].forEach((name) => {
+      drop?.addEventListener(name, (ev) => {
+        ev.preventDefault();
+        drop.classList.remove("drag-over");
+      });
+    });
+    drop?.addEventListener("drop", (ev) => {
+      const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      void previewFile(panel, file);
+    });
+    panel.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-csv-import]")) void importSelected(panel);
+    });
+    bindRowChrome(panel);
+  }
+
+  function start() {
+    document.querySelectorAll(".csv-import-panel").forEach(bindPanel);
   }
 
   if (document.readyState === "loading") {

@@ -276,6 +276,18 @@
               </div>
             </div>
 
+            <div class="panel csv-import-panel" id="csv-import-panel-expenses" data-csv-purpose="expense">
+              <div class="panel-header"><h2>Import bank statement (CSV)</h2></div>
+              <p class="muted">Export a .csv from your bank (CommBank, NAB, ANZ, Westpac, ING and similar). Review every line before it lands on your ledger — leave personal transfers and non-work spend unticked. This does not lodge with the ATO, and it does not use a monthly scan credit.</p>
+              <div class="csv-import-drop" data-csv-drop>
+                <p>Drop a .csv file here, or choose one from your device</p>
+                <button type="button" class="btn secondary" data-csv-pick>Choose CSV</button>
+                <input type="file" accept=".csv,text/csv,text/plain" hidden data-csv-file />
+              </div>
+              <p class="muted small hidden" data-csv-status></p>
+              <div class="csv-import-review hidden" data-csv-review></div>
+            </div>
+
             <div class="panel">
               <div class="panel-header">
                 <h2>Total expenses</h2>
@@ -360,6 +372,18 @@
                 </div>
               </form>
             </div>
+          </div>
+
+          <div class="panel csv-import-panel" id="csv-import-panel-income" data-csv-purpose="income">
+            <div class="panel-header"><h2>Import bank statement (CSV)</h2></div>
+            <p class="muted">Pull pays and other credits from a bank .csv into income — or flip a line to expenses if it was money out. Review each row first. This does not lodge with the ATO.</p>
+            <div class="csv-import-drop" data-csv-drop>
+              <p>Drop a .csv file here, or choose one from your device</p>
+              <button type="button" class="btn secondary" data-csv-pick>Choose CSV</button>
+              <input type="file" accept=".csv,text/csv,text/plain" hidden data-csv-file />
+            </div>
+            <p class="muted small hidden" data-csv-status></p>
+            <div class="csv-import-review hidden" data-csv-review></div>
           </div>
 
           <div class="panel">
