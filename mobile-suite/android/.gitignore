@@ -92,10 +92,12 @@ lint/tmp/
 # Cordova plugins for Capacitor
 capacitor-cordova-android-plugins
 
-# Copied web assets
-app/src/main/assets/public
+# Copied web assets are committed so a GitHub checkout can still produce a
+# launchable Play AAB if Android Studio is opened without `npx cap sync`.
+# Re-run `npx cap sync android` before a store build so plugins stay current.
+# app/src/main/assets/public
+# app/src/main/assets/capacitor.config.json
+# app/src/main/assets/capacitor.plugins.json
 
 # Generated Config files
-app/src/main/assets/capacitor.config.json
-app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml

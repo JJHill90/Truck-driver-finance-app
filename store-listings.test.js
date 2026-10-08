@@ -73,3 +73,50 @@ describe("Suite store listing assets", () => {
     }
   });
 });
+
+describe("Suite Android launch shell", () => {
+  const androidApp = path.join(__dirname, "mobile-suite", "android", "app");
+
+  it("uses a color Android 12 splash (PNG backgrounds crash on launch)", () => {
+    const styles = fs.readFileSync(
+      path.join(androidApp, "src/main/res/values/styles.xml"),
+      "utf8"
+    );
+    expect(styles).toMatch(/windowSplashScreenBackground">@color\/splashBackground/);
+    expect(styles).toMatch(/windowSplashScreenAnimatedIcon">@drawable\/ic_launcher_foreground/);
+    expect(styles).toMatch(/postSplashScreenTheme">@style\/AppTheme\.NoActionBar/);
+    expect(styles).not.toMatch(/android:background">@drawable\/splash/);
+    const colors = fs.readFileSync(
+      path.join(androidApp, "src/main/res/values/colors.xml"),
+      "utf8"
+    );
+    expect(colors).toMatch(/name="splashBackground">#0B1F33/);
+  });
+
+  it("ships a committed Capacitor config that loads the hosted Suite URL", () => {
+    const raw = fs.readFileSync(
+      path.join(androidApp, "src/main/assets/capacitor.config.json"),
+      "utf8"
+    );
+    const config = JSON.parse(raw);
+    expect(config.appId).toBe("com.gotaxation.suite");
+    expect(config.server.url).toBe("https://go-taxation-suite.onrender.com/suite/");
+    expect(fs.existsSync(path.join(androidApp, "src/main/assets/public/index.html"))).toBe(true);
+  });
+
+  it("installs the AndroidX splash screen before the Capacitor bridge starts", () => {
+    const main = fs.readFileSync(
+      path.join(androidApp, "src/main/java/com/gotaxation/suite/MainActivity.java"),
+      "utf8"
+    );
+    expect(main).toMatch(/SplashScreen\.installSplashScreen\(this\)/);
+    expect(main).toMatch(/super\.onCreate/);
+  });
+
+  it("bumps the Play versionCode so testers can install the rebuild", () => {
+    const gradle = fs.readFileSync(path.join(androidApp, "build.gradle"), "utf8");
+    expect(gradle).toMatch(/versionCode 2/);
+    expect(gradle).toMatch(/versionName "1\.0\.1"/);
+  });
+});
+

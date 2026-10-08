@@ -79,7 +79,10 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle.** Keep the keystore **out of git**.
+**Build → Generate Signed Bundle** (`versionCode` 2 / `1.0.1`). Keep the
+keystore **out of git**. If an older tester build closed on launch, that was
+the Android 12 splash theme (a full-screen PNG on `Theme.SplashScreen`), not
+a corrupt Play file — upload this rebuilt AAB to the same closed track.
 
 Then in Play Console for `com.gotaxation.suite`:
 

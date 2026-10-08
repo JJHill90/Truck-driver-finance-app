@@ -7,8 +7,8 @@ android {
         applicationId "com.gotaxation.suite"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -43,6 +43,20 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+gradle.projectsEvaluated {
+    tasks.named("preBuild").configure {
+        doFirst {
+            def capConfig = file("src/main/assets/capacitor.config.json")
+            if (!capConfig.exists()) {
+                throw new GradleException(
+                    "Missing src/main/assets/capacitor.config.json. " +
+                    "From mobile-suite run: npm install && npx cap sync android"
+                )
+            }
+        }
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

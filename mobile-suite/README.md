@@ -25,6 +25,14 @@ npx cap sync android
 npx cap open android
 ```
 
+Always sync **before** **Build → Generate Signed Bundle**. Opening the GitHub
+repo in Android Studio without that step can ship an AAB that closes on
+launch (missing `capacitor.config.json`, or an Android 12 splash theme that
+uses a full-screen PNG). Play is not “corrupting” the bundle.
+
+If testers already have a crashing build, ship **versionCode 2** (`1.0.1`)
+to Closed testing and ask them to update.
+
 Set `CORS_ALLOW_CAPACITOR=1` on the Suite Render service (Blueprint default)
 so session cookies work (`SameSite=None; Secure`).
 
