@@ -43,7 +43,6 @@ describe("Suite official public origin", () => {
 
   it("redirects www → apex only on the standalone Suite host", () => {
     process.env.APP_PRODUCT = "suite";
-    const headers = {};
     const res = {
       redirected: null,
       redirect(status, url) {

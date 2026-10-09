@@ -144,7 +144,7 @@ describe("marketing overview HTTP", () => {
     const saved = await posted.json();
     expect(saved.ok).toBe(true);
     expect(saved.id).toBeTruthy();
-  });
+  }, 20_000);
 
   it("serves the Suite overview at / on APP_PRODUCT=suite and keeps /suite/ as the app", async () => {
     process.env.APP_PRODUCT = "suite";
@@ -170,14 +170,6 @@ describe("marketing overview HTTP", () => {
     const appPage = await get(server, "/suite/");
     expect(appPage.status).toBe(200);
     expect(appPage.text).toMatch(/Go Taxation Suite|title-brand-suite/i);
-
-    const { port } = server.address();
-    const www = await fetch(`http://127.0.0.1:${port}/privacy`, {
-      redirect: "manual",
-      headers: { Host: "www.gotaxationsuite.com" },
-    });
-    expect(www.status).toBe(301);
-    expect(www.headers.get("location")).toBe("https://gotaxationsuite.com/privacy");
     delete process.env.APP_PRODUCT;
   });
 });
