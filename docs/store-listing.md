@@ -6,12 +6,13 @@ Compile **only** this listing:
 |-------|--------|
 | Name | Go Taxation Suite |
 | Application id | `com.gotaxation.suite` |
-| Loads | `https://go-taxation-suite.onrender.com/suite/` |
+| Loads (Play WebView until DNS is live) | `https://go-taxation-suite.onrender.com/suite/` |
+| Official marketing site (no login) | `https://gotaxationsuite.com/` |
+| Official Privacy (no login) | `https://gotaxationsuite.com/privacy` |
+| Official Terms (no login) | `https://gotaxationsuite.com/terms` |
+| Official Support (no login) | `https://gotaxationsuite.com/support` |
+| Fallback while DNS verifies | `https://go-taxation-suite.onrender.com/` (same pages) |
 | Native project | `mobile-suite/` |
-| Marketing site (no login) | `https://go-taxation-suite.onrender.com/` |
-| Privacy (no login) | `https://go-taxation-suite.onrender.com/privacy` |
-| Terms (no login) | `https://go-taxation-suite.onrender.com/terms` |
-| Support (no login) | `https://go-taxation-suite.onrender.com/support` |
 | Support email | `support@godriverhub.com` |
 
 Do not submit Driver Hub (`com.haulagefinance.app` / `mobile/`).
@@ -84,7 +85,9 @@ npx cap open android
 Then in Play Console for `com.gotaxation.suite`:
 
 1. Upload the AAB (Internal testing, then Production).
-2. Privacy policy = `https://go-taxation-suite.onrender.com/privacy`
+2. Privacy policy = `https://gotaxationsuite.com/privacy`
+   (fallback `https://go-taxation-suite.onrender.com/privacy` until DNS/TLS
+   on the official domain is verified — see `docs/custom-domain.md`)
 3. Data safety (answers below)
 4. Photo/video permission: camera and photos are for receipt capture only;
    not required (file upload works)
@@ -92,12 +95,12 @@ Then in Play Console for `com.gotaxation.suite`:
 6. Store listing: copy below. Screenshots:
    `mobile-suite/store/screenshots/play-1080x1920/`. Feature graphic:
    `mobile-suite/store/feature-graphic-1024x500.png`.
-   Marketing URL: `https://go-taxation-suite.onrender.com/`
+   Marketing URL: `https://gotaxationsuite.com/`
    After the listing is live, set `SUITE_PLAY_STORE_URL` on the Suite Render
    service so the overview Play button goes live.
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com` and
-   `https://go-taxation-suite.onrender.com/support`
+   `https://gotaxationsuite.com/support`
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
@@ -114,9 +117,9 @@ Xcode team signing → Archive → TestFlight → App Store.
 
 In App Store Connect:
 
-1. Privacy Policy URL = `https://go-taxation-suite.onrender.com/privacy`
-2. Support URL = `https://go-taxation-suite.onrender.com/support`
-3. Marketing URL = `https://go-taxation-suite.onrender.com/`
+1. Privacy Policy URL = `https://gotaxationsuite.com/privacy`
+2. Support URL = `https://gotaxationsuite.com/support`
+3. Marketing URL = `https://gotaxationsuite.com/`
    After the listing is live, set `SUITE_APP_STORE_URL` on the Suite Render
    service so the overview App Store button goes live.
 4. App Privacy nutrition labels (below)

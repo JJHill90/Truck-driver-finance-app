@@ -6,7 +6,9 @@
     "url": "https://go-taxation-suite.onrender.com/suite/",
     "cleartext": false,
     "allowNavigation": [
-      "https://go-taxation-suite.onrender.com/*"
+      "https://go-taxation-suite.onrender.com/*",
+      "https://gotaxationsuite.com/*",
+      "https://www.gotaxationsuite.com/*"
     ]
   },
   "android": {

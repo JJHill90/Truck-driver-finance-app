@@ -33,7 +33,12 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   in `render.yaml`, disk `gotax-data`): `/` is the Suite overview, `/haulage`
   redirects to `/suite/`, every `/api/haulage` request uses the general ATO
   engine, and accounts stay on that service’s own disk — not the Driver Hub
-  `haulage-data` disk. Native shells still load `/suite/` or `/haulage/`.
+  `haulage-data` disk. Official public host is **`https://gotaxationsuite.com/`**
+  (same Express pages: `/`, `/privacy`, `/terms`, `/support`, `/suite/`).
+  Attach that domain only to `go-taxation-suite` — see `docs/custom-domain.md`.
+  Use HTTPS, not `http://`. Keep the Play WebView on the onrender `/suite/`
+  URL until DNS + TLS are verified. Native shells still load `/suite/` or
+  `/haulage/`.
   When Play / App Store listings exist, set `SUITE_PLAY_STORE_URL` /
   `SUITE_APP_STORE_URL` (Suite host) or `DRIVERHUB_PLAY_STORE_URL` /
   `DRIVERHUB_APP_STORE_URL` (Driver Hub host); until then the buttons stay

@@ -113,6 +113,7 @@ const accountDelete = require("./lib/account-delete");
 const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
+const { wwwToApexRedirect } = require("./lib/suite-public-origin");
 const {
   normalizeCars,
   primaryActiveWorkUsePercent,
@@ -752,6 +753,9 @@ function buildAlerts(records, product) {
 }
 
 const app = express();
+// Official Suite domain: www.gotaxationsuite.com → https://gotaxationsuite.com
+// on the dedicated host only. localhost / onrender stay put.
+app.use(wwwToApexRedirect);
 // Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
 // Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
 app.use(corsMiddleware);

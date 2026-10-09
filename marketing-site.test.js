@@ -47,6 +47,7 @@ describe("marketing overview pages", () => {
     expect(suiteHtml).not.toMatch(/Taxation Hub/i);
     expect(suiteHtml).not.toMatch(/Fuel Hub/i);
     expect(suiteHtml).not.toMatch(/truck-driver/i);
+    expect(suiteHtml).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/"/);
   });
 
   it("Driver Hub overview links to /haulage/ and names both picker apps", () => {
@@ -169,6 +170,14 @@ describe("marketing overview HTTP", () => {
     const appPage = await get(server, "/suite/");
     expect(appPage.status).toBe(200);
     expect(appPage.text).toMatch(/Go Taxation Suite|title-brand-suite/i);
+
+    const { port } = server.address();
+    const www = await fetch(`http://127.0.0.1:${port}/privacy`, {
+      redirect: "manual",
+      headers: { Host: "www.gotaxationsuite.com" },
+    });
+    expect(www.status).toBe(301);
+    expect(www.headers.get("location")).toBe("https://gotaxationsuite.com/privacy");
     delete process.env.APP_PRODUCT;
   });
 });
