@@ -3,11 +3,9 @@
 	"appName": "Go Taxation Suite",
 	"webDir": "www",
 	"server": {
-		"url": "https://go-taxation-suite.onrender.com/suite/",
 		"cleartext": false,
-		"allowNavigation": [
-			"https://go-taxation-suite.onrender.com/*"
-		]
+		"androidScheme": "https",
+		"errorPath": "index.html"
 	},
 	"android": {
 		"allowMixedContent": false,

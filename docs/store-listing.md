@@ -79,10 +79,11 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 2 / `1.0.1`). Keep the
-keystore **out of git**. If an older tester build closed on launch, that was
-the Android 12 splash theme (a full-screen PNG on `Theme.SplashScreen`), not
-a corrupt Play file — upload this rebuilt AAB to the same closed track.
+**Build → Generate Signed Bundle** (`versionCode` 6 / `1.0.5`). Keep the
+keystore **out of git**. A navy thumbnail that never becomes the login
+form is the WebView not reaching `/suite/` (Capacitor was proxying HTML
+through Java, which fails on Cloudflare / a cold Render box). Upload this
+AAB to the same closed track.
 
 Then in Play Console for `com.gotaxation.suite`:
 

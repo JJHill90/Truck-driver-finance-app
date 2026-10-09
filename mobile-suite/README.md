@@ -25,13 +25,17 @@ npx cap sync android
 npx cap open android
 ```
 
-Always sync **before** **Build → Generate Signed Bundle**. Opening the GitHub
-repo in Android Studio without that step can ship an AAB that closes on
-launch (missing `capacitor.config.json`, or an Android 12 splash theme that
-uses a full-screen PNG). Play is not “corrupting” the bundle.
+Always sync **before** **Build → Generate Signed Bundle**. Play does not
+corrupt the AAB.
 
-If testers already have a crashing build, ship **versionCode 2** (`1.0.1`)
-to Closed testing and ask them to update.
+A navy icon that never becomes the login form is the WebView failing to
+reach `https://go-taxation-suite.onrender.com/suite/`. Capacitor’s
+`server.url` proxies that HTML through Java `HttpURLConnection`, which
+often dies on Cloudflare or a sleeping Render instance. This shell now
+loads the hosted page in the WebView itself and drops the splash after
+700ms. First open after idle can take up to a minute.
+
+Ship **versionCode 6** (`1.0.5`) to Closed testing and ask testers to update.
 
 Set `CORS_ALLOW_CAPACITOR=1` on the Suite Render service (Blueprint default)
 so session cookies work (`SameSite=None; Secure`).

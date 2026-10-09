@@ -93,30 +93,43 @@ describe("Suite Android launch shell", () => {
     expect(colors).toMatch(/name="splashBackground">#0B1F33/);
   });
 
-  it("ships a committed Capacitor config that loads the hosted Suite URL", () => {
+  it("does not proxy the hosted Suite URL through Capacitor server.url", () => {
     const raw = fs.readFileSync(
       path.join(androidApp, "src/main/assets/capacitor.config.json"),
       "utf8"
     );
     const config = JSON.parse(raw);
     expect(config.appId).toBe("com.gotaxation.suite");
-    expect(config.server.url).toBe("https://go-taxation-suite.onrender.com/suite/");
-    expect(fs.existsSync(path.join(androidApp, "src/main/assets/public/index.html"))).toBe(true);
+    expect(config.server && config.server.url).toBeFalsy();
+    const launcher = fs.readFileSync(
+      path.join(androidApp, "src/main/assets/public/index.html"),
+      "utf8"
+    );
+    expect(launcher).toMatch(/go-taxation-suite\.onrender\.com\/suite\//);
+    expect(launcher).toMatch(/Try again/);
   });
 
-  it("installs the AndroidX splash screen before the Capacitor bridge starts", () => {
+  it("loads the hosted Suite in the WebView and dismisses the splash", () => {
     const main = fs.readFileSync(
       path.join(androidApp, "src/main/java/com/gotaxation/suite/MainActivity.java"),
       "utf8"
     );
+    const plugin = fs.readFileSync(
+      path.join(androidApp, "src/main/java/com/gotaxation/suite/SuiteNavigationPlugin.java"),
+      "utf8"
+    );
     expect(main).toMatch(/SplashScreen\.installSplashScreen\(this\)/);
-    expect(main).toMatch(/super\.onCreate/);
+    expect(main).toMatch(/setKeepOnScreenCondition/);
+    expect(main).toMatch(/https:\/\/go-taxation-suite\.onrender\.com\/suite\//);
+    expect(main).toMatch(/openHostedSuite/);
+    expect(plugin).toMatch(/shouldOverrideLoad/);
+    expect(plugin).toMatch(/go-taxation-suite\.onrender\.com/);
   });
 
   it("bumps the Play versionCode so testers can install the rebuild", () => {
     const gradle = fs.readFileSync(path.join(androidApp, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 2/);
-    expect(gradle).toMatch(/versionName "1\.0\.1"/);
+    expect(gradle).toMatch(/versionCode 6/);
+    expect(gradle).toMatch(/versionName "1\.0\.5"/);
   });
 });
 
