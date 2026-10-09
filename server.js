@@ -2732,6 +2732,19 @@ api.delete("/admin/users/:username", async (req, res) => {
   }
 });
 
+api.get("/admin/support-messages", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({
+    email: support.supportInbox(),
+    mailConfigured: mail.mailConfigured(),
+    channels: {
+      smtp: mail.smtpConfigured(),
+      resend: mail.resendConfigured(),
+    },
+    messages: support.listMessages(100),
+  });
+});
+
 // --- Full-store backups (primary mod) ------------------------------------
 api.get("/admin/backups", (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -4623,6 +4636,7 @@ api.post("/support/contact", async (req, res) => {
       username,
       to: inbox,
       priority,
+      product: productOf(req),
     });
   } catch (err) {
     console.warn("Support email failed:", err && err.message ? err.message : err);
@@ -4645,7 +4659,7 @@ api.post("/support/contact", async (req, res) => {
       "Your support request has been sent to the developer. We’ll reply to the email you provided.";
   } else {
     statusMessage =
-      "Your request was saved. We’ll reply to the email you provided.";
+      "Your request was saved on this server, but email to the developer inbox failed. Use the copy-to-email link, or set SMTP / Resend on this host.";
   }
 
   res.json({
@@ -4657,9 +4671,13 @@ api.post("/support/contact", async (req, res) => {
     channel: mailResult.channel || null,
     needsClientDelivery: false,
     supportEmail: inbox,
-    mailto: support.mailtoHref({ name, email, phone, message, priority }),
+    mailto: support.mailtoHref({ name, email, phone, message, priority, product: productOf(req) }),
     priority,
-    confirmationText: mail.buildSupportConfirmationText({ name, supportEmail: inbox }),
+    confirmationText: mail.buildSupportConfirmationText({
+      name,
+      supportEmail: inbox,
+      product: productOf(req),
+    }),
     message: statusMessage,
     error: mailResult.error || null,
   });

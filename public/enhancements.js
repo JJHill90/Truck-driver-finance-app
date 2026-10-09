@@ -4444,6 +4444,46 @@
     maybeAutoDownloadDailyBackup(rows);
   }
 
+  async function loadAdminSupportInbox() {
+    const listEl = byId("admin-support-list");
+    const statusEl = byId("admin-support-status");
+    if (!listEl) return;
+    try {
+      const data = await apiGet("/admin/support-messages");
+      if (data.error) throw new Error(data.error);
+      const mailOn = Boolean(data.mailConfigured);
+      if (statusEl) {
+        statusEl.textContent = mailOn
+          ? `Inbox ${data.email || "support@godriverhub.com"} · SMTP/Resend configured — new forms email this address`
+          : `Inbox ${data.email || "support@godriverhub.com"} · SMTP/Resend not set on this host — forms are saved here only until you copy SMTP from Driver Hub or add Resend`;
+      }
+      const rows = data.messages || [];
+      if (!rows.length) {
+        listEl.innerHTML = `<p class="muted small">No support forms saved yet.</p>`;
+        return;
+      }
+      listEl.innerHTML = rows
+        .map((m) => {
+          const when = fmtDate(m.createdAt);
+          const who = [m.name, m.email].filter(Boolean).join(" · ");
+          const preview = String(m.message || "").replace(/\s+/g, " ").slice(0, 220);
+          return `<div class="admin-backup-row">
+            <div>
+              <strong>${esc(who || "Unknown")}</strong>
+              <span class="muted small"> · ${esc(when)}${m.priority ? " · priority" : ""}</span>
+              <div class="muted small">${esc(preview)}${preview.length >= 220 ? "…" : ""}</div>
+            </div>
+            <div class="admin-backup-actions">
+              <a class="btn secondary" href="mailto:${esc(m.email || "")}">Reply</a>
+            </div>
+          </div>`;
+        })
+        .join("");
+    } catch (err) {
+      if (statusEl) statusEl.textContent = err.message || "Could not load support inbox";
+    }
+  }
+
   async function loadAdminBackups() {
     const panel = byId("admin-panel");
     if (!panel || panel.classList.contains("hidden")) return;
@@ -4520,6 +4560,7 @@
       return;
     }
     renderAdminList(data.users || []);
+    await loadAdminSupportInbox();
     await loadAdminBackups();
   }
 
@@ -4767,6 +4808,14 @@
     if (adminRefresh) {
       adminRefresh.addEventListener("click", () => {
         void loadAdminUsers();
+      });
+    }
+
+    const supportRefresh = byId("admin-support-refresh");
+    if (supportRefresh && !supportRefresh.dataset.wired) {
+      supportRefresh.dataset.wired = "1";
+      supportRefresh.addEventListener("click", () => {
+        void loadAdminSupportInbox();
       });
     }
 
@@ -9015,6 +9064,7 @@
     confirmationSent,
     emailed,
     mailto,
+    error,
   }) {
     const inbox = supportEmail || "support@godriverhub.com";
     const wrap = document.createElement("div");
@@ -9022,20 +9072,28 @@
 
     const title = document.createElement("p");
     title.className = "support-confirm-title";
-    title.textContent = emailed ? "Support request sent" : "Support request received";
+    title.textContent = emailed ? "Support request sent" : "Could not email support";
     wrap.appendChild(title);
 
     const line1 = document.createElement("p");
     line1.textContent = emailed
       ? `Your message has been sent to the developer (${inbox}).`
-      : `Your message was saved. We’ll reply to ${userEmail} from ${inbox}.`;
+      : `Your message was saved on the server, but it was not emailed to ${inbox}. Use the link below so the request reaches the inbox.`;
     wrap.appendChild(line1);
+    if (!emailed && error) {
+      const errLine = document.createElement("p");
+      errLine.className = "muted";
+      errLine.textContent = error;
+      wrap.appendChild(errLine);
+    }
 
     const line2 = document.createElement("p");
     if (confirmationSent) {
       line2.textContent = `A confirmation notice was also sent to ${userEmail}. Check your inbox (and spam) for “we received your support request”.`;
-    } else {
+    } else if (emailed) {
       line2.textContent = `We’ll reply to ${userEmail}. If you want a copy in your own sent mail, use the link below.`;
+    } else {
+      line2.textContent = `Tap Email ${inbox} now so the developer receives this request.`;
     }
     wrap.appendChild(line2);
 
@@ -9049,7 +9107,7 @@
       wrap.appendChild(line3);
     }
 
-    setStatus(wrap, { isSuccess: true });
+    setStatus(wrap, { isSuccess: Boolean(emailed), isError: !emailed });
   }
 
   async function onSubmit(e) {
@@ -9090,6 +9148,7 @@
         confirmationSent,
         emailed,
         mailto: data.mailto || `mailto:${supportEmail}`,
+        error: data.error || "",
       });
       form.reset();
     } catch {

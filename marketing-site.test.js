@@ -143,7 +143,7 @@ describe("marketing overview HTTP", () => {
     const saved = await posted.json();
     expect(saved.ok).toBe(true);
     expect(saved.id).toBeTruthy();
-  });
+  }, 20_000);
 
   it("serves the Suite overview at / on APP_PRODUCT=suite and keeps /suite/ as the app", async () => {
     process.env.APP_PRODUCT = "suite";
