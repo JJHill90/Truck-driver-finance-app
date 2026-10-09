@@ -173,6 +173,8 @@ on load — including prompts when email is missing or the password is older tha
   `STRIPE_PRICE_ID_SUITE`, `STRIPE_PRICE_ID_SUITE_YEARLY`,
   `STRIPE_WEBHOOK_SECRET` — optional Stripe billing. Driver Hub Pro is
   $5/mo or $60/yr; Suite Pro is $10/mo or $110/yr.
+  Price env vars must be Stripe ids starting with `price_` (copy from
+  Stripe → Product catalog → Prices), not a product name or “$110 AUD”.
   Without them, free quotas and trials still work.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`,
   `APP_BASE_URL` — optional outbound email for recovery links and 90-day
