@@ -30,12 +30,60 @@ stay on Suite disk `gotax-data`.
 
 ## 2. Point DNS at Render
 
-At the registrar that owns `gotaxationsuite.com`, create exactly the
-records Render listed. Wait until both hosts show **Verified** and TLS
-is **Issued**. Until then, keep using
-`https://go-taxation-suite.onrender.com/` — it stays live.
+Edit the zone that the **nameservers** actually serve. This domain’s
+nameservers are `ds902-dns1.centos-server.net` /
+`ds902-dns2.centos-server.net` (Ace Host / cPanel). Records added only
+at the registrar do nothing while those NS stay in place.
+
+Open Ace Host / cPanel → **Zone Editor** (or Advanced DNS) and set:
+
+| Host | Type | Value |
+|------|------|--------|
+| `@` / `gotaxationsuite.com` | `A` | `216.24.57.1` |
+| `www` | `CNAME` | `go-taxation-suite.onrender.com` |
+
+Use Render’s values if the dashboard shows different ones.
+
+**Remove / do not keep:**
+
+- The old parking `A` `162.247.78.68` (Ace Host).
+- `www` CNAME → `gotaxationsuite.com` (that still hits the old host).
+- Any **AAAA** (IPv6) on `@` or `www`. Render is IPv4-only; leftover
+  AAAA records fail verification even when A is correct.
+- URL redirects / “parked domain” / domain-forwarding features.
+
+**CAA:** this domain has none. Do **not** add CAA unless you need it.
+If you already have CAA, also add:
+
+```
+gotaxationsuite.com.  CAA  0 issue "letsencrypt.org"
+gotaxationsuite.com.  CAA  0 issue "pki.goog"
+```
+
+Leave MX / SPF alone if you still use Ace Host mail. They do not block
+Render verify.
+
+Set TTL to 1–5 minutes while testing. In Render click **Verify** after
+`dig +short A gotaxationsuite.com` returns **only** `216.24.57.1`.
+Until then keep using `https://go-taxation-suite.onrender.com/`.
 
 `www` redirects to the apex on the Suite host (`lib/suite-public-origin.js`).
+
+### If Render says it could not verify
+
+That banner always mentions AAAA and CAA. Check the live records first:
+
+```bash
+dig +short A gotaxationsuite.com
+dig +short AAAA gotaxationsuite.com
+dig +short CNAME www.gotaxationsuite.com
+dig +short CAA gotaxationsuite.com
+```
+
+Verification fails until the apex `A` is Render’s `216.24.57.1` (not
+`162.247.78.68`) and `www` CNAMEs to `go-taxation-suite.onrender.com`.
+Then click Verify again. TLS issues after that usually mean a leftover
+AAAA or a CAA list that omits `letsencrypt.org` / `pki.goog`.
 
 ## 3. Point the app at the official origin
 
