@@ -74,7 +74,13 @@ const {
 } = require("./lib/receipt-ocr");
 const { analyzeScan } = require("./lib/document-breakdown");
 const { extractPdfText } = require("./lib/pdf-text");
-const { ocrPdfViaRaster, pdfResultNeedsOcr, shouldRasterPdf } = require("./lib/pdf-ocr");
+const {
+  ocrPdfViaRaster,
+  pdfResultNeedsOcr,
+  shouldRasterPdf,
+  mergeRasterIntoOcr,
+} = require("./lib/pdf-ocr");
+const { slimOcrResultForClient, presentScanJson } = require("./lib/scan-ocr-present");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
   applyHistoricalRates,
@@ -2875,6 +2881,7 @@ api.get("/records", (req, res) => {
       ...r,
       hasImage: Boolean(r.imagePath),
       dataUrl: undefined,
+      ocrResult: slimOcrResultForClient(r.ocrResult),
     };
     // Gallery can show scans before Approve — flag orphans for the UI.
     base.awaitingConfirm = isAwaitingConfirm(base);
@@ -3736,6 +3743,163 @@ api.post("/income/:id/restore", (req, res) => {
   res.json({ ok: true, entry: result.entry, alreadyActive: Boolean(result.alreadyActive) });
 });
 
+function enrichScannedOcr(req, records, ocrResult, purpose) {
+  const scanPurpose = purpose === "income" ? "income" : "expense";
+  applyAbnEntityPairing(ocrResult, scanPurpose);
+  enrichOcrFromVendors(ocrResult, records.vendors || [], scanPurpose);
+  if (scanPurpose !== "income") {
+    if (req.user) {
+      const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
+      applyOcrCategoryPreset(ocrResult, account);
+    }
+    if (ocrResult.suggestedCategory) {
+      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+    }
+  }
+
+  const { componentBreakdown, breakdownKind, compliance, payPeriod } =
+    productOf(req) === "suite"
+      ? suite.analyzeScan(ocrResult, scanPurpose, records.profile)
+      : analyzeScan(ocrResult, scanPurpose, records.profile);
+  ocrResult.componentBreakdown = componentBreakdown;
+  ocrResult.compliance = compliance;
+  ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+
+  if (scanPurpose === "income") {
+    const withheld = extractTaxWithheld(ocrResult, componentBreakdown);
+    if (withheld > 0) {
+      ocrResult.taxWithheld = withheld;
+      ocrResult.paygWithheld = withheld;
+    }
+  }
+
+  if (payPeriod) {
+    ocrResult.payPeriodInfo = payPeriod;
+    if (payPeriod.text && !ocrResult.payPeriod) ocrResult.payPeriod = payPeriod.text;
+    const filing = [
+      payPeriod.text && payPeriod.from ? `Pay period ${payPeriod.text}` : null,
+      payPeriod.paymentDateLabel ? `Paid ${payPeriod.paymentDateLabel}` : null,
+      payPeriod.cycleLabel || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (filing) {
+      ocrResult.description = ocrResult.description ? `${ocrResult.description} · ${filing}` : filing;
+    }
+  }
+
+  applyResolvedDocumentDate(ocrResult, scanPurpose, payPeriod);
+
+  if (scanPurpose === "income") {
+    sanitizeIncomeFields(ocrResult);
+    if (typeof ocrResult.rawText === "string") ocrResult.rawText = stripChequeTokens(ocrResult.rawText);
+    if (typeof ocrResult.rawTextPreview === "string") {
+      ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
+    }
+    ocrResult.description = buildIncomeDescription(ocrResult);
+    if (ocrResult.suggestedIncomeType) {
+      ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
+    }
+    if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
+    ocrResult.travelAllowance = extractTravelAllowance(ocrResult, {
+      date: ocrResult.date,
+      financialYear:
+        (records.profile && records.profile.financialYear) ||
+        getFinancialYearForDate(ocrResult.date || new Date().toISOString().slice(0, 10)),
+    });
+  } else if (ocrResult.suggestedCategory) {
+    ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+  }
+
+  let detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
+  if (scanPurpose === "expense") {
+    detectedTotals = refineExpenseDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
+  } else {
+    detectedTotals = refineIncomeDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
+  }
+  const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
+  if (primaryTotal && primaryTotal.amount > 0) {
+    if (scanPurpose === "expense") {
+      ocrResult.amount = primaryTotal.amount;
+    } else {
+      applyIncomePrimaryToOcr(ocrResult, primaryTotal);
+      if (!(Number(ocrResult.grossTotal) > 0) && Number(ocrResult.taxableIncome) > 0) {
+        ocrResult.grossTotal = Number(ocrResult.taxableIncome);
+      }
+      if (!(Number(ocrResult.taxableIncome) > 0) && Number(ocrResult.grossTotal) > 0) {
+        ocrResult.taxableIncome = Number(ocrResult.grossTotal);
+      }
+    }
+  } else if (scanPurpose === "expense") {
+    ocrResult.amount = null;
+  }
+
+  return {
+    ocrResult,
+    detectedTotals,
+    componentBreakdown,
+    breakdownKind,
+    compliance,
+    payPeriod: payPeriod || null,
+    primaryTotal,
+    scanPurpose,
+  };
+}
+
+function detectedTotalsFromStoredOcr(ocr, purpose) {
+  const scanPurpose = purpose === "income" ? "income" : "expense";
+  const breakdown = (ocr && ocr.componentBreakdown) || [];
+  let detectedTotals = mergeDetectedTotals(ocr || {}, breakdown, scanPurpose);
+  if (scanPurpose === "expense") {
+    detectedTotals = refineExpenseDetectedTotals(detectedTotals, ocr || {}, breakdown);
+  } else {
+    detectedTotals = refineIncomeDetectedTotals(detectedTotals, ocr || {}, breakdown);
+  }
+  return detectedTotals;
+}
+
+let pdfRasterQueue = Promise.resolve();
+
+function scheduleDeferredPdfRaster(req, receiptId, purpose) {
+  const work = () => runDeferredPdfRaster(req, receiptId, purpose);
+  pdfRasterQueue = pdfRasterQueue.then(work, work);
+}
+
+async function runDeferredPdfRaster(req, receiptId, purpose) {
+  try {
+    const records = getRecords(req);
+    const receipt = (records.receipts || []).find((r) => r && r.id === receiptId);
+    if (!receipt || !isAwaitingConfirm(receipt)) return;
+    const dataUrl = receipt.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
+    if (!dataUrl) return;
+    const rasterOcr = await ocrPdfViaRaster(dataUrl, { purpose });
+    const latest = getRecords(req);
+    const live = (latest.receipts || []).find((r) => r && r.id === receiptId);
+    if (!live || !isAwaitingConfirm(live)) return;
+    if (!rasterOcr || pdfResultNeedsOcr(rasterOcr, purpose)) {
+      if (live.ocrResult) live.ocrResult.ocrPending = false;
+      persist(req);
+      return;
+    }
+    const merged = normalizeOcrResult(mergeRasterIntoOcr(live.ocrResult || {}, rasterOcr, purpose));
+    const enriched = enrichScannedOcr(req, latest, merged, purpose);
+    live.ocrResult = enriched.ocrResult;
+    persist(req);
+  } catch (err) {
+    console.warn("Deferred PDF raster failed:", err.message);
+    try {
+      const records = getRecords(req);
+      const live = (records.receipts || []).find((r) => r && r.id === receiptId);
+      if (live && live.ocrResult) {
+        live.ocrResult.ocrPending = false;
+        persist(req);
+      }
+    } catch {
+      /* ignore follow-up */
+    }
+  }
+}
+
 // --- Receipts ------------------------------------------------------------
 api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
   try {
@@ -3760,194 +3924,48 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       purpose: ocrPurpose,
     });
 
-    // For PDFs, capture the FULL document text (the provided extractor only
-    // exposes a short preview) so every row of tabular payslips can be labelled.
+    // Text-layer extract already ran inside extractReceiptData. Only parse
+    // again when that pass left no rawText (avoids a second pdf-parse stall).
     const isPdf = mimeType === "application/pdf" || /\.pdf$/i.test(filename || "");
-    if (isPdf) {
+    if (isPdf && !ocrResult.rawText) {
       try {
         const fullText = await extractPdfText(imageBase64);
         if (fullText) ocrResult.rawText = fullText;
       } catch (e) {
         console.warn("PDF full-text extraction failed:", e.message);
       }
-
-      // Scanned / photo PDFs have no text layer, so the text-based extractor
-      // above finds no dollar totals. Rasterise those pages and OCR the images.
-      // Digital PDFs with a real text layer stay on the fast path — raster
-      // Tesseract is what makes payslip scans feel stuck for minutes.
-      if (shouldRasterPdf(ocrResult, ocrPurpose, ocrResult.rawText)) {
-        try {
-          const rasterOcr = await ocrPdfViaRaster(imageBase64, { purpose: ocrPurpose });
-          if (rasterOcr && !pdfResultNeedsOcr(rasterOcr, ocrPurpose)) {
-            const combined = normalizeOcrResult({
-              ...ocrResult,
-              documentType: ocrPurpose === "income" ? "income" : ocrResult.documentType,
-              amount: rasterOcr.amount ?? ocrResult.amount,
-              gst: rasterOcr.gst ?? ocrResult.gst,
-              grossTotal: rasterOcr.grossTotal ?? ocrResult.grossTotal,
-              taxableIncome: rasterOcr.taxableIncome ?? ocrResult.taxableIncome,
-              gstAmount: rasterOcr.gstAmount ?? ocrResult.gstAmount,
-              netPay: rasterOcr.netPay ?? ocrResult.netPay,
-              // The text layer had no total, so its vendor/date/etc. are
-              // unreliable (often page markers like "-- 1 of 1 --"). Prefer the
-              // values read from the rasterised image.
-              date: rasterOcr.date || ocrResult.date || null,
-              vendor: rasterOcr.vendor || ocrResult.vendor || "",
-              entity: rasterOcr.entity || rasterOcr.vendor || ocrResult.entity || "",
-              vendorAbn: rasterOcr.vendorAbn || ocrResult.vendorAbn || "",
-              suggestedCategory:
-                (rasterOcr.suggestedCategory && rasterOcr.suggestedCategory !== "other_work"
-                  ? rasterOcr.suggestedCategory
-                  : null) ||
-                ocrResult.suggestedCategory ||
-                rasterOcr.suggestedCategory,
-              suggestedIncomeType:
-                ocrResult.suggestedIncomeType || rasterOcr.suggestedIncomeType || null,
-              lineItems:
-                rasterOcr.lineItems && rasterOcr.lineItems.length
-                  ? rasterOcr.lineItems
-                  : ocrResult.lineItems,
-              candidateAmounts: [
-                ...(ocrResult.candidateAmounts || []),
-                ...(rasterOcr.candidateAmounts || []),
-              ],
-              payPeriod: ocrResult.payPeriod || rasterOcr.payPeriod || "",
-              rawText: rasterOcr.rawText || ocrResult.rawText || "",
-              ocrSource: [ocrResult.ocrSource, "pdf-raster-ocr"]
-                .filter(Boolean)
-                .join("+"),
-              notes: "Read from scanned PDF image. Confirm the total below.",
-            });
-            Object.assign(ocrResult, combined);
-          }
-        } catch (e) {
-          console.warn("PDF image OCR fallback failed:", e.message);
-        }
-      } else if (pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
-        console.info("PDF scan: skip raster OCR (usable text layer, no labelled total)");
-      }
     }
 
-    // Prefer the supplier/employer ABN and the entity name attached to it
-    // (checksum + proximity) before vendor memory runs.
-    applyAbnEntityPairing(ocrResult, purpose === "income" ? "income" : "expense");
-
-    // ABN + business name memory: fill vendor/ABN from prior saves and suggest
-    // a category (meals, training, …) before compliance/breakdown runs.
-    enrichOcrFromVendors(
-      ocrResult,
-      records.vendors || [],
-      purpose === "income" ? "income" : "expense"
-    );
-    if (purpose !== "income") {
-      // Profile "Default expense category" when OCR/vendor left a weak guess.
-      if (req.user) {
-        const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
-        applyOcrCategoryPreset(ocrResult, account);
-      }
-      if (ocrResult.suggestedCategory) {
-        ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
-      }
-    }
-
-    // Enrich: typed component breakdown + ATO compliance assessment.
-    const { componentBreakdown, breakdownKind, compliance, payPeriod } =
-      productOf(req) === "suite"
-        ? suite.analyzeScan(ocrResult, purpose === "income" ? "income" : "expense", records.profile)
-        : analyzeScan(ocrResult, purpose === "income" ? "income" : "expense", records.profile);
-    ocrResult.componentBreakdown = componentBreakdown;
-    ocrResult.compliance = compliance;
-    ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
-
-    // Surface PAYG / income tax withheld for the dashboard Gross vs Tax doughnut
-    // (and so confirm can persist it on the income row). Visual only.
-    if (purpose === "income") {
-      const withheld = extractTaxWithheld(ocrResult, componentBreakdown);
-      if (withheld > 0) {
-        ocrResult.taxWithheld = withheld;
-        ocrResult.paygWithheld = withheld;
-      }
-    }
-
-    // Pay period / payment date -> surface in the confirm form and saved entry
-    // (so it appears in filing), and expose structured info for the UI panel.
-    if (payPeriod) {
-      ocrResult.payPeriodInfo = payPeriod;
-      if (payPeriod.text && !ocrResult.payPeriod) ocrResult.payPeriod = payPeriod.text;
-      const filing = [
-        payPeriod.text && payPeriod.from ? `Pay period ${payPeriod.text}` : null,
-        payPeriod.paymentDateLabel ? `Paid ${payPeriod.paymentDateLabel}` : null,
-        payPeriod.cycleLabel || null,
+    // Image-only PDFs still need MuPDF + Tesseract, but that work must not
+    // hold the Android WebView open. Save + return on the text layer first;
+    // raster runs in the background and the client can poll for totals.
+    const wantsRaster = isPdf && shouldRasterPdf(ocrResult, ocrPurpose, ocrResult.rawText);
+    if (wantsRaster) {
+      ocrResult.ocrPending = true;
+      ocrResult.notes = [
+        ocrResult.notes,
+        ocrPurpose === "income"
+          ? "Payslip saved. Scanned pages are still being read — enter totals if they are blank, or wait a moment."
+          : "Receipt saved. Scanned pages are still being read — enter the total if it is blank, or wait a moment.",
       ]
         .filter(Boolean)
-        .join(" · ");
-      if (filing) {
-        ocrResult.description = ocrResult.description ? `${ocrResult.description} · ${filing}` : filing;
-      }
+        .join(" ");
+    } else if (isPdf && pdfResultNeedsOcr(ocrResult, ocrPurpose)) {
+      console.info("PDF scan: skip raster OCR (usable text layer, no labelled total)");
     }
 
-    // Resolve AU invoice/payment date (prefer labeled dates over YTD/period starts)
-    // so the entry lands in the correct financial year.
-    applyResolvedDocumentDate(
-      ocrResult,
-      purpose === "income" ? "income" : "expense",
-      payPeriod
-    );
+    const enriched = enrichScannedOcr(req, records, ocrResult, ocrPurpose);
+    const {
+      detectedTotals,
+      componentBreakdown,
+      breakdownKind,
+      compliance,
+      payPeriod,
+      primaryTotal,
+      scanPurpose,
+    } = enriched;
+    Object.assign(ocrResult, enriched.ocrResult);
 
-    // Income uploads: strip any "cheque" payment-method wording and label with
-    // payslip / pay-period terminology (with the pay-period date).
-    if (purpose === "income") {
-      sanitizeIncomeFields(ocrResult);
-      // rawText/preview feed the scan-review "raw text" display, so clean those
-      // too (analyzeScan has already consumed rawText above).
-      if (typeof ocrResult.rawText === "string") ocrResult.rawText = stripChequeTokens(ocrResult.rawText);
-      if (typeof ocrResult.rawTextPreview === "string") {
-        ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
-      }
-      ocrResult.description = buildIncomeDescription(ocrResult);
-      if (ocrResult.suggestedIncomeType) {
-        ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
-      }
-      if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
-      // Snapshot Travel / LAFHA from OCR text for LAFHA-days forecast.
-      ocrResult.travelAllowance = extractTravelAllowance(ocrResult, {
-        date: ocrResult.date,
-        financialYear:
-          (records.profile && records.profile.financialYear) ||
-          getFinancialYearForDate(ocrResult.date || new Date().toISOString().slice(0, 10)),
-      });
-    } else if (ocrResult.suggestedCategory) {
-      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
-    }
-
-    const scanPurpose = purpose === "income" ? "income" : "expense";
-    let detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
-    if (scanPurpose === "expense") {
-      detectedTotals = refineExpenseDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
-    } else {
-      // Remittances/invoices: prefer net income / net pay over gross for the
-      // amount users approve into the ledger (gross stays available as a field).
-      detectedTotals = refineIncomeDetectedTotals(detectedTotals, ocrResult, componentBreakdown);
-    }
-    const primaryTotal = detectedTotals.find((t) => t.primary) || detectedTotals[0];
-    // Keep OCR amount fields in sync with the primary detected total for the confirm UI.
-    if (primaryTotal && primaryTotal.amount > 0) {
-      if (scanPurpose === "expense") {
-        ocrResult.amount = primaryTotal.amount;
-      } else {
-        applyIncomePrimaryToOcr(ocrResult, primaryTotal);
-        // Fill missing gross/taxable from OCR only — never from the net primary.
-        if (!(Number(ocrResult.grossTotal) > 0) && Number(ocrResult.taxableIncome) > 0) {
-          ocrResult.grossTotal = Number(ocrResult.taxableIncome);
-        }
-        if (!(Number(ocrResult.taxableIncome) > 0) && Number(ocrResult.grossTotal) > 0) {
-          ocrResult.taxableIncome = Number(ocrResult.grossTotal);
-        }
-      }
-    } else if (scanPurpose === "expense") {
-      // Prefer an empty approve amount over a card-PAN OCR guess ($5822.10).
-      ocrResult.amount = null;
-    }
     const scanAmount =
       labelAmountFromScan(ocrResult, scanPurpose) ?? (primaryTotal ? primaryTotal.amount : null);
     const labeledName = buildDocumentFilename({
@@ -3965,17 +3983,20 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       primaryTotal ? primaryTotal.amount : null
     );
     if (duplicateMatches.length && !forceDuplicate) {
-      res.json({
-        possibleDuplicate: true,
-        message: "possible duplicate detected, do you wish to continue with the upload?",
-        matches: duplicateMatches,
-        ocrResult,
-        detectedTotals,
-        componentBreakdown,
-        breakdownKind,
-        compliance,
-        payPeriod: payPeriod || null,
-      });
+      res.json(
+        presentScanJson({
+          possibleDuplicate: true,
+          message: "possible duplicate detected, do you wish to continue with the upload?",
+          matches: duplicateMatches,
+          ocrResult,
+          detectedTotals,
+          componentBreakdown,
+          breakdownKind,
+          compliance,
+          payPeriod: payPeriod || null,
+          ocrPending: Boolean(ocrResult.ocrPending),
+        })
+      );
       return;
     }
 
@@ -3988,23 +4009,29 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       ocrResult,
     });
     persist(req);
-    res.json({
-      receipt: {
-        id: receipt.id,
-        filename: receipt.filename,
-        mimeType: receipt.mimeType,
-        purpose: receipt.purpose,
-        hasImage: Boolean(receipt.imagePath),
-      },
-      ocrResult,
-      detectedTotals,
-      componentBreakdown,
-      breakdownKind,
-      compliance,
-      payPeriod: payPeriod || null,
-      possibleDuplicate: false,
-      matches: duplicateMatches,
-    });
+    if (wantsRaster && receipt && receipt.id) {
+      scheduleDeferredPdfRaster(req, receipt.id, scanPurpose);
+    }
+    res.json(
+      presentScanJson({
+        receipt: {
+          id: receipt.id,
+          filename: receipt.filename,
+          mimeType: receipt.mimeType,
+          purpose: receipt.purpose,
+          hasImage: Boolean(receipt.imagePath),
+        },
+        ocrResult,
+        detectedTotals,
+        componentBreakdown,
+        breakdownKind,
+        compliance,
+        payPeriod: payPeriod || null,
+        possibleDuplicate: false,
+        matches: duplicateMatches,
+        ocrPending: Boolean(ocrResult.ocrPending),
+      })
+    );
   } catch (err) {
     next(err);
   }
@@ -4259,6 +4286,36 @@ api.delete("/receipts/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+api.get("/receipts/:id", (req, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Sign in to view this scan." });
+    return;
+  }
+  const records = getRecords(req);
+  const receipt = (records.receipts || []).find((r) => r && r.id === req.params.id);
+  if (!receipt) {
+    res.status(404).json({ error: "Receipt not found." });
+    return;
+  }
+  const purpose = receipt.purpose === "income" ? "income" : "expense";
+  const ocr = receipt.ocrResult || {};
+  res.json(
+    presentScanJson({
+      receipt: {
+        id: receipt.id,
+        filename: receipt.filename,
+        mimeType: receipt.mimeType,
+        purpose,
+        hasImage: Boolean(receipt.imagePath),
+        awaitingConfirm: isAwaitingConfirm(receipt),
+      },
+      ocrPending: Boolean(ocr.ocrPending),
+      ocrResult: ocr,
+      detectedTotals: detectedTotalsFromStoredOcr(ocr, purpose),
+    })
+  );
+});
+
 api.get("/receipts/:id/image", (req, res) => {
   if (!req.user) {
     res.status(401).json({ error: "Sign in to view receipt files." });
@@ -4266,6 +4323,16 @@ api.get("/receipts/:id/image", (req, res) => {
   }
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
+  if (
+    receipt &&
+    (/pdf/i.test(receipt.mimeType || "") || /\.pdf$/i.test(receipt.filename || receipt.imagePath || ""))
+  ) {
+    res.status(415).json({
+      error: "Use the file endpoint for PDF documents.",
+      isPdf: true,
+    });
+    return;
+  }
   const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
   if (!dataUrl) {
     res.status(404).json({ error: "Receipt image not found." });

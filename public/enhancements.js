@@ -51,8 +51,9 @@
     abortController: null,
   };
 
-  const PDF_SCAN_TIMEOUT_MS = 240000; // 4 min — remittance PDFs + raster OCR
+  const PDF_SCAN_TIMEOUT_MS = 90000; // text-layer save is fast; raster is background
   const MULTIPART_SCAN_MIN = 400000; // ~400 KB JSON → prefer FormData on Firefox
+  const NATIVE_PDF_MAX_BYTES = 12 * 1024 * 1024;
 
   function formatElapsed(ms) {
     const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
@@ -81,9 +82,11 @@
     }
     return {
       title: "OCR in progress",
-      phase: income ? "Reading remittance / payslip…" : "Reading receipt totals…",
-      button: income ? "Scanning remittance / payslip…" : "Scanning dollar totals…",
-      hint: "Scanned PDFs and first-time OCR can take longer. Please keep this tab open.",
+      phase: income ? "Saving remittance / payslip…" : "Reading receipt totals…",
+      button: income ? "Saving remittance / payslip…" : "Scanning dollar totals…",
+      hint: income
+        ? "The payslip is saved first so a slow scan cannot lose the file. Totals fill in when ready."
+        : "Scanned PDFs and first-time OCR can take longer. Please keep this tab open.",
     };
   }
 
@@ -346,8 +349,12 @@
     if (typeof orig !== "function" || orig.__haulagePdfPatch) return;
     async function patched(file, ...rest) {
       if (isPdfFile(file)) {
-        if (file.size > 25 * 1024 * 1024) {
-          throw new Error(`${file.name} exceeds 25 MB. Use a smaller file or manual entry.`);
+        const native =
+          typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell();
+        const maxBytes = native ? NATIVE_PDF_MAX_BYTES : 25 * 1024 * 1024;
+        if (file.size > maxBytes) {
+          const limit = native ? "12 MB" : "25 MB";
+          throw new Error(`${file.name} exceeds ${limit}. Use a smaller file or manual entry.`);
         }
         pendingScanFile = file;
         return {
@@ -377,6 +384,76 @@
     form.append("purpose", meta.purpose || "expense");
     if (meta.forceDuplicate) form.append("forceDuplicate", "true");
     return form;
+  }
+
+  function haulageApiRoot() {
+    return `${window.location.origin}/api/haulage`;
+  }
+
+  function setScanFieldValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el || value == null || value === "") return;
+    el.value = value;
+  }
+
+  function applyDeferredScanOcr(data, purpose) {
+    const o = (data && data.ocrResult) || {};
+    const totals = (data && data.detectedTotals) || [];
+    const primary = (totals.find((t) => t.primary) || totals[0] || {}).amount;
+    if (purpose === "income") {
+      setScanFieldValue("income-confirm-entity", o.entity || o.vendor);
+      setScanFieldValue("income-confirm-gross", o.grossTotal);
+      setScanFieldValue("income-confirm-taxable", o.taxableIncome ?? o.grossTotal);
+      setScanFieldValue("income-confirm-gst", o.gstAmount ?? o.gst);
+      setScanFieldValue("income-confirm-amount", primary || o.netPay || o.grossTotal);
+      setScanFieldValue("income-confirm-description", o.description);
+      if (o.date) setScanFieldValue("income-confirm-date", o.date);
+    }
+    if (data && data.componentBreakdown) {
+      latest = {
+        ...(latest || {}),
+        breakdown: data.componentBreakdown || [],
+        compliance: data.compliance || (latest && latest.compliance) || null,
+        payPeriod: data.payPeriod || (latest && latest.payPeriod) || null,
+        receiptId: (data.receipt && data.receipt.id) || (latest && latest.receiptId),
+        purpose,
+        token: `${Date.now()}-${Math.random()}`,
+      };
+    }
+    if (typeof window.toast === "function" && (primary || o.amount || o.grossTotal)) {
+      window.toast("Scan totals updated");
+    }
+  }
+
+  async function pollDeferredScanOcr(receiptId, purpose) {
+    if (!receiptId) return;
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      try {
+        const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data || data.ocrPending) continue;
+        applyDeferredScanOcr(data, purpose);
+        return;
+      } catch {
+        /* keep polling — raster may still be running */
+      }
+    }
+  }
+
+  function slimClientScanPayload(data) {
+    if (!data || typeof data !== "object" || !data.ocrResult) return data;
+    const ocr = { ...data.ocrResult };
+    if (typeof ocr.rawText === "string" && ocr.rawText.length > 1200) {
+      ocr.rawText = ocr.rawText.slice(0, 1200);
+    }
+    if (typeof ocr.rawTextPreview === "string" && ocr.rawTextPreview.length > 1200) {
+      ocr.rawTextPreview = ocr.rawTextPreview.slice(0, 1200);
+    }
+    return { ...data, ocrResult: ocr };
   }
 
   /** Modal: possible duplicate detected — Continue or Cancel. */
@@ -631,7 +708,7 @@
 
         const purpose = meta.purpose;
         const initialPhase = meta.forceDuplicate ? "rereading" : "reading";
-        // Remittance PDFs often need >90s (raster OCR). Replace app.js's short abort.
+        // PDFs used to wait on raster OCR; they now save on the text layer first.
         const looksPdf =
           /application\/pdf/i.test(bodyStr) ||
           /\.pdf"/i.test(String(bodyStr).slice(-400)) ||
@@ -779,6 +856,9 @@
             if (typeof window.haulageRefreshBilling === "function") {
               void window.haulageRefreshBilling();
             }
+            if (data.ocrPending && data.receipt && data.receipt.id) {
+              void pollDeferredScanOcr(data.receipt.id, purpose);
+            }
           }
 
           // Soft freemium gate: upload quota (402) — toast + upgrade hint, do not brick mid-OCR review.
@@ -795,12 +875,14 @@
               window.haulagePromptUpgrade(data);
             }
           }
-          return new Response(JSON.stringify(data == null ? {} : data), {
+          return new Response(JSON.stringify(slimClientScanPayload(data == null ? {} : data)), {
             status,
             headers: { "Content-Type": "application/json" },
           });
         } finally {
           if (scanTimeoutId) clearTimeout(scanTimeoutId);
+          pendingScanFile = null;
+          scanFileForRetry = null;
           stopOcrProgress();
         }
       }
@@ -1455,10 +1537,32 @@
   });
   previewMo.observe(document.body, { childList: true, subtree: true });
 
+  function patchPdfReceiptViewer() {
+    const origFetchImage = window.fetchReceiptImageDataUrl;
+    if (typeof origFetchImage === "function" && !origFetchImage.__haulagePdfSafe) {
+      async function safeFetchImage(receiptId) {
+        const finder = window.findReceipt;
+        const receipt = typeof finder === "function" ? finder(receiptId) : null;
+        const pdf =
+          receipt &&
+          (typeof window.isReceiptPdf === "function"
+            ? window.isReceiptPdf(receipt)
+            : /pdf/i.test(receipt.mimeType || receipt.filename || ""));
+        if (pdf && typeof window.receiptFileUrl === "function") {
+          return window.receiptFileUrl(receiptId);
+        }
+        return origFetchImage(receiptId);
+      }
+      safeFetchImage.__haulagePdfSafe = true;
+      window.fetchReceiptImageDataUrl = safeFetchImage;
+    }
+  }
+
   function init() {
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
     patchPrefillIncomeForm();
+    patchPdfReceiptViewer();
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
