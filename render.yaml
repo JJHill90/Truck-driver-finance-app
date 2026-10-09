@@ -172,8 +172,13 @@ services:
         sync: false
       - key: SUITE_REVIEWER_EMAIL
         sync: false
+      # After Render Custom Domains + DNS: https://gotaxationsuite.com
+      # (not http://). See docs/custom-domain.md. Until then keep the
+      # onrender origin so Stripe success/cancel and recovery links work.
       - key: APP_BASE_URL
         sync: false
+      # Optional extra origins. Apex + www of gotaxationsuite.com are
+      # already allowlisted in lib/cors.js.
       - key: CORS_ORIGINS
         sync: false
       # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.

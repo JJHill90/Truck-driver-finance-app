@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const STORE = path.join(__dirname, "mobile-suite", "store");
+const STORE_LISTING = path.join(__dirname, "docs", "store-listing.md");
+const CAP_CONFIG = path.join(__dirname, "mobile-suite", "capacitor.config.json");
 const IOS_PLIST = path.join(__dirname, "mobile-suite", "ios", "App", "App", "Info.plist");
 const IOS_ADDITIONS = path.join(__dirname, "mobile-suite", "ios-info.plist.additions.xml");
 
@@ -16,6 +18,23 @@ function pngInfo(filePath) {
 }
 
 describe("Suite store listing assets", () => {
+  it("lists the official HTTPS domain for marketing and legal pages", () => {
+    const listing = fs.readFileSync(STORE_LISTING, "utf8");
+    expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/privacy/);
+    expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/terms/);
+    expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/support/);
+    expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\//);
+    const cap = JSON.parse(fs.readFileSync(CAP_CONFIG, "utf8"));
+    expect(cap.server.url).toBe("https://go-taxation-suite.onrender.com/suite/");
+    expect(cap.server.allowNavigation).toEqual(
+      expect.arrayContaining([
+        "https://go-taxation-suite.onrender.com/*",
+        "https://gotaxationsuite.com/*",
+        "https://www.gotaxationsuite.com/*",
+      ])
+    );
+  });
+
   it("ships a 1024×500 Play feature graphic with no alpha", () => {
     expect(pngInfo(path.join(STORE, "feature-graphic-1024x500.png"))).toMatchObject({
       width: 1024,

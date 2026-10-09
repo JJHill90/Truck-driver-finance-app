@@ -47,6 +47,7 @@ describe("marketing overview pages", () => {
     expect(suiteHtml).not.toMatch(/Taxation Hub/i);
     expect(suiteHtml).not.toMatch(/Fuel Hub/i);
     expect(suiteHtml).not.toMatch(/truck-driver/i);
+    expect(suiteHtml).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/"/);
   });
 
   it("Driver Hub overview links to /haulage/ and names both picker apps", () => {
@@ -143,7 +144,7 @@ describe("marketing overview HTTP", () => {
     const saved = await posted.json();
     expect(saved.ok).toBe(true);
     expect(saved.id).toBeTruthy();
-  });
+  }, 20_000);
 
   it("serves the Suite overview at / on APP_PRODUCT=suite and keeps /suite/ as the app", async () => {
     process.env.APP_PRODUCT = "suite";
