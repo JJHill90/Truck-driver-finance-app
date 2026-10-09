@@ -144,6 +144,36 @@ describe("mail.sendSupportEmail channels", () => {
     expect(calls[0].body._replyto).toBe("sam@example.com");
   });
 
+  it("treats FormSubmit Cloudflare 403 as not sent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({}),
+      }))
+    );
+    const result = await mail.sendSupportEmail({
+      name: "Sam",
+      email: "sam@example.com",
+      phone: "",
+      message: "Hello",
+      product: "suite",
+    });
+    expect(result.sent).toBe(false);
+    expect(result.channel).toBe("formsubmit");
+    expect(result.error).toMatch(/Cloudflare 403|SMTP_HOST|RESEND_API_KEY/);
+    expect(mail.formSubmitCloudflareBlocked({ status: 403 }, "")).toBe(true);
+    expect(mail.supportBrand("suite")).toBe("Go Taxation Suite");
+    expect(
+      mail.buildSupportConfirmationText({
+        name: "Sam",
+        supportEmail: mail.DEFAULT_SUPPORT_EMAIL,
+        product: "suite",
+      })
+    ).toMatch(/Go Taxation Suite/);
+  });
+
   it("does not treat a pending FormSubmit activation as a sent email", async () => {
     vi.stubGlobal(
       "fetch",
