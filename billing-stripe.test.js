@@ -67,6 +67,22 @@ describe("applySubscriptionToUser", () => {
     }
   });
 
+  it("rejects a Product id (prod_) pasted into STRIPE_PRICE_ID_SUITE", async () => {
+    const prev = process.env.STRIPE_PRICE_ID_SUITE;
+    process.env.STRIPE_PRICE_ID_SUITE = "prod_VPIfphkpGLPC63";
+    try {
+      expect(isStripePriceId("prod_VPIfphkpGLPC63")).toBe(false);
+      expect(configuredPriceId("suite", "month")).toBe("");
+      await expect(ensurePriceId({}, "month", "suite", "pro")).rejects.toMatchObject({
+        code: "STRIPE_PRICE_INVALID",
+        message: expect.stringMatching(/prod_VPIfphkpGLPC63[\s\S]*price_/),
+      });
+    } finally {
+      if (prev == null) delete process.env.STRIPE_PRICE_ID_SUITE;
+      else process.env.STRIPE_PRICE_ID_SUITE = prev;
+    }
+  });
+
   it("rejects a product name pasted into STRIPE_PRICE_ID_SUITE_YEARLY", async () => {
     expect(isStripePriceId("price_1ABC123xyz")).toBe(true);
     expect(isStripePriceId("Suite Pro yearly Price id ($110 AUD)")).toBe(false);
