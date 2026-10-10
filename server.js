@@ -80,7 +80,7 @@ const {
   shouldRasterPdf,
   mergeRasterIntoOcr,
 } = require("./lib/pdf-ocr");
-const { slimOcrResultForClient, presentScanJson } = require("./lib/scan-ocr-present");
+const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
   applyHistoricalRates,
@@ -2881,7 +2881,7 @@ api.get("/records", (req, res) => {
       ...r,
       hasImage: Boolean(r.imagePath),
       dataUrl: undefined,
-      ocrResult: slimOcrResultForClient(r.ocrResult),
+      ocrResult: slimOcrResultForList(r.ocrResult),
     };
     // Gallery can show scans before Approve — flag orphans for the UI.
     base.awaitingConfirm = isAwaitingConfirm(base);
@@ -3984,7 +3984,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     );
     if (duplicateMatches.length && !forceDuplicate) {
       res.json(
-        presentScanJson({
+        presentScanConfirmJson({
           possibleDuplicate: true,
           message: "possible duplicate detected, do you wish to continue with the upload?",
           matches: duplicateMatches,
@@ -4013,7 +4013,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       scheduleDeferredPdfRaster(req, receipt.id, scanPurpose);
     }
     res.json(
-      presentScanJson({
+      presentScanConfirmJson({
         receipt: {
           id: receipt.id,
           filename: receipt.filename,
@@ -4300,7 +4300,7 @@ api.get("/receipts/:id", (req, res) => {
   const purpose = receipt.purpose === "income" ? "income" : "expense";
   const ocr = receipt.ocrResult || {};
   res.json(
-    presentScanJson({
+    presentScanConfirmJson({
       receipt: {
         id: receipt.id,
         filename: receipt.filename,

@@ -1,4 +1,10 @@
-const { slimOcrResultForClient, presentScanJson, RAW_TEXT_CLIENT_MAX } = require("./lib/scan-ocr-present");
+const {
+  slimOcrResultForClient,
+  slimOcrResultForList,
+  presentScanJson,
+  presentScanConfirmJson,
+  RAW_TEXT_CLIENT_MAX,
+} = require("./lib/scan-ocr-present");
 const { mergeRasterIntoOcr, rasterOptionsFor, shouldRasterPdf } = require("./lib/pdf-ocr");
 
 describe("slimOcrResultForClient", () => {
@@ -24,6 +30,27 @@ describe("slimOcrResultForClient", () => {
   });
 });
 
+describe("slimOcrResultForList", () => {
+  it("drops rawText and breakdown so /records stays small after a PDF scan", () => {
+    const slim = slimOcrResultForList({
+      documentType: "income",
+      amount: 2431,
+      netPay: 2431,
+      rawText: "PAYSLIP ".repeat(2000),
+      componentBreakdown: [{ label: "Gross", amount: 3043 }],
+      compliance: { summary: "ok", checks: [{ status: "pass" }] },
+      lineItems: [{ label: "row", amount: 1 }],
+      notes: "x".repeat(500),
+    });
+    expect(slim.amount).toBe(2431);
+    expect(slim.netPay).toBe(2431);
+    expect(slim.rawText).toBeUndefined();
+    expect(slim.componentBreakdown).toBeUndefined();
+    expect(slim.compliance).toBeUndefined();
+    expect(slim.notes.length).toBe(240);
+  });
+});
+
 describe("presentScanJson", () => {
   it("slims ocrResult on a scan payload and keeps receipt meta", () => {
     const rawText = "x".repeat(5000);
@@ -36,6 +63,38 @@ describe("presentScanJson", () => {
     expect(out.ocrPending).toBe(true);
     expect(out.ocrResult.rawText.length).toBe(RAW_TEXT_CLIENT_MAX);
     expect(out.ocrResult.amount).toBe(10);
+  });
+});
+
+describe("presentScanConfirmJson", () => {
+  it("drops rawText so the post-OCR confirm payload stays small", () => {
+    const out = presentScanConfirmJson({
+      receipt: { id: "r1", filename: "payslip.pdf", mimeType: "application/pdf" },
+      ocrResult: {
+        amount: 2431,
+        netPay: 2431,
+        rawText: "PAYSLIP ".repeat(2000),
+        notes: "x".repeat(400),
+      },
+      detectedTotals: Array.from({ length: 30 }, (_, i) => ({ label: `row ${i}`, amount: i })),
+      componentBreakdown: Array.from({ length: 20 }, (_, i) => ({
+        type: "income",
+        label: `line ${i}`,
+        amount: i,
+        extra: "drop-me",
+      })),
+      compliance: { status: "ok", summary: "y".repeat(400), checks: [{ status: "pass" }] },
+      ocrPending: false,
+    });
+    expect(out.receipt.id).toBe("r1");
+    expect(out.ocrResult.amount).toBe(2431);
+    expect(out.ocrResult.rawText).toBeUndefined();
+    expect(out.ocrResult.notes.length).toBe(240);
+    expect(out.detectedTotals).toHaveLength(16);
+    expect(out.componentBreakdown).toHaveLength(16);
+    expect(out.componentBreakdown[0].extra).toBeUndefined();
+    expect(out.compliance.summary.length).toBe(240);
+    expect(out.compliance.checks).toBeUndefined();
   });
 });
 
