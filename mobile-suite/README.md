@@ -25,6 +25,18 @@ npx cap sync android
 npx cap open android
 ```
 
+Always sync **before** **Build → Generate Signed Bundle**. Play does not
+corrupt the AAB.
+
+A navy icon that never becomes the login form is the WebView failing to
+reach `https://go-taxation-suite.onrender.com/suite/`. Capacitor’s
+`server.url` proxies that HTML through Java `HttpURLConnection`, which
+often dies on Cloudflare or a sleeping Render instance. This shell now
+loads the hosted page in the WebView itself and drops the splash after
+700ms. First open after idle can take up to a minute.
+
+Ship **versionCode 6** (`1.0.5`) to Closed testing and ask testers to update.
+
 Set `CORS_ALLOW_CAPACITOR=1` on the Suite Render service (Blueprint default)
 so session cookies work (`SameSite=None; Secure`).
 

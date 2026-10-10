@@ -79,7 +79,11 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle.** Keep the keystore **out of git**.
+**Build → Generate Signed Bundle** (`versionCode` 6 / `1.0.5`). Keep the
+keystore **out of git**. A navy thumbnail that never becomes the login
+form is the WebView not reaching `/suite/` (Capacitor was proxying HTML
+through Java, which fails on Cloudflare / a cold Render box). Upload this
+AAB to the same closed track.
 
 Then in Play Console for `com.gotaxation.suite`:
 

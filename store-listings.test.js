@@ -73,3 +73,63 @@ describe("Suite store listing assets", () => {
     }
   });
 });
+
+describe("Suite Android launch shell", () => {
+  const androidApp = path.join(__dirname, "mobile-suite", "android", "app");
+
+  it("uses a color Android 12 splash (PNG backgrounds crash on launch)", () => {
+    const styles = fs.readFileSync(
+      path.join(androidApp, "src/main/res/values/styles.xml"),
+      "utf8"
+    );
+    expect(styles).toMatch(/windowSplashScreenBackground">@color\/splashBackground/);
+    expect(styles).toMatch(/windowSplashScreenAnimatedIcon">@drawable\/ic_launcher_foreground/);
+    expect(styles).toMatch(/postSplashScreenTheme">@style\/AppTheme\.NoActionBar/);
+    expect(styles).not.toMatch(/android:background">@drawable\/splash/);
+    const colors = fs.readFileSync(
+      path.join(androidApp, "src/main/res/values/colors.xml"),
+      "utf8"
+    );
+    expect(colors).toMatch(/name="splashBackground">#0B1F33/);
+  });
+
+  it("does not proxy the hosted Suite URL through Capacitor server.url", () => {
+    const raw = fs.readFileSync(
+      path.join(androidApp, "src/main/assets/capacitor.config.json"),
+      "utf8"
+    );
+    const config = JSON.parse(raw);
+    expect(config.appId).toBe("com.gotaxation.suite");
+    expect(config.server && config.server.url).toBeFalsy();
+    const launcher = fs.readFileSync(
+      path.join(androidApp, "src/main/assets/public/index.html"),
+      "utf8"
+    );
+    expect(launcher).toMatch(/go-taxation-suite\.onrender\.com\/suite\//);
+    expect(launcher).toMatch(/Try again/);
+  });
+
+  it("loads the hosted Suite in the WebView and dismisses the splash", () => {
+    const main = fs.readFileSync(
+      path.join(androidApp, "src/main/java/com/gotaxation/suite/MainActivity.java"),
+      "utf8"
+    );
+    const plugin = fs.readFileSync(
+      path.join(androidApp, "src/main/java/com/gotaxation/suite/SuiteNavigationPlugin.java"),
+      "utf8"
+    );
+    expect(main).toMatch(/SplashScreen\.installSplashScreen\(this\)/);
+    expect(main).toMatch(/setKeepOnScreenCondition/);
+    expect(main).toMatch(/https:\/\/go-taxation-suite\.onrender\.com\/suite\//);
+    expect(main).toMatch(/openHostedSuite/);
+    expect(plugin).toMatch(/shouldOverrideLoad/);
+    expect(plugin).toMatch(/go-taxation-suite\.onrender\.com/);
+  });
+
+  it("bumps the Play versionCode so testers can install the rebuild", () => {
+    const gradle = fs.readFileSync(path.join(androidApp, "build.gradle"), "utf8");
+    expect(gradle).toMatch(/versionCode 6/);
+    expect(gradle).toMatch(/versionName "1\.0\.5"/);
+  });
+});
+
