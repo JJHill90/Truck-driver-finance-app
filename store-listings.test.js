@@ -24,6 +24,12 @@ describe("Suite store listing assets", () => {
     });
   });
 
+  it("keeps the Play feature graphic tagline in the generator", () => {
+    const src = fs.readFileSync(path.join(STORE, "generate-icons.py"), "utf8");
+    expect(src).toMatch(/Record your receipts and income with ease\./);
+    expect(src).toMatch(/Take control so the ATO does not/);
+  });
+
   it("keeps camera + export-compliance keys on the iOS project", () => {
     const plist = fs.readFileSync(IOS_PLIST, "utf8");
     const additions = fs.readFileSync(IOS_ADDITIONS, "utf8");

@@ -213,8 +213,8 @@ def feature_graphic():
     draw.text((448, 128), "Go Taxation", fill=NAVY, font=title)
     draw.text((448, 188), "Suite", fill=SKY, font=suite_font)
     draw.rounded_rectangle((448, 266, 448 + 72, 272), radius=3, fill=AMBER)
-    draw.text((448, 296), "Record receipts. Prepare working papers.", fill=NAVY, font=tag)
-    draw.text((448, 334), "Not advice. You lodge with the ATO.", fill=(90, 104, 118, 255), font=tag)
+    draw.text((448, 296), "Record your receipts and income with ease.", fill=NAVY, font=tag)
+    draw.text((448, 334), "Take control so the ATO does not", fill=(90, 104, 118, 255), font=tag)
     return img
 
 
