@@ -445,15 +445,102 @@
   }
 
   function slimClientScanPayload(data) {
-    if (!data || typeof data !== "object" || !data.ocrResult) return data;
-    const ocr = { ...data.ocrResult };
-    if (typeof ocr.rawText === "string" && ocr.rawText.length > 1200) {
-      ocr.rawText = ocr.rawText.slice(0, 1200);
+    if (!data || typeof data !== "object") return data || {};
+    const ocr = data.ocrResult && typeof data.ocrResult === "object" ? data.ocrResult : {};
+    const notes = typeof ocr.notes === "string" ? ocr.notes.slice(0, 240) : ocr.notes;
+    const breakdown = Array.isArray(data.componentBreakdown)
+      ? data.componentBreakdown.slice(0, 16)
+      : data.componentBreakdown;
+    const totals = Array.isArray(data.detectedTotals) ? data.detectedTotals.slice(0, 16) : data.detectedTotals;
+    const compliance =
+      data.compliance && typeof data.compliance === "object"
+        ? {
+            status: data.compliance.status || null,
+            summary:
+              typeof data.compliance.summary === "string" ? data.compliance.summary.slice(0, 240) : "",
+          }
+        : data.compliance;
+    return {
+      receipt: data.receipt,
+      ocrPending: Boolean(data.ocrPending),
+      possibleDuplicate: Boolean(data.possibleDuplicate),
+      matches: Array.isArray(data.matches) ? data.matches.slice(0, 8) : data.matches,
+      message: data.message,
+      error: data.error,
+      code: data.code,
+      entitlements: data.entitlements,
+      detectedTotals: totals,
+      componentBreakdown: breakdown,
+      breakdownKind: data.breakdownKind || null,
+      compliance,
+      payPeriod: data.payPeriod || null,
+      ocrResult: {
+        documentType: ocr.documentType,
+        documentKind: ocr.documentKind,
+        date: ocr.date || null,
+        vendor: ocr.vendor || "",
+        entity: ocr.entity || ocr.vendor || "",
+        amount: ocr.amount ?? null,
+        grossTotal: ocr.grossTotal ?? null,
+        taxableIncome: ocr.taxableIncome ?? null,
+        gst: ocr.gst ?? null,
+        gstAmount: ocr.gstAmount ?? ocr.gst ?? null,
+        netPay: ocr.netPay ?? null,
+        payPeriod: ocr.payPeriod || "",
+        description: ocr.description || "",
+        suggestedIncomeType: ocr.suggestedIncomeType || null,
+        suggestedCategory: ocr.suggestedCategory || null,
+        vendorAbn: ocr.vendorAbn || null,
+        travelAllowance: ocr.travelAllowance || null,
+        notes: notes || "",
+      },
+    };
+  }
+
+  function installQuietRefreshAll() {
+    const current = window.refreshAll;
+    if (typeof current !== "function" || current.__haulageQuietSkip) return;
+    async function skipped() {
+      if (window.__haulageSkipNextRefreshAll) {
+        window.__haulageSkipNextRefreshAll = false;
+        return;
+      }
+      return current.apply(this, arguments);
     }
-    if (typeof ocr.rawTextPreview === "string" && ocr.rawTextPreview.length > 1200) {
-      ocr.rawTextPreview = ocr.rawTextPreview.slice(0, 1200);
+    skipped.__haulageQuietSkip = true;
+    window.refreshAll = skipped;
+  }
+
+  function quietUiAfterScanSave() {
+    window.__haulageQuietUntil = Date.now() + 12000;
+    // app.js always awaits refreshAll() after a scan. That refetch + gallery
+    // rebuild freezes Android after "OCR finished" even though the file saved.
+    window.__haulageSkipNextRefreshAll = true;
+    installQuietRefreshAll();
+  }
+
+  function patchRefreshEofyLive() {
+    const orig = window.refreshEofyLive;
+    if (typeof orig !== "function" || orig.__haulageQuietPatch) return;
+    async function patched() {
+      if (Number(window.__haulageQuietUntil) > Date.now()) return;
+      return orig.apply(this, arguments);
     }
-    return { ...data, ocrResult: ocr };
+    patched.__haulageQuietPatch = true;
+    window.refreshEofyLive = patched;
+  }
+
+  function isQuietHeavyForecastGet(url, method) {
+    if (Number(window.__haulageQuietUntil) <= Date.now()) return false;
+    if (String(method || "GET").toUpperCase() !== "GET") return false;
+    return /\/api\/haulage\/(summary|report|forecast)(\?|$)/.test(String(url || ""));
+  }
+
+  function cachedQuietForecastResponse(_url) {
+    return new Response(JSON.stringify({ ok: true, quiet: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   /** Modal: possible duplicate detected — Continue or Cancel. */
@@ -581,6 +668,12 @@
   window.fetch = async function (...args) {
     let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
     let options = args[1] || {};
+    const fetchMethod = String(
+      options.method || (args[0] && typeof args[0] === "object" && args[0].method) || "GET"
+    ).toUpperCase();
+    if (isQuietHeavyForecastGet(url, fetchMethod)) {
+      return cachedQuietForecastResponse(url);
+    }
 
     // Inject cash / no-receipt flags from the manual expense form (app.js
     // builds its own payload and does not read these checkboxes).
@@ -714,6 +807,7 @@
           /\.pdf"/i.test(String(bodyStr).slice(-400)) ||
           (typeof FormData !== "undefined" && fetchOpts.body instanceof FormData);
         let scanTimeoutId = null;
+        let scanProgressStopped = false;
         {
           const controller = new AbortController();
           ocrProgress.abortController = controller;
@@ -849,15 +943,24 @@
               taxWithheld: Number(ocr.taxWithheld || ocr.paygWithheld) || null,
               purpose,
               receiptId: data.receipt && data.receipt.id,
-              isPdf: /pdf/i.test(mimeType),
+              isPdf:
+                /pdf/i.test(mimeType) || /\.pdf$/i.test(String((data.receipt && data.receipt.filename) || "")),
               token: `${Date.now()}-${Math.random()}`,
             };
             // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
+            quietUiAfterScanSave();
             if (typeof window.haulageRefreshBilling === "function") {
-              void window.haulageRefreshBilling();
+              setTimeout(() => {
+                if (typeof window.haulageRefreshBilling === "function") {
+                  void window.haulageRefreshBilling();
+                }
+              }, 1500);
             }
             if (data.ocrPending && data.receipt && data.receipt.id) {
-              void pollDeferredScanOcr(data.receipt.id, purpose);
+              const waitMs = Math.max(800, Number(window.__haulageQuietUntil) - Date.now() + 400);
+              setTimeout(() => {
+                void pollDeferredScanOcr(data.receipt.id, purpose);
+              }, Number.isFinite(waitMs) ? waitMs : 2500);
             }
           }
 
@@ -875,6 +978,10 @@
               window.haulagePromptUpgrade(data);
             }
           }
+          stopOcrProgress();
+          scanProgressStopped = true;
+          await yieldToUi();
+          await new Promise((resolve) => setTimeout(resolve, 40));
           return new Response(JSON.stringify(slimClientScanPayload(data == null ? {} : data)), {
             status,
             headers: { "Content-Type": "application/json" },
@@ -883,7 +990,7 @@
           if (scanTimeoutId) clearTimeout(scanTimeoutId);
           pendingScanFile = null;
           scanFileForRetry = null;
-          stopOcrProgress();
+          if (!scanProgressStopped) stopOcrProgress();
         }
       }
 
@@ -1563,6 +1670,10 @@
     patchManualIncomeForm();
     patchPrefillIncomeForm();
     patchPdfReceiptViewer();
+    patchRefreshEofyLive();
+    installQuietRefreshAll();
+    setTimeout(installQuietRefreshAll, 0);
+    setTimeout(installQuietRefreshAll, 500);
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
@@ -11112,9 +11223,15 @@
 
   function wrapRefreshAll() {
     if (typeof globalThis.refreshAll !== "function") return;
-    if (globalThis.refreshAll.__haulageAwaitingWrapped) return;
+    if (globalThis.refreshAll.__haulageAwaitingWrapped || globalThis.refreshAll.__haulageQuietSkip) {
+      return;
+    }
     const prevRefresh = globalThis.refreshAll;
     async function wrappedRefresh() {
+      if (window.__haulageSkipNextRefreshAll) {
+        window.__haulageSkipNextRefreshAll = false;
+        return;
+      }
       const result = await prevRefresh.apply(this, arguments);
       refreshUi();
       return result;
@@ -11155,6 +11272,15 @@
     };
     wrapSetView();
     wrapRefreshAll();
+    const origEofy = globalThis.refreshEofyLive;
+    if (typeof origEofy === "function" && !origEofy.__haulageQuietPatch) {
+      async function quietEofy() {
+        if (Number(window.__haulageQuietUntil) > Date.now()) return;
+        return origEofy.apply(this, arguments);
+      }
+      quietEofy.__haulageQuietPatch = true;
+      globalThis.refreshEofyLive = quietEofy;
+    }
     setTimeout(wrapSetView, 0);
     setTimeout(wrapRefreshAll, 0);
     setTimeout(wrapSetView, 500);
