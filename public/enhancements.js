@@ -328,8 +328,12 @@
 
   /**
    * Firefox freezes when app.js JSON.stringify's a multi-MB PDF data-URL.
-   * For PDFs, skip building that giant string — stash the File and send
-   * multipart FormData from the fetch wrapper instead.
+   * For PDFs, skip building that giant string — stash an in-memory copy and
+   * send multipart FormData from the fetch wrapper instead.
+   *
+   * Android WebView also crashes if we keep the original <input type=file>
+   * PDF (a content:// URI from the picker) until after OCR. Copy the bytes
+   * immediately and clear the input so the OS can release that URI.
    */
   let pendingScanFile = null;
   const TINY_PDF_STUB =
@@ -344,6 +348,33 @@
     return file.type === "application/pdf" || ext === "pdf";
   }
 
+  function isAndroidLike() {
+    if (typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell()) {
+      return true;
+    }
+    return /Android/i.test(String(navigator.userAgent || ""));
+  }
+
+  function clearScanFileInputs() {
+    ["income-file", "receipt-file", "enh-attach-receipt-input"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+  }
+
+  async function copyPdfToMemory(file) {
+    const buf = await file.arrayBuffer();
+    const type = file.type || "application/pdf";
+    const name = file.name || "upload.pdf";
+    try {
+      return new File([buf], name, { type });
+    } catch {
+      const blob = new Blob([buf], { type });
+      blob.name = name;
+      return blob;
+    }
+  }
+
   function patchPrepareImageForUpload() {
     const orig = window.prepareImageForUpload;
     if (typeof orig !== "function" || orig.__haulagePdfPatch) return;
@@ -356,7 +387,16 @@
           const limit = native ? "12 MB" : "25 MB";
           throw new Error(`${file.name} exceeds ${limit}. Use a smaller file or manual entry.`);
         }
-        pendingScanFile = file;
+        let copy = file;
+        try {
+          copy = await copyPdfToMemory(file);
+        } catch {
+          throw new Error(
+            "Could not read that PDF. Take a photo of the page, or use Add income manually."
+          );
+        }
+        pendingScanFile = copy;
+        clearScanFileInputs();
         return {
           dataUrl: TINY_PDF_STUB,
           mimeType: "application/pdf",
@@ -543,6 +583,33 @@
     });
   }
 
+  let lastRecordsBody = null;
+
+  function isRecordsGet(url, method) {
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
+  }
+
+  function isReceiptImageGet(url, method) {
+    return (
+      String(method || "GET").toUpperCase() === "GET" &&
+      /\/api\/haulage\/receipts\/[^/]+\/image(\?|$)/.test(String(url || ""))
+    );
+  }
+
+  function quietRecordsResponse() {
+    return new Response(
+      lastRecordsBody ||
+        JSON.stringify({
+          profile: {},
+          income: [],
+          expenses: [],
+          receipts: [],
+          vendors: [],
+        }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   /** Modal: possible duplicate detected — Continue or Cancel. */
   function promptDuplicateContinue(data) {
     return new Promise((resolve) => {
@@ -673,6 +740,15 @@
     ).toUpperCase();
     if (isQuietHeavyForecastGet(url, fetchMethod)) {
       return cachedQuietForecastResponse(url);
+    }
+    if (window.__haulageSkipNextRefreshAll && isRecordsGet(url, fetchMethod)) {
+      return quietRecordsResponse();
+    }
+    if (Number(window.__haulageQuietUntil) > Date.now() && isReceiptImageGet(url, fetchMethod)) {
+      return new Response(JSON.stringify({ error: "Use the file endpoint for PDF documents.", isPdf: true }), {
+        status: 415,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Inject cash / no-receipt flags from the manual expense form (app.js
@@ -997,6 +1073,13 @@
       // Soft gate for paid features. GET /forecast is browse-safe so opening
       // Forecast or EOFY (which refreshes forecast) does not pop the modal.
       const res = await origFetch.apply(this, args);
+      if (res && res.ok && isRecordsGet(url, fetchMethod)) {
+        try {
+          lastRecordsBody = await res.clone().text();
+        } catch {
+          /* keep the previous cache */
+        }
+      }
       try {
         if (res.status === 402 && isHaulageApiUrl(url)) {
           const data = await res.clone().json();
@@ -1580,9 +1663,13 @@
     closeLightbox();
     const overlay = document.createElement("div");
     overlay.className = "enh-lightbox";
-    overlay.innerHTML = isPdf
-      ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
-      : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
+    overlay.innerHTML =
+      isPdf && isAndroidLike()
+        ? `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
+           <p><a class="btn primary" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></p>`
+        : isPdf
+          ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
+          : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
     const close = document.createElement("button");
     close.className = "enh-lightbox-close";
     close.setAttribute("aria-label", "Close");
@@ -1655,6 +1742,9 @@
           (typeof window.isReceiptPdf === "function"
             ? window.isReceiptPdf(receipt)
             : /pdf/i.test(receipt.mimeType || receipt.filename || ""));
+        if (pdf && isAndroidLike()) {
+          throw new Error("PDF preview opens as a file, not an image.");
+        }
         if (pdf && typeof window.receiptFileUrl === "function") {
           return window.receiptFileUrl(receiptId);
         }
@@ -1663,6 +1753,49 @@
       safeFetchImage.__haulagePdfSafe = true;
       window.fetchReceiptImageDataUrl = safeFetchImage;
     }
+
+    const origOpen = window.openReceiptViewer;
+    if (typeof origOpen === "function" && !origOpen.__haulagePdfSafe) {
+      async function safeOpen(receiptId) {
+        const finder = window.findReceipt;
+        const receipt = typeof finder === "function" ? finder(receiptId) : null;
+        const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
+        if (pdf && isAndroidLike()) {
+          const viewer = document.getElementById("receipt-viewer");
+          const body = document.getElementById("receipt-viewer-body");
+          const title = document.getElementById("receipt-viewer-title");
+          const href =
+            typeof window.receiptFileUrl === "function" ? window.receiptFileUrl(receiptId) : "#";
+          if (title) title.innerHTML = `<strong>${esc(receipt.filename || "PDF")}</strong>`;
+          if (body) {
+            body.innerHTML = `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
+              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
+          }
+          if (viewer) {
+            viewer.classList.remove("hidden");
+            document.body.style.overflow = "hidden";
+          }
+          return;
+        }
+        return origOpen.apply(this, arguments);
+      }
+      safeOpen.__haulagePdfSafe = true;
+      window.openReceiptViewer = safeOpen;
+    }
+  }
+
+  function patchUploadSkipRefresh() {
+    ["uploadIncomeFile", "uploadReceiptFile"].forEach((name) => {
+      const orig = window[name];
+      if (typeof orig !== "function" || orig.__haulageNoRefresh) return;
+      async function patched() {
+        window.__haulageSkipNextRefreshAll = true;
+        installQuietRefreshAll();
+        return orig.apply(this, arguments);
+      }
+      patched.__haulageNoRefresh = true;
+      window[name] = patched;
+    });
   }
 
   function init() {
@@ -1672,8 +1805,11 @@
     patchPdfReceiptViewer();
     patchRefreshEofyLive();
     installQuietRefreshAll();
+    patchUploadSkipRefresh();
     setTimeout(installQuietRefreshAll, 0);
+    setTimeout(patchUploadSkipRefresh, 0);
     setTimeout(installQuietRefreshAll, 500);
+    setTimeout(patchUploadSkipRefresh, 500);
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }

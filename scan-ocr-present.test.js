@@ -131,4 +131,15 @@ Employee A DRIVER ordinary time overtime travel
 See attached breakdown for this payment`;
     expect(shouldRasterPdf({ amount: null, grossTotal: null }, "income", text)).toBe(false);
   });
+
+  it("does not raster a digital remittance advice (text layer already has the total)", () => {
+    const text = `Quiktrak Asia Pacific Pty Ltd
+33 Rocky Point Rd
+Kogarah NSW
+REMITTANCE ADVICE
+Date: 30/09/2026
+Payment Amount: $1,577.10
+In Payment For invoice QT20260029`;
+    expect(shouldRasterPdf({ amount: 1577.1, grossTotal: 1577.1 }, "income", text)).toBe(false);
+  });
 });

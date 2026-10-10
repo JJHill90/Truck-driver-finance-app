@@ -25,11 +25,20 @@ describe("Android post-OCR freeze guards", () => {
     expect(src).toMatch(/isQuietHeavyForecastGet/);
   });
 
+  it("copies picker PDFs into memory and clears the file input", () => {
+    const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
+    expect(src).toMatch(/function copyPdfToMemory/);
+    expect(src).toMatch(/function clearScanFileInputs/);
+    expect(src).toMatch(/file\.arrayBuffer\(\)/);
+    expect(src).toMatch(/function patchUploadSkipRefresh/);
+    expect(src).toMatch(/Opening it inside the app can freeze Android/);
+  });
+
   it("cache-busts enhancements so the Play WebView loads the skip", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public/suite/index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=pdf-freeze-4/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=pdf-freeze-4/);
+    expect(hub).toMatch(/enhancements\.js\?v=pdf-picker-5/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=pdf-picker-5/);
   });
 });
 
