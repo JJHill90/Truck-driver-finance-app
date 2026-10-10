@@ -331,13 +331,13 @@
    * For PDFs, skip building that giant string — stash an in-memory copy and
    * send multipart FormData from the fetch wrapper instead.
    *
-   * Android WebView also crashes if we keep the original <input type=file>
-   * PDF (a content:// URI from the picker) until after OCR. Copy the bytes
-   * immediately and clear the input so the OS can release that URI.
+   * Do not construct a File/Blob with type application/pdf. Chrome Android
+   * hands that to Pdfium and can Aw Snap after OCR on AcroForm remittances.
+   * Do not clear <input type=file> while app.js still holds the picker File.
    */
   let pendingScanFile = null;
   const TINY_PDF_STUB =
-    "data:application/pdf;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
+    "data:application/octet-stream;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
 
   function isPdfFile(file) {
     if (!file) return false;
@@ -362,17 +362,16 @@
     });
   }
 
+  function detachedPdfBlob(buf, filename) {
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    blob.name = filename || "upload.pdf";
+    return blob;
+  }
+
   async function copyPdfToMemory(file) {
+    const filename = String((file && file.name) || "upload.pdf");
     const buf = await file.arrayBuffer();
-    const type = file.type || "application/pdf";
-    const name = file.name || "upload.pdf";
-    try {
-      return new File([buf], name, { type });
-    } catch {
-      const blob = new Blob([buf], { type });
-      blob.name = name;
-      return blob;
-    }
+    return detachedPdfBlob(buf, filename);
   }
 
   function patchPrepareImageForUpload() {
@@ -387,16 +386,15 @@
           const limit = native ? "12 MB" : "25 MB";
           throw new Error(`${file.name} exceeds ${limit}. Use a smaller file or manual entry.`);
         }
-        let copy = file;
-        try {
-          copy = await copyPdfToMemory(file);
-        } catch {
-          throw new Error(
-            "Could not read that PDF. Take a photo of the page, or use Add income manually."
-          );
+        if (!pendingScanFile) {
+          try {
+            pendingScanFile = await copyPdfToMemory(file);
+          } catch {
+            throw new Error(
+              "Could not read that PDF. Take a photo of the page, or use Add income manually."
+            );
+          }
         }
-        pendingScanFile = copy;
-        clearScanFileInputs();
         return {
           dataUrl: TINY_PDF_STUB,
           mimeType: "application/pdf",
@@ -418,9 +416,11 @@
 
   async function buildScanFormDataFromFile(file, meta) {
     const form = new FormData();
-    form.append("file", file, file.name || "upload.pdf");
-    form.append("mimeType", file.type || meta.mimeType || "application/pdf");
-    form.append("filename", file.name || meta.filename || "upload.pdf");
+    const filename = file.name || meta.filename || "upload.pdf";
+    const mime = /\.pdf$/i.test(filename) ? "application/pdf" : file.type || meta.mimeType || "application/octet-stream";
+    form.append("file", file, filename);
+    form.append("mimeType", mime);
+    form.append("filename", filename);
     form.append("purpose", meta.purpose || "expense");
     if (meta.forceDuplicate) form.append("forceDuplicate", "true");
     return form;
@@ -1788,10 +1788,22 @@
     ["uploadIncomeFile", "uploadReceiptFile"].forEach((name) => {
       const orig = window[name];
       if (typeof orig !== "function" || orig.__haulageNoRefresh) return;
-      async function patched() {
+      async function patched(file) {
+        let safe = file;
+        if (isPdfFile(file)) {
+          try {
+            safe = await copyPdfToMemory(file);
+            pendingScanFile = safe;
+          } catch {
+            throw new Error(
+              "Could not read that PDF. Take a photo of the page, or use Add income manually."
+            );
+          }
+          clearScanFileInputs();
+        }
         window.__haulageSkipNextRefreshAll = true;
         installQuietRefreshAll();
-        return orig.apply(this, arguments);
+        return orig.call(this, safe);
       }
       patched.__haulageNoRefresh = true;
       window[name] = patched;
