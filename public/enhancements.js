@@ -537,10 +537,18 @@
     };
   }
 
+  function refreshAllIsBlocked() {
+    return (
+      Boolean(window.__haulageSkipNextRefreshAll) ||
+      Number(window.__haulageBlockRefreshAll) > Date.now()
+    );
+  }
+
   function installQuietRefreshAll() {
     const current = window.refreshAll;
     if (typeof current !== "function" || current.__haulageQuietSkip) return;
     async function skipped() {
+      if (Number(window.__haulageBlockRefreshAll) > Date.now()) return;
       if (window.__haulageSkipNextRefreshAll) {
         window.__haulageSkipNextRefreshAll = false;
         return;
@@ -552,7 +560,8 @@
   }
 
   function quietUiAfterScanSave() {
-    window.__haulageQuietUntil = Date.now() + 12000;
+    window.__haulageQuietUntil = Date.now() + 30000;
+    window.__haulageBlockRefreshAll = Date.now() + 30000;
     // app.js always awaits refreshAll() after a scan. That refetch + gallery
     // rebuild freezes Android after "OCR finished" even though the file saved.
     window.__haulageSkipNextRefreshAll = true;
@@ -741,7 +750,7 @@
     if (isQuietHeavyForecastGet(url, fetchMethod)) {
       return cachedQuietForecastResponse(url);
     }
-    if (window.__haulageSkipNextRefreshAll && isRecordsGet(url, fetchMethod)) {
+    if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
       return quietRecordsResponse();
     }
     if (Number(window.__haulageQuietUntil) > Date.now() && isReceiptImageGet(url, fetchMethod)) {
@@ -1784,30 +1793,243 @@
     }
   }
 
-  function patchUploadSkipRefresh() {
-    ["uploadIncomeFile", "uploadReceiptFile"].forEach((name) => {
-      const orig = window[name];
-      if (typeof orig !== "function" || orig.__haulageNoRefresh) return;
-      async function patched(file) {
-        let safe = file;
-        if (isPdfFile(file)) {
-          try {
-            safe = await copyPdfToMemory(file);
-            pendingScanFile = safe;
-          } catch {
-            throw new Error(
-              "Could not read that PDF. Take a photo of the page, or use Add income manually."
-            );
-          }
-          clearScanFileInputs();
+  function todayIsoLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function incomeTypeOptionsHtml(selected) {
+    const form = document.getElementById("income-form");
+    const sel = form && form.elements && form.elements.type;
+    const want = selected || "salary_wages";
+    if (sel && sel.options && sel.options.length) {
+      return Array.from(sel.options)
+        .map(
+          (opt) =>
+            `<option value="${esc(opt.value)}"${opt.value === want ? " selected" : ""}>${esc(opt.textContent)}</option>`
+        )
+        .join("");
+    }
+    return `<option value="salary_wages" selected>Salary / wages</option>`;
+  }
+
+  function paintIncomePdfConfirm(box, data, filename) {
+    const o = (data && data.ocrResult) || {};
+    const totals = Array.isArray(data.detectedTotals) ? data.detectedTotals.slice(0, 8) : [];
+    const primary =
+      (totals.find((t) => t.primary) || totals[0] || {}).amount ||
+      o.netPay ||
+      o.amount ||
+      o.grossTotal ||
+      "";
+    const entity = o.entity || o.vendor || "";
+    const receiptId = data.receipt && data.receipt.id;
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div class="scan-confirm">
+        <h3>Approve remittance / payslip?</h3>
+        <p class="muted"><strong>${esc(filename || "Document")}</strong> scanned for income summary</p>
+        <div class="income-mini-summary">
+          <div class="income-mini-title">${esc(entity || "Entity / company")}</div>
+          <div class="income-mini-row"><span>Gross total</span><strong>${fmt(o.grossTotal ?? o.amount ?? 0)}</strong></div>
+          <div class="income-mini-row"><span>Amount / net</span><strong>${fmt(primary || 0)}</strong></div>
+        </div>
+        <div class="form-grid scan-confirm-form">
+          <label>Entity / company<input type="text" id="income-confirm-entity" value="${esc(entity)}" /></label>
+          <label>Date<input type="date" id="income-confirm-date" value="${esc(o.date || todayIsoLocal())}" /></label>
+          <label>Type<select id="income-confirm-type">${incomeTypeOptionsHtml(o.suggestedIncomeType)}</select></label>
+          <label>Gross ($)<input type="number" id="income-confirm-gross" step="0.01" min="0" value="${o.grossTotal ?? primary ?? ""}" /></label>
+          <label class="scan-confirm-amount-label">Amount / net ($)
+            <input type="number" id="income-confirm-amount" step="0.01" min="0" value="${primary || ""}" required />
+          </label>
+          <label>Description<input type="text" id="income-confirm-description" value="${esc(o.description || "")}" /></label>
+        </div>
+        <div class="scan-confirm-actions">
+          <button type="button" class="btn primary" id="income-confirm-yes">Approve &amp; save</button>
+          <button type="button" class="btn secondary" id="income-confirm-discard">Discard</button>
+        </div>
+      </div>`;
+    const yes = document.getElementById("income-confirm-yes");
+    const no = document.getElementById("income-confirm-discard");
+    if (yes) yes.addEventListener("click", () => void confirmIncomePdfScan(receiptId, true));
+    if (no) no.addEventListener("click", () => void confirmIncomePdfScan(receiptId, false));
+  }
+
+  async function confirmIncomePdfScan(receiptId, confirmed) {
+    const box = document.getElementById("income-scan-result");
+    window.__haulageBlockRefreshAll = 0;
+    window.__haulageSkipNextRefreshAll = false;
+    if (!confirmed) {
+      try {
+        if (receiptId) {
+          await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          });
         }
-        window.__haulageSkipNextRefreshAll = true;
-        installQuietRefreshAll();
-        return orig.call(this, safe);
+      } catch {
+        /* already gone */
       }
-      patched.__haulageNoRefresh = true;
-      window[name] = patched;
+      if (box) box.innerHTML = `<p class="muted">Upload discarded.</p>`;
+      if (typeof window.toast === "function") window.toast("Upload discarded");
+      return;
+    }
+    const amount = Number(document.getElementById("income-confirm-amount")?.value);
+    if (!(amount > 0)) {
+      if (typeof window.toast === "function") {
+        window.toast("Enter a valid total amount from the document");
+      }
+      document.getElementById("income-confirm-amount")?.focus();
+      return;
+    }
+    const entity = document.getElementById("income-confirm-entity")?.value || "";
+    const gross = Number(document.getElementById("income-confirm-gross")?.value || amount);
+    const payload = {
+      confirmed: true,
+      purpose: "income",
+      amount,
+      netPay: amount,
+      grossTotal: Number.isFinite(gross) ? gross : amount,
+      taxableIncome: Number.isFinite(gross) ? gross : amount,
+      entity,
+      vendor: entity,
+      date: document.getElementById("income-confirm-date")?.value || todayIsoLocal(),
+      type: document.getElementById("income-confirm-type")?.value || "salary_wages",
+      description: document.getElementById("income-confirm-description")?.value || "",
+    };
+    try {
+      const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not save totals");
+      if (box) {
+        box.innerHTML = `<h3>Payslip / remittance saved</h3>
+          <p class="tag green">${fmt(amount)} added to income list</p>`;
+      }
+      if (typeof window.toast === "function") window.toast("Saved");
+      if (typeof window.refreshAll === "function") await window.refreshAll();
+    } catch (err) {
+      if (typeof window.toast === "function") window.toast(err.message || "Could not save totals");
+    }
+  }
+
+  async function scanPdfViaOrigFetch(blob, purpose, forceDuplicate) {
+    const form = await buildScanFormDataFromFile(blob, {
+      purpose,
+      filename: blob.name,
+      mimeType: "application/pdf",
+      forceDuplicate: Boolean(forceDuplicate),
     });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PDF_SCAN_TIMEOUT_MS);
+    try {
+      const res = await origFetch(`${haulageApiRoot()}/receipts/scan`, {
+        method: "POST",
+        credentials: "same-origin",
+        body: form,
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      return { status: res.status, data };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function uploadIncomePdf(file) {
+    const pickBtn = document.getElementById("pick-income");
+    const box = document.getElementById("income-scan-result");
+    const preview = document.getElementById("income-preview");
+    if (pickBtn) {
+      pickBtn.disabled = true;
+      pickBtn.textContent = "Scanning remittance / payslip…";
+    }
+    try {
+      quietUiAfterScanSave();
+      const blob = await copyPdfToMemory(file);
+      pendingScanFile = blob;
+      clearScanFileInputs();
+      if (preview) {
+        preview.classList.remove("hidden");
+        preview.innerHTML = `<div class="file-preview-pill">PDF ready: ${esc(
+          blob.name || file.name || "document.pdf"
+        )}</div>
+          <p class="muted">Text will be extracted for entity, taxable income and GST where possible.</p>`;
+      }
+      startOcrProgress("income", "reading");
+      await yieldToUi();
+      let { status, data } = await scanPdfViaOrigFetch(blob, "income", false);
+      if (data && data.possibleDuplicate) {
+        setOcrProgressPhase("awaiting-duplicate");
+        const proceed = await promptDuplicateContinue(data);
+        if (!proceed) {
+          stopOcrProgress({ silent: true });
+          if (box) {
+            box.classList.remove("hidden");
+            box.innerHTML = `<p class="muted">Upload cancelled — possible duplicate detected.</p>`;
+          }
+          return;
+        }
+        setOcrProgressPhase("rereading");
+        await yieldToUi();
+        ({ status, data } = await scanPdfViaOrigFetch(blob, "income", true));
+      }
+      if (status === 401 || status === 403) {
+        throw new Error((data && data.error) || "Log in before uploading.");
+      }
+      if (!data || !data.receipt) {
+        throw new Error((data && data.error) || "Scan failed");
+      }
+      stopOcrProgress();
+      latest = null;
+      await yieldToUi();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      if (box) paintIncomePdfConfirm(box, data, blob.name || file.name);
+      if (typeof window.toast === "function") {
+        window.toast("Income summary ready — approve before saving");
+      }
+    } catch (err) {
+      stopOcrProgress({ silent: true });
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `<h3>Could not upload file</h3><p class="muted">${esc(
+          err && err.message ? err.message : "Scan failed"
+        )}</p>`;
+      }
+      if (typeof window.toast === "function") window.toast(err.message || "Scan failed");
+    } finally {
+      pendingScanFile = null;
+      if (pickBtn) {
+        pickBtn.disabled = false;
+        pickBtn.textContent = "Upload file";
+      }
+    }
+  }
+
+  function patchUploadSkipRefresh() {
+    const origIncome = window.uploadIncomeFile;
+    if (typeof origIncome === "function" && !origIncome.__haulagePdfIsolate) {
+      async function patchedIncome(file) {
+        if (isPdfFile(file)) return uploadIncomePdf(file);
+        quietUiAfterScanSave();
+        return origIncome.apply(this, arguments);
+      }
+      patchedIncome.__haulagePdfIsolate = true;
+      window.uploadIncomeFile = patchedIncome;
+    }
+    const origExpense = window.uploadReceiptFile;
+    if (typeof origExpense === "function" && !origExpense.__haulagePdfIsolate) {
+      async function patchedExpense(file) {
+        quietUiAfterScanSave();
+        return origExpense.apply(this, arguments);
+      }
+      patchedExpense.__haulagePdfIsolate = true;
+      window.uploadReceiptFile = patchedExpense;
+    }
   }
 
   function init() {
@@ -11376,6 +11598,7 @@
     }
     const prevRefresh = globalThis.refreshAll;
     async function wrappedRefresh() {
+      if (Number(window.__haulageBlockRefreshAll) > Date.now()) return;
       if (window.__haulageSkipNextRefreshAll) {
         window.__haulageSkipNextRefreshAll = false;
         return;
