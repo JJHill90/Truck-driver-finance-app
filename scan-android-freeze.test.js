@@ -32,14 +32,17 @@ describe("Android post-OCR freeze guards", () => {
     expect(src).toMatch(/application\/octet-stream/);
     expect(src).not.toMatch(/new File\(\[buf\], name, \{ type \}\)/);
     expect(src).toMatch(/function patchUploadSkipRefresh/);
+    expect(src).toMatch(/function uploadIncomePdf/);
+    expect(src).toMatch(/function paintIncomePdfConfirm/);
+    expect(src).toMatch(/__haulageBlockRefreshAll/);
     expect(src).toMatch(/Opening it inside the app can freeze Android/);
   });
 
   it("cache-busts enhancements so the Play WebView loads the skip", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public/suite/index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=pdf-aw-snap-6/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=pdf-aw-snap-6/);
+    expect(hub).toMatch(/enhancements\.js\?v=pdf-isolate-7/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=pdf-isolate-7/);
   });
 });
 
