@@ -34,10 +34,11 @@ describe("formatVersionLabel", () => {
     expect(formatVersionLabel(167)).toBe("Version 3.14");
     expect(formatVersionLabel(168)).toBe("Version 3.15");
     expect(formatVersionLabel(169)).toBe("Version 3.16");
+    expect(formatVersionLabel(170)).toBe("Version 3.17");
   });
 
-  it("maps the current PR constant (this PR is #169 → Version 3.16)", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(169);
-    expect(formatVersionLabel(169)).toBe("Version 3.16");
+  it("maps the current PR constant (this PR is #170 → Version 3.17)", () => {
+    expect(HAULAGE_PR_NUMBER).toBe(170);
+    expect(formatVersionLabel(170)).toBe("Version 3.17");
   });
 });
