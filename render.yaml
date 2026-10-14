@@ -189,6 +189,9 @@ services:
         sync: false
       - key: SUITE_APP_STORE_URL
         sync: false
+      # Copy SMTP_* + MAIL_FROM from haulage-finance. FormSubmit is blocked
+      # from Render (Cloudflare 403); without SMTP/Resend the Support form
+      # saves on disk only and never reaches support@godriverhub.com.
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM
@@ -243,6 +246,8 @@ services:
         value: ap-southeast-2
       # Stripe — Go Taxation Suite Pro ($10/mo or $110/yr AUD). Separate Prices
       # from Driver Hub. Do not reuse STRIPE_PRICE_ID ($5/$60) on this service.
+      # Values must be Stripe Price ids (price_…) from Product catalog → Prices.
+      # Do not paste a Product id (prod_…) or a name like “Suite Pro yearly”.
       # Webhook endpoint: /api/haulage/billing/webhook
       - key: STRIPE_SECRET_KEY
         sync: false

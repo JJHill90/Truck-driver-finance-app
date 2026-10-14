@@ -104,6 +104,18 @@ describe("support.saveContactMessage", () => {
       priority: true,
     });
     expect(decodeURIComponent(priorityHref)).toContain("[PRIORITY]");
+
+    const listed = support.listMessages(10);
+    expect(listed.some((m) => m.id === saved.id)).toBe(true);
+    expect(listed[0].createdAt >= listed[listed.length - 1].createdAt).toBe(true);
+
+    const suiteMail = support.mailtoHref({
+      name: "Alex",
+      email: "alex@example.com",
+      message: "BAS question",
+      product: "suite",
+    });
+    expect(decodeURIComponent(suiteMail)).toContain("Go Taxation Suite");
   });
 
   it("defaults support inbox to the business email", () => {
