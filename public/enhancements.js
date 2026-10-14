@@ -51,8 +51,9 @@
     abortController: null,
   };
 
-  const PDF_SCAN_TIMEOUT_MS = 240000; // 4 min — remittance PDFs + raster OCR
+  const PDF_SCAN_TIMEOUT_MS = 90000; // text-layer save is fast; raster is background
   const MULTIPART_SCAN_MIN = 400000; // ~400 KB JSON → prefer FormData on Firefox
+  const NATIVE_PDF_MAX_BYTES = 12 * 1024 * 1024;
 
   function formatElapsed(ms) {
     const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
@@ -81,9 +82,11 @@
     }
     return {
       title: "OCR in progress",
-      phase: income ? "Reading remittance / payslip…" : "Reading receipt totals…",
-      button: income ? "Scanning remittance / payslip…" : "Scanning dollar totals…",
-      hint: "Scanned PDFs and first-time OCR can take longer. Please keep this tab open.",
+      phase: income ? "Saving remittance / payslip…" : "Reading receipt totals…",
+      button: income ? "Saving remittance / payslip…" : "Scanning dollar totals…",
+      hint: income
+        ? "The payslip is saved first so a slow scan cannot lose the file. Totals fill in when ready."
+        : "Scanned PDFs and first-time OCR can take longer. Please keep this tab open.",
     };
   }
 
@@ -325,12 +328,16 @@
 
   /**
    * Firefox freezes when app.js JSON.stringify's a multi-MB PDF data-URL.
-   * For PDFs, skip building that giant string — stash the File and send
-   * multipart FormData from the fetch wrapper instead.
+   * For PDFs, skip building that giant string — stash an in-memory copy and
+   * send multipart FormData from the fetch wrapper instead.
+   *
+   * Do not construct a File/Blob with type application/pdf. Chrome Android
+   * hands that to Pdfium and can Aw Snap after OCR on AcroForm remittances.
+   * Do not clear <input type=file> while app.js still holds the picker File.
    */
   let pendingScanFile = null;
   const TINY_PDF_STUB =
-    "data:application/pdf;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
+    "data:application/octet-stream;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
 
   function isPdfFile(file) {
     if (!file) return false;
@@ -341,15 +348,53 @@
     return file.type === "application/pdf" || ext === "pdf";
   }
 
+  function isAndroidLike() {
+    if (typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell()) {
+      return true;
+    }
+    return /Android/i.test(String(navigator.userAgent || ""));
+  }
+
+  function clearScanFileInputs() {
+    ["income-file", "receipt-file", "enh-attach-receipt-input"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+  }
+
+  function detachedPdfBlob(buf, filename) {
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    blob.name = filename || "upload.pdf";
+    return blob;
+  }
+
+  async function copyPdfToMemory(file) {
+    const filename = String((file && file.name) || "upload.pdf");
+    const buf = await file.arrayBuffer();
+    return detachedPdfBlob(buf, filename);
+  }
+
   function patchPrepareImageForUpload() {
     const orig = window.prepareImageForUpload;
     if (typeof orig !== "function" || orig.__haulagePdfPatch) return;
     async function patched(file, ...rest) {
       if (isPdfFile(file)) {
-        if (file.size > 25 * 1024 * 1024) {
-          throw new Error(`${file.name} exceeds 25 MB. Use a smaller file or manual entry.`);
+        const native =
+          typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell();
+        const maxBytes = native ? NATIVE_PDF_MAX_BYTES : 25 * 1024 * 1024;
+        if (file.size > maxBytes) {
+          const limit = native ? "12 MB" : "25 MB";
+          throw new Error(`${file.name} exceeds ${limit}. Use a smaller file or manual entry.`);
         }
-        pendingScanFile = file;
+        if (!pendingScanFile) {
+          try {
+            pendingScanFile = await copyPdfToMemory(file);
+          } catch {
+            throw new Error(
+              "Could not read that PDF. Take a photo of the page, or use Add income manually."
+            );
+          }
+        }
         return {
           dataUrl: TINY_PDF_STUB,
           mimeType: "application/pdf",
@@ -371,12 +416,207 @@
 
   async function buildScanFormDataFromFile(file, meta) {
     const form = new FormData();
-    form.append("file", file, file.name || "upload.pdf");
-    form.append("mimeType", file.type || meta.mimeType || "application/pdf");
-    form.append("filename", file.name || meta.filename || "upload.pdf");
+    const filename = file.name || meta.filename || "upload.pdf";
+    const mime = /\.pdf$/i.test(filename) ? "application/pdf" : file.type || meta.mimeType || "application/octet-stream";
+    form.append("file", file, filename);
+    form.append("mimeType", mime);
+    form.append("filename", filename);
     form.append("purpose", meta.purpose || "expense");
     if (meta.forceDuplicate) form.append("forceDuplicate", "true");
     return form;
+  }
+
+  function haulageApiRoot() {
+    return `${window.location.origin}/api/haulage`;
+  }
+
+  function setScanFieldValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el || value == null || value === "") return;
+    el.value = value;
+  }
+
+  function applyDeferredScanOcr(data, purpose) {
+    const o = (data && data.ocrResult) || {};
+    const totals = (data && data.detectedTotals) || [];
+    const primary = (totals.find((t) => t.primary) || totals[0] || {}).amount;
+    if (purpose === "income") {
+      setScanFieldValue("income-confirm-entity", o.entity || o.vendor);
+      setScanFieldValue("income-confirm-gross", o.grossTotal);
+      setScanFieldValue("income-confirm-taxable", o.taxableIncome ?? o.grossTotal);
+      setScanFieldValue("income-confirm-gst", o.gstAmount ?? o.gst);
+      setScanFieldValue("income-confirm-amount", primary || o.netPay || o.grossTotal);
+      setScanFieldValue("income-confirm-description", o.description);
+      if (o.date) setScanFieldValue("income-confirm-date", o.date);
+    }
+    if (data && data.componentBreakdown) {
+      latest = {
+        ...(latest || {}),
+        breakdown: data.componentBreakdown || [],
+        compliance: data.compliance || (latest && latest.compliance) || null,
+        payPeriod: data.payPeriod || (latest && latest.payPeriod) || null,
+        receiptId: (data.receipt && data.receipt.id) || (latest && latest.receiptId),
+        purpose,
+        token: `${Date.now()}-${Math.random()}`,
+      };
+    }
+    if (typeof window.toast === "function" && (primary || o.amount || o.grossTotal)) {
+      window.toast("Scan totals updated");
+    }
+  }
+
+  async function pollDeferredScanOcr(receiptId, purpose) {
+    if (!receiptId) return;
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      try {
+        const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data || data.ocrPending) continue;
+        applyDeferredScanOcr(data, purpose);
+        return;
+      } catch {
+        /* keep polling — raster may still be running */
+      }
+    }
+  }
+
+  function slimClientScanPayload(data) {
+    if (!data || typeof data !== "object") return data || {};
+    const ocr = data.ocrResult && typeof data.ocrResult === "object" ? data.ocrResult : {};
+    const notes = typeof ocr.notes === "string" ? ocr.notes.slice(0, 240) : ocr.notes;
+    const breakdown = Array.isArray(data.componentBreakdown)
+      ? data.componentBreakdown.slice(0, 16)
+      : data.componentBreakdown;
+    const totals = Array.isArray(data.detectedTotals) ? data.detectedTotals.slice(0, 16) : data.detectedTotals;
+    const compliance =
+      data.compliance && typeof data.compliance === "object"
+        ? {
+            status: data.compliance.status || null,
+            summary:
+              typeof data.compliance.summary === "string" ? data.compliance.summary.slice(0, 240) : "",
+          }
+        : data.compliance;
+    return {
+      receipt: data.receipt,
+      ocrPending: Boolean(data.ocrPending),
+      possibleDuplicate: Boolean(data.possibleDuplicate),
+      matches: Array.isArray(data.matches) ? data.matches.slice(0, 8) : data.matches,
+      message: data.message,
+      error: data.error,
+      code: data.code,
+      entitlements: data.entitlements,
+      detectedTotals: totals,
+      componentBreakdown: breakdown,
+      breakdownKind: data.breakdownKind || null,
+      compliance,
+      payPeriod: data.payPeriod || null,
+      ocrResult: {
+        documentType: ocr.documentType,
+        documentKind: ocr.documentKind,
+        date: ocr.date || null,
+        vendor: ocr.vendor || "",
+        entity: ocr.entity || ocr.vendor || "",
+        amount: ocr.amount ?? null,
+        grossTotal: ocr.grossTotal ?? null,
+        taxableIncome: ocr.taxableIncome ?? null,
+        gst: ocr.gst ?? null,
+        gstAmount: ocr.gstAmount ?? ocr.gst ?? null,
+        netPay: ocr.netPay ?? null,
+        payPeriod: ocr.payPeriod || "",
+        description: ocr.description || "",
+        suggestedIncomeType: ocr.suggestedIncomeType || null,
+        suggestedCategory: ocr.suggestedCategory || null,
+        vendorAbn: ocr.vendorAbn || null,
+        travelAllowance: ocr.travelAllowance || null,
+        notes: notes || "",
+      },
+    };
+  }
+
+  function refreshAllIsBlocked() {
+    return (
+      Boolean(window.__haulageSkipNextRefreshAll) ||
+      Number(window.__haulageBlockRefreshAll) > Date.now()
+    );
+  }
+
+  function installQuietRefreshAll() {
+    const current = window.refreshAll;
+    if (typeof current !== "function" || current.__haulageQuietSkip) return;
+    async function skipped() {
+      if (Number(window.__haulageBlockRefreshAll) > Date.now()) return;
+      if (window.__haulageSkipNextRefreshAll) {
+        window.__haulageSkipNextRefreshAll = false;
+        return;
+      }
+      return current.apply(this, arguments);
+    }
+    skipped.__haulageQuietSkip = true;
+    window.refreshAll = skipped;
+  }
+
+  function quietUiAfterScanSave() {
+    window.__haulageQuietUntil = Date.now() + 30000;
+    window.__haulageBlockRefreshAll = Date.now() + 30000;
+    // app.js always awaits refreshAll() after a scan. That refetch + gallery
+    // rebuild freezes Android after "OCR finished" even though the file saved.
+    window.__haulageSkipNextRefreshAll = true;
+    installQuietRefreshAll();
+  }
+
+  function patchRefreshEofyLive() {
+    const orig = window.refreshEofyLive;
+    if (typeof orig !== "function" || orig.__haulageQuietPatch) return;
+    async function patched() {
+      if (Number(window.__haulageQuietUntil) > Date.now()) return;
+      return orig.apply(this, arguments);
+    }
+    patched.__haulageQuietPatch = true;
+    window.refreshEofyLive = patched;
+  }
+
+  function isQuietHeavyForecastGet(url, method) {
+    if (Number(window.__haulageQuietUntil) <= Date.now()) return false;
+    if (String(method || "GET").toUpperCase() !== "GET") return false;
+    return /\/api\/haulage\/(summary|report|forecast)(\?|$)/.test(String(url || ""));
+  }
+
+  function cachedQuietForecastResponse(_url) {
+    return new Response(JSON.stringify({ ok: true, quiet: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  let lastRecordsBody = null;
+
+  function isRecordsGet(url, method) {
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
+  }
+
+  function isReceiptImageGet(url, method) {
+    return (
+      String(method || "GET").toUpperCase() === "GET" &&
+      /\/api\/haulage\/receipts\/[^/]+\/image(\?|$)/.test(String(url || ""))
+    );
+  }
+
+  function quietRecordsResponse() {
+    return new Response(
+      lastRecordsBody ||
+        JSON.stringify({
+          profile: {},
+          income: [],
+          expenses: [],
+          receipts: [],
+          vendors: [],
+        }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   /** Modal: possible duplicate detected — Continue or Cancel. */
@@ -504,6 +744,21 @@
   window.fetch = async function (...args) {
     let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
     let options = args[1] || {};
+    const fetchMethod = String(
+      options.method || (args[0] && typeof args[0] === "object" && args[0].method) || "GET"
+    ).toUpperCase();
+    if (isQuietHeavyForecastGet(url, fetchMethod)) {
+      return cachedQuietForecastResponse(url);
+    }
+    if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
+      return quietRecordsResponse();
+    }
+    if (Number(window.__haulageQuietUntil) > Date.now() && isReceiptImageGet(url, fetchMethod)) {
+      return new Response(JSON.stringify({ error: "Use the file endpoint for PDF documents.", isPdf: true }), {
+        status: 415,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     // Inject cash / no-receipt flags from the manual expense form (app.js
     // builds its own payload and does not read these checkboxes).
@@ -631,12 +886,13 @@
 
         const purpose = meta.purpose;
         const initialPhase = meta.forceDuplicate ? "rereading" : "reading";
-        // Remittance PDFs often need >90s (raster OCR). Replace app.js's short abort.
+        // PDFs used to wait on raster OCR; they now save on the text layer first.
         const looksPdf =
           /application\/pdf/i.test(bodyStr) ||
           /\.pdf"/i.test(String(bodyStr).slice(-400)) ||
           (typeof FormData !== "undefined" && fetchOpts.body instanceof FormData);
         let scanTimeoutId = null;
+        let scanProgressStopped = false;
         {
           const controller = new AbortController();
           ocrProgress.abortController = controller;
@@ -772,12 +1028,24 @@
               taxWithheld: Number(ocr.taxWithheld || ocr.paygWithheld) || null,
               purpose,
               receiptId: data.receipt && data.receipt.id,
-              isPdf: /pdf/i.test(mimeType),
+              isPdf:
+                /pdf/i.test(mimeType) || /\.pdf$/i.test(String((data.receipt && data.receipt.filename) || "")),
               token: `${Date.now()}-${Math.random()}`,
             };
             // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
+            quietUiAfterScanSave();
             if (typeof window.haulageRefreshBilling === "function") {
-              void window.haulageRefreshBilling();
+              setTimeout(() => {
+                if (typeof window.haulageRefreshBilling === "function") {
+                  void window.haulageRefreshBilling();
+                }
+              }, 1500);
+            }
+            if (data.ocrPending && data.receipt && data.receipt.id) {
+              const waitMs = Math.max(800, Number(window.__haulageQuietUntil) - Date.now() + 400);
+              setTimeout(() => {
+                void pollDeferredScanOcr(data.receipt.id, purpose);
+              }, Number.isFinite(waitMs) ? waitMs : 2500);
             }
           }
 
@@ -795,19 +1063,32 @@
               window.haulagePromptUpgrade(data);
             }
           }
-          return new Response(JSON.stringify(data == null ? {} : data), {
+          stopOcrProgress();
+          scanProgressStopped = true;
+          await yieldToUi();
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          return new Response(JSON.stringify(slimClientScanPayload(data == null ? {} : data)), {
             status,
             headers: { "Content-Type": "application/json" },
           });
         } finally {
           if (scanTimeoutId) clearTimeout(scanTimeoutId);
-          stopOcrProgress();
+          pendingScanFile = null;
+          scanFileForRetry = null;
+          if (!scanProgressStopped) stopOcrProgress();
         }
       }
 
       // Soft gate for paid features. GET /forecast is browse-safe so opening
       // Forecast or EOFY (which refreshes forecast) does not pop the modal.
       const res = await origFetch.apply(this, args);
+      if (res && res.ok && isRecordsGet(url, fetchMethod)) {
+        try {
+          lastRecordsBody = await res.clone().text();
+        } catch {
+          /* keep the previous cache */
+        }
+      }
       try {
         if (res.status === 402 && isHaulageApiUrl(url)) {
           const data = await res.clone().json();
@@ -1391,9 +1672,13 @@
     closeLightbox();
     const overlay = document.createElement("div");
     overlay.className = "enh-lightbox";
-    overlay.innerHTML = isPdf
-      ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
-      : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
+    overlay.innerHTML =
+      isPdf && isAndroidLike()
+        ? `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
+           <p><a class="btn primary" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></p>`
+        : isPdf
+          ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
+          : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
     const close = document.createElement("button");
     close.className = "enh-lightbox-close";
     close.setAttribute("aria-label", "Close");
@@ -1455,10 +1740,310 @@
   });
   previewMo.observe(document.body, { childList: true, subtree: true });
 
+  function patchPdfReceiptViewer() {
+    const origFetchImage = window.fetchReceiptImageDataUrl;
+    if (typeof origFetchImage === "function" && !origFetchImage.__haulagePdfSafe) {
+      async function safeFetchImage(receiptId) {
+        const finder = window.findReceipt;
+        const receipt = typeof finder === "function" ? finder(receiptId) : null;
+        const pdf =
+          receipt &&
+          (typeof window.isReceiptPdf === "function"
+            ? window.isReceiptPdf(receipt)
+            : /pdf/i.test(receipt.mimeType || receipt.filename || ""));
+        if (pdf && isAndroidLike()) {
+          throw new Error("PDF preview opens as a file, not an image.");
+        }
+        if (pdf && typeof window.receiptFileUrl === "function") {
+          return window.receiptFileUrl(receiptId);
+        }
+        return origFetchImage(receiptId);
+      }
+      safeFetchImage.__haulagePdfSafe = true;
+      window.fetchReceiptImageDataUrl = safeFetchImage;
+    }
+
+    const origOpen = window.openReceiptViewer;
+    if (typeof origOpen === "function" && !origOpen.__haulagePdfSafe) {
+      async function safeOpen(receiptId) {
+        const finder = window.findReceipt;
+        const receipt = typeof finder === "function" ? finder(receiptId) : null;
+        const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
+        if (pdf && isAndroidLike()) {
+          const viewer = document.getElementById("receipt-viewer");
+          const body = document.getElementById("receipt-viewer-body");
+          const title = document.getElementById("receipt-viewer-title");
+          const href =
+            typeof window.receiptFileUrl === "function" ? window.receiptFileUrl(receiptId) : "#";
+          if (title) title.innerHTML = `<strong>${esc(receipt.filename || "PDF")}</strong>`;
+          if (body) {
+            body.innerHTML = `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
+              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
+          }
+          if (viewer) {
+            viewer.classList.remove("hidden");
+            document.body.style.overflow = "hidden";
+          }
+          return;
+        }
+        return origOpen.apply(this, arguments);
+      }
+      safeOpen.__haulagePdfSafe = true;
+      window.openReceiptViewer = safeOpen;
+    }
+  }
+
+  function todayIsoLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function incomeTypeOptionsHtml(selected) {
+    const form = document.getElementById("income-form");
+    const sel = form && form.elements && form.elements.type;
+    const want = selected || "salary_wages";
+    if (sel && sel.options && sel.options.length) {
+      return Array.from(sel.options)
+        .map(
+          (opt) =>
+            `<option value="${esc(opt.value)}"${opt.value === want ? " selected" : ""}>${esc(opt.textContent)}</option>`
+        )
+        .join("");
+    }
+    return `<option value="salary_wages" selected>Salary / wages</option>`;
+  }
+
+  function paintIncomePdfConfirm(box, data, filename) {
+    const o = (data && data.ocrResult) || {};
+    const totals = Array.isArray(data.detectedTotals) ? data.detectedTotals.slice(0, 8) : [];
+    const primary =
+      (totals.find((t) => t.primary) || totals[0] || {}).amount ||
+      o.netPay ||
+      o.amount ||
+      o.grossTotal ||
+      "";
+    const entity = o.entity || o.vendor || "";
+    const receiptId = data.receipt && data.receipt.id;
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <div class="scan-confirm">
+        <h3>Approve remittance / payslip?</h3>
+        <p class="muted"><strong>${esc(filename || "Document")}</strong> scanned for income summary</p>
+        <div class="income-mini-summary">
+          <div class="income-mini-title">${esc(entity || "Entity / company")}</div>
+          <div class="income-mini-row"><span>Gross total</span><strong>${fmt(o.grossTotal ?? o.amount ?? 0)}</strong></div>
+          <div class="income-mini-row"><span>Amount / net</span><strong>${fmt(primary || 0)}</strong></div>
+        </div>
+        <div class="form-grid scan-confirm-form">
+          <label>Entity / company<input type="text" id="income-confirm-entity" value="${esc(entity)}" /></label>
+          <label>Date<input type="date" id="income-confirm-date" value="${esc(o.date || todayIsoLocal())}" /></label>
+          <label>Type<select id="income-confirm-type">${incomeTypeOptionsHtml(o.suggestedIncomeType)}</select></label>
+          <label>Gross ($)<input type="number" id="income-confirm-gross" step="0.01" min="0" value="${o.grossTotal ?? primary ?? ""}" /></label>
+          <label class="scan-confirm-amount-label">Amount / net ($)
+            <input type="number" id="income-confirm-amount" step="0.01" min="0" value="${primary || ""}" required />
+          </label>
+          <label>Description<input type="text" id="income-confirm-description" value="${esc(o.description || "")}" /></label>
+        </div>
+        <div class="scan-confirm-actions">
+          <button type="button" class="btn primary" id="income-confirm-yes">Approve &amp; save</button>
+          <button type="button" class="btn secondary" id="income-confirm-discard">Discard</button>
+        </div>
+      </div>`;
+    const yes = document.getElementById("income-confirm-yes");
+    const no = document.getElementById("income-confirm-discard");
+    if (yes) yes.addEventListener("click", () => void confirmIncomePdfScan(receiptId, true));
+    if (no) no.addEventListener("click", () => void confirmIncomePdfScan(receiptId, false));
+  }
+
+  async function confirmIncomePdfScan(receiptId, confirmed) {
+    const box = document.getElementById("income-scan-result");
+    window.__haulageBlockRefreshAll = 0;
+    window.__haulageSkipNextRefreshAll = false;
+    if (!confirmed) {
+      try {
+        if (receiptId) {
+          await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          });
+        }
+      } catch {
+        /* already gone */
+      }
+      if (box) box.innerHTML = `<p class="muted">Upload discarded.</p>`;
+      if (typeof window.toast === "function") window.toast("Upload discarded");
+      return;
+    }
+    const amount = Number(document.getElementById("income-confirm-amount")?.value);
+    if (!(amount > 0)) {
+      if (typeof window.toast === "function") {
+        window.toast("Enter a valid total amount from the document");
+      }
+      document.getElementById("income-confirm-amount")?.focus();
+      return;
+    }
+    const entity = document.getElementById("income-confirm-entity")?.value || "";
+    const gross = Number(document.getElementById("income-confirm-gross")?.value || amount);
+    const payload = {
+      confirmed: true,
+      purpose: "income",
+      amount,
+      netPay: amount,
+      grossTotal: Number.isFinite(gross) ? gross : amount,
+      taxableIncome: Number.isFinite(gross) ? gross : amount,
+      entity,
+      vendor: entity,
+      date: document.getElementById("income-confirm-date")?.value || todayIsoLocal(),
+      type: document.getElementById("income-confirm-type")?.value || "salary_wages",
+      description: document.getElementById("income-confirm-description")?.value || "",
+    };
+    try {
+      const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not save totals");
+      if (box) {
+        box.innerHTML = `<h3>Payslip / remittance saved</h3>
+          <p class="tag green">${fmt(amount)} added to income list</p>`;
+      }
+      if (typeof window.toast === "function") window.toast("Saved");
+      if (typeof window.refreshAll === "function") await window.refreshAll();
+    } catch (err) {
+      if (typeof window.toast === "function") window.toast(err.message || "Could not save totals");
+    }
+  }
+
+  async function scanPdfViaOrigFetch(blob, purpose, forceDuplicate) {
+    const form = await buildScanFormDataFromFile(blob, {
+      purpose,
+      filename: blob.name,
+      mimeType: "application/pdf",
+      forceDuplicate: Boolean(forceDuplicate),
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PDF_SCAN_TIMEOUT_MS);
+    try {
+      const res = await origFetch(`${haulageApiRoot()}/receipts/scan`, {
+        method: "POST",
+        credentials: "same-origin",
+        body: form,
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      return { status: res.status, data };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function uploadIncomePdf(file) {
+    const pickBtn = document.getElementById("pick-income");
+    const box = document.getElementById("income-scan-result");
+    const preview = document.getElementById("income-preview");
+    if (pickBtn) {
+      pickBtn.disabled = true;
+      pickBtn.textContent = "Scanning remittance / payslip…";
+    }
+    try {
+      quietUiAfterScanSave();
+      const blob = await copyPdfToMemory(file);
+      pendingScanFile = blob;
+      clearScanFileInputs();
+      if (preview) {
+        preview.classList.remove("hidden");
+        preview.innerHTML = `<div class="file-preview-pill">PDF ready: ${esc(
+          blob.name || file.name || "document.pdf"
+        )}</div>
+          <p class="muted">Text will be extracted for entity, taxable income and GST where possible.</p>`;
+      }
+      startOcrProgress("income", "reading");
+      await yieldToUi();
+      let { status, data } = await scanPdfViaOrigFetch(blob, "income", false);
+      if (data && data.possibleDuplicate) {
+        setOcrProgressPhase("awaiting-duplicate");
+        const proceed = await promptDuplicateContinue(data);
+        if (!proceed) {
+          stopOcrProgress({ silent: true });
+          if (box) {
+            box.classList.remove("hidden");
+            box.innerHTML = `<p class="muted">Upload cancelled — possible duplicate detected.</p>`;
+          }
+          return;
+        }
+        setOcrProgressPhase("rereading");
+        await yieldToUi();
+        ({ status, data } = await scanPdfViaOrigFetch(blob, "income", true));
+      }
+      if (status === 401 || status === 403) {
+        throw new Error((data && data.error) || "Log in before uploading.");
+      }
+      if (!data || !data.receipt) {
+        throw new Error((data && data.error) || "Scan failed");
+      }
+      stopOcrProgress();
+      latest = null;
+      await yieldToUi();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      if (box) paintIncomePdfConfirm(box, data, blob.name || file.name);
+      if (typeof window.toast === "function") {
+        window.toast("Income summary ready — approve before saving");
+      }
+    } catch (err) {
+      stopOcrProgress({ silent: true });
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `<h3>Could not upload file</h3><p class="muted">${esc(
+          err && err.message ? err.message : "Scan failed"
+        )}</p>`;
+      }
+      if (typeof window.toast === "function") window.toast(err.message || "Scan failed");
+    } finally {
+      pendingScanFile = null;
+      if (pickBtn) {
+        pickBtn.disabled = false;
+        pickBtn.textContent = "Upload file";
+      }
+    }
+  }
+
+  function patchUploadSkipRefresh() {
+    const origIncome = window.uploadIncomeFile;
+    if (typeof origIncome === "function" && !origIncome.__haulagePdfIsolate) {
+      async function patchedIncome(file) {
+        if (isPdfFile(file)) return uploadIncomePdf(file);
+        quietUiAfterScanSave();
+        return origIncome.apply(this, arguments);
+      }
+      patchedIncome.__haulagePdfIsolate = true;
+      window.uploadIncomeFile = patchedIncome;
+    }
+    const origExpense = window.uploadReceiptFile;
+    if (typeof origExpense === "function" && !origExpense.__haulagePdfIsolate) {
+      async function patchedExpense(file) {
+        quietUiAfterScanSave();
+        return origExpense.apply(this, arguments);
+      }
+      patchedExpense.__haulagePdfIsolate = true;
+      window.uploadReceiptFile = patchedExpense;
+    }
+  }
+
   function init() {
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
     patchPrefillIncomeForm();
+    patchPdfReceiptViewer();
+    patchRefreshEofyLive();
+    installQuietRefreshAll();
+    patchUploadSkipRefresh();
+    setTimeout(installQuietRefreshAll, 0);
+    setTimeout(patchUploadSkipRefresh, 0);
+    setTimeout(installQuietRefreshAll, 500);
+    setTimeout(patchUploadSkipRefresh, 500);
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
@@ -11008,9 +11593,16 @@
 
   function wrapRefreshAll() {
     if (typeof globalThis.refreshAll !== "function") return;
-    if (globalThis.refreshAll.__haulageAwaitingWrapped) return;
+    if (globalThis.refreshAll.__haulageAwaitingWrapped || globalThis.refreshAll.__haulageQuietSkip) {
+      return;
+    }
     const prevRefresh = globalThis.refreshAll;
     async function wrappedRefresh() {
+      if (Number(window.__haulageBlockRefreshAll) > Date.now()) return;
+      if (window.__haulageSkipNextRefreshAll) {
+        window.__haulageSkipNextRefreshAll = false;
+        return;
+      }
       const result = await prevRefresh.apply(this, arguments);
       refreshUi();
       return result;
@@ -11051,6 +11643,15 @@
     };
     wrapSetView();
     wrapRefreshAll();
+    const origEofy = globalThis.refreshEofyLive;
+    if (typeof origEofy === "function" && !origEofy.__haulageQuietPatch) {
+      async function quietEofy() {
+        if (Number(window.__haulageQuietUntil) > Date.now()) return;
+        return origEofy.apply(this, arguments);
+      }
+      quietEofy.__haulageQuietPatch = true;
+      globalThis.refreshEofyLive = quietEofy;
+    }
     setTimeout(wrapSetView, 0);
     setTimeout(wrapRefreshAll, 0);
     setTimeout(wrapSetView, 500);
