@@ -5,7 +5,12 @@
 	"server": {
 		"cleartext": false,
 		"androidScheme": "https",
-		"errorPath": "index.html"
+		"errorPath": "index.html",
+		"allowNavigation": [
+			"https://go-taxation-suite.onrender.com/*",
+			"https://gotaxationsuite.com/*",
+			"https://www.gotaxationsuite.com/*"
+		]
 	},
 	"android": {
 		"allowMixedContent": false,

@@ -47,6 +47,7 @@ describe("marketing overview pages", () => {
     expect(suiteHtml).not.toMatch(/Taxation Hub/i);
     expect(suiteHtml).not.toMatch(/Fuel Hub/i);
     expect(suiteHtml).not.toMatch(/truck-driver/i);
+    expect(suiteHtml).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/"/);
   });
 
   it("Driver Hub overview links to /haulage/ and names both picker apps", () => {

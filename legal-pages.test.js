@@ -20,6 +20,7 @@ describe("public legal pages", () => {
     expect(privacy).not.toMatch(/Fuel Hub/i);
     expect(privacy).not.toMatch(/truck-driver/i);
     expect(privacy).not.toMatch(/work vehicle/i);
+    expect(privacy).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/privacy"/);
   });
 
   it("Suite terms keep honest tax wording and Suite-only Stripe prices", () => {
@@ -35,6 +36,7 @@ describe("public legal pages", () => {
     expect(terms).not.toMatch(/Taxation Hub/i);
     expect(terms).not.toMatch(/Fuel Hub/i);
     expect(terms).not.toMatch(/\$5 \/ month or \$60 \/ year/);
+    expect(terms).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/terms"/);
   });
 
   it("Suite support page is store-safe and Suite-only", () => {

@@ -6,6 +6,7 @@ const {
   applyCorsHeaders,
   CAPACITOR_ORIGINS,
 } = require("./lib/cors");
+const { SUITE_OFFICIAL_ORIGINS } = require("./lib/suite-public-origin");
 
 function mockReq(headers = {}) {
   return { headers, secure: false, method: "GET" };
@@ -43,6 +44,15 @@ describe("cors allowlist", () => {
     const list = buildAllowlist({ CORS_ORIGINS: "https://app.example.com" });
     expect(isOriginAllowed("https://evil.example", list)).toBe(false);
     expect(isOriginAllowed("https://app.example.com", list)).toBe(true);
+  });
+
+  it("always allowlists the official Suite HTTPS origins", () => {
+    const list = buildAllowlist({});
+    for (const origin of SUITE_OFFICIAL_ORIGINS) {
+      expect(list).toContain(origin);
+      expect(isOriginAllowed(origin, list)).toBe(true);
+    }
+    expect(list).not.toContain("http://gotaxationsuite.com");
   });
 });
 
