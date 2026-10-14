@@ -198,24 +198,33 @@
     confirmationSent,
     emailed,
     mailto,
+    error,
   }) {
     const inbox = supportEmail || "support@godriverhub.com";
     const wrap = document.createElement("div");
     const title = document.createElement("p");
     title.className = "support-confirm-title";
-    title.textContent = emailed ? "Support request sent" : "Support request received";
+    title.textContent = emailed ? "Support request sent" : "Could not email support";
     wrap.appendChild(title);
 
     const line1 = document.createElement("p");
     line1.textContent = emailed
       ? `Your message has been sent to the developer (${inbox}).`
-      : `Your message was saved. We’ll reply to ${userEmail} from ${inbox}.`;
+      : `Your message was saved on the server, but it was not emailed to ${inbox}. Use the link below so the request reaches the inbox.`;
     wrap.appendChild(line1);
+    if (!emailed && error) {
+      const errLine = document.createElement("p");
+      errLine.className = "muted";
+      errLine.textContent = error;
+      wrap.appendChild(errLine);
+    }
 
     const line2 = document.createElement("p");
     line2.textContent = confirmationSent
       ? `A confirmation notice was also sent to ${userEmail}. Check your inbox (and spam).`
-      : `We’ll reply to ${userEmail}. If you want a copy in your own sent mail, use the link below.`;
+      : emailed
+        ? `We’ll reply to ${userEmail}. If you want a copy in your own sent mail, use the link below.`
+        : `Tap Email ${inbox} now so the developer receives this request.`;
     wrap.appendChild(line2);
 
     if (mailto) {
@@ -226,7 +235,7 @@
       line3.appendChild(a);
       wrap.appendChild(line3);
     }
-    setStatus(wrap, { isSuccess: true });
+    setStatus(wrap, { isSuccess: Boolean(emailed), isError: !emailed });
   }
 
   async function onSubmit(e) {
@@ -260,6 +269,7 @@
         confirmationSent: Boolean(data.confirmationSent),
         emailed: Boolean(data.emailed),
         mailto: data.mailto || "mailto:support@godriverhub.com",
+        error: data.error || "",
       });
       form.reset();
     } catch {
