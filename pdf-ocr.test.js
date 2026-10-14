@@ -72,6 +72,12 @@ See attached breakdown for this payment`;
 });
 
 describe("renderPdfPagesToPng", () => {
+  it("honours a one-page income budget", async () => {
+    const pdf = await makePdf(["page one", "page two would be here if rendered"]);
+    const pngs = await renderPdfPagesToPng(pdf.toString("base64"), { maxPages: 1, zoom: 1.25 });
+    expect(pngs.length).toBe(1);
+  }, 30000);
+
   it("rasterises each PDF page to a PNG image", async () => {
     const pdf = await makePdf(["BP TRUCK STOP", "TOTAL 50.05"]);
     const pngs = await renderPdfPagesToPng(pdf.toString("base64"));
