@@ -184,6 +184,9 @@ services:
         sync: false
       - key: SUITE_APP_STORE_URL
         sync: false
+      # Copy SMTP_* + MAIL_FROM from haulage-finance. FormSubmit is blocked
+      # from Render (Cloudflare 403); without SMTP/Resend the Support form
+      # saves on disk only and never reaches support@godriverhub.com.
       - key: SUPPORT_EMAIL
         value: support@godriverhub.com
       - key: MAIL_FROM
