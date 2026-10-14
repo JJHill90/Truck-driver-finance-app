@@ -1,4 +1,9 @@
-const { applySubscriptionToUser, configuredPriceId } = require("./lib/billing-stripe");
+const {
+  applySubscriptionToUser,
+  configuredPriceId,
+  ensurePriceId,
+  isStripePriceId,
+} = require("./lib/billing-stripe");
 
 describe("applySubscriptionToUser", () => {
   it("stores cancel_at_period_end so Pro benefits can continue until period end", () => {
@@ -59,6 +64,39 @@ describe("applySubscriptionToUser", () => {
         if (value == null) delete process.env[key];
         else process.env[key] = value;
       }
+    }
+  });
+
+  it("rejects a Product id (prod_) pasted into STRIPE_PRICE_ID_SUITE", async () => {
+    const prev = process.env.STRIPE_PRICE_ID_SUITE;
+    process.env.STRIPE_PRICE_ID_SUITE = "prod_VPIfphkpGLPC63";
+    try {
+      expect(isStripePriceId("prod_VPIfphkpGLPC63")).toBe(false);
+      expect(configuredPriceId("suite", "month")).toBe("");
+      await expect(ensurePriceId({}, "month", "suite", "pro")).rejects.toMatchObject({
+        code: "STRIPE_PRICE_INVALID",
+        message: expect.stringMatching(/prod_VPIfphkpGLPC63[\s\S]*price_/),
+      });
+    } finally {
+      if (prev == null) delete process.env.STRIPE_PRICE_ID_SUITE;
+      else process.env.STRIPE_PRICE_ID_SUITE = prev;
+    }
+  });
+
+  it("rejects a product name pasted into STRIPE_PRICE_ID_SUITE_YEARLY", async () => {
+    expect(isStripePriceId("price_1ABC123xyz")).toBe(true);
+    expect(isStripePriceId("Suite Pro yearly Price id ($110 AUD)")).toBe(false);
+    const prev = process.env.STRIPE_PRICE_ID_SUITE_YEARLY;
+    process.env.STRIPE_PRICE_ID_SUITE_YEARLY = "Suite Pro yearly Price id ($110 AUD)";
+    try {
+      expect(configuredPriceId("suite", "year")).toBe("");
+      await expect(ensurePriceId({}, "year", "suite", "pro")).rejects.toMatchObject({
+        code: "STRIPE_PRICE_INVALID",
+        message: expect.stringMatching(/STRIPE_PRICE_ID_SUITE_YEARLY[\s\S]*price_/),
+      });
+    } finally {
+      if (prev == null) delete process.env.STRIPE_PRICE_ID_SUITE_YEARLY;
+      else process.env.STRIPE_PRICE_ID_SUITE_YEARLY = prev;
     }
   });
 });
