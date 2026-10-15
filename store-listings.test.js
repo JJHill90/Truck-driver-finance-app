@@ -17,6 +17,16 @@ function pngInfo(filePath) {
   };
 }
 
+describe("Driver Hub Capacitor load URL", () => {
+  it("keeps the hosted /haulage/ shell until godriverhub.com TLS is live", () => {
+    const cap = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "mobile", "capacitor.config.json"), "utf8")
+    );
+    expect(String(cap.server.url || "")).toMatch(/\/haulage\/$/);
+    expect(String(cap.server.url || "")).not.toMatch(/godriverhub\.com/);
+  });
+});
+
 describe("Suite store listing assets", () => {
   it("lists the official HTTPS domain for marketing and legal pages", () => {
     const listing = fs.readFileSync(STORE_LISTING, "utf8");

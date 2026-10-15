@@ -7,6 +7,14 @@ The phone loads the same Render site you already use in the browser. Auth,
 uploads, OCR, and ledgers stay on the server — this folder only packages a
 WebView + Play Store / sideload build.
 
+Keep `server.url` on the onrender `/haulage/` origin until
+`https://godriverhub.com/haulage/` is live (Render custom domain + DNS).
+Official marketing / Privacy / Terms / Support: `https://godriverhub.com/`
+— same Express app, not a second site. See
+[`docs/custom-domain-driverhub.md`](../docs/custom-domain-driverhub.md).
+When you retarget the WebView, add `https://godriverhub.com/*` and
+`https://www.godriverhub.com/*` to `server.allowNavigation`.
+
 ## Prerequisites
 
 - Node 20+
