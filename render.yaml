@@ -1,5 +1,5 @@
 # Render Blueprint — two web services from this repo:
-#   haulage-finance     Driver Hub / Taxation Hub / Fuel Hub  →  /haulage/
+#   haulage-finance     Driver Hub / Taxation Hub / Fuel Hub  →  /  (app /haulage/)
 #   go-taxation-suite   Go Taxation Suite (general ATO)       →  /suite/
 # In the Render dashboard: New → Blueprint → connect this repo. Render detects
 # this file and provisions both services (each with its own persistent disk).
@@ -44,11 +44,13 @@ services:
       # the server. Prefer Gmail SMTP (app password) OR Resend API key.
       # Without either, Support still saves the request and emails via FormSubmit
       # from the server (activation stays in the developer inbox, not the UI).
+      # After Render Custom Domains + DNS: https://godriverhub.com
+      # (not http://). See docs/custom-domain-driverhub.md. Until then keep the
+      # onrender origin so Stripe success/cancel and recovery links work.
       - key: APP_BASE_URL
         sync: false
-      # Cross-origin allowlist for Play / iOS WebViews (comma-separated origins).
-      # Leave unset for same-origin web. Example:
-      # capacitor://localhost,https://your-custom-domain.com
+      # Optional extra origins. Apex + www of godriverhub.com are already
+      # allowlisted in lib/cors.js.
       - key: CORS_ORIGINS
         sync: false
       # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
@@ -151,9 +153,9 @@ services:
       # Persistent disk. Native Node and Docker both write here (not /app/data).
       - key: DATA_DIR
         value: /opt/render/project/src/data
-      # Absolute origin of the Driver Hub Render service
-      # (e.g. https://your-service.example.com). When set, /haulage on this
-      # host redirects there so Suite is never mistaken for Driver Hub.
+      # Absolute origin of the Driver Hub service. After custom-domain + DNS:
+      # https://godriverhub.com (see docs/custom-domain-driverhub.md). When set,
+      # /haulage on this host redirects there so Suite is never mistaken for Hub.
       - key: DRIVERHUB_PUBLIC_URL
         sync: false
       - key: OPENAI_API_KEY
