@@ -1,6 +1,6 @@
 # Official domain — gotaxationsuite.com
 
-The website we already built (app / store buttons, Privacy, Terms, Support)
+The preview website (About, screenshots, App Store / Play buttons, Support)
 is the same Express app as Go Taxation Suite. It is **not** a second site.
 
 Attach **`https://gotaxationsuite.com/`** as a custom domain on Render
@@ -8,7 +8,8 @@ service **`go-taxation-suite`**. Then these paths are the public pages:
 
 | Page | Official URL |
 |------|----------------|
-| Marketing / store links | `https://gotaxationsuite.com/` |
+| Preview / marketing | `https://gotaxationsuite.com/` |
+| About us | `https://gotaxationsuite.com/#about` |
 | Open the app | `https://gotaxationsuite.com/suite/` |
 | Privacy | `https://gotaxationsuite.com/privacy` |
 | Terms | `https://gotaxationsuite.com/terms` |

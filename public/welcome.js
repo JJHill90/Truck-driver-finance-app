@@ -119,21 +119,21 @@
 
   const HELP = isSuite ? SUITE_HELP : HUB_HELP;
 
-  function bindStore(id, url) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const ready = Boolean(url);
-    el.setAttribute("aria-disabled", ready ? "false" : "true");
-    if (ready) {
-      el.href = url;
-      el.target = "_blank";
-      el.rel = "noopener noreferrer";
-      const kicker = el.querySelector(".store-btn-kicker");
-      if (kicker) kicker.textContent = "Available on";
-    } else {
-      el.removeAttribute("href");
-      el.addEventListener("click", (e) => e.preventDefault());
-    }
+  function bindStore(selector, url) {
+    document.querySelectorAll(selector).forEach((el) => {
+      const ready = Boolean(url);
+      el.setAttribute("aria-disabled", ready ? "false" : "true");
+      if (ready) {
+        el.href = url;
+        el.target = "_blank";
+        el.rel = "noopener noreferrer";
+        const kicker = el.querySelector(".store-btn-kicker");
+        if (kicker) kicker.textContent = "Available on";
+      } else {
+        el.removeAttribute("href");
+        el.addEventListener("click", (e) => e.preventDefault());
+      }
+    });
   }
 
   async function hydrateStore() {
@@ -143,8 +143,8 @@
       document.querySelectorAll("[data-welcome-app]").forEach((a) => {
         if (data.appUrl) a.href = data.appUrl;
       });
-      bindStore("welcome-appstore", data.appStoreUrl);
-      bindStore("welcome-play", data.playStoreUrl);
+      bindStore("#welcome-appstore, [data-store='appstore']", data.appStoreUrl);
+      bindStore("#welcome-play, [data-store='play']", data.playStoreUrl);
       const note = document.getElementById("welcome-store-note");
       if (note && data.appStoreUrl && data.playStoreUrl) {
         note.textContent =
