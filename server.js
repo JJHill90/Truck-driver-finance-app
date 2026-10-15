@@ -119,7 +119,15 @@ const accountDelete = require("./lib/account-delete");
 const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
-const { wwwToApexRedirect } = require("./lib/suite-public-origin");
+const {
+  wwwToApexRedirect: suiteWwwToApexRedirect,
+  isSuiteOfficialHost,
+  hostFromRequest: publicHostFromRequest,
+} = require("./lib/suite-public-origin");
+const {
+  wwwToApexRedirect: driverHubWwwToApexRedirect,
+  isDriverHubOfficialHost,
+} = require("./lib/driverhub-public-origin");
 const {
   normalizeCars,
   primaryActiveWorkUsePercent,
@@ -759,9 +767,11 @@ function buildAlerts(records, product) {
 }
 
 const app = express();
-// Official Suite domain: www.gotaxationsuite.com → https://gotaxationsuite.com
-// on the dedicated host only. localhost / onrender stay put.
-app.use(wwwToApexRedirect);
+// Official domains: www → apex on that product's host only.
+// localhost / onrender stay put. Suite middleware no-ops on Driver Hub
+// (and vice versa) so both can share this Express app.
+app.use(suiteWwwToApexRedirect);
+app.use(driverHubWwwToApexRedirect);
 // Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
 // Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
 app.use(corsMiddleware);
@@ -4792,14 +4802,29 @@ function sendLegalPage(fileName) {
     res.sendFile(path.join(PUBLIC_DIR, fileName));
   };
 }
+
+/** True when this request should get Go Taxation Suite marketing / legal HTML. */
+function serveSuitePublicPages(req, kind) {
+  if (kind === "haulage") return false;
+  if (kind === "suite") return true;
+  const host = publicHostFromRequest(req);
+  if (isDriverHubOfficialHost(host)) return false;
+  return (
+    suite.isStandaloneSuite() ||
+    isSuiteOfficialHost(host) ||
+    suite.productOf(req) === "suite"
+  );
+}
+
 function sendProductLegalPage(kind) {
   const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
   const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
   return (req, res) => {
     const pathName = String((req.originalUrl || req.path || "").split("?")[0]);
-    // Store-facing /privacy and /terms are Go Taxation Suite only.
-    let file = suiteFile;
+    let file = hubFile;
     if (pathName.startsWith("/haulage")) file = hubFile;
+    else if (pathName.startsWith("/suite")) file = suiteFile;
+    else if (serveSuitePublicPages(req)) file = suiteFile;
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
 }
@@ -4826,10 +4851,9 @@ const WELCOME_HUB_SHOTS_DIR = path.join(PUBLIC_DIR, "welcome-hub-shots");
 
 function sendWelcomePage(kind) {
   return (req, res) => {
-    const suitePage =
-      kind === "suite" ||
-      (kind !== "haulage" && (suite.productOf(req) === "suite" || suite.isStandaloneSuite()));
-    const file = suitePage ? "welcome-suite.html" : "welcome-driverhub.html";
+    const file = serveSuitePublicPages(req, kind)
+      ? "welcome-suite.html"
+      : "welcome-driverhub.html";
     res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
@@ -4837,10 +4861,9 @@ function sendWelcomePage(kind) {
 
 function sendWelcomeSupport(kind) {
   return (req, res) => {
-    const suitePage =
-      kind === "suite" ||
-      (kind !== "haulage" && (suite.productOf(req) === "suite" || suite.isStandaloneSuite()));
-    const file = suitePage ? "welcome-support-suite.html" : "welcome-support-driverhub.html";
+    const file = serveSuitePublicPages(req, kind)
+      ? "welcome-support-suite.html"
+      : "welcome-support-driverhub.html";
     res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
@@ -4851,7 +4874,8 @@ app.get(["/welcome.js"], sendLegalPage("welcome.js"));
 app.get("/truck.svg", sendLegalPage("truck.svg"));
 app.get("/welcome.json", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json(storeLinks.linksForProduct(suite.productOf(req)));
+  const product = serveSuitePublicPages(req) ? "suite" : "haulage";
+  res.json(storeLinks.linksForProduct(product));
 });
 app.use(
   "/welcome/shots",

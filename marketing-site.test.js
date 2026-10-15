@@ -58,6 +58,7 @@ describe("marketing overview pages", () => {
     expect(hubHtml).toMatch(/\/welcome\/hub-shots\/01-login\.png/);
     expect(hubHtml).toMatch(/id="welcome-appstore"/);
     expect(hubHtml).toMatch(/id="welcome-play"/);
+    expect(hubHtml).toMatch(/rel="canonical" href="https:\/\/godriverhub\.com\/"/);
   });
 
   it("Suite website Support tab has the in-app help, contact form, FAQ, and no driver-product names", () => {
@@ -144,7 +145,42 @@ describe("marketing overview HTTP", () => {
     const saved = await posted.json();
     expect(saved.ok).toBe(true);
     expect(saved.id).toBeTruthy();
+
+    const privacy = await get(server, "/privacy");
+    expect(privacy.status).toBe(200);
+    expect(privacy.text).toMatch(/Privacy Policy/);
+    expect(privacy.text).toMatch(/Driver Hub/);
+    expect(privacy.text).not.toMatch(/Go Taxation Suite/);
+
+    const terms = await get(server, "/terms");
+    expect(terms.status).toBe(200);
+    expect(terms.text).toMatch(/Driver Hub/);
+    expect(terms.text).toMatch(/\$5 \/ month or \$60/);
   }, 20_000);
+
+  it("serves Hub pages on godriverhub.com and redirects www to the apex", async () => {
+    delete process.env.APP_PRODUCT;
+    const hubHost = { "x-forwarded-host": "godriverhub.com", "x-forwarded-proto": "https" };
+    const home = await get(server, "/", hubHost);
+    expect(home.status).toBe(200);
+    expect(home.text).toMatch(/Driver Hub/);
+    expect(home.text).not.toMatch(/Go Taxation Suite/);
+
+    const privacy = await get(server, "/privacy", hubHost);
+    expect(privacy.status).toBe(200);
+    expect(privacy.text).toMatch(/Driver Hub/);
+    expect(privacy.text).toMatch(/rel="canonical" href="https:\/\/godriverhub\.com\/privacy"/);
+
+    const json = await get(server, "/welcome.json", hubHost);
+    expect(JSON.parse(json.text).appUrl).toBe("/haulage/");
+
+    const www = await get(server, "/privacy", {
+      "x-forwarded-host": "www.godriverhub.com",
+      "x-forwarded-proto": "https",
+    });
+    expect(www.status).toBe(301);
+    expect(www.location).toBe("https://godriverhub.com/privacy");
+  });
 
   it("serves the Suite overview at / on APP_PRODUCT=suite and keeps /suite/ as the app", async () => {
     process.env.APP_PRODUCT = "suite";
@@ -166,6 +202,11 @@ describe("marketing overview HTTP", () => {
     expect(suiteSupportPage.text).toMatch(/Go Taxation Suite/);
     expect(suiteSupportPage.text).toMatch(/id="support-contact-form"/);
     expect(suiteSupportPage.text).not.toMatch(/Driver Hub/);
+
+    const privacy = await get(server, "/privacy");
+    expect(privacy.status).toBe(200);
+    expect(privacy.text).toMatch(/Go Taxation Suite/);
+    expect(privacy.text).not.toMatch(/Driver Hub/);
 
     const appPage = await get(server, "/suite/");
     expect(appPage.status).toBe(200);
