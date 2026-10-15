@@ -1,27 +1,23 @@
 # Driver Hub — mobile shell (Capacitor)
 
-Native Android (and later iOS) wrapper around the **hosted** web app at
-`https://haulage-finance.onrender.com/haulage/`.
+Native Android wrapper around the **hosted** web app at
+`https://www.godriverhub.com/haulage/`.
 
 The phone loads the same Render site you already use in the browser. Auth,
 uploads, OCR, and ledgers stay on the server — this folder only packages a
-WebView + Play Store / sideload build.
+WebView + Play Store build.
 
-Keep `server.url` on the onrender `/haulage/` origin until
-`https://godriverhub.com/haulage/` is live (Render custom domain + DNS).
-Official marketing / Privacy / Terms / Support: `https://godriverhub.com/`
-— same Express app, not a second site. See
+Do **not** set Capacitor `server.url`. The WebView loads the hosted URL from
+`MainActivity` (same crash-safe pattern as Go Taxation Suite). Official
+marketing / Privacy / Terms / Support: see
+[`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md) and
 [`docs/custom-domain-driverhub.md`](../docs/custom-domain-driverhub.md).
-When you retarget the WebView, add `https://godriverhub.com/*` and
-`https://www.godriverhub.com/*` to `server.allowNavigation`.
 
 ## Prerequisites
 
 - Node 20+
 - [Android Studio](https://developer.android.com/studio) (Android SDK + a device
   or emulator)
-- For iOS: a Mac with Xcode (not generated in this repo yet — run
-  `npx cap add ios` on a Mac when ready)
 
 ## Quick start (Android)
 
@@ -32,27 +28,18 @@ npx cap sync android
 npx cap open android
 ```
 
-In Android Studio: pick a device → **Run**. The app opens the Render URL
-(same-origin API, cookies work as in Chrome).
+In Android Studio: pick a device → **Run**. Then **Build → Generate Signed
+Bundle** for Play (`versionCode` 1 / `1.0.0`). Keep the keystore out of git.
 
-### Point at a different host
+Store listing copy, Data safety answers, and reviewer notes:
+[`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md).
 
-Edit `server.url` in `capacitor.config.json`, then:
+Regenerate icons / feature graphic:
 
 ```bash
-npx cap sync android
+python3 -m pip install Pillow
+python3 mobile/store/generate-icons.py
 ```
-
-Examples:
-
-| Target | `server.url` |
-|--------|----------------|
-| Production (default) | `https://haulage-finance.onrender.com/haulage/` |
-| Local LAN testing | `http://192.168.x.x:3000/haulage/` (`cleartext: true`) |
-
-Local HTTP also needs `android:usesCleartextTraffic="true"` (or a network
-security config) and, if the WebView origin differs from the API host, the
-server CORS allowlist (`CORS_ORIGINS` / `CORS_ALLOW_CAPACITOR`) from PR #62.
 
 ## Why remote URL (not bundling `public/`)
 
@@ -70,21 +57,9 @@ server CORS allowlist (`CORS_ORIGINS` / `CORS_ALLOW_CAPACITOR`) from PR #62.
 | `@capacitor/camera` | Optional native camera (web file picker still works) |
 | `@capacitor/filesystem` | Optional local file helpers |
 
-Receipt scan in the SPA today uses the browser file input inside the WebView;
-native Camera can be wired later without changing the backend.
-
-## Play Store / internal testing
-
-1. Device-test the debug APK from Android Studio.
-2. Create a signing keystore (keep it out of git).
-3. Build a release AAB: Android Studio → **Build → Generate Signed Bundle**.
-4. Upload to Play Console → Internal testing track.
-5. Keep `server.url` on production HTTPS before store builds.
-
 ## iOS
 
-On a Mac (Xcode + signing). This Linux tree does not include a generated
-Xcode project:
+On a Mac (Xcode + signing):
 
 ```bash
 cd mobile
@@ -92,22 +67,8 @@ npx cap add ios
 npx cap sync ios
 ```
 
-Paste `ios-info.plist.additions.xml` into `ios/App/App/Info.plist` (camera
-and photo-library usage strings), then `npx cap open ios` → Archive →
-TestFlight. App id: `com.haulagefinance.app`.
+Paste `ios-info.plist.additions.xml` into `ios/App/App/Info.plist`, then
+`npx cap open ios`. App id: `com.haulagefinance.app`.
 
 Go Taxation Suite is a **second listing** under `mobile-suite/`
 (`com.gotaxation.suite` → `/suite/`). See `docs/store-listing.md`.
-
-## Repo layout
-
-```
-mobile/
-  capacitor.config.json   # appId, remote server.url
-  www/                    # offline fallback page
-  android/                # native project (open in Android Studio)
-  package.json            # Capacitor deps (separate from root app)
-```
-
-Do not commit `mobile/node_modules` or Android `build/` / `local.properties`
-(ignored).

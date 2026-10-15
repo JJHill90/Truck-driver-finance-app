@@ -56,6 +56,14 @@ services:
       # Play / iOS WebView origins (capacitor://localhost, …) + SameSite=None cookies.
       - key: CORS_ALLOW_CAPACITOR
         value: "1"
+      # Optional Play reviewer login (non-admin, complimentary Pro+). Set a
+      # strong password in the dashboard; never commit it. Paste into Play notes.
+      - key: HUB_REVIEWER_USERNAME
+        sync: false
+      - key: HUB_REVIEWER_PASSWORD
+        sync: false
+      - key: HUB_REVIEWER_EMAIL
+        sync: false
       # Public overview store buttons (https only). Leave unset until listings exist.
       - key: DRIVERHUB_PLAY_STORE_URL
         sync: false

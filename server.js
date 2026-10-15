@@ -4962,7 +4962,9 @@ function bootListen() {
   if (process.env.NODE_ENV === "test") return;
   auth.reloadSessionsFromDisk();
   const admin = auth.ensureAdminBootstrap();
-  const reviewer = reviewerDemo.ensureReviewerDemo();
+  const reviewer = suite.isStandaloneSuite()
+    ? reviewerDemo.ensureReviewerDemo()
+    : reviewerDemo.ensureHubReviewerDemo();
   app.listen(PORT, "0.0.0.0", () => {
     if (suite.isStandaloneSuite()) {
       console.log(`Go Taxation Suite overview at http://localhost:${PORT}/`);

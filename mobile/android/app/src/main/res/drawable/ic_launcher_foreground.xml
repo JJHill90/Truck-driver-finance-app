@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Amber truck mark on the navy splash / adaptive icon foreground. -->
+    <path
+        android:fillColor="#F0A202"
+        android:pathData="M28,62 h18 V34 H28 v28 z" />
+    <path
+        android:fillColor="#F0A202"
+        android:pathData="M46,62 h34 V46 L72,36 H46 v26 z" />
+    <path
+        android:fillColor="#0B1F33"
+        android:pathData="M36,68 m-7,0 a7,7 0 1,1 14,0 a7,7 0 1,1 -14,0" />
+    <path
+        android:fillColor="#0B1F33"
+        android:pathData="M72,68 m-7,0 a7,7 0 1,1 14,0 a7,7 0 1,1 -14,0" />
+    <path
+        android:fillColor="#F0A202"
+        android:pathData="M36,68 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
+    <path
+        android:fillColor="#F0A202"
+        android:pathData="M72,68 m-4,0 a4,4 0 1,1 8,0 a4,4 0 1,1 -8,0" />
+</vector>
