@@ -46,10 +46,11 @@ function rewriteHtml(html, origin) {
   out = out.replace(/href="\/legal\.css"/g, 'href="legal.css"');
   out = out.replace(/href="\/suite\/icon-512\.png"/g, 'href="icon-512.png"');
   out = out.replace(/src="\/suite\/icon-512\.png"/g, 'src="icon-512.png"');
-  out = out.replace(/\/welcome\/shots\//g, "shots/");
+  // Keep preview PNGs as a local shots/ folder (upload that folder, or Extract the zip).
+  out = out.replace(/src="\/welcome\/shots\//g, 'src="shots/');
   out = out.replace(
-    "https://gotaxationsuite.com/welcome/shots/02-dashboard.png",
-    "https://gotaxationsuite.com/shots/02-dashboard.png"
+    /content="https:\/\/gotaxationsuite\.com\/welcome\/shots\//g,
+    'content="https://gotaxationsuite.com/shots/'
   );
   return out;
 }
@@ -110,6 +111,10 @@ function build(env = process.env, outDir = OUT) {
 
 Upload EVERY file in this folder into the domain's public_html
 (File Manager → public_html for gotaxationsuite.com).
+
+cPanel File Manager does not upload folders when you pick files.
+Either: (1) upload this zip into public_html and click Extract, or
+(2) create a folder named shots and upload the five PNGs into it.
 
 Do NOT upload the Node/Render tax app here. "Open the app" goes to:
   ${origin}/suite/

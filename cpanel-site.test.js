@@ -12,6 +12,7 @@ describe("cPanel static preview site", () => {
         <a href="/support">Support</a>
         <a href="/#about">About</a>
         <img src="/welcome/shots/01-login.png" alt="" />
+        <meta property="og:image" content="https://gotaxationsuite.com/welcome/shots/02-dashboard.png" />
         <link rel="icon" href="/suite/icon-512.png" />
       </body>`,
       origin
@@ -21,6 +22,8 @@ describe("cPanel static preview site", () => {
     expect(html).toMatch('href="support.html"');
     expect(html).toMatch('href="index.html#about"');
     expect(html).toMatch('src="shots/01-login.png"');
+    expect(html).toMatch('content="https://gotaxationsuite.com/shots/02-dashboard.png"');
+    expect(html).not.toMatch("gotaxationsuite.comshots");
     expect(html).toMatch('href="icon-512.png"');
     expect(html).not.toMatch('href="/suite/"');
   });

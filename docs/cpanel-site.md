@@ -83,6 +83,11 @@ Do **not** upload the preview files into WHM root’s home (`/root`) or into
 3. Enable **Show Hidden Files** (Settings) so `.htaccess` is visible.
 4. Upload **all** files from `cpanel-site/` into `public_html`.
 5. You should see `index.html` at the root, not only `cgi-bin/`.
+6. **Screenshots:** File Manager’s Upload button does **not** create folders.
+   Create a folder named `shots` inside `public_html`, open it, and upload
+   `01-login.png` … `05-report.png`. Or upload the zip into `public_html` and
+   click **Extract** so the `shots` folder is created for you. Without that
+   folder the phones on “A quick look” stay blank (`/shots/01-login.png` 404).
 6. If AutoSSL was not run from WHM, cPanel → **SSL/TLS Status** → Run AutoSSL.
    Use **https://gotaxationsuite.com/** in Play / App Store listings.
 
