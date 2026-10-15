@@ -24,16 +24,22 @@ that A record.** Changing it to Render’s `216.24.57.1` would send the website
 
 Leave MX / mail records as they are.
 
-## 2. Build (or use the committed folder)
+## 2. Get the website files onto your computer
 
-From the repo:
+These files are **not** on your PC until you download them. They live in GitHub.
 
-```bash
-npm run cpanel-site
-```
+**Easiest:** download this zip (website files only, `index.html` at the top):
 
-That writes `cpanel-site/` (`index.html`, `support.html`, `privacy.html`,
-`terms.html`, CSS/JS, screenshots, `.htaccess`).
+https://github.com/JJHill90/Truck-driver-finance-app/raw/cursor/suite-preview-website-ddf2/gotaxationsuite-website-for-cpanel.zip
+
+Save it, then unzip. You should see `index.html`, `support.html`, `shots`, and
+the other site files. Those are what you upload into cPanel `public_html`.
+
+Or from the repo: **Code →** switch branch to `cursor/suite-preview-website-ddf2`
+→ **Download ZIP**, unzip, then open the inner folder named `cpanel-site`
+(ignore the rest of the repo — do not upload `server.js` or `node_modules`).
+
+To rebuild later from a clone: `npm run cpanel-site` writes `cpanel-site/`.
 
 ## 3. WHM (root) vs cPanel (website account)
 
