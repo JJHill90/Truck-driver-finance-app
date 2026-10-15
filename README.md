@@ -67,7 +67,7 @@ npm start
 Then open **http://localhost:3000/** for the public overview (screenshots and store placeholders), or **http://localhost:3000/haulage/** for the Driver Hub app.
 **Go Taxation Suite** (general PAYG / sole trader / partnership, same tabs as Taxation Hub) is at **http://localhost:3000/suite/** (overview: `/welcome-suite`).
 To mimic the dedicated Render host locally: `APP_PRODUCT=suite npm start` — root `/` then shows the Suite overview; the app stays at `/suite/`.
-Official public host (after Render custom-domain + DNS): **`https://gotaxationsuite.com/`** — same overview, Privacy, Terms, Support, and `/suite/` app. Attach that domain only to service `go-taxation-suite`. See [`docs/custom-domain.md`](docs/custom-domain.md). Use HTTPS, not `http://`.
+Official **preview website** is **`https://gotaxationsuite.com/`** on Ace Host **cPanel** (About, screenshots, store buttons, Support, Privacy, Terms). The live **app** stays on Render at **`https://go-taxation-suite.onrender.com/suite/`**. Do not point the apex domain at Render. Upload bundle: `npm run cpanel-site` → `cpanel-site/` into cPanel `public_html`. See [`docs/cpanel-site.md`](docs/cpanel-site.md).
 
 ## Scripts
 
@@ -251,7 +251,7 @@ This repo deploys **two** Render web services from the same GitHub repository
 | Service | Product | Public URL | Persistent disk |
 | --- | --- | --- | --- |
 | `haulage-finance` | Driver Hub / Taxation Hub / Fuel Hub | `https://<service>.onrender.com/haulage/` | `haulage-data` |
-| `go-taxation-suite` | Go Taxation Suite (`APP_PRODUCT=suite`) | Official `https://gotaxationsuite.com/` (app `/suite/`); fallback `https://<service>.onrender.com/` | `gotax-data` |
+| `go-taxation-suite` | Go Taxation Suite (`APP_PRODUCT=suite`) | App `https://<service>.onrender.com/suite/` (preview website is cPanel `gotaxationsuite.com`) | `gotax-data` |
 
 Each service has its **own disk and accounts**. A Driver Hub login does not
 appear on Go Taxation Suite, and vice versa.
@@ -271,10 +271,9 @@ appear on Go Taxation Suite, and vice versa.
    correct origin (optional but recommended):
    - On **`haulage-finance`**: `SUITE_PUBLIC_URL=https://YOUR-SUITE-SERVICE.onrender.com`
    - On **`go-taxation-suite`**: `DRIVERHUB_PUBLIC_URL=https://YOUR-DRIVERHUB-SERVICE.onrender.com`
-   Also set `APP_BASE_URL` on each service to its own public HTTPS origin.
-   After `gotaxationsuite.com` is attached to **`go-taxation-suite`**, set
-   `APP_BASE_URL=https://gotaxationsuite.com` on that service (see
-   [`docs/custom-domain.md`](docs/custom-domain.md)). Add the
+   Also set `APP_BASE_URL` on each service to its own public HTTPS origin
+   (Suite app: `https://go-taxation-suite.onrender.com` — not the cPanel
+   apex). Preview website upload: [`docs/cpanel-site.md`](docs/cpanel-site.md). Add the
    primary-mod password and optional `OPENAI_API_KEY` / Stripe / SMTP in the
    Render dashboard (do not commit those values).
 
