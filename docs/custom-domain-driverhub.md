@@ -104,10 +104,46 @@ dig +short CAA godriverhub.com
 | `A` `216.24.57.1` and `www` CNAME `haulage-finance.onrender.com` | Ready. Click **Verify** again. |
 
 TTL on the parking records is often 4 hours. After you save, wait or
-flush Google / Cloudflare public DNS caches, then Verify.
+flush public caches, then Verify:
 
-TLS issues after a green Verify usually mean a leftover AAAA or a CAA
-list that omits `letsencrypt.org` / `pki.goog`.
+- Google: https://developers.google.com/speed/public-dns/cache
+- Cloudflare: https://one.one.one.one/purge-cache/
+
+Check both resolvers. Verify stays red while either still has Ace Host:
+
+```bash
+dig @8.8.8.8 +short A godriverhub.com
+dig @1.1.1.1 +short A godriverhub.com
+```
+
+### If the browser shows a certificate / SSL error
+
+That is expected **until Render Verify is green and the certificate
+says Issued**. Pointing the `A` record at `216.24.57.1` before that
+sends HTTPS to Cloudflare with **no cert for this hostname**:
+
+- Browser: `NET::ERR_SSL_PROTOCOL_ERROR` / “connection is not private”
+- `curl https://godriverhub.com/` → handshake failure, no peer cert
+- `http://godriverhub.com/` → Cloudflare **409** / error **1001**
+
+Ace Host still has a Let’s Encrypt cert (`CN=godriverhub.com`, issued
+for the parked site). Resolvers that have not picked up the new `A`
+record (often `8.8.8.8` for a few hours) open that old cert and the
+hyphenated `go-driverhub.com` park page — not Driver Hub.
+
+Until Verify is green:
+
+1. Keep using the service’s `onrender.com` URL (Driver Hub home and `/haulage/`).
+2. Flush Google’s cache, wait until `dig @8.8.8.8 +short A godriverhub.com`
+   is **only** `216.24.57.1`, then click **Verify** again.
+3. In cPanel Zone Editor, delete leftover
+   `_acme-challenge.godriverhub.com` TXT (cPanel AutoSSL). It can stall
+   Render’s new certificate.
+4. Do **not** set `APP_BASE_URL` until `curl -sI https://godriverhub.com/`
+   returns `200`.
+
+A leftover **AAAA** or a **CAA** list that omits `letsencrypt.org` /
+`pki.goog` also blocks issuance after a green Verify.
 
 ## 3. Point the app at the official origin
 
