@@ -2,10 +2,9 @@
 
 Second store listing. Native Android (and later iOS) wrapper around the
 **hosted** web app. Keep the Play load URL on
-`https://go-taxation-suite.onrender.com/suite/` until
-`https://gotaxationsuite.com/suite/` is live (Render custom domain + DNS).
+`https://go-taxation-suite.onrender.com/suite/`.
 Official marketing / Privacy / Terms / Support: `https://gotaxationsuite.com/`
-— same Express app, not a second site. See [`docs/custom-domain.md`](../docs/custom-domain.md).
+on cPanel (not the Node app). See [`docs/cpanel-site.md`](../docs/cpanel-site.md).
 
 Do **not** reuse Driver Hub’s application id (`com.haulagefinance.app`).
 This shell is `com.gotaxation.suite`.
