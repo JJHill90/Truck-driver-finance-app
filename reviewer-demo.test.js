@@ -25,6 +25,9 @@ describe("store reviewer demo account", () => {
       "SUITE_REVIEWER_USERNAME",
       "SUITE_REVIEWER_PASSWORD",
       "SUITE_REVIEWER_EMAIL",
+      "HUB_REVIEWER_USERNAME",
+      "HUB_REVIEWER_PASSWORD",
+      "HUB_REVIEWER_EMAIL",
     ]) {
       prev[key] = process.env[key];
       delete process.env[key];
@@ -88,6 +91,28 @@ describe("store reviewer demo account", () => {
     expect(again.created).toBe(false);
     expect(again.seeded).toBe(false);
     expect(JSON.parse(fs.readFileSync(file, "utf8")).profile.name).toBe("Alex Chen");
+  });
+
+  it("creates a non-admin Pro+ Hub reviewer with a truck-driver ledger", () => {
+    process.env.HUB_REVIEWER_USERNAME = "hub.reviewer";
+    process.env.HUB_REVIEWER_PASSWORD = strongPass;
+    process.env.HUB_REVIEWER_EMAIL = "hub.reviewer@example.com";
+
+    const first = reviewerDemo.ensureHubReviewerDemo();
+    expect(first.ready).toBe(true);
+    expect(first.created).toBe(true);
+    expect(first.seeded).toBe(true);
+
+    const user = auth.getUser("hub.reviewer");
+    expect(user.isAdmin).toBe(false);
+    expect(user.isProPlus).toBe(true);
+    expect(user.needsFirstRunTour).toBe(false);
+
+    const file = auth.recordsFileFor("hub.reviewer");
+    const records = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(records.profile.name).toBe("Sam Driver");
+    expect(records.profile.driverType).toMatch(/haul/i);
+    expect(records.expenses[0].category).toBe("meals");
   });
 
   it("returns a clear error when the password is too weak", () => {
