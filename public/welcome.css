@@ -25,12 +25,16 @@ body.welcome-page {
   color: var(--link);
 }
 .welcome-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: min(72rem, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 1rem 0;
+  padding: 0.85rem 0 1rem;
+  background: linear-gradient(180deg, #061018 72%, rgba(6, 16, 24, 0));
 }
 .welcome-mark {
   width: 40px;
@@ -182,6 +186,12 @@ body.welcome-page {
   margin: 0;
   color: var(--muted);
   font-size: 0.92rem;
+}
+#about,
+#preview,
+#get-the-app,
+#help {
+  scroll-margin-top: 4.75rem;
 }
 .about,
 .get-app,
