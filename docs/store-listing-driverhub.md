@@ -1,0 +1,141 @@
+# Driver Hub — Google Play submission
+
+Compile **only** this listing:
+
+| Field | Value |
+|-------|--------|
+| Name | Driver Hub |
+| Application id | `com.haulagefinance.app` |
+| Loads (Play WebView) | `https://www.godriverhub.com/haulage/` |
+| Official marketing site | `https://www.godriverhub.com/` |
+| Privacy (Hub, no login) | `https://www.godriverhub.com/haulage/privacy` |
+| Terms (Hub, no login) | `https://www.godriverhub.com/haulage/terms` |
+| Support | `https://www.godriverhub.com/support` |
+| Native project | `mobile/` |
+| Support email | `support@godriverhub.com` |
+
+Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
+
+Use **www** in Play URLs while apex `godriverhub.com` still splits with the old Ace Host IP on some resolvers (Google Public DNS). After apex Verify is green everywhere, you can switch the console to `https://godriverhub.com/…`. Until the Hub-legal PR is on `main`, `/privacy` and `/terms` on this host are still Suite pages — Play must use `/haulage/privacy` and `/haulage/terms`.
+
+## Verdict
+
+**Ready to start Play Console** once you sign a release AAB on a machine with Android Studio. Product, crash-safe WebView, icon, feature graphic, screenshots, listing copy, and reviewer bootstrap are in the repo.
+
+Still required **outside this repo**:
+
+1. Google Play Developer account (one-time registration).
+2. Signed Play AAB (Android Studio + your keystore — keep the keystore **out of git**).
+3. Set `HUB_REVIEWER_USERNAME` + `HUB_REVIEWER_PASSWORD` on Render service `haulage-finance`, then paste those credentials in review notes.
+4. Land this branch on `main` so production serves the reviewer bootstrap (the live site already serves `/haulage/` and Hub support).
+
+## Already done in the product
+
+| Requirement | Status | Where |
+|-------------|--------|--------|
+| Own name, id, hosted `/haulage/` URL | Done | `mobile/capacitor.config.json` |
+| Android `targetSdk` 35, camera optional | Done | `mobile/android/` |
+| Crash-safe launch (no `server.url` proxy) | Done | `MainActivity` + `HubNavigationPlugin` |
+| Android 12 splash is a **color** (PNG crashes) | Done | `styles.xml` |
+| Public Privacy + Terms (Driver Hub) | Live | `/haulage/privacy` and `/haulage/terms` |
+| Public Support | Live | `/support` |
+| Public marketing overview | Live | `https://www.godriverhub.com/` |
+| In-app account deletion | Done | Profile → Delete account |
+| Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
+| Play feature graphic 1024×500 | Done | `mobile/store/feature-graphic-1024x500.png` |
+| Phone screenshots 1080×1920 | Done | `mobile/store/screenshots/play-1080x1920/` |
+| Reviewer demo bootstrap | Done | `HUB_REVIEWER_*` → `lib/reviewer-demo.js` |
+
+## Must finish in Play Console
+
+On a machine with Android Studio:
+
+```bash
+cd mobile
+npm install
+npx cap sync android
+npx cap open android
+```
+
+**Build → Generate Signed Bundle** (`versionCode` 1 / `1.0.0`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline.
+
+Then in Play Console for `com.haulagefinance.app`:
+
+1. Create the app (default language English (Australia) if offered).
+2. Upload the AAB to **Internal testing**, install on a phone, confirm login — then Production (or closed testing first).
+3. Privacy policy = `https://www.godriverhub.com/haulage/privacy`
+4. Data safety (answers below)
+5. Photo/video permission: camera and photos are for receipt capture only; not required (file upload works)
+6. IARC content rating (finance / tools — typically Everyone / PEGI 3)
+7. Store listing: copy below. Screenshots: `mobile/store/screenshots/play-1080x1920/`. Feature graphic: `mobile/store/feature-graphic-1024x500.png`. High-res icon: `mobile/store/icon-play-512.png`. Marketing URL: `https://www.godriverhub.com/`
+8. After the listing is live, set `DRIVERHUB_PLAY_STORE_URL` on `haulage-finance` so the overview Play button goes live.
+9. Category: **Business** or **Finance**
+10. Contact: `support@godriverhub.com` and `https://www.godriverhub.com/support`
+
+Play does **not** get a Stripe/IAP product. This build is a login WebView. Subscriptions stay on the website.
+
+## Listing copy (paste)
+
+**Name:** Driver Hub
+
+**Short (Play, ≤80):**  
+Truck tax records and diesel planning. Not advice. You lodge with the ATO.
+
+**Description:**
+
+Driver Hub is the login for Taxation Hub and Fuel Hub. Track work expenses, scan receipts and payslips, keep a live EOFY working paper, and plan diesel fills on NHVR truck-access corridors. One profile — name, employer, licence class and work vehicle — feeds both apps.
+
+This is not tax advice and not an official ATO product. The app does not lodge a BAS or tax return. You (or your registered agent) lodge with the ATO.
+
+Free: 15 uploads a month and one on-screen EOFY report. Taxation Hub Pro ($5/month or $60/year AUD) is sold on the website via Stripe, auto-renews, and cancels from Profile → Plan or the Stripe customer portal. The store app does not sell in-app purchases.
+
+Camera and photos are used only when you choose to photograph a receipt or payslip. You can upload a file instead.
+
+Delete your account any time: Profile → Delete account (type DELETE and your password), or email support@godriverhub.com.
+
+## Data safety / App Privacy answers
+
+Collect / linked to identity / not used for advertising or tracking:
+
+| Data | Why | Required? |
+|------|-----|-----------|
+| Email, name, account | Sign-in, recovery | Yes to create an account |
+| Financial info (your ledgers) | App functionality | Yes if you use the ledgers |
+| Photos | Receipt / payslip capture | No — file upload works |
+| App activity (support messages) | Customer support | No |
+| Location (Fuel Hub, optional) | Nearby diesel / route planning | No |
+
+- Sold: **No**
+- Tracking: **No**
+- Advertising: **No**
+- Encryption in transit: **Yes** (HTTPS)
+- Users can request deletion: **Yes** (in-app + email)
+
+Payments: Stripe on the **website** only. Card numbers are not stored in this app.
+
+## Reviewer demo account
+
+On **haulage-finance** in Render set:
+
+- `HUB_REVIEWER_USERNAME` — e.g. `hub.reviewer`
+- `HUB_REVIEWER_PASSWORD` — a strong password you choose (never commit it)
+- `HUB_REVIEWER_EMAIL` — optional; defaults to `support+reviewer@godriverhub.com`
+
+The next boot creates a non-admin complimentary Pro+ profile with a small truck-driver sample ledger. It does not reset an existing password.
+
+Paste in Play review notes:
+
+- URL: `https://www.godriverhub.com/haulage/`
+- Username / password: the env values you set
+- How to delete: Profile → Delete account → type DELETE
+
+Do not give reviewers the primary mod login.
+
+## Residual policy risk
+
+Pro features are digital. Stripe checkout is hidden in the native shell.
+Reviewers can still ask for Play Billing. If they do, do not turn Stripe
+checkout back on in the app.
+
+Do **not** say “we lodge your return”, “ATO approved”, or mix this listing
+with Go Taxation Suite.

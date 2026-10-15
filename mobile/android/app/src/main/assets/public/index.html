@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Driver Hub</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --navy: #0b1f33;
+        --amber: #f0a202;
+        --ink: #e8eef5;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--navy);
+        color: var(--ink);
+        font-family: system-ui, sans-serif;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        padding: 2rem;
+      }
+      h1 {
+        margin: 0 0 0.75rem;
+        font-size: 1.35rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--amber);
+      }
+      p {
+        margin: 0 0 1.25rem;
+        max-width: 22rem;
+        line-height: 1.45;
+        opacity: 0.92;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        padding: 0.7rem 1.2rem;
+        font: inherit;
+        font-weight: 650;
+        color: var(--navy);
+        background: var(--amber);
+      }
+      button[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>Driver Hub</h1>
+      <p id="status">
+        Opening your driver apps… The first open after a while can take up to a
+        minute while the server wakes.
+      </p>
+      <button id="retry" type="button" hidden>Try again</button>
+    </div>
+    <script>
+      (function () {
+        var HUB = "https://www.godriverhub.com/haulage/";
+        var status = document.getElementById("status");
+        var retry = document.getElementById("retry");
+        function go() {
+          retry.hidden = true;
+          status.textContent =
+            "Opening your driver apps… The first open after a while can take up to a minute while the server wakes.";
+          window.location.replace(HUB);
+        }
+        retry.addEventListener("click", go);
+        setTimeout(function () {
+          retry.hidden = false;
+          status.textContent =
+            "Still waiting on the server. Check you are online, then tap Try again.";
+        }, 15000);
+        go();
+      })();
+    </script>
+  </body>
+</html>

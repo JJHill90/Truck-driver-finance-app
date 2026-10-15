@@ -6,6 +6,8 @@ const terms = fs.readFileSync(path.join(__dirname, "public/terms.html"), "utf8")
 const support = fs.readFileSync(path.join(__dirname, "public/support.html"), "utf8");
 const welcomeSupport = fs.readFileSync(path.join(__dirname, "public/welcome-support-suite.html"), "utf8");
 const hubPrivacy = fs.readFileSync(path.join(__dirname, "public/privacy-driverhub.html"), "utf8");
+const hubTerms = fs.readFileSync(path.join(__dirname, "public/terms-driverhub.html"), "utf8");
+const hubSupport = fs.readFileSync(path.join(__dirname, "public/welcome-support-driverhub.html"), "utf8");
 
 describe("public legal pages", () => {
   it("Suite privacy is Go Taxation Suite only — no Driver Hub or driver apps", () => {
@@ -63,5 +65,13 @@ describe("public legal pages", () => {
   it("Driver Hub keeps a separate privacy page for the website footer", () => {
     expect(hubPrivacy).toMatch(/Driver Hub/);
     expect(hubPrivacy).toMatch(/does not lodge a BAS or tax return/i);
+    expect(hubPrivacy).toMatch(/rel="canonical" href="https:\/\/godriverhub\.com\/privacy"/);
+  });
+
+  it("Driver Hub terms and support canonicals point at godriverhub.com", () => {
+    expect(hubTerms).toMatch(/Driver Hub/);
+    expect(hubTerms).toMatch(/\$5 \/ month or \$60/);
+    expect(hubTerms).toMatch(/rel="canonical" href="https:\/\/godriverhub\.com\/terms"/);
+    expect(hubSupport).toMatch(/rel="canonical" href="https:\/\/godriverhub\.com\/support"/);
   });
 });

@@ -7,6 +7,7 @@ const {
   CAPACITOR_ORIGINS,
 } = require("./lib/cors");
 const { SUITE_OFFICIAL_ORIGINS } = require("./lib/suite-public-origin");
+const { DRIVERHUB_OFFICIAL_ORIGINS } = require("./lib/driverhub-public-origin");
 
 function mockReq(headers = {}) {
   return { headers, secure: false, method: "GET" };
@@ -46,13 +47,14 @@ describe("cors allowlist", () => {
     expect(isOriginAllowed("https://app.example.com", list)).toBe(true);
   });
 
-  it("always allowlists the official Suite HTTPS origins", () => {
+  it("always allowlists the official Suite and Driver Hub HTTPS origins", () => {
     const list = buildAllowlist({});
-    for (const origin of SUITE_OFFICIAL_ORIGINS) {
+    for (const origin of [...SUITE_OFFICIAL_ORIGINS, ...DRIVERHUB_OFFICIAL_ORIGINS]) {
       expect(list).toContain(origin);
       expect(isOriginAllowed(origin, list)).toBe(true);
     }
     expect(list).not.toContain("http://gotaxationsuite.com");
+    expect(list).not.toContain("http://godriverhub.com");
   });
 });
 
