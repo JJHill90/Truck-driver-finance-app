@@ -27,8 +27,17 @@ Accounts stay on Driver Hub disk `haulage-data`. Suite stays on
 ## 1. Add the domain on Render
 
 1. Open Render → service **`haulage-finance`** → **Settings → Custom Domains**.
-2. Add `godriverhub.com` and `www.godriverhub.com`.
-3. Copy the DNS records Render shows (usually an apex ALIAS/A and a `www` CNAME).
+2. Add **only** the apex: `godriverhub.com`. Render automatically adds
+   `www.godriverhub.com` and redirects it to the apex. Adding `www` as a
+   second custom domain fails with a duplicate / “already verified” error.
+3. Copy the DNS records Render shows (apex `A` / `ALIAS`, `www` `CNAME`).
+
+Do **not** add this domain on `go-taxation-suite`. If it already appears
+on another Render service, delete it there first — a hostname can only
+belong to one service.
+
+cPanel / AutoSSL “this domain is verified” is **not** Render Verify.
+Render only verifies after public DNS points at Render (next section).
 
 ## 2. Point DNS at Render
 
@@ -45,10 +54,15 @@ Set:
 
 Use Render’s values if the dashboard shows different ones.
 
-**Remove / do not keep:**
+**Remove / do not keep** (these are what currently block Verify):
 
-- Parking or old-host `A` records on `@`.
-- `www` CNAME → `godriverhub.com` (that still hits the old host).
+- Apex `A` `162.247.78.68` (Ace Host). Render needs **only**
+  `216.24.57.1` (or the IP shown in the dashboard).
+- `www` CNAME → `godriverhub.com` (that still hits Ace Host). It must
+  CNAME to `haulage-finance.onrender.com`.
+- Apache / cPanel redirects from `godriverhub.com` → `go-driverhub.com`
+  (parked hyphenated site). Changing the `A` record stops that; also
+  turn off Redirects / parked-domain forwarding in cPanel.
 - Any **AAAA** (IPv6) on `@` or `www`. Render is IPv4-only; leftover
   AAAA records fail verification even when A is correct.
 - URL redirects / “parked domain” / domain-forwarding features.
@@ -73,6 +87,9 @@ Until then keep using the `onrender.com` URL for the app.
 
 ### If Render says it could not verify
 
+That is expected while DNS still answers Ace Host. Check the **live**
+records (not the cPanel editor preview):
+
 ```bash
 dig +short A godriverhub.com
 dig +short AAAA godriverhub.com
@@ -80,10 +97,17 @@ dig +short CNAME www.godriverhub.com
 dig +short CAA godriverhub.com
 ```
 
-Verification fails until the apex `A` is Render’s IP and `www` CNAMEs to
-`haulage-finance.onrender.com`. Then click Verify again. TLS issues after
-that usually mean a leftover AAAA or a CAA list that omits
-`letsencrypt.org` / `pki.goog`.
+| Result | Meaning |
+|--------|---------|
+| `A` `162.247.78.68` | Still Ace Host. Change `@` to `216.24.57.1`. |
+| `www` CNAME `godriverhub.com` | Still the old host. Point `www` at `haulage-finance.onrender.com`. |
+| `A` `216.24.57.1` and `www` CNAME `haulage-finance.onrender.com` | Ready. Click **Verify** again. |
+
+TTL on the parking records is often 4 hours. After you save, wait or
+flush Google / Cloudflare public DNS caches, then Verify.
+
+TLS issues after a green Verify usually mean a leftover AAAA or a CAA
+list that omits `letsencrypt.org` / `pki.goog`.
 
 ## 3. Point the app at the official origin
 
