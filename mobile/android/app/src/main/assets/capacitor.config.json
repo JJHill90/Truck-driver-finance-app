@@ -7,8 +7,10 @@
 		"androidScheme": "https",
 		"errorPath": "index.html",
 		"allowNavigation": [
-			"https://www.godriverhub.com/*",
-			"https://godriverhub.com/*"
+			"https://godriverhub.com/haulage*",
+			"https://godriverhub.com/api/haulage*",
+			"https://www.godriverhub.com/haulage*",
+			"https://www.godriverhub.com/api/haulage*"
 		]
 	},
 	"android": {
