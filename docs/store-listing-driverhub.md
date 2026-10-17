@@ -6,17 +6,17 @@ Compile **only** this listing:
 |-------|--------|
 | Name | Driver Hub |
 | Application id | `com.haulagefinance.app` |
-| Loads (Play WebView) | `https://www.godriverhub.com/haulage/` |
-| Official marketing site | `https://www.godriverhub.com/` |
-| Privacy (Hub, no login) | `https://www.godriverhub.com/haulage/privacy` |
-| Terms (Hub, no login) | `https://www.godriverhub.com/haulage/terms` |
+| Loads (Play WebView — the **app**) | `https://godriverhub.com/haulage/` |
+| Official marketing site (browser only) | `https://godriverhub.com/` |
+| Privacy (Hub, no login) | `https://godriverhub.com/haulage/privacy` |
+| Terms (Hub, no login) | `https://godriverhub.com/haulage/terms` |
 | Support | `https://www.godriverhub.com/support` |
 | Native project | `mobile/` |
 | Support email | `support@godriverhub.com` |
 
 Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
 
-Use **www** in Play URLs while apex `godriverhub.com` still splits with the old Ace Host IP on some resolvers (Google Public DNS). After apex Verify is green everywhere, you can switch the console to `https://godriverhub.com/…`. Until the Hub-legal PR is on `main`, `/privacy` and `/terms` on this host are still Suite pages — Play must use `/haulage/privacy` and `/haulage/terms`.
+The Play package must load **`/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub). Do not point Capacitor at `https://godriverhub.com/` — that URL is the public **website**. A www → apex 301 on `/haulage/` also opens Chrome; the shell skips that hop. Until Hub-legal pages are on `main`, Play Console privacy/terms must still use `/haulage/privacy` and `/haulage/terms`.
 
 ## Verdict
 
@@ -57,7 +57,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 1 / `1.0.0`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline.
+**Build → Generate Signed Bundle** (`versionCode` 2 / `1.0.1`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline. Upload this AAB over the build that opened the marketing website in Chrome.
 
 Then in Play Console for `com.haulagefinance.app`:
 
@@ -140,7 +140,7 @@ The next boot creates a non-admin complimentary Pro+ profile with a small truck-
 
 Paste in Play review notes:
 
-- URL: `https://www.godriverhub.com/haulage/`
+- URL: `https://godriverhub.com/haulage/`
 - Username / password: the env values you set
 - How to delete: Profile → Delete account → type DELETE
 

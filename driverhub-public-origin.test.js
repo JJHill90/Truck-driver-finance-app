@@ -5,6 +5,9 @@ const {
   officialPageUrl,
   hostFromRequest,
   isDriverHubOfficialHost,
+  isHubAppPath,
+  isDriverHubNativeApp,
+  nativeAppToHaulageRedirect,
   wwwToApexRedirect,
 } = require("./lib/driverhub-public-origin");
 
@@ -81,6 +84,87 @@ describe("Driver Hub official public origin", () => {
     expect(
       wwwToApexRedirect(
         { headers: { host: "haulage-finance.onrender.com" }, originalUrl: "/" },
+        res,
+        () => {
+          nextCalled = true;
+        }
+      )
+    ).toBe(false);
+    expect(nextCalled).toBe(true);
+  });
+
+  it("does not www→apex the /haulage app (that 301 opens Chrome in Play)", () => {
+    delete process.env.APP_PRODUCT;
+    const res = {
+      redirect() {
+        throw new Error("should not redirect /haulage");
+      },
+    };
+    let nextCalled = false;
+    expect(isHubAppPath("/haulage/")).toBe(true);
+    expect(isHubAppPath("/api/haulage/auth/me")).toBe(true);
+    expect(isHubAppPath("/")).toBe(false);
+    expect(
+      wwwToApexRedirect(
+        {
+          headers: { host: "www.godriverhub.com" },
+          originalUrl: "/haulage/",
+          method: "GET",
+        },
+        res,
+        () => {
+          nextCalled = true;
+        }
+      )
+    ).toBe(false);
+    expect(nextCalled).toBe(true);
+  });
+
+  it("sends the native Play shell from the marketing homepage into /haulage/", () => {
+    delete process.env.APP_PRODUCT;
+    expect(isDriverHubNativeApp({ headers: { "user-agent": "Mozilla DriverHubApp" } })).toBe(true);
+    expect(isDriverHubNativeApp({ headers: { "user-agent": "Chrome" } })).toBe(false);
+
+    const res = {
+      redirected: null,
+      redirect(status, url) {
+        this.redirected = { status, url };
+      },
+    };
+    const native = {
+      headers: { "user-agent": "Chrome Mobile DriverHubApp" },
+      originalUrl: "/",
+      method: "GET",
+    };
+    expect(nativeAppToHaulageRedirect(native, res, () => {})).toBe(true);
+    expect(res.redirected).toEqual({ status: 302, url: "/haulage/" });
+
+    res.redirected = null;
+    expect(
+      nativeAppToHaulageRedirect(
+        { ...native, originalUrl: "/privacy" },
+        res,
+        () => {}
+      )
+    ).toBe(true);
+    expect(res.redirected).toEqual({ status: 302, url: "/haulage/privacy" });
+
+    let nextCalled = false;
+    expect(
+      nativeAppToHaulageRedirect(
+        { ...native, originalUrl: "/haulage/" },
+        res,
+        () => {
+          nextCalled = true;
+        }
+      )
+    ).toBe(false);
+    expect(nextCalled).toBe(true);
+
+    nextCalled = false;
+    expect(
+      nativeAppToHaulageRedirect(
+        { headers: { "user-agent": "Chrome" }, originalUrl: "/", method: "GET" },
         res,
         () => {
           nextCalled = true;

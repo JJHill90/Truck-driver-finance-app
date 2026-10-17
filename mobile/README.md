@@ -1,7 +1,8 @@
 # Driver Hub — mobile shell (Capacitor)
 
-Native Android wrapper around the **hosted** web app at
-`https://www.godriverhub.com/haulage/`.
+Native Android wrapper around the **hosted app** at
+`https://godriverhub.com/haulage/` — not the public marketing site at
+`https://godriverhub.com/`.
 
 The phone loads the same Render site you already use in the browser. Auth,
 uploads, OCR, and ledgers stay on the server — this folder only packages a
@@ -29,7 +30,7 @@ npx cap open android
 ```
 
 In Android Studio: pick a device → **Run**. Then **Build → Generate Signed
-Bundle** for Play (`versionCode` 1 / `1.0.0`). Keep the keystore out of git.
+Bundle** for Play (`versionCode` 2 / `1.0.1`). Keep the keystore out of git.
 
 Store listing copy, Data safety answers, and reviewer notes:
 [`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md).

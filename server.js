@@ -126,6 +126,7 @@ const {
 } = require("./lib/suite-public-origin");
 const {
   wwwToApexRedirect: driverHubWwwToApexRedirect,
+  nativeAppToHaulageRedirect,
   isDriverHubOfficialHost,
 } = require("./lib/driverhub-public-origin");
 const {
@@ -772,6 +773,7 @@ const app = express();
 // (and vice versa) so both can share this Express app.
 app.use(suiteWwwToApexRedirect);
 app.use(driverHubWwwToApexRedirect);
+app.use(nativeAppToHaulageRedirect);
 // Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
 // Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
 app.use(corsMiddleware);

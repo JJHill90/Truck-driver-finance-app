@@ -2069,6 +2069,9 @@
   /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
   function isNativeShell() {
     try {
+      if (typeof navigator !== "undefined" && /\bDriverHubApp\b/i.test(navigator.userAgent || "")) {
+        return true;
+      }
       const cap = window.Capacitor;
       if (cap && typeof cap.isNativePlatform === "function") {
         return Boolean(cap.isNativePlatform());

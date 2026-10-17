@@ -8,7 +8,9 @@ import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
-    static final String HUB_URL = "https://www.godriverhub.com/haulage/";
+    /** Play package loads the app, never the marketing homepage at /. */
+    static final String HUB_URL = "https://godriverhub.com/haulage/";
+    static final String NATIVE_UA = "DriverHubApp";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,7 +32,10 @@ public class MainActivity extends BridgeActivity {
             new Handler(Looper.getMainLooper()).postDelayed(this::openHostedHub, 250);
             return;
         }
-        webView.post(() -> webView.loadUrl(HUB_URL));
+        webView.post(() -> {
+            markNativeUserAgent(webView);
+            webView.loadUrl(HUB_URL);
+        });
     }
 
     private void openHostedHubIfStillLocal() {
@@ -39,10 +44,31 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         String url = String.valueOf(webView.getUrl());
-        boolean hosted = url.contains(HubNavigationPlugin.HOSTED_HOST)
-            || url.contains(HubNavigationPlugin.HOSTED_APEX);
-        if (!hosted) {
-            webView.post(() -> webView.loadUrl(HUB_URL));
+        boolean inApp = HubNavigationPlugin.isOfficialHost(hostOf(url))
+            && url.contains("/haulage");
+        if (!inApp) {
+            webView.post(() -> {
+                markNativeUserAgent(webView);
+                webView.loadUrl(HUB_URL);
+            });
+        }
+    }
+
+    private void markNativeUserAgent(WebView webView) {
+        String ua = webView.getSettings().getUserAgentString();
+        if (ua == null) {
+            ua = "";
+        }
+        if (!ua.contains(NATIVE_UA)) {
+            webView.getSettings().setUserAgentString(ua + " " + NATIVE_UA);
+        }
+    }
+
+    private static String hostOf(String url) {
+        try {
+            return android.net.Uri.parse(url).getHost();
+        } catch (Exception ignored) {
+            return "";
         }
     }
 
