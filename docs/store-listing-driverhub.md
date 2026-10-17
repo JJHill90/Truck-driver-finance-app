@@ -81,17 +81,32 @@ Play does **not** get a Stripe/IAP product. This build is a login WebView. Subsc
 **Short (Play, ≤80):**  
 Truck tax records and diesel planning. Not advice. You lodge with the ATO.
 
-**Description:**
+**Description (Play, ≤4000; this copy is 2216):**
 
-Driver Hub is the login for Taxation Hub and Fuel Hub. Track work expenses, scan receipts and payslips, keep a live EOFY working paper, and plan diesel fills on NHVR truck-access corridors. One profile — name, employer, licence class and work vehicle — feeds both apps.
+Driver Hub is a cab-side assistant for Australian truck drivers. One login helps you keep tax records and diesel planning in the same place, so you are not sorting dockets on the kitchen table after a long run.
 
-This is not tax advice and not an official ATO product. The app does not lodge a BAS or tax return. You (or your registered agent) lodge with the ATO.
+Sign in once, then open Taxation Hub or Fuel Hub. Your name, employer, licence class and work vehicle stay on one profile and feed both apps. Use it in the yard, at the servo, or in the bunk — photograph the paper while you still have it.
 
+HOW TAXATION HUB HELPS
+Photograph a meal docket, travel groceries or a payslip before it lives in the door pocket. Approve the totals and they land on your expense or income ledger for the financial year you are working. The dashboard shows spend against what you actually took home. A live EOFY working paper updates as you go — something you (or your registered agent) can use when you lodge with the ATO.
+
+It also helps you keep travel / LAFHA days, car claims (cents per kilometre or logbook) and a tax estimate in view between trips, so you can see where you stand before EOFY is on top of you. Figures are indicative. This is assistance, not someone doing the return for you.
+
+HOW FUEL HUB HELPS
+Plan diesel fills on NHVR truck-access freight corridors from load, trailers and tank — not a car-nav shortcut. Rank truck-access stops and size a fill so you are not brim-filling at the dearest bowser if you do not need to.
+
+WHAT THIS APP IS (AND IS NOT)
+Driver Hub is an assistance tool. It is not tax, financial or legal advice and not an official ATO product. It does not lodge a BAS or tax return. You (or your registered agent) lodge with the ATO.
+
+FREE AND PRO
 Free: 15 uploads a month and one on-screen EOFY report. Taxation Hub Pro ($5/month or $60/year AUD) is sold on the website via Stripe, auto-renews, and cancels from Profile → Plan or the Stripe customer portal. The store app does not sell in-app purchases.
 
 Camera and photos are used only when you choose to photograph a receipt or payslip. You can upload a file instead.
 
 Delete your account any time: Profile → Delete account (type DELETE and your password), or email support@godriverhub.com.
+
+Support: https://www.godriverhub.com/support
+Privacy: https://www.godriverhub.com/haulage/privacy
 
 ## Data safety / App Privacy answers
 
