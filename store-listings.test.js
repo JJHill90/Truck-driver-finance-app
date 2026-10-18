@@ -17,6 +17,105 @@ function pngInfo(filePath) {
   };
 }
 
+describe("Driver Hub store listing assets", () => {
+  const hubStore = path.join(__dirname, "mobile", "store");
+  const hubListing = path.join(__dirname, "docs", "store-listing-driverhub.md");
+  const hubCap = path.join(__dirname, "mobile", "capacitor.config.json");
+  const hubAndroid = path.join(__dirname, "mobile", "android", "app");
+
+  it("lists Hub HTTPS marketing and legal pages", () => {
+    const listing = fs.readFileSync(hubListing, "utf8");
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\/privacy|https:\/\/godriverhub\.com\/haulage\/privacy/);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\/terms|https:\/\/godriverhub\.com\/haulage\/terms/);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/support|https:\/\/godriverhub\.com\/support/);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
+    expect(listing).toMatch(/gotaxation\.com\.au/);
+    expect(listing).toMatch(/marketing site/);
+    const cap = JSON.parse(fs.readFileSync(hubCap, "utf8"));
+    expect(cap.server.url).toBeFalsy();
+    expect(cap.server.androidScheme).toBe("https");
+    expect(cap.server.allowNavigation).toEqual(
+      expect.arrayContaining([
+        "https://godriverhub.com/haulage*",
+        "https://www.godriverhub.com/haulage*",
+        "https://godriverhub.com/api/haulage*",
+        "https://www.godriverhub.com/api/haulage*",
+      ])
+    );
+    expect(cap.server.allowNavigation.join("\n")).not.toMatch(/godriverhub\.com\/\*/);
+  });
+
+  it("ships a 1024×500 Play feature graphic with no alpha", () => {
+    expect(pngInfo(path.join(hubStore, "feature-graphic-1024x500.png"))).toMatchObject({
+      width: 1024,
+      height: 500,
+      colorType: 2,
+    });
+  });
+
+  it("keeps the Play short description at or under 80 characters", () => {
+    const listing = fs.readFileSync(hubListing, "utf8");
+    const match = listing.match(/\*\*Short \(Play, ≤80\):\*\*[^\n]*\n+([^\n]+)/);
+    expect(match).toBeTruthy();
+    expect(match[1].trim().length).toBeGreaterThan(20);
+    expect(match[1].trim().length).toBeLessThanOrEqual(80);
+  });
+
+  it("ships a 512 Play icon", () => {
+    expect(pngInfo(path.join(hubStore, "icon-play-512.png"))).toMatchObject({
+      width: 512,
+      height: 512,
+    });
+  });
+
+  it("has Play phone screenshots at 1080×1920", () => {
+    const playDir = path.join(hubStore, "screenshots", "play-1080x1920");
+    const names = ["01-login.png", "02-dashboard.png", "03-expenses.png", "04-income.png", "05-report.png"];
+    for (const name of names) {
+      expect(pngInfo(path.join(playDir, name))).toMatchObject({
+        width: 1080,
+        height: 1920,
+        colorType: 2,
+      });
+    }
+  });
+
+  it("uses a color Android 12 splash and does not proxy via server.url", () => {
+    const styles = fs.readFileSync(path.join(hubAndroid, "src/main/res/values/styles.xml"), "utf8");
+    expect(styles).toMatch(/windowSplashScreenBackground">@color\/splashBackground/);
+    expect(styles).not.toMatch(/android:background">@drawable\/splash/);
+    const colors = fs.readFileSync(path.join(hubAndroid, "src/main/res/values/colors.xml"), "utf8");
+    expect(colors).toMatch(/name="splashBackground">#0B1F33/);
+    const raw = fs.readFileSync(path.join(hubAndroid, "src/main/assets/capacitor.config.json"), "utf8");
+    const config = JSON.parse(raw);
+    expect(config.appId).toBe("com.haulagefinance.app");
+    expect(config.server && config.server.url).toBeFalsy();
+    const main = fs.readFileSync(
+      path.join(hubAndroid, "src/main/java/com/haulagefinance/app/MainActivity.java"),
+      "utf8"
+    );
+    expect(main).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
+    expect(main).toMatch(/SplashScreen\.installSplashScreen/);
+    expect(main).toMatch(/DriverHubApp/);
+    expect(main).toMatch(/url\.contains\("\/haulage"\)/);
+    const plugin = fs.readFileSync(
+      path.join(hubAndroid, "src/main/java/com/haulagefinance/app/HubNavigationPlugin.java"),
+      "utf8"
+    );
+    expect(plugin).toMatch(/shouldOverrideLoad/);
+    expect(plugin).toMatch(/isAppPath/);
+    expect(plugin).toMatch(/bounceToApp/);
+    expect(plugin).toMatch(/isLocalHost/);
+    expect(plugin).not.toMatch(/gotaxation\.com\.au/);
+    const launcher = fs.readFileSync(path.join(hubAndroid, "src/main/assets/public/index.html"), "utf8");
+    expect(launcher).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
+    expect(launcher).toMatch(/Try again/);
+    const gradle = fs.readFileSync(path.join(hubAndroid, "build.gradle"), "utf8");
+    expect(gradle).toMatch(/versionCode 3/);
+    expect(gradle).toMatch(/versionName "1\.0\.2"/);
+  });
+});
+
 describe("Suite store listing assets", () => {
   it("lists the official HTTPS domain for marketing and legal pages", () => {
     const listing = fs.readFileSync(STORE_LISTING, "utf8");
