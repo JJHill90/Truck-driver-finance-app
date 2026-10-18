@@ -1,8 +1,13 @@
 # Driver Hub — mobile shell (Capacitor)
 
 Native Android wrapper around the **hosted app** at
-`https://godriverhub.com/haulage/` — not the public marketing site at
-`https://godriverhub.com/`.
+`https://www.godriverhub.com/haulage/` — the Driver Hub login service, not the
+public marketing site at `https://godriverhub.com/` and not
+`www.gotaxation.com.au` (that name does not resolve).
+
+Open **this** project in Android Studio: `mobile/android` after `npx cap sync android`
+from `mobile/`. Application id is `com.haulagefinance.app`. Do **not** open
+`mobile-suite/` or a local `comgotaxationsuite` folder — that is Go Taxation Suite.
 
 The phone loads the same Render site you already use in the browser. Auth,
 uploads, OCR, and ledgers stay on the server — this folder only packages a
@@ -30,7 +35,7 @@ npx cap open android
 ```
 
 In Android Studio: pick a device → **Run**. Then **Build → Generate Signed
-Bundle** for Play (`versionCode` 2 / `1.0.1`). Keep the keystore out of git.
+Bundle** for Play (`versionCode` 3 / `1.0.2`). Keep the keystore out of git.
 
 Store listing copy, Data safety answers, and reviewer notes:
 [`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md).

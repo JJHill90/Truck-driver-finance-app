@@ -6,17 +6,19 @@ Compile **only** this listing:
 |-------|--------|
 | Name | Driver Hub |
 | Application id | `com.haulagefinance.app` |
-| Loads (Play WebView — the **app**) | `https://godriverhub.com/haulage/` |
+| Loads (Play WebView — the **app**) | `https://www.godriverhub.com/haulage/` |
 | Official marketing site (browser only) | `https://godriverhub.com/` |
-| Privacy (Hub, no login) | `https://godriverhub.com/haulage/privacy` |
-| Terms (Hub, no login) | `https://godriverhub.com/haulage/terms` |
+| Privacy (Hub, no login) | `https://www.godriverhub.com/haulage/privacy` |
+| Terms (Hub, no login) | `https://www.godriverhub.com/haulage/terms` |
 | Support | `https://www.godriverhub.com/support` |
 | Native project | `mobile/` |
 | Support email | `support@godriverhub.com` |
 
 Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
 
-The Play package must load **`/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub). Do not point Capacitor at `https://godriverhub.com/` — that URL is the public **website**. A www → apex 301 on `/haulage/` also opens Chrome; the shell skips that hop. Until Hub-legal pages are on `main`, Play Console privacy/terms must still use `/haulage/privacy` and `/haulage/terms`.
+The Play package must load **`https://www.godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). Live Cloudflare 301s apex → www, so the shell opens **www `/haulage/`** directly. Until Hub-legal pages are on `main`, Play Console privacy/terms must still use `/haulage/privacy` and `/haulage/terms`.
+
+Build Driver Hub from this repo’s **`mobile/`** folder (`com.haulagefinance.app`). Do not open the Suite Android Studio project (`mobile-suite/` or a local `comgotaxationsuite` tree).
 
 ## Verdict
 
@@ -57,7 +59,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 2 / `1.0.1`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline. Upload this AAB over the build that opened the marketing website in Chrome.
+**Build → Generate Signed Bundle** (`versionCode` 3 / `1.0.2`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline. Upload this AAB over any build that opened Chrome, the marketing homepage, or `www.gotaxation.com.au`.
 
 Then in Play Console for `com.haulagefinance.app`:
 
@@ -140,7 +142,7 @@ The next boot creates a non-admin complimentary Pro+ profile with a small truck-
 
 Paste in Play review notes:
 
-- URL: `https://godriverhub.com/haulage/`
+- URL: `https://www.godriverhub.com/haulage/`
 - Username / password: the env values you set
 - How to delete: Profile → Delete account → type DELETE
 

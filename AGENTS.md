@@ -39,11 +39,13 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   **`https://gotaxationsuite.com/`** on `go-taxation-suite` (`/`, `/privacy`,
   `/terms`, `/support`, `/suite/` app — see `docs/custom-domain.md`). Do not
   attach the Hub domain to Suite or the Suite domain to Hub.   Driver Hub Play
-  WebView loads `https://godriverhub.com/haulage/` (the app). The public website
-  stays at `https://godriverhub.com/`. Do not load `/` in the native shell, and
-  do not set Capacitor `server.url` (see `docs/store-listing-driverhub.md`).
-  Keep Suite Play on the onrender `/suite/` URL until Suite DNS + TLS are
-  verified. Native shells still load `/suite/` or `/haulage/`.
+  WebView loads `https://www.godriverhub.com/haulage/` (the app service). Live
+  Cloudflare 301s apex → www, so do not launch `https://godriverhub.com/`
+  (marketing) or a non-existent host. Do not set Capacitor `server.url`
+  (see `docs/store-listing-driverhub.md`). Keep Suite Play on the onrender
+  `/suite/` URL until Suite DNS + TLS are verified. Native shells still
+  load `/suite/` or `/haulage/`. Build Hub from `mobile/`, Suite from
+  `mobile-suite/`.
   When Play / App Store listings exist, set `SUITE_PLAY_STORE_URL` /
   `SUITE_APP_STORE_URL` (Suite host) or `DRIVERHUB_PLAY_STORE_URL` /
   `DRIVERHUB_APP_STORE_URL` (Driver Hub host); until then the buttons stay
