@@ -25,10 +25,11 @@ describe("Driver Hub store listing assets", () => {
 
   it("lists Hub HTTPS marketing and legal pages", () => {
     const listing = fs.readFileSync(hubListing, "utf8");
-    expect(listing).toMatch(/https:\/\/godriverhub\.com\/haulage\/privacy/);
-    expect(listing).toMatch(/https:\/\/godriverhub\.com\/haulage\/terms/);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\/privacy|https:\/\/godriverhub\.com\/haulage\/privacy/);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\/terms|https:\/\/godriverhub\.com\/haulage\/terms/);
     expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/support|https:\/\/godriverhub\.com\/support/);
-    expect(listing).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
+    expect(listing).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
+    expect(listing).toMatch(/gotaxation\.com\.au/);
     expect(listing).toMatch(/marketing site/);
     const cap = JSON.parse(fs.readFileSync(hubCap, "utf8"));
     expect(cap.server.url).toBeFalsy();
@@ -93,8 +94,7 @@ describe("Driver Hub store listing assets", () => {
       path.join(hubAndroid, "src/main/java/com/haulagefinance/app/MainActivity.java"),
       "utf8"
     );
-    expect(main).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
-    expect(main).not.toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
+    expect(main).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
     expect(main).toMatch(/SplashScreen\.installSplashScreen/);
     expect(main).toMatch(/DriverHubApp/);
     expect(main).toMatch(/url\.contains\("\/haulage"\)/);
@@ -105,13 +105,14 @@ describe("Driver Hub store listing assets", () => {
     expect(plugin).toMatch(/shouldOverrideLoad/);
     expect(plugin).toMatch(/isAppPath/);
     expect(plugin).toMatch(/bounceToApp/);
+    expect(plugin).toMatch(/isLocalHost/);
+    expect(plugin).not.toMatch(/gotaxation\.com\.au/);
     const launcher = fs.readFileSync(path.join(hubAndroid, "src/main/assets/public/index.html"), "utf8");
-    expect(launcher).toMatch(/godriverhub\.com\/haulage\//);
-    expect(launcher).not.toMatch(/www\.godriverhub\.com\/haulage\//);
+    expect(launcher).toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
     expect(launcher).toMatch(/Try again/);
     const gradle = fs.readFileSync(path.join(hubAndroid, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 2/);
-    expect(gradle).toMatch(/versionName "1\.0\.1"/);
+    expect(gradle).toMatch(/versionCode 3/);
+    expect(gradle).toMatch(/versionName "1\.0\.2"/);
   });
 });
 

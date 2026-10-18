@@ -6,13 +6,13 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
- * Keep the Play package on the Driver Hub <strong>app</strong> ({@code /haulage/}),
- * not the public marketing website at {@code godriverhub.com/}.
+ * Keep the Play package on the Driver Hub <strong>app</strong>
+ * ({@code https://www.godriverhub.com/haulage/}), not the public website and
+ * not an unknown host (those show {@code ERR_NAME_NOT_RESOLVED} in Chrome).
  *
- * Without this, Capacitor treats an off-localhost host as an external intent
- * and opens Chrome, or (when listed in allowNavigation) proxies HTML through
- * HttpURLConnection. A www → apex 301 looks like a new website load and
- * Chrome takes over.
+ * Returning {@code null} lets Capacitor open Chrome or show
+ * {@code ERR_NAME_NOT_RESOLVED}. Returning {@code false} keeps the load in
+ * this WebView. Returning {@code true} means we handled it (bounce to the app).
  */
 @CapacitorPlugin(name = "HubNavigation")
 public class HubNavigationPlugin extends Plugin {
@@ -26,6 +26,19 @@ public class HubNavigationPlugin extends Plugin {
         return HOSTED_HOST.equalsIgnoreCase(host) || HOSTED_APEX.equalsIgnoreCase(host);
     }
 
+    static boolean isLocalHost(String host) {
+        if (host == null) {
+            return false;
+        }
+        String h = host.toLowerCase();
+        return "localhost".equals(h)
+            || "127.0.0.1".equals(h)
+            || "10.0.2.2".equals(h)
+            || h.endsWith(".localhost")
+            || "capacitor".equals(h)
+            || h.startsWith("capacitor");
+    }
+
     static boolean isAppPath(String path) {
         if (path == null || path.isEmpty() || "/".equals(path)) {
             return false;
@@ -37,13 +50,13 @@ public class HubNavigationPlugin extends Plugin {
 
     static String bounceToApp(String path) {
         if ("/privacy".equals(path) || "/privacy.html".equals(path)) {
-            return "https://godriverhub.com/haulage/privacy";
+            return "https://www.godriverhub.com/haulage/privacy";
         }
         if ("/terms".equals(path) || "/terms.html".equals(path)) {
-            return "https://godriverhub.com/haulage/terms";
+            return "https://www.godriverhub.com/haulage/terms";
         }
         if ("/support".equals(path) || "/support.html".equals(path)) {
-            return "https://godriverhub.com/haulage/support";
+            return "https://www.godriverhub.com/haulage/support";
         }
         return MainActivity.HUB_URL;
     }
@@ -53,16 +66,17 @@ public class HubNavigationPlugin extends Plugin {
         if (url == null || url.getHost() == null) {
             return null;
         }
-        if (!isOfficialHost(url.getHost())) {
+        String host = url.getHost();
+        if (isLocalHost(host)) {
             return null;
         }
         String path = url.getPath() == null ? "/" : url.getPath();
-        if (isAppPath(path)) {
+        if (isOfficialHost(host) && isAppPath(path)) {
             return false;
         }
         WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView != null) {
-            String bounce = bounceToApp(path);
+            String bounce = bounceToApp(isOfficialHost(host) ? path : "/");
             webView.post(() -> webView.loadUrl(bounce));
         }
         return true;
