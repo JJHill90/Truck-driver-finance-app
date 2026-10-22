@@ -7694,11 +7694,227 @@
       .join("");
   }
 
+  let editModalKeyHandler = null;
+
   function closeEditModal() {
+    if (editModalKeyHandler) {
+      document.removeEventListener("keydown", editModalKeyHandler);
+      editModalKeyHandler = null;
+    }
     document.getElementById("enh-ledger-edit-modal")?.remove();
   }
 
-  function openEditModal(type, id) {
+  function isGoTaxSuiteUi() {
+    return Boolean(document.body && document.body.classList.contains("gotax-suite"));
+  }
+
+  function travelFieldLabels() {
+    if (isGoTaxSuiteUi()) {
+      return {
+        overnightDays: "Work travel nights",
+        travelAllowanceAmount: "Travel allowance amount (AUD)",
+      };
+    }
+    return {
+      overnightDays: "Living Away from Home days (LAFHA)",
+      travelAllowanceAmount: "Travel / LAFHA amount (AUD)",
+    };
+  }
+
+  function lookupMenuLabel(list, id) {
+    if (!id) return "";
+    const found = (list || []).find((item) => (item && item.id ? item.id : item) === id);
+    if (!found) return String(id).replace(/_/g, " ");
+    return found.label || String(found.id || id).replace(/_/g, " ");
+  }
+
+  function categoryLabel(id) {
+    try {
+      const cats = (state.standards && state.standards.categories) || [];
+      const special = (state.standards && state.standards.specialClaimCategories) || [];
+      return lookupMenuLabel(cats.concat(special), id);
+    } catch {
+      return String(id || "").replace(/_/g, " ");
+    }
+  }
+
+  function incomeTypeLabel(id) {
+    try {
+      return lookupMenuLabel((state.standards && state.standards.incomeTypes) || [], id);
+    } catch {
+      return String(id || "").replace(/_/g, " ");
+    }
+  }
+
+  function expenseFieldDefs() {
+    return [
+      { key: "date", label: "Date", kind: "date", required: true },
+      { key: "category", label: "Category", kind: "category", required: true },
+      { key: "amount", label: "Amount (AUD)", kind: "money", required: true, step: "0.01", min: "0" },
+      { key: "vendor", label: "Vendor / business", kind: "text" },
+      { key: "vendorAbn", label: "ABN", kind: "text", inputmode: "numeric" },
+      { key: "description", label: "Description", kind: "text", wide: true },
+      { key: "workUsePercent", label: "Work-use %", kind: "number", min: "0", max: "100", step: "1" },
+      { key: "reimbursed", label: "Reimbursed", kind: "checkbox" },
+      {
+        key: "cashTransaction",
+        label: "Cash transaction (Paid cash check for claim)",
+        kind: "checkbox",
+      },
+      { key: "noReceipt", label: "No receipt", kind: "checkbox" },
+      { key: "vendingMachine", label: "Vending machine", kind: "checkbox" },
+      { key: "notes", label: "Notes", kind: "textarea", wide: true },
+    ];
+  }
+
+  function incomeFieldDefs() {
+    const travel = travelFieldLabels();
+    return [
+      { key: "date", label: "Date", kind: "date", required: true },
+      { key: "type", label: "Type", kind: "incomeType", required: true },
+      { key: "amount", label: "Amount (AUD)", kind: "money", required: true, step: "0.01", min: "0" },
+      { key: "entity", label: "Entity / payer", kind: "text" },
+      { key: "grossTotal", label: "Gross total", kind: "money", step: "0.01", min: "0" },
+      { key: "taxableIncome", label: "Taxable income", kind: "money", step: "0.01", min: "0" },
+      { key: "gstAmount", label: "GST", kind: "money", step: "0.01", min: "0" },
+      { key: "netPay", label: "Net pay", kind: "money", step: "0.01", min: "0" },
+      { key: "payPeriod", label: "Pay period", kind: "text", wide: true },
+      {
+        key: "overnightDays",
+        label: travel.overnightDays,
+        kind: "number",
+        step: "1",
+        min: "0",
+        max: "31",
+        placeholder: "e.g. 3",
+      },
+      {
+        key: "travelAllowanceAmount",
+        label: travel.travelAllowanceAmount,
+        kind: "money",
+        step: "0.01",
+        min: "0",
+        placeholder: "optional",
+      },
+      { key: "description", label: "Description", kind: "text", wide: true },
+      { key: "summaryNotes", label: "Notes", kind: "textarea", wide: true },
+    ];
+  }
+
+  function entryFieldValue(entry, field) {
+    if (field.key === "entity") return entry.entity || entry.payer || "";
+    if (field.key === "grossTotal") return entry.grossTotal ?? entry.amount ?? "";
+    if (field.key === "taxableIncome") return entry.taxableIncome ?? entry.amount ?? "";
+    if (field.key === "gstAmount") return entry.gstAmount ?? 0;
+    if (field.key === "netPay") return entry.netPay ?? "";
+    if (field.key === "workUsePercent") return entry.workUsePercent ?? 100;
+    if (field.key === "overnightDays") return entry.overnightDays ?? "";
+    if (field.key === "travelAllowanceAmount") return entry.travelAllowanceAmount ?? "";
+    if (field.kind === "checkbox") return Boolean(entry[field.key]);
+    return entry[field.key] ?? "";
+  }
+
+  function previewFieldValue(entry, field) {
+    const raw = entryFieldValue(entry, field);
+    if (field.kind === "checkbox") return raw ? "Yes" : "No";
+    if (raw === "" || raw == null) return "—";
+    if (field.kind === "money") return fmtCurrency(raw);
+    if (field.kind === "category") return categoryLabel(raw) || "—";
+    if (field.kind === "incomeType") return incomeTypeLabel(raw) || "—";
+    if (field.kind === "date") {
+      const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    }
+    return String(raw);
+  }
+
+  function fieldControlHtml(field, value) {
+    const req = field.required ? " required" : "";
+    if (field.kind === "category") {
+      return `<select name="${esc(field.key)}"${req}>${categoryOptionsHtml(value)}</select>`;
+    }
+    if (field.kind === "incomeType") {
+      return `<select name="${esc(field.key)}"${req}>${incomeTypeOptionsHtml(value)}</select>`;
+    }
+    if (field.kind === "checkbox") {
+      return `<input name="${esc(field.key)}" type="checkbox"${value ? " checked" : ""}>`;
+    }
+    if (field.kind === "textarea") {
+      return `<textarea name="${esc(field.key)}" rows="3">${esc(value)}</textarea>`;
+    }
+    const type = field.kind === "date" ? "date" : field.kind === "money" || field.kind === "number" ? "number" : "text";
+    const extra = [
+      field.step ? `step="${field.step}"` : "",
+      field.min != null ? `min="${field.min}"` : "",
+      field.max != null ? `max="${field.max}"` : "",
+      field.inputmode ? `inputmode="${field.inputmode}"` : "",
+      field.placeholder ? `placeholder="${esc(field.placeholder)}"` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `<input name="${esc(field.key)}" type="${type}" ${extra}${req} value="${esc(value)}">`;
+  }
+
+  function selectedLedgerPayload(isExpense, form, selectedKeys) {
+    const keys = new Set(selectedKeys);
+    const payload = {};
+    const el = (name) => form.querySelector(`[name="${name}"]`);
+    const takeText = (name) => {
+      if (!keys.has(name)) return;
+      payload[name] = el(name)?.value ?? "";
+    };
+    const takeNumber = (name, emptyValue) => {
+      if (!keys.has(name)) return;
+      const raw = el(name)?.value;
+      payload[name] = raw === "" || raw == null ? emptyValue : Number(raw);
+    };
+    const takeCheck = (name) => {
+      if (!keys.has(name)) return;
+      payload[name] = Boolean(el(name)?.checked);
+    };
+
+    if (isExpense) {
+      takeText("date");
+      takeText("category");
+      takeNumber("amount", 0);
+      takeText("vendor");
+      takeText("vendorAbn");
+      takeText("description");
+      takeNumber("workUsePercent", 100);
+      takeCheck("reimbursed");
+      takeCheck("cashTransaction");
+      takeCheck("noReceipt");
+      takeCheck("vendingMachine");
+      takeText("notes");
+      return payload;
+    }
+
+    takeText("date");
+    takeText("type");
+    takeNumber("amount", 0);
+    takeText("entity");
+    if (keys.has("entity")) payload.payer = payload.entity;
+    takeNumber("grossTotal", null);
+    takeNumber("taxableIncome", null);
+    takeNumber("gstAmount", 0);
+    takeNumber("netPay", null);
+    takeText("payPeriod");
+    if (keys.has("overnightDays")) {
+      const raw = el("overnightDays")?.value;
+      if (raw === "" || raw == null) {
+        payload.overnightDays = null;
+      } else {
+        payload.overnightDays = Math.round(Number(raw));
+        payload.overnightDaysSource = "manual_edit";
+      }
+    }
+    takeNumber("travelAllowanceAmount", null);
+    takeText("description");
+    takeText("summaryNotes");
+    return payload;
+  }
+
+  function openEditModal(type, id, opts) {
     const entry = findEntry(type, id);
     if (!entry) {
       if (typeof toast === "function") toast("Entry not found — refresh and try again.");
@@ -7706,108 +7922,239 @@
     }
     if (entry.reconciled) {
       if (typeof toast === "function") {
-        toast("This entry is reconciled and locked. Ask Haulage_Admin to unlock it first.");
+        toast("This entry is reconciled and locked. Ask [REDACTED] to unlock it first.");
       }
       return;
     }
     closeEditModal();
 
+    const isExpense = type === "expense";
+    const title = isExpense ? "Edit expense" : "Edit income";
+    const fieldDefs = isExpense ? expenseFieldDefs() : incomeFieldDefs();
+    const preselect = Array.isArray(opts && opts.preselect) ? opts.preselect.filter(Boolean) : [];
+    const selected = new Set(preselect);
+    const drafts = {};
+    let step = preselect.length ? "edit" : "pick";
+
     const modal = document.createElement("div");
     modal.id = "enh-ledger-edit-modal";
     modal.className = "enh-dup-modal enh-ledger-edit-modal";
-
-    const isExpense = type === "expense";
-    const title = isExpense ? "Edit expense" : "Edit income";
-    const fields = isExpense
-      ? `
-        <label>Date<input name="date" type="date" required value="${esc(entry.date || "")}"></label>
-        <label>Category<select name="category" required>${categoryOptionsHtml(entry.category)}</select></label>
-        <label>Amount (AUD)<input name="amount" type="number" step="0.01" min="0" required value="${esc(entry.amount)}"></label>
-        <label>Vendor / business<input name="vendor" type="text" value="${esc(entry.vendor || "")}"></label>
-        <label>ABN<input name="vendorAbn" type="text" inputmode="numeric" value="${esc(entry.vendorAbn || "")}"></label>
-        <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
-        <label>Work-use %<input name="workUsePercent" type="number" min="0" max="100" step="1" value="${esc(entry.workUsePercent ?? 100)}"></label>
-        <label class="enh-edit-check"><input name="reimbursed" type="checkbox"${entry.reimbursed ? " checked" : ""}> Reimbursed</label>
-        <label class="enh-edit-check"><input name="cashTransaction" type="checkbox"${entry.cashTransaction ? " checked" : ""}> Cash transaction (Paid cash check for claim)</label>
-        <label class="enh-edit-check"><input name="noReceipt" type="checkbox"${entry.noReceipt ? " checked" : ""}> No receipt</label>
-        <label class="enh-edit-check"><input name="vendingMachine" type="checkbox"${entry.vendingMachine ? " checked" : ""}> Vending machine</label>
-        <label>Notes<textarea name="notes" rows="2">${esc(entry.notes || "")}</textarea></label>
-      `
-      : `
-        <label>Date<input name="date" type="date" required value="${esc(entry.date || "")}"></label>
-        <label>Type<select name="type" required>${incomeTypeOptionsHtml(entry.type)}</select></label>
-        <label>Amount (AUD)<input name="amount" type="number" step="0.01" min="0" required value="${esc(entry.amount)}"></label>
-        <label>Entity / payer<input name="entity" type="text" value="${esc(entry.entity || entry.payer || "")}"></label>
-        <label>Gross total<input name="grossTotal" type="number" step="0.01" min="0" value="${esc(entry.grossTotal ?? entry.amount ?? "")}"></label>
-        <label>Taxable income<input name="taxableIncome" type="number" step="0.01" min="0" value="${esc(entry.taxableIncome ?? entry.amount ?? "")}"></label>
-        <label>GST<input name="gstAmount" type="number" step="0.01" min="0" value="${esc(entry.gstAmount ?? 0)}"></label>
-        <label>Net pay<input name="netPay" type="number" step="0.01" min="0" value="${esc(entry.netPay ?? "")}"></label>
-        <label>Pay period<input name="payPeriod" type="text" value="${esc(entry.payPeriod || "")}"></label>
-        <label>Living Away from Home days (LAFHA)<input name="overnightDays" type="number" step="1" min="0" max="31" value="${esc(entry.overnightDays ?? "")}" placeholder="e.g. 3"></label>
-        <label>Travel / LAFHA amount (AUD)<input name="travelAllowanceAmount" type="number" step="0.01" min="0" value="${esc(entry.travelAllowanceAmount ?? "")}" placeholder="optional"></label>
-        <label>Description<input name="description" type="text" value="${esc(entry.description || "")}"></label>
-        <label>Notes<textarea name="summaryNotes" rows="2">${esc(entry.summaryNotes || "")}</textarea></label>
-      `;
-
-    modal.innerHTML = `
-      <div class="enh-dup-backdrop" data-edit-close></div>
-      <div class="enh-dup-card enh-ledger-edit-card" role="dialog" aria-modal="true" aria-labelledby="enh-ledger-edit-title">
-        <h3 id="enh-ledger-edit-title">${esc(title)}</h3>
-        <p class="muted">Change scanned or manual fields, then save. Photo links stay attached.</p>
-        <form id="enh-ledger-edit-form" class="enh-ledger-edit-form">${fields}
-          <div class="enh-dup-actions">
-            <button type="button" class="btn secondary" data-edit-close>Cancel</button>
-            <button type="submit" class="btn">Save changes</button>
-          </div>
-        </form>
-        <p class="enh-edit-error muted" hidden></p>
-      </div>
-    `;
     document.body.appendChild(modal);
 
-    modal.querySelectorAll("[data-edit-close]").forEach((el) => {
-      el.addEventListener("click", closeEditModal);
-    });
+    function selectedFields() {
+      return fieldDefs.filter((field) => selected.has(field.key));
+    }
 
-    const form = modal.querySelector("#enh-ledger-edit-form");
-    const errEl = modal.querySelector(".enh-edit-error");
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const fd = new FormData(form);
-      const payload = {};
-      for (const [key, value] of fd.entries()) payload[key] = value;
-      if (isExpense) {
-        payload.reimbursed = Boolean(form.querySelector('[name="reimbursed"]')?.checked);
-        payload.cashTransaction = Boolean(
-          form.querySelector('[name="cashTransaction"]')?.checked
-        );
-        payload.noReceipt = Boolean(form.querySelector('[name="noReceipt"]')?.checked);
-        payload.vendingMachine = Boolean(
-          form.querySelector('[name="vendingMachine"]')?.checked
-        );
-        payload.workUsePercent = Number(payload.workUsePercent);
-        payload.amount = Number(payload.amount);
-      } else {
-        payload.amount = Number(payload.amount);
-        payload.grossTotal = payload.grossTotal === "" ? null : Number(payload.grossTotal);
-        payload.taxableIncome = payload.taxableIncome === "" ? null : Number(payload.taxableIncome);
-        payload.gstAmount = payload.gstAmount === "" ? 0 : Number(payload.gstAmount);
-        payload.netPay = payload.netPay === "" ? null : Number(payload.netPay);
-        payload.payer = payload.entity;
-        if (payload.overnightDays === "" || payload.overnightDays == null) {
-          payload.overnightDays = null;
-        } else {
-          payload.overnightDays = Math.round(Number(payload.overnightDays));
-          payload.overnightDaysSource = "manual_edit";
-        }
-        if (payload.travelAllowanceAmount === "" || payload.travelAllowanceAmount == null) {
-          payload.travelAllowanceAmount = null;
-        } else {
-          payload.travelAllowanceAmount = Number(payload.travelAllowanceAmount);
-        }
+    function currentValue(field) {
+      if (Object.prototype.hasOwnProperty.call(drafts, field.key)) return drafts[field.key];
+      return entryFieldValue(entry, field);
+    }
+
+    function captureDrafts() {
+      const form = modal.querySelector("#enh-ledger-edit-form");
+      if (!form) return;
+      fieldDefs.forEach((field) => {
+        const input = form.querySelector(`[name="${field.key}"]`);
+        if (!input) return;
+        drafts[field.key] = field.kind === "checkbox" ? input.checked : input.value;
+      });
+    }
+
+    function originalControlValue(field) {
+      const raw = entryFieldValue(entry, field);
+      if (field.kind === "checkbox") return Boolean(raw);
+      return String(raw ?? "");
+    }
+
+    function formControlValue(form, field) {
+      const input = form.querySelector(`[name="${field.key}"]`);
+      if (!input) return originalControlValue(field);
+      if (field.kind === "checkbox") return Boolean(input.checked);
+      return String(input.value ?? "");
+    }
+
+    function isEditorDirty() {
+      const form = modal.querySelector("#enh-ledger-edit-form");
+      if (!form) return false;
+      return selectedFields().some((field) => formControlValue(form, field) !== originalControlValue(field));
+    }
+
+    function syncSaveBtn() {
+      const btn = modal.querySelector("[data-edit-save]");
+      if (!btn) return;
+      const dirty = isEditorDirty();
+      btn.disabled = !dirty;
+      btn.classList.toggle("is-ready", dirty);
+      btn.setAttribute("aria-disabled", dirty ? "false" : "true");
+    }
+
+    function syncPickerUi() {
+      modal.querySelectorAll("[data-edit-field]").forEach((box) => {
+        const row = box.closest(".enh-ledger-edit-pick");
+        if (row) row.classList.toggle("is-on", box.checked);
+      });
+      const n = selected.size;
+      const count = modal.querySelector("[data-edit-count]");
+      if (count) {
+        count.textContent = n
+          ? `${n} field${n === 1 ? "" : "s"} selected`
+          : "Select at least one field to continue";
+      }
+      const go = modal.querySelector("[data-edit-continue]");
+      if (go) go.disabled = n === 0;
+    }
+
+    function paint() {
+      const chosen = selectedFields();
+      const cardClass = `enh-dup-card enh-ledger-edit-card${
+        step === "edit" && chosen.length === 1 ? " is-single" : ""
+      }`;
+      if (step === "pick") {
+        modal.innerHTML = `
+          <div class="enh-dup-backdrop" data-edit-close></div>
+          <div class="${cardClass}" role="dialog" aria-modal="true" aria-labelledby="enh-ledger-edit-title">
+            <div class="enh-ledger-edit-head">
+              <h3 id="enh-ledger-edit-title">${esc(title)}</h3>
+              <p class="muted">Tick the fields you want to change. Current values stay on the rest.</p>
+            </div>
+            <div class="enh-ledger-edit-body">
+              <div class="enh-ledger-edit-toolbar">
+                <button type="button" class="btn secondary small" data-edit-select-all>Select all</button>
+                <button type="button" class="btn secondary small" data-edit-select-none>Clear</button>
+              </div>
+              <div class="enh-ledger-edit-picker" role="group" aria-label="Fields to edit">
+                ${fieldDefs
+                  .map((field) => {
+                    const on = selected.has(field.key);
+                    return `<label class="enh-ledger-edit-pick${on ? " is-on" : ""}">
+                      <input type="checkbox" data-edit-field="${esc(field.key)}"${on ? " checked" : ""}>
+                      <span>
+                        <strong>${esc(field.label)}</strong>
+                        <em>${esc(previewFieldValue(entry, field))}</em>
+                      </span>
+                    </label>`;
+                  })
+                  .join("")}
+              </div>
+            </div>
+            <div class="enh-ledger-edit-foot">
+              <p class="muted small enh-ledger-edit-count" data-edit-count></p>
+              <div class="enh-dup-actions">
+                <button type="button" class="btn secondary" data-edit-close>Cancel</button>
+                <button type="button" class="btn" data-edit-continue>Continue</button>
+              </div>
+            </div>
+          </div>
+        `;
+        syncPickerUi();
+        const first = modal.querySelector("[data-edit-field]");
+        if (first) first.focus();
+        return;
       }
 
-      const submitBtn = form.querySelector('button[type="submit"]');
+      const fieldsHtml = chosen
+        .map((field) => {
+          const value = currentValue(field);
+          const cls = [
+            field.kind === "checkbox" ? "enh-edit-check" : "",
+            field.wide ? "enh-edit-wide" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const control = fieldControlHtml(field, value);
+          if (field.kind === "checkbox") {
+            return `<label class="${cls}">${control} ${esc(field.label)}</label>`;
+          }
+          return `<label class="${cls}">${esc(field.label)}${control}</label>`;
+        })
+        .join("");
+
+      modal.innerHTML = `
+        <div class="enh-dup-backdrop" data-edit-close></div>
+        <div class="${cardClass}" role="dialog" aria-modal="true" aria-labelledby="enh-ledger-edit-title">
+          <div class="enh-ledger-edit-head">
+            <h3 id="enh-ledger-edit-title">${esc(title)}</h3>
+            <p class="muted">Editing ${chosen.length} field${chosen.length === 1 ? "" : "s"}. Photo links stay attached.</p>
+          </div>
+          <form id="enh-ledger-edit-form" class="enh-ledger-edit-body">
+            <div class="enh-ledger-edit-form" data-count="${chosen.length}">${fieldsHtml}</div>
+          </form>
+          <div class="enh-ledger-edit-foot">
+            <p class="enh-edit-error muted" hidden></p>
+            <div class="enh-dup-actions">
+              <button type="button" class="btn secondary" data-edit-back>Change fields</button>
+              <button type="button" class="btn secondary" data-edit-close>Cancel</button>
+              <button type="submit" class="btn ledger-edit-save-btn" data-edit-save form="enh-ledger-edit-form" disabled>Save changes</button>
+            </div>
+          </div>
+        </div>
+      `;
+      syncSaveBtn();
+      const firstInput = modal.querySelector("#enh-ledger-edit-form input, #enh-ledger-edit-form select, #enh-ledger-edit-form textarea");
+      if (firstInput) firstInput.focus();
+    }
+
+    modal.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-edit-close]")) {
+        closeEditModal();
+        return;
+      }
+      if (ev.target.closest("[data-edit-select-all]")) {
+        fieldDefs.forEach((field) => selected.add(field.key));
+        modal.querySelectorAll("[data-edit-field]").forEach((box) => {
+          box.checked = true;
+        });
+        syncPickerUi();
+        return;
+      }
+      if (ev.target.closest("[data-edit-select-none]")) {
+        selected.clear();
+        modal.querySelectorAll("[data-edit-field]").forEach((box) => {
+          box.checked = false;
+        });
+        syncPickerUi();
+        return;
+      }
+      if (ev.target.closest("[data-edit-continue]")) {
+        if (!selected.size) return;
+        step = "edit";
+        paint();
+        return;
+      }
+      if (ev.target.closest("[data-edit-back]")) {
+        captureDrafts();
+        step = "pick";
+        paint();
+      }
+    });
+
+    modal.addEventListener("input", (ev) => {
+      if (ev.target.closest("#enh-ledger-edit-form")) syncSaveBtn();
+    });
+
+    modal.addEventListener("change", (ev) => {
+      const box = ev.target.closest("[data-edit-field]");
+      if (box) {
+        const key = box.getAttribute("data-edit-field");
+        if (box.checked) selected.add(key);
+        else selected.delete(key);
+        syncPickerUi();
+        return;
+      }
+      if (ev.target.closest("#enh-ledger-edit-form")) syncSaveBtn();
+    });
+
+    modal.addEventListener("submit", async (ev) => {
+      if (ev.target.id !== "enh-ledger-edit-form") return;
+      ev.preventDefault();
+      if (!isEditorDirty()) {
+        syncSaveBtn();
+        return;
+      }
+      const form = ev.target;
+      const payload = selectedLedgerPayload(isExpense, form, selected);
+      const submitBtn = modal.querySelector("[data-edit-save]");
+      const errEl = modal.querySelector(".enh-edit-error");
       if (submitBtn) submitBtn.disabled = true;
       if (errEl) {
         errEl.hidden = true;
@@ -7834,9 +8181,17 @@
           errEl.hidden = false;
         } else if (typeof toast === "function") toast(err.message);
       } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        syncSaveBtn();
       }
     });
+
+    editModalKeyHandler = (ev) => {
+      if (ev.key !== "Escape") return;
+      ev.preventDefault();
+      closeEditModal();
+    };
+    document.addEventListener("keydown", editModalKeyHandler);
+    paint();
   }
 
   function syncCarExpenseLedgerFromMain() {
@@ -7997,7 +8352,10 @@
       const inc = e.target.closest("[data-edit-income]");
       if (inc) {
         e.preventDefault();
-        openEditModal("income", inc.getAttribute("data-edit-income"));
+        const preselect = inc.classList.contains("overnight-edit-btn")
+          ? ["overnightDays", "travelAllowanceAmount"]
+          : null;
+        openEditModal("income", inc.getAttribute("data-edit-income"), { preselect });
       }
     });
 
@@ -9532,7 +9890,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit asks which fields to change so the form stays readable — pick one or several. On a payslip row you can set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },
@@ -9581,7 +9939,7 @@
       title: "Income & remittances",
       body: [
         "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
-        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
+        "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit asks which fields to change so the form stays readable — pick one or several. On a payslip row you can set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
     },

@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
 
 describe("updateExpense", () => {
@@ -49,6 +51,28 @@ describe("updateExpense", () => {
 
   it("returns null when the expense is missing", () => {
     expect(updateExpense({ expenses: [] }, "missing", { amount: 1 })).toBeNull();
+  });
+
+  it("leaves fields out of the patch unchanged", () => {
+    const records = {
+      expenses: [
+        {
+          id: "e2",
+          date: "2026-01-10",
+          category: "meals",
+          amount: 20,
+          vendor: "Shop",
+          notes: "keep me",
+          reimbursed: false,
+        },
+      ],
+    };
+    const updated = updateExpense(records, "e2", { vendor: "Woolworths" });
+    expect(updated.vendor).toBe("Woolworths");
+    expect(updated.amount).toBe(20);
+    expect(updated.notes).toBe("keep me");
+    expect(updated.reimbursed).toBe(false);
+    expect(updated.date).toBe("2026-01-10");
   });
 });
 
@@ -116,5 +140,20 @@ describe("updateIncome", () => {
     expect(updated.overnightDays).toBe(3);
     expect(updated.overnightDaysSource).toBe("manual_edit");
     expect(updated.travelAllowanceAmount).toBe(168.84);
+  });
+});
+
+describe("ledger edit modal", () => {
+  it("opens a field picker so only chosen ledger fields are edited", () => {
+    const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
+    expect(src).toMatch(/Tick the fields you want to change/);
+    expect(src).toMatch(/data-edit-field/);
+    expect(src).toMatch(/data-edit-continue/);
+    expect(src).toMatch(/data-edit-select-all/);
+    expect(src).toMatch(/function selectedLedgerPayload/);
+    expect(src).toMatch(/Change fields/);
+    expect(src).toMatch(/function syncSaveBtn/);
+    expect(src).toMatch(/data-edit-save/);
+    expect(src).toMatch(/ledger-edit-save-btn/);
   });
 });

@@ -743,40 +743,147 @@ table.income-ledger .tag.tag-reconciled {
 .gallery-week-picker select,
 .ledger-week-picker select { min-width: 9.5rem; }
 
-/* Ledger edit modal */
-.enh-ledger-edit-card { width: min(520px, 94vw); max-height: 88vh; overflow: auto; }
+/* Ledger edit modal — pick fields first, then edit only those */
+.enh-ledger-edit-modal { align-items: center; padding: 16px; }
+.enh-ledger-edit-card {
+  width: min(720px, 96vw);
+  max-height: min(88vh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 18px 20px 14px;
+}
+.enh-ledger-edit-card.is-single { width: min(460px, 94vw); }
+.enh-ledger-edit-head h3 { margin: 0 0 6px; }
+.enh-ledger-edit-head p { margin: 0; }
+.enh-ledger-edit-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 12px 0;
+  padding-right: 4px;
+}
+.enh-ledger-edit-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.enh-ledger-edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.enh-ledger-edit-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 10px;
+}
+.enh-ledger-edit-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+.enh-ledger-edit-pick:hover,
+.enh-ledger-edit-pick:has(input:focus-visible) { border-color: var(--accent); }
+.enh-ledger-edit-pick.is-on {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.enh-ledger-edit-pick input { margin-top: 3px; flex: 0 0 auto; }
+.enh-ledger-edit-pick span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.enh-ledger-edit-pick strong { font-size: 0.9rem; color: var(--text); }
+.enh-ledger-edit-pick em {
+  font-style: normal;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .enh-ledger-edit-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 16px;
+  margin: 0;
 }
+.enh-ledger-edit-form[data-count="1"] { grid-template-columns: 1fr; }
 .enh-ledger-edit-form label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.82rem;
+  gap: 6px;
+  font-size: 0.9rem;
   color: var(--text-dim);
+  min-width: 0;
 }
-.enh-ledger-edit-form label:nth-child(n + 5) { grid-column: 1 / -1; }
+.enh-ledger-edit-form .enh-edit-wide,
+.enh-ledger-edit-form .enh-edit-check { grid-column: 1 / -1; }
 .enh-ledger-edit-form .enh-edit-check {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  grid-column: 1 / -1;
+  gap: 10px;
+  font-size: 1rem;
+  color: var(--text);
 }
 .enh-ledger-edit-form input,
 .enh-ledger-edit-form select,
 .enh-ledger-edit-form textarea {
   font: inherit;
+  font-size: 1rem;
   color: var(--text);
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 12px 14px;
+  min-height: 44px;
 }
-.enh-ledger-edit-form .enh-dup-actions { grid-column: 1 / -1; margin-top: 4px; }
-.enh-edit-error { color: var(--accent); margin: 8px 0 0; }
+.enh-ledger-edit-form textarea { min-height: 88px; resize: vertical; }
+.enh-ledger-edit-form input[type="checkbox"] { min-height: 0; width: 1.1rem; height: 1.1rem; }
+.enh-ledger-edit-foot .enh-dup-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.enh-ledger-edit-foot .ledger-edit-save-btn {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+.enh-ledger-edit-foot .ledger-edit-save-btn.is-ready,
+.enh-ledger-edit-foot .ledger-edit-save-btn:not(:disabled) {
+  background: var(--reconcile);
+  color: var(--reconcile-ink);
+  border-color: transparent;
+  opacity: 1;
+  cursor: pointer;
+}
+.enh-ledger-edit-foot .ledger-edit-save-btn.is-ready:hover,
+.enh-ledger-edit-foot .ledger-edit-save-btn:not(:disabled):hover {
+  background: var(--reconcile-strong);
+  color: var(--reconcile-ink);
+}
+.enh-edit-error { color: var(--accent); margin: 0; }
+.enh-ledger-edit-count { margin: 0; }
 .ledger-fy-empty { margin: 8px 2px 0; }
 
 /* Allowance caps: segmented tally + day/week/month. */
