@@ -11,7 +11,7 @@ Compile **only** this listing:
 | Official Privacy (no login) | `https://gotaxationsuite.com/privacy` |
 | Official Terms (no login) | `https://gotaxationsuite.com/terms` |
 | Official Support (no login) | `https://gotaxationsuite.com/support` |
-| Fallback while DNS verifies | `https://go-taxation-suite.onrender.com/` (same pages) |
+| Live app (WebView) | `https://go-taxation-suite.onrender.com/suite/` |
 | Native project | `mobile-suite/` |
 | Support email | `support@godriverhub.com` |
 
