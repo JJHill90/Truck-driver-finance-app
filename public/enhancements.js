@@ -680,7 +680,10 @@
   }
 
   function isQuietHeavyForecastGet(url, method) {
-    if (Number(window.__haulageQuietUntil) <= Date.now()) return false;
+    // Only stub while the post-scan quiet window is in the future.
+    // Number(undefined) is NaN, and NaN <= now is false — that used to
+    // intercept /summary on every page load and toast assessableTotal.
+    if (!(Number(window.__haulageQuietUntil) > Date.now())) return false;
     if (String(method || "GET").toUpperCase() !== "GET") return false;
     return /\/api\/haulage\/(summary|report|forecast)(\?|$)/.test(String(url || ""));
   }

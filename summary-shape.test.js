@@ -18,6 +18,9 @@ describe("dashboard assessableTotal guard", () => {
     const chunk = src.slice(start, start + 800);
     expect(chunk).toMatch(/quietSummaryStub/);
     expect(chunk).not.toMatch(/JSON\.stringify\(\{ ok: true, quiet: true \}\)/);
+    expect(src).toMatch(
+      /if \(!\(Number\(window\.__haulageQuietUntil\) > Date\.now\(\)\)\) return false;/
+    );
   });
 
   it("ensureSummaryShape fills income on a quiet stub", () => {
