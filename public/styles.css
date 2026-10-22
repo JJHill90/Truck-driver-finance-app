@@ -1881,14 +1881,30 @@ tr.vending-machine-row {
   cursor: pointer;
   pointer-events: auto;
 }
-.enh-lightbox-done {
+.enh-lightbox-bar {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 3;
-  min-width: 8rem;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) 10px 12px;
+  pointer-events: none;
+}
+.enh-lightbox-bar .btn,
+.enh-lightbox-close {
   pointer-events: auto;
+}
+.enh-lightbox-done {
+  min-width: 6.5rem;
+}
+.enh-lightbox-close {
+  position: static;
+  top: auto;
+  right: auto;
 }
 
 /* --- Profile employer predictive text ----------------------------------- */

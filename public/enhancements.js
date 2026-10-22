@@ -1839,14 +1839,16 @@
           ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
           : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
     overlay.innerHTML = `<div class="enh-lightbox-stage">${body}</div>
-      <button type="button" class="enh-lightbox-close" aria-label="Close photo">×</button>
-      <button type="button" class="btn secondary enh-lightbox-done">Close</button>`;
+      <div class="enh-lightbox-bar">
+        <button type="button" class="btn secondary enh-lightbox-done">Close</button>
+        <button type="button" class="enh-lightbox-close" aria-label="Close photo">×</button>
+      </div>`;
     const closePhoto = (ev) => {
       if (ev) {
         ev.preventDefault();
         ev.stopPropagation();
       }
-      closeLightbox();
+      closeLightbox({ closeViewer: true });
     };
     overlay.querySelector(".enh-lightbox-close")?.addEventListener("click", closePhoto);
     overlay.querySelector(".enh-lightbox-done")?.addEventListener("click", closePhoto);
@@ -1864,9 +1866,18 @@
     document.body.style.overflow = "hidden";
   }
 
-  function closeLightbox() {
+  function closeLightbox(opts) {
     const existing = document.querySelector(".enh-lightbox");
     if (existing) existing.remove();
+    const closeViewer = opts && opts.closeViewer;
+    if (closeViewer && receiptViewerIsOpen()) {
+      if (typeof window.closeReceiptViewer === "function") window.closeReceiptViewer();
+      else {
+        document.getElementById("receipt-viewer")?.classList.add("hidden");
+        document.body.style.overflow = "";
+      }
+      return;
+    }
     if (!receiptViewerIsOpen()) document.body.style.overflow = "";
   }
 
