@@ -159,4 +159,14 @@ describe("applyHistoricalRates", () => {
     expect(summary.allowances.overtimeMealCap).toBe(40);
     expect(summary.profile.salaryBand).toBe("band1");
   });
+
+  it("does not throw when income is missing (quiet/partial summaries)", () => {
+    const summary = {
+      financialYear: "2026-27",
+      expenses: { deductibleTotal: 0, grossTotal: 0, breakdown: [] },
+    };
+    expect(() => applyHistoricalRates(summary, { expenses: [] }, "2026-27")).not.toThrow();
+    expect(summary.taxEstimate.taxableIncome).toBe(0);
+    expect(summary.taxEstimate.totalTax).toBe(0);
+  });
 });

@@ -685,8 +685,52 @@
     return /\/api\/haulage\/(summary|report|forecast)(\?|$)/.test(String(url || ""));
   }
 
-  function cachedQuietForecastResponse(_url) {
-    return new Response(JSON.stringify({ ok: true, quiet: true }), {
+  function quietSummaryStub() {
+    return {
+      financialYear: (globalThis.state && globalThis.state.financialYear) || "",
+      profile: { salaryBand: "band1", annualSalary: 0, travelCaps: {} },
+      income: { grossTotal: 0, assessableTotal: 0, breakdown: [] },
+      expenses: { grossTotal: 0, deductibleTotal: 0, breakdown: [] },
+      allowances: {
+        truckDriverMealsDaily: { breakfast: { cap: 0 }, lunch: { cap: 0 }, dinner: { cap: 0 } },
+        overtimeMealCap: 0,
+        domesticTravelCaps: { accommodation: 0, incidentals: 0 },
+      },
+      taxEstimate: { taxableIncome: 0, incomeTax: 0, medicareLevy: 0, totalTax: 0, effectiveRate: 0 },
+      substantiation: { required: false, threshold: 300, message: "" },
+      warnings: [],
+    };
+  }
+
+  function quietReportStub() {
+    return {
+      title: "",
+      subtitle: "",
+      generatedAt: new Date().toISOString(),
+      driver: { name: "", driverType: "", employer: "" },
+      summary: quietSummaryStub(),
+    };
+  }
+
+  function quietForecastStub() {
+    return {
+      ok: true,
+      quiet: true,
+      yearProgress: { daysElapsed: 0, daysTotal: 365, percentComplete: 0 },
+      yearToDate: { income: 0, deductions: 0 },
+      projected: { income: 0, deductions: 0, totalTax: 0, netAfterTax: 0, averageMonthlyNet: 0 },
+      scenarios: [],
+    };
+  }
+
+  function cachedQuietForecastResponse(url) {
+    const path = String(url || "");
+    let body = { ok: true, quiet: true };
+    if (/\/summary(\?|$)/.test(path)) body = quietSummaryStub();
+    else if (/\/report\.pdf(\?|$)/.test(path)) body = { ok: true, quiet: true };
+    else if (/\/report(\?|$)/.test(path)) body = quietReportStub();
+    else if (/\/forecast(\?|$)/.test(path)) body = quietForecastStub();
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -6143,6 +6187,100 @@
   } else {
     start();
   }
+})();
+
+/* --- Guard verbatim renderStats / renderReport when summary.income is missing
+ * app.js does s.income.assessableTotal with no check. A quiet post-scan stub
+ * used to return { ok: true } and init() toasted the TypeError, aborting
+ * refreshAll before the expense ledger painted.
+ */
+(function () {
+  "use strict";
+
+  function ensureSummaryShape(s) {
+    if (!s || typeof s !== "object") return null;
+    if (!s.income || typeof s.income !== "object") {
+      s.income = { grossTotal: 0, assessableTotal: 0, breakdown: [] };
+    }
+    if (!Array.isArray(s.income.breakdown)) s.income.breakdown = [];
+    if (!s.expenses || typeof s.expenses !== "object") {
+      s.expenses = { grossTotal: 0, deductibleTotal: 0, breakdown: [] };
+    }
+    if (!Array.isArray(s.expenses.breakdown)) s.expenses.breakdown = [];
+    if (!s.taxEstimate || typeof s.taxEstimate !== "object") {
+      s.taxEstimate = { taxableIncome: 0, incomeTax: 0, medicareLevy: 0, totalTax: 0, effectiveRate: 0 };
+    }
+    if (!s.allowances || typeof s.allowances !== "object") s.allowances = {};
+    const meals = s.allowances.truckDriverMealsDaily;
+    if (!meals || typeof meals !== "object") {
+      s.allowances.truckDriverMealsDaily = {
+        breakfast: { cap: 0 },
+        lunch: { cap: 0 },
+        dinner: { cap: 0 },
+      };
+    } else {
+      ["breakfast", "lunch", "dinner"].forEach((k) => {
+        if (!meals[k] || typeof meals[k] !== "object") meals[k] = { cap: 0 };
+      });
+    }
+    if (s.allowances.overtimeMealCap == null) s.allowances.overtimeMealCap = 0;
+    if (!s.allowances.domesticTravelCaps || typeof s.allowances.domesticTravelCaps !== "object") {
+      s.allowances.domesticTravelCaps = {};
+    }
+    if (!s.profile || typeof s.profile !== "object") s.profile = {};
+    if (!s.profile.salaryBand) s.profile.salaryBand = "band1";
+    if (!s.substantiation || typeof s.substantiation !== "object") s.substantiation = { message: "" };
+    if (!Array.isArray(s.warnings)) s.warnings = [];
+    return s;
+  }
+
+  function wrapNamed(name, fn) {
+    const orig = globalThis[name];
+    if (typeof orig !== "function" || orig.__haulageSafeStats) return;
+    const wrapped = fn(orig);
+    wrapped.__haulageSafeStats = true;
+    globalThis[name] = wrapped;
+  }
+
+  wrapNamed("renderStats", (orig) =>
+    function safeRenderStats() {
+      try {
+        const s = globalThis.state && globalThis.state.summary;
+        if (s) ensureSummaryShape(s);
+        return orig.apply(this, arguments);
+      } catch (err) {
+        console.warn("renderStats", err);
+      }
+    }
+  );
+
+  wrapNamed("renderReport", (orig) =>
+    function safeRenderReport() {
+      try {
+        const r = globalThis.state && globalThis.state.report;
+        if (r) {
+          if (r.summary) ensureSummaryShape(r.summary);
+          else r.summary = ensureSummaryShape({});
+          if (!r.driver || typeof r.driver !== "object") r.driver = {};
+        }
+        return orig.apply(this, arguments);
+      } catch (err) {
+        console.warn("renderReport", err);
+      }
+    }
+  );
+
+  wrapNamed("refreshEofyLive", (orig) =>
+    async function safeRefreshEofyLive() {
+      try {
+        return await orig.apply(this, arguments);
+      } catch (err) {
+        console.warn("refreshEofyLive", err);
+      }
+    }
+  );
+
+  globalThis.HaulageSummaryShape = { ensureSummaryShape };
 })();
 
 /* --- Receipt gallery: show labeled filename (DD.MM.YY AUD$…) ------------- */
