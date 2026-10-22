@@ -430,10 +430,100 @@
     return `${window.location.origin}/api/haulage`;
   }
 
+  function isScanFieldDirty(el) {
+    return Boolean(el && el.dataset && el.dataset.scanUserEdited === "1");
+  }
+
+  function markScanFieldDirty(el) {
+    if (el && el.dataset) el.dataset.scanUserEdited = "1";
+  }
+
   function setScanFieldValue(id, value) {
     const el = document.getElementById(id);
     if (!el || value == null || value === "") return;
+    if (isScanFieldDirty(el)) return;
     el.value = value;
+  }
+
+  function setFormFieldValue(form, name, value) {
+    if (!form || !name || value == null || value === "") return;
+    const el = form.elements[name];
+    if (!el || isScanFieldDirty(el)) return;
+    el.value = value;
+  }
+
+  const INCOME_FORM_TO_CONFIRM = [
+    ["payer", "income-confirm-entity"],
+    ["date", "income-confirm-date"],
+    ["type", "income-confirm-type"],
+    ["grossTotal", "income-confirm-gross"],
+    ["gstAmount", "income-confirm-gst"],
+    ["netPay", "income-confirm-amount"],
+    ["amount", "income-confirm-amount"],
+    ["description", "income-confirm-description"],
+  ];
+
+  function syncIncomeConfirmFromForm() {
+    const form = document.getElementById("income-form");
+    if (!form) return;
+    for (const [name, confirmId] of INCOME_FORM_TO_CONFIRM) {
+      const src = name === "netPay" ? form.elements.netPay || document.getElementById("income-net-pay") : form.elements[name];
+      const dest = document.getElementById(confirmId);
+      if (!src || !dest || !isScanFieldDirty(src)) continue;
+      if (src.value === "" || src.value == null) continue;
+      dest.value = src.value;
+      markScanFieldDirty(dest);
+    }
+    const net = form.elements.netPay || document.getElementById("income-net-pay");
+    const hiddenAmount = form.elements.amount;
+    if (net && hiddenAmount && isScanFieldDirty(net) && net.value !== "") {
+      hiddenAmount.value = net.value;
+    }
+  }
+
+  function syncIncomeFormFromConfirm() {
+    const form = document.getElementById("income-form");
+    if (!form) return;
+    const map = [
+      ["income-confirm-entity", "payer"],
+      ["income-confirm-date", "date"],
+      ["income-confirm-type", "type"],
+      ["income-confirm-gross", "grossTotal"],
+      ["income-confirm-gst", "gstAmount"],
+      ["income-confirm-amount", "netPay"],
+      ["income-confirm-amount", "amount"],
+      ["income-confirm-description", "description"],
+    ];
+    for (const [confirmId, name] of map) {
+      const src = document.getElementById(confirmId);
+      const dest = name === "netPay" ? form.elements.netPay || document.getElementById("income-net-pay") : form.elements[name];
+      if (!src || !dest || !isScanFieldDirty(src)) continue;
+      dest.value = src.value;
+    }
+  }
+
+  function bindScanEditGuards() {
+    if (document.documentElement.dataset.scanEditGuards === "1") return;
+    document.documentElement.dataset.scanEditGuards = "1";
+    document.addEventListener("input", (e) => {
+      const t = e.target;
+      if (!t || (!t.id && !(t.form && t.form.id === "income-form"))) return;
+      const confirmId = t.id && /^(income-confirm-|scan-confirm-)/.test(t.id);
+      const onIncomeForm = t.form && t.form.id === "income-form";
+      if (!confirmId && !onIncomeForm) return;
+      markScanFieldDirty(t);
+      if (onIncomeForm) syncIncomeConfirmFromForm();
+      if (confirmId) syncIncomeFormFromConfirm();
+    });
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (e.target && e.target.closest("#income-confirm-yes, #income-save-btn")) {
+          syncIncomeConfirmFromForm();
+        }
+      },
+      true
+    );
   }
 
   function applyDeferredScanOcr(data, purpose) {
@@ -448,6 +538,16 @@
       setScanFieldValue("income-confirm-amount", primary || o.netPay || o.grossTotal);
       setScanFieldValue("income-confirm-description", o.description);
       if (o.date) setScanFieldValue("income-confirm-date", o.date);
+      const form = document.getElementById("income-form");
+      if (form) {
+        setFormFieldValue(form, "payer", o.entity || o.vendor);
+        setFormFieldValue(form, "grossTotal", o.grossTotal);
+        setFormFieldValue(form, "gstAmount", o.gstAmount ?? o.gst);
+        setFormFieldValue(form, "netPay", primary || o.netPay || o.grossTotal);
+        setFormFieldValue(form, "amount", primary || o.netPay || o.grossTotal);
+        setFormFieldValue(form, "description", o.description);
+        if (o.date) setFormFieldValue(form, "date", o.date);
+      }
     }
     if (data && data.componentBreakdown) {
       latest = {
@@ -1480,6 +1580,15 @@
     ensureIncomeAbnField(box);
     ensureIncomeTravelFields(box);
     declutterIncomeConfirm(box);
+    if (latest.purpose === "income" && !box.querySelector(".enh-income-edit-hint")) {
+      const form = box.querySelector(".scan-confirm-form");
+      if (form) {
+        const hint = document.createElement("p");
+        hint.className = "muted small enh-income-edit-hint";
+        hint.textContent = "Edit any field if the scan got it wrong — including the Add income manually form — then approve.";
+        form.insertAdjacentElement("beforebegin", hint);
+      }
+    }
     syncExpenseAbnFields(box);
     if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
       window.haulageApplyProfilePresets({ forceWorkUse: false });
@@ -1536,12 +1645,54 @@
     const orig = window.readIncomeScanConfirmPayload;
     if (typeof orig !== "function" || orig.__enhAbnPatched) return;
     function wrapped() {
+      syncIncomeConfirmFromForm();
       const payload = orig.apply(this, arguments) || {};
       const abnEl = document.getElementById("income-confirm-abn");
       const abn = (abnEl && abnEl.value) || (latest && latest.purpose === "income" && latest.vendorAbn) || "";
       if (abn) {
         payload.vendorAbn = abn;
         payload.abn = abn;
+      }
+      const form = document.getElementById("income-form");
+      const netEl = document.getElementById("income-net-pay") || (form && form.elements.netPay);
+      if (isScanFieldDirty(netEl) && netEl.value !== "") {
+        const n = Number(netEl.value);
+        if (Number.isFinite(n)) {
+          payload.amount = n;
+          payload.netPay = n;
+        }
+      }
+      const payerEl = form && form.elements.payer;
+      if (isScanFieldDirty(payerEl) && String(payerEl.value || "").trim()) {
+        payload.entity = String(payerEl.value).trim();
+        payload.vendor = payload.entity;
+      }
+      const dateEl = form && form.elements.date;
+      if (isScanFieldDirty(dateEl) && dateEl.value) payload.date = dateEl.value;
+      const typeEl = form && form.elements.type;
+      if (isScanFieldDirty(typeEl) && typeEl.value) payload.type = typeEl.value;
+      const formGross = form && form.elements.grossTotal;
+      if (isScanFieldDirty(formGross) && formGross.value !== "") {
+        const g = Number(formGross.value);
+        if (Number.isFinite(g)) {
+          payload.grossTotal = g;
+          payload.taxableIncome = g;
+        }
+      }
+      const formGst = form && form.elements.gstAmount;
+      if (isScanFieldDirty(formGst) && formGst.value !== "") {
+        const g = Number(formGst.value);
+        if (Number.isFinite(g)) payload.gstAmount = g;
+      }
+      const formDesc = form && form.elements.description;
+      if (isScanFieldDirty(formDesc)) payload.description = formDesc.value || "";
+      const overnightForm = form && form.elements.overnightDays;
+      if (isScanFieldDirty(overnightForm) && overnightForm.value !== "") {
+        const d = Number(overnightForm.value);
+        if (Number.isFinite(d) && d >= 0) {
+          payload.overnightDays = Math.round(d);
+          payload.overnightDaysSource = "confirm";
+        }
       }
       const travelAmtEl = document.getElementById("income-confirm-travel-amount");
       const overnightEl = document.getElementById("income-confirm-overnight-days");
@@ -1668,35 +1819,110 @@
   }
 
   // --- Image lightbox -----------------------------------------------------
+  function receiptViewerIsOpen() {
+    const viewer = document.getElementById("receipt-viewer");
+    return Boolean(viewer && !viewer.classList.contains("hidden"));
+  }
+
+  function forceCloseReceiptViewer() {
+    const existing = document.querySelector(".enh-lightbox");
+    if (existing) existing.remove();
+    if (typeof window.closeReceiptViewer === "function") {
+      try {
+        window.closeReceiptViewer();
+      } catch {
+        /* fall through */
+      }
+    }
+    const viewer = document.getElementById("receipt-viewer");
+    if (viewer) viewer.classList.add("hidden");
+    const body = document.getElementById("receipt-viewer-body");
+    if (body) body.innerHTML = "";
+    document.body.style.overflow = "";
+  }
+
+  function bindReceiptViewerClose() {
+    if (document.documentElement.dataset.receiptViewerClose === "1") return;
+    document.documentElement.dataset.receiptViewerClose = "1";
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target.closest("#receipt-viewer-close, [data-close-viewer]")) return;
+        e.preventDefault();
+        forceCloseReceiptViewer();
+      },
+      true
+    );
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key !== "Escape") return;
+        if (document.querySelector(".enh-lightbox")) return;
+        if (!receiptViewerIsOpen()) return;
+        e.preventDefault();
+        forceCloseReceiptViewer();
+      },
+      true
+    );
+  }
+
   function openLightbox(src, isPdf) {
     closeLightbox();
     const overlay = document.createElement("div");
     overlay.className = "enh-lightbox";
-    overlay.innerHTML =
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Scanned document");
+    const body =
       isPdf && isAndroidLike()
         ? `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
            <p><a class="btn primary" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></p>`
         : isPdf
           ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
           : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
-    const close = document.createElement("button");
-    close.className = "enh-lightbox-close";
-    close.setAttribute("aria-label", "Close");
-    close.textContent = "×";
-    overlay.appendChild(close);
+    overlay.innerHTML = `<div class="enh-lightbox-stage">${body}</div>
+      <div class="enh-lightbox-bar">
+        <button type="button" class="btn secondary enh-lightbox-done">Close</button>
+        <button type="button" class="enh-lightbox-close" aria-label="Close photo">×</button>
+      </div>`;
+    const closePhoto = (ev) => {
+      if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+      closeLightbox({ closeViewer: true });
+    };
+    overlay.querySelector(".enh-lightbox-close")?.addEventListener("click", closePhoto);
+    overlay.querySelector(".enh-lightbox-done")?.addEventListener("click", closePhoto);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay || e.target === close) closeLightbox();
+      if (e.target === overlay || e.target.classList.contains("enh-lightbox-stage")) {
+        closeLightbox({ closeViewer: true });
+      }
     });
     const img = overlay.querySelector("img");
-    if (img) img.addEventListener("click", () => img.classList.toggle("enh-zoomed"));
+    if (img) {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        img.classList.toggle("enh-zoomed");
+      });
+    }
     document.body.appendChild(overlay);
     document.body.style.overflow = "hidden";
   }
 
-  function closeLightbox() {
+  function closeLightbox(opts) {
     const existing = document.querySelector(".enh-lightbox");
     if (existing) existing.remove();
-    document.body.style.overflow = "";
+    const closeViewer = opts && opts.closeViewer;
+    if (closeViewer && receiptViewerIsOpen()) {
+      if (typeof window.closeReceiptViewer === "function") window.closeReceiptViewer();
+      else {
+        document.getElementById("receipt-viewer")?.classList.add("hidden");
+        document.body.style.overflow = "";
+      }
+      return;
+    }
+    if (!receiptViewerIsOpen()) document.body.style.overflow = "";
   }
 
   function currentPreviewImage() {
@@ -1721,15 +1947,26 @@
       }
       return;
     }
-    // Direct click on a scan preview image.
-    if (target.tagName === "IMG" && target.closest("#receipt-preview, #income-preview")) {
+    // Direct click on a scan preview or opened receipt/payslip photo.
+    if (
+      target.tagName === "IMG" &&
+      target.closest("#receipt-preview, #income-preview, #receipt-viewer-body")
+    ) {
       openLightbox(target.src, false);
     }
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeLightbox();
-  });
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape") return;
+      if (!document.querySelector(".enh-lightbox")) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeLightbox({ closeViewer: true });
+    },
+    true
+  );
 
   // Add a zoom affordance to preview images as they appear.
   const previewMo = new MutationObserver(() => {
@@ -2033,6 +2270,8 @@
   }
 
   function init() {
+    bindScanEditGuards();
+    bindReceiptViewerClose();
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
     patchPrefillIncomeForm();

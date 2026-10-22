@@ -199,4 +199,43 @@ EFTPOS 24.48
     const now = new Date(2026, 7, 21);
     expect(toIsoAusDate("18/08/28", now)).toBe("2026-08-18");
   });
+
+  it("repairs a wholly wrong in-window year (2026 → 2020 / 2016) on a recent docket", () => {
+    const now = new Date(2026, 9, 22); // 22 Oct 2026
+    // Stored / typed ISO dates stay as entered (document labels, ledger edits).
+    expect(toIsoAusDate("2014-01-05", now)).toBe("2014-01-05");
+    expect(toIsoAusDate("18/08/2020", now)).toBe("2020-08-18");
+
+    expect(extractBestDocumentDate("Date: 18/08/2020\nTotal $24.48", "expense", now).date).toBe(
+      "2026-08-18"
+    );
+    expect(extractBestDocumentDate("Date: 18/08/2016\nTotal $24.48", "expense", now).date).toBe(
+      "2026-08-18"
+    );
+    expect(extractBestDocumentDate("Date: 18/08/20\nTotal $24.48", "expense", now).date).toBe(
+      "2026-08-18"
+    );
+
+    const resolved = resolveDocumentDate({
+      ocrDate: "2020-08-18",
+      rawText: "TAX INVOICE\nDate: 18/08/2020\nTotal $24.48",
+      purpose: "expense",
+      now,
+    });
+    expect(resolved).toBe("2026-08-18");
+  });
+
+  it("keeps a real prior-FY date that is only 1–2 years old", () => {
+    const now = new Date(2026, 9, 22);
+    expect(toIsoAusDate("18/08/2025", now)).toBe("2025-08-18");
+    expect(toIsoAusDate("18/08/2024", now)).toBe("2024-08-18");
+    expect(
+      resolveDocumentDate({
+        ocrDate: "2025-08-18",
+        rawText: "Payslip\nPayment date 18/08/2025\nNet pay $1,200.00",
+        purpose: "income",
+        now,
+      })
+    ).toBe("2025-08-18");
+  });
 });
