@@ -1824,6 +1824,48 @@
     return Boolean(viewer && !viewer.classList.contains("hidden"));
   }
 
+  function forceCloseReceiptViewer() {
+    const existing = document.querySelector(".enh-lightbox");
+    if (existing) existing.remove();
+    if (typeof window.closeReceiptViewer === "function") {
+      try {
+        window.closeReceiptViewer();
+      } catch {
+        /* fall through */
+      }
+    }
+    const viewer = document.getElementById("receipt-viewer");
+    if (viewer) viewer.classList.add("hidden");
+    const body = document.getElementById("receipt-viewer-body");
+    if (body) body.innerHTML = "";
+    document.body.style.overflow = "";
+  }
+
+  function bindReceiptViewerClose() {
+    if (document.documentElement.dataset.receiptViewerClose === "1") return;
+    document.documentElement.dataset.receiptViewerClose = "1";
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target.closest("#receipt-viewer-close, [data-close-viewer]")) return;
+        e.preventDefault();
+        forceCloseReceiptViewer();
+      },
+      true
+    );
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key !== "Escape") return;
+        if (document.querySelector(".enh-lightbox")) return;
+        if (!receiptViewerIsOpen()) return;
+        e.preventDefault();
+        forceCloseReceiptViewer();
+      },
+      true
+    );
+  }
+
   function openLightbox(src, isPdf) {
     closeLightbox();
     const overlay = document.createElement("div");
@@ -1853,7 +1895,9 @@
     overlay.querySelector(".enh-lightbox-close")?.addEventListener("click", closePhoto);
     overlay.querySelector(".enh-lightbox-done")?.addEventListener("click", closePhoto);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay || e.target.classList.contains("enh-lightbox-stage")) closeLightbox();
+      if (e.target === overlay || e.target.classList.contains("enh-lightbox-stage")) {
+        closeLightbox({ closeViewer: true });
+      }
     });
     const img = overlay.querySelector("img");
     if (img) {
@@ -1919,7 +1963,7 @@
       if (!document.querySelector(".enh-lightbox")) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      closeLightbox();
+      closeLightbox({ closeViewer: true });
     },
     true
   );
@@ -2227,6 +2271,7 @@
 
   function init() {
     bindScanEditGuards();
+    bindReceiptViewerClose();
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
     patchPrefillIncomeForm();

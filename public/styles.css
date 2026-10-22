@@ -1667,7 +1667,11 @@ tr.vending-machine-row {
   padding-top: calc(12px + env(safe-area-inset-top, 0px));
 }
 #receipt-viewer .modal-actions { flex-wrap: wrap; }
-#receipt-viewer-close { font-weight: 700; }
+#receipt-viewer-close {
+  font-weight: 700;
+  min-width: 5.5rem;
+  min-height: 40px;
+}
 #receipt-viewer-body img { cursor: zoom-in; }
 
 /* Toast */
