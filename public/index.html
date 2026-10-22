@@ -330,8 +330,12 @@
             <div class="panel">
               <div class="panel-header"><h2>Scan payslip / remittance</h2></div>
               <div id="income-upload-zone" class="upload-zone">
-                <p>Drag &amp; drop a payslip or remittance (image / PDF)</p>
-                <button type="button" class="btn primary" id="pick-income">Upload file</button>
+                <p>Drag &amp; drop a payslip or remittance (image / PDF), or use the camera with a live scan frame</p>
+                <div class="upload-zone-actions">
+                  <button type="button" class="btn primary" id="pick-income-camera">Scan with camera</button>
+                  <button type="button" class="btn secondary" id="pick-income">Upload file</button>
+                </div>
+                <p class="muted small camera-rationale">The camera is used only to photograph receipts and payslips you choose to save. You can refuse the permission and upload a file instead.</p>
                 <input type="file" id="income-file" accept="image/*,application/pdf" hidden />
               </div>
               <div id="income-preview" class="preview hidden"></div>
@@ -983,7 +987,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=scan-edit-3"></script>
+    <script src="./enhancements.js?v=suite-into-hub-1"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./fuelhub.js?v=admin-both-2"></script>
     <script src="./companion.js?v=companion-2"></script>

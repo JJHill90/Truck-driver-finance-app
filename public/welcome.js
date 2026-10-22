@@ -34,7 +34,7 @@
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Tap Scan with camera for a live amber frame so you can fit the top of the payslip and the date, or upload a photo or PDF with Upload file — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile.",
       ],
@@ -78,7 +78,7 @@
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Tap Scan with camera for a live amber frame so you can fit the top of the payslip and the date, or upload a photo or PDF with Upload file — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit on a payslip row to set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. Sign in before uploading so everything lands in your profile.",
       ],

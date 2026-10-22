@@ -348,7 +348,14 @@
     return file.type === "application/pdf" || ext === "pdf";
   }
 
+  function isNativeAppUserAgent(ua) {
+    return /\b(DriverHubApp|GoTaxationSuiteApp)\b/i.test(String(ua || ""));
+  }
+
   function isAndroidLike() {
+    if (typeof navigator !== "undefined" && isNativeAppUserAgent(navigator.userAgent)) {
+      return true;
+    }
     if (typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell()) {
       return true;
     }
@@ -2179,12 +2186,14 @@
 
   async function uploadIncomePdf(file) {
     const pickBtn = document.getElementById("pick-income");
+    const cameraBtn = document.getElementById("pick-income-camera");
     const box = document.getElementById("income-scan-result");
     const preview = document.getElementById("income-preview");
     if (pickBtn) {
       pickBtn.disabled = true;
       pickBtn.textContent = "Scanning remittance / payslip…";
     }
+    if (cameraBtn) cameraBtn.disabled = true;
     try {
       quietUiAfterScanSave();
       const blob = await copyPdfToMemory(file);
@@ -2244,6 +2253,7 @@
         pickBtn.disabled = false;
         pickBtn.textContent = "Upload file";
       }
+      if (cameraBtn) cameraBtn.disabled = false;
     }
   }
 
@@ -2308,6 +2318,9 @@
   /** Capacitor Play / App Store WebView — hide Stripe checkout (not store IAP). */
   function isNativeShell() {
     try {
+      if (typeof navigator !== "undefined" && /\b(DriverHubApp|GoTaxationSuiteApp)\b/i.test(navigator.userAgent || "")) {
+        return true;
+      }
       const cap = window.Capacitor;
       if (cap && typeof cap.isNativePlatform === "function") {
         return Boolean(cap.isNativePlatform());
@@ -10128,7 +10141,7 @@
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Tap Scan with camera for a live amber frame so you can fit the top of the payslip and the date, or upload a photo or PDF with Upload file — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit asks which fields to change so the form stays readable — pick one or several. On a payslip row you can set Living Away from Home (LAFHA) days and Travel/LAFHA $ if a scan missed them — the Dashboard Travel allowance days total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
@@ -10177,7 +10190,7 @@
     income: {
       title: "Income & remittances",
       body: [
-        "Use Income to record payslips, remittances and other earnings for the selected financial year. Upload a payslip or invoice (image or PDF) the same way as expenses — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
+        "Use Income to record payslips, remittances and other earnings for the selected financial year. Tap Scan with camera for a live amber frame so you can fit the top of the payslip and the date, or upload a photo or PDF with Upload file — OCR pulls gross, net and related fields when it can, then you approve before save. Manual entry is available when you prefer to type amounts yourself. You can also import a bank .csv: credits land as income (pays, remittances) and you can flip a debit to expenses after review.",
         "Choose an income type from the menu, keep descriptions clear, and use the ledger to edit or remove rows. Edit asks which fields to change so the form stays readable — pick one or several. On a payslip row you can set Work travel nights and travel-allowance $ if a scan missed them — the Dashboard Work travel nights total updates from those fields.",
         "The income gallery only shows documents saved as income, so expense receipts won’t block a payslip upload. After a scan, tap Approve & save — photos can sit in the gallery before they appear in the ledger; if a photo says Needs approval, use Finish approval. When you scan a remittance or invoice, the approve amount prefers net income / net pay when that wording appears; otherwise it uses the largest pay figure (not GST or PAYG). Sign in before uploading so everything lands in your profile, not the shared guest store.",
       ],
@@ -12331,19 +12344,89 @@
   }
 })();
 
-/* --- Live expense receipt camera with scan-frame guide -------------------
+/* --- Live receipt / payslip camera with scan-frame guide -----------------
  * Opens rear camera, shows a tall receipt frame overlay (safeguard), captures
- * the framed region, then hands a File to app.js uploadReceiptFile.
+ * the framed region, then hands a File to uploadReceiptFile or uploadIncomeFile.
  */
 (function () {
   "use strict";
-  /* global uploadReceiptFile */
+  /* global uploadReceiptFile, uploadIncomeFile */
 
   let stream = null;
   let modal = null;
+  let cameraPurpose = "expense";
 
   function notify(msg) {
     if (typeof toast === "function") toast(msg);
+  }
+
+  function cameraIsOpen() {
+    return Boolean(modal && !modal.hidden);
+  }
+
+  function forceCloseCamera() {
+    stopStream();
+    const video = document.getElementById("receipt-camera-video");
+    if (video) video.srcObject = null;
+    if (modal) modal.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  function bindCameraClose() {
+    if (document.documentElement.dataset.receiptCameraClose === "1") return;
+    document.documentElement.dataset.receiptCameraClose = "1";
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!e.target.closest("#receipt-camera-cancel, #receipt-camera-cancel-top, .receipt-camera-close")) {
+          return;
+        }
+        e.preventDefault();
+        forceCloseCamera();
+      },
+      true
+    );
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key !== "Escape" || !cameraIsOpen()) return;
+        e.preventDefault();
+        forceCloseCamera();
+      },
+      true
+    );
+  }
+
+  function purposeCopy() {
+    return cameraPurpose === "income"
+      ? {
+          label: "Scan payslip with camera",
+          hint: "Line the payslip up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
+          status: "Align payslip in frame",
+          shutter: "Capture payslip",
+          fallbackId: "income-file",
+          filename: () => `payslip-scan-${Date.now()}.jpg`,
+        }
+      : {
+          label: "Scan receipt with camera",
+          hint: "Line the receipt up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
+          status: "Align receipt in frame",
+          shutter: "Capture receipt",
+          fallbackId: "receipt-file",
+          filename: () => `receipt-scan-${Date.now()}.jpg`,
+        };
+  }
+
+  function syncCameraCopy() {
+    if (!modal) return;
+    const copy = purposeCopy();
+    modal.setAttribute("aria-label", copy.label);
+    const hint = modal.querySelector(".receipt-camera-hint");
+    if (hint) hint.innerHTML = copy.hint;
+    const status = document.getElementById("receipt-camera-status");
+    if (status) status.textContent = copy.status;
+    const shutter = document.getElementById("receipt-camera-shutter");
+    if (shutter) shutter.setAttribute("aria-label", copy.shutter);
   }
 
   function ensureModal() {
@@ -12356,6 +12439,10 @@
     modal.setAttribute("aria-modal", "true");
     modal.setAttribute("aria-label", "Scan receipt with camera");
     modal.innerHTML = `
+      <div class="receipt-camera-bar">
+        <button type="button" class="btn secondary" id="receipt-camera-cancel-top">Cancel</button>
+        <button type="button" class="receipt-camera-close" aria-label="Close camera">×</button>
+      </div>
       <div class="receipt-camera-stage">
         <video class="receipt-camera-video" id="receipt-camera-video" playsinline muted autoplay></video>
         <div class="receipt-camera-overlay" aria-hidden="true">
@@ -12378,12 +12465,9 @@
         </div>
       </div>`;
     document.body.appendChild(modal);
-    modal.querySelector("#receipt-camera-cancel")?.addEventListener("click", () => closeCamera());
+    bindCameraClose();
     modal.querySelector("#receipt-camera-shutter")?.addEventListener("click", () => {
       void captureAndUpload();
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && modal && !modal.hidden) closeCamera();
     });
     return modal;
   }
@@ -12401,11 +12485,7 @@
   }
 
   function closeCamera() {
-    stopStream();
-    const video = document.getElementById("receipt-camera-video");
-    if (video) video.srcObject = null;
-    if (modal) modal.hidden = true;
-    document.body.style.overflow = "";
+    forceCloseCamera();
   }
 
   /**
@@ -12468,6 +12548,7 @@
     }
     if (shutter) shutter.disabled = true;
     if (status) status.textContent = "Capturing…";
+    const copy = purposeCopy();
 
     try {
       const crop = frameCropInVideo(video, frame);
@@ -12486,32 +12567,43 @@
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not capture photo"))), "image/jpeg", 0.92);
       });
-      const file = new File([blob], `receipt-scan-${Date.now()}.jpg`, {
+      const file = new File([blob], copy.filename(), {
         type: "image/jpeg",
         lastModified: Date.now(),
       });
 
       closeCamera();
-      if (typeof uploadReceiptFile === "function") {
-        await uploadReceiptFile(file);
+      const upload =
+        cameraPurpose === "income"
+          ? typeof uploadIncomeFile === "function"
+            ? uploadIncomeFile
+            : null
+          : typeof uploadReceiptFile === "function"
+            ? uploadReceiptFile
+            : null;
+      if (upload) {
+        await upload(file);
       } else {
         notify("Could not start upload — refresh and try again");
       }
     } catch (err) {
       notify(err.message || "Capture failed");
-      if (status) status.textContent = "Align receipt in frame";
+      if (status) status.textContent = copy.status;
       if (shutter) shutter.disabled = false;
     }
   }
 
-  async function openCamera() {
+  async function openCamera(purpose) {
+    cameraPurpose = purpose === "income" ? "income" : "expense";
+    const copy = purposeCopy();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       notify("Camera not available in this browser — use Upload file instead");
-      document.getElementById("receipt-file")?.click();
+      document.getElementById(copy.fallbackId)?.click();
       return;
     }
 
     ensureModal();
+    syncCameraCopy();
     const video = document.getElementById("receipt-camera-video");
     const shutter = document.getElementById("receipt-camera-shutter");
     const status = document.getElementById("receipt-camera-status");
@@ -12532,7 +12624,7 @@
       });
       video.srcObject = stream;
       await video.play().catch(() => {});
-      if (status) status.textContent = "Align receipt in frame";
+      if (status) status.textContent = copy.status;
       if (shutter) shutter.disabled = false;
     } catch (err) {
       closeCamera();
@@ -12542,16 +12634,24 @@
           ? "Camera permission blocked — allow camera access, or use Upload file"
           : "Could not open camera — use Upload file instead"
       );
-      document.getElementById("receipt-file")?.click();
+      document.getElementById(copy.fallbackId)?.click();
     }
   }
 
   function start() {
-    const btn = document.getElementById("pick-receipt-camera");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      void openCamera();
-    });
+    bindCameraClose();
+    const expenseBtn = document.getElementById("pick-receipt-camera");
+    if (expenseBtn) {
+      expenseBtn.addEventListener("click", () => {
+        void openCamera("expense");
+      });
+    }
+    const incomeBtn = document.getElementById("pick-income-camera");
+    if (incomeBtn) {
+      incomeBtn.addEventListener("click", () => {
+        void openCamera("income");
+      });
+    }
   }
 
   if (document.readyState === "loading") {
