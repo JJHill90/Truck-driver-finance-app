@@ -1253,7 +1253,7 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .receipt-camera-modal {
   position: fixed;
   inset: 0;
-  z-index: 95;
+  z-index: 170;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -1261,6 +1261,33 @@ input[type="checkbox"] { width: 16px; height: 16px; }
   color: #f8fafc;
 }
 .receipt-camera-modal[hidden] { display: none !important; }
+.receipt-camera-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) 10px 12px;
+}
+.receipt-camera-bar .btn {
+  min-width: 6.5rem;
+  pointer-events: auto;
+}
+.receipt-camera-close {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
 .receipt-camera-stage {
   position: relative;
   flex: 1 1 auto;
@@ -1399,7 +1426,8 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .upload-zone .btn.primary,
 #pick-receipt,
 #pick-receipt-camera,
-#pick-income {
+#pick-income,
+#pick-income-camera {
   padding: 12px 22px;
   font-size: 1rem;
   font-weight: 700;
