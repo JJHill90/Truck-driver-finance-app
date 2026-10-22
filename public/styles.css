@@ -862,6 +862,26 @@ table.income-ledger .tag.tag-reconciled {
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+.enh-ledger-edit-foot .ledger-edit-save-btn {
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+.enh-ledger-edit-foot .ledger-edit-save-btn.is-ready,
+.enh-ledger-edit-foot .ledger-edit-save-btn:not(:disabled) {
+  background: var(--reconcile);
+  color: var(--reconcile-ink);
+  border-color: transparent;
+  opacity: 1;
+  cursor: pointer;
+}
+.enh-ledger-edit-foot .ledger-edit-save-btn.is-ready:hover,
+.enh-ledger-edit-foot .ledger-edit-save-btn:not(:disabled):hover {
+  background: var(--reconcile-strong);
+  color: var(--reconcile-ink);
+}
 .enh-edit-error { color: var(--accent); margin: 0; }
 .enh-ledger-edit-count { margin: 0; }
 .ledger-fy-empty { margin: 8px 2px 0; }

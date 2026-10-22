@@ -7960,6 +7960,34 @@
       });
     }
 
+    function originalControlValue(field) {
+      const raw = entryFieldValue(entry, field);
+      if (field.kind === "checkbox") return Boolean(raw);
+      return String(raw ?? "");
+    }
+
+    function formControlValue(form, field) {
+      const input = form.querySelector(`[name="${field.key}"]`);
+      if (!input) return originalControlValue(field);
+      if (field.kind === "checkbox") return Boolean(input.checked);
+      return String(input.value ?? "");
+    }
+
+    function isEditorDirty() {
+      const form = modal.querySelector("#enh-ledger-edit-form");
+      if (!form) return false;
+      return selectedFields().some((field) => formControlValue(form, field) !== originalControlValue(field));
+    }
+
+    function syncSaveBtn() {
+      const btn = modal.querySelector("[data-edit-save]");
+      if (!btn) return;
+      const dirty = isEditorDirty();
+      btn.disabled = !dirty;
+      btn.classList.toggle("is-ready", dirty);
+      btn.setAttribute("aria-disabled", dirty ? "false" : "true");
+    }
+
     function syncPickerUi() {
       modal.querySelectorAll("[data-edit-field]").forEach((box) => {
         const row = box.closest(".enh-ledger-edit-pick");
@@ -8056,11 +8084,12 @@
             <div class="enh-dup-actions">
               <button type="button" class="btn secondary" data-edit-back>Change fields</button>
               <button type="button" class="btn secondary" data-edit-close>Cancel</button>
-              <button type="submit" class="btn" form="enh-ledger-edit-form">Save changes</button>
+              <button type="submit" class="btn ledger-edit-save-btn" data-edit-save form="enh-ledger-edit-form" disabled>Save changes</button>
             </div>
           </div>
         </div>
       `;
+      syncSaveBtn();
       const firstInput = modal.querySelector("#enh-ledger-edit-form input, #enh-ledger-edit-form select, #enh-ledger-edit-form textarea");
       if (firstInput) firstInput.focus();
     }
@@ -8099,21 +8128,32 @@
       }
     });
 
+    modal.addEventListener("input", (ev) => {
+      if (ev.target.closest("#enh-ledger-edit-form")) syncSaveBtn();
+    });
+
     modal.addEventListener("change", (ev) => {
       const box = ev.target.closest("[data-edit-field]");
-      if (!box) return;
-      const key = box.getAttribute("data-edit-field");
-      if (box.checked) selected.add(key);
-      else selected.delete(key);
-      syncPickerUi();
+      if (box) {
+        const key = box.getAttribute("data-edit-field");
+        if (box.checked) selected.add(key);
+        else selected.delete(key);
+        syncPickerUi();
+        return;
+      }
+      if (ev.target.closest("#enh-ledger-edit-form")) syncSaveBtn();
     });
 
     modal.addEventListener("submit", async (ev) => {
       if (ev.target.id !== "enh-ledger-edit-form") return;
       ev.preventDefault();
+      if (!isEditorDirty()) {
+        syncSaveBtn();
+        return;
+      }
       const form = ev.target;
       const payload = selectedLedgerPayload(isExpense, form, selected);
-      const submitBtn = modal.querySelector('button[type="submit"]');
+      const submitBtn = modal.querySelector("[data-edit-save]");
       const errEl = modal.querySelector(".enh-edit-error");
       if (submitBtn) submitBtn.disabled = true;
       if (errEl) {
@@ -8141,7 +8181,7 @@
           errEl.hidden = false;
         } else if (typeof toast === "function") toast(err.message);
       } finally {
-        if (submitBtn) submitBtn.disabled = false;
+        syncSaveBtn();
       }
     });
 

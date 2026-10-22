@@ -152,5 +152,8 @@ describe("ledger edit modal", () => {
     expect(src).toMatch(/data-edit-select-all/);
     expect(src).toMatch(/function selectedLedgerPayload/);
     expect(src).toMatch(/Change fields/);
+    expect(src).toMatch(/function syncSaveBtn/);
+    expect(src).toMatch(/data-edit-save/);
+    expect(src).toMatch(/ledger-edit-save-btn/);
   });
 });
