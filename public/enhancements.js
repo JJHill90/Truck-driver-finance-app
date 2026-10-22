@@ -687,7 +687,7 @@
 
   function quietSummaryStub() {
     return {
-      financialYear: (globalThis.state && globalThis.state.financialYear) || "",
+      financialYear: (typeof state !== "undefined" && state.financialYear) || "",
       profile: { salaryBand: "band1", annualSalary: 0, travelCaps: {} },
       income: { grossTotal: 0, assessableTotal: 0, breakdown: [] },
       expenses: { grossTotal: 0, deductibleTotal: 0, breakdown: [] },
@@ -6196,6 +6196,7 @@
  */
 (function () {
   "use strict";
+  /* global state */
 
   function ensureSummaryShape(s) {
     if (!s || typeof s !== "object") return null;
@@ -6245,7 +6246,7 @@
   wrapNamed("renderStats", (orig) =>
     function safeRenderStats() {
       try {
-        const s = globalThis.state && globalThis.state.summary;
+        const s = typeof state !== "undefined" ? state.summary : null;
         if (s) ensureSummaryShape(s);
         return orig.apply(this, arguments);
       } catch (err) {
@@ -6257,7 +6258,7 @@
   wrapNamed("renderReport", (orig) =>
     function safeRenderReport() {
       try {
-        const r = globalThis.state && globalThis.state.report;
+        const r = typeof state !== "undefined" ? state.report : null;
         if (r) {
           if (r.summary) ensureSummaryShape(r.summary);
           else r.summary = ensureSummaryShape({});

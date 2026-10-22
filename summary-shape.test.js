@@ -9,6 +9,7 @@ describe("dashboard assessableTotal guard", () => {
     expect(src).toMatch(/function safeRenderStats/);
     expect(src).toMatch(/function quietSummaryStub/);
     expect(src).toMatch(/s\.income = \{ grossTotal: 0, assessableTotal: 0, breakdown: \[\] \}/);
+    expect(src).toMatch(/typeof state !== "undefined" \? state\.summary/);
   });
 
   it("quiet /summary stub includes income.assessableTotal", () => {
