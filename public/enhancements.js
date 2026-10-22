@@ -666,6 +666,24 @@
     window.refreshAll = skipped;
   }
 
+  function isUsableSummary(s) {
+    return Boolean(s && s.income && typeof s.income === "object" && s.expenses && s.taxEstimate);
+  }
+
+  function isUsableReport(r) {
+    return Boolean(r && r.summary && isUsableSummary(r.summary));
+  }
+
+  function scheduleTotalsSyncAfterQuiet() {
+    const wait = Math.max(0, Number(window.__haulageQuietUntil) - Date.now()) + 250;
+    clearTimeout(window.__haulageTotalsSyncTimer);
+    window.__haulageTotalsSyncTimer = setTimeout(() => {
+      if (typeof window.refreshEofyLive === "function") {
+        void window.refreshEofyLive();
+      }
+    }, wait);
+  }
+
   function quietUiAfterScanSave() {
     window.__haulageQuietUntil = Date.now() + 30000;
     window.__haulageBlockRefreshAll = Date.now() + 30000;
@@ -673,15 +691,83 @@
     // rebuild freezes Android after "OCR finished" even though the file saved.
     window.__haulageSkipNextRefreshAll = true;
     installQuietRefreshAll();
+    // Still refresh /summary after the quiet window so dashboard pies sync.
+    scheduleTotalsSyncAfterQuiet();
+  }
+
+  function patchRenderStats() {
+    const orig = window.renderStats;
+    if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
+    function guarded() {
+      const s = window.state && window.state.summary;
+      if (!isUsableSummary(s)) return;
+      try {
+        return orig.apply(this, arguments);
+      } catch (err) {
+        if (typeof console !== "undefined") console.warn("renderStats skipped:", err);
+      }
+    }
+    guarded.__haulageSummaryGuard = true;
+    window.renderStats = guarded;
+  }
+
+  function patchRenderReport() {
+    const orig = window.renderReport;
+    if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
+    function guarded() {
+      const r = window.state && window.state.report;
+      if (r && !isUsableReport(r)) return;
+      try {
+        return orig.apply(this, arguments);
+      } catch (err) {
+        if (typeof console !== "undefined") console.warn("renderReport skipped:", err);
+      }
+    }
+    guarded.__haulageSummaryGuard = true;
+    window.renderReport = guarded;
   }
 
   function patchRefreshEofyLive() {
     const orig = window.refreshEofyLive;
-    if (typeof orig !== "function" || orig.__haulageQuietPatch) return;
+    if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     async function patched() {
-      if (Number(window.__haulageQuietUntil) > Date.now()) return;
-      return orig.apply(this, arguments);
+      const prevSummary = window.state && window.state.summary;
+      const prevReport = window.state && window.state.report;
+      try {
+        await orig.apply(this, arguments);
+      } catch (err) {
+        if (window.state) {
+          if (!isUsableSummary(window.state.summary) && isUsableSummary(prevSummary)) {
+            window.state.summary = prevSummary;
+          }
+          if (window.state.report && !isUsableReport(window.state.report) && isUsableReport(prevReport)) {
+            window.state.report = prevReport;
+          }
+        }
+        if (isUsableSummary(window.state && window.state.summary)) {
+          if (typeof window.renderStats === "function") window.renderStats();
+          return;
+        }
+        throw err;
+      }
+      if (window.state && !isUsableSummary(window.state.summary)) {
+        if (isUsableSummary(prevSummary)) window.state.summary = prevSummary;
+        else if (lastSummaryBody) {
+          try {
+            window.state.summary = JSON.parse(lastSummaryBody);
+          } catch {
+            /* keep the incomplete payload */
+          }
+        }
+        if (isUsableSummary(window.state.summary) && typeof window.renderStats === "function") {
+          window.renderStats();
+        }
+      }
+      if (window.state && window.state.report && !isUsableReport(window.state.report) && isUsableReport(prevReport)) {
+        window.state.report = prevReport;
+      }
     }
+    patched.__haulageSummaryGuard = true;
     patched.__haulageQuietPatch = true;
     window.refreshEofyLive = patched;
   }
@@ -689,10 +775,30 @@
   function isQuietHeavyForecastGet(url, method) {
     if (Number(window.__haulageQuietUntil) <= Date.now()) return false;
     if (String(method || "GET").toUpperCase() !== "GET") return false;
-    return /\/api\/haulage\/(summary|report|forecast)(\?|$)/.test(String(url || ""));
+    // Do not stub /summary — a { ok: true } body crashes renderStats
+    // (s.income.assessableTotal) and leaves dashboard pies unsynced.
+    return /\/api\/haulage\/(report|forecast)(\?|$)/.test(String(url || ""));
   }
 
-  function cachedQuietForecastResponse(_url) {
+  function isSummaryGet(url, method) {
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/summary(\?|$)/.test(String(url || ""));
+  }
+
+  function isReportGet(url, method) {
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/report(\?|$)/.test(String(url || ""));
+  }
+
+  function cachedQuietForecastResponse(url) {
+    const u = String(url || "");
+    if (/\/report(\?|$)/.test(u) && lastReportBody) {
+      return new Response(lastReportBody, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (/\/report(\?|$)/.test(u) || /\/summary(\?|$)/.test(u)) {
+      return null;
+    }
     return new Response(JSON.stringify({ ok: true, quiet: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -700,6 +806,8 @@
   }
 
   let lastRecordsBody = null;
+  let lastSummaryBody = null;
+  let lastReportBody = null;
 
   function isRecordsGet(url, method) {
     return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
@@ -855,7 +963,8 @@
       options.method || (args[0] && typeof args[0] === "object" && args[0].method) || "GET"
     ).toUpperCase();
     if (isQuietHeavyForecastGet(url, fetchMethod)) {
-      return cachedQuietForecastResponse(url);
+      const cached = cachedQuietForecastResponse(url);
+      if (cached) return cached;
     }
     if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
       return quietRecordsResponse();
@@ -1192,6 +1301,24 @@
       if (res && res.ok && isRecordsGet(url, fetchMethod)) {
         try {
           lastRecordsBody = await res.clone().text();
+        } catch {
+          /* keep the previous cache */
+        }
+      }
+      if (res && res.ok && isSummaryGet(url, fetchMethod)) {
+        try {
+          const text = await res.clone().text();
+          const data = JSON.parse(text);
+          if (isUsableSummary(data)) lastSummaryBody = text;
+        } catch {
+          /* keep the previous cache */
+        }
+      }
+      if (res && res.ok && isReportGet(url, fetchMethod)) {
+        try {
+          const text = await res.clone().text();
+          const data = JSON.parse(text);
+          if (isUsableReport(data)) lastReportBody = text;
         } catch {
           /* keep the previous cache */
         }
@@ -2286,7 +2413,12 @@
     patchManualIncomeForm();
     patchPrefillIncomeForm();
     patchPdfReceiptViewer();
+    patchRenderStats();
+    patchRenderReport();
     patchRefreshEofyLive();
+    setTimeout(patchRenderStats, 0);
+    setTimeout(patchRenderReport, 0);
+    setTimeout(patchRefreshEofyLive, 0);
     installQuietRefreshAll();
     patchUploadSkipRefresh();
     setTimeout(installQuietRefreshAll, 0);
@@ -12313,13 +12445,13 @@
     wrapSetView();
     wrapRefreshAll();
     const origEofy = globalThis.refreshEofyLive;
-    if (typeof origEofy === "function" && !origEofy.__haulageQuietPatch) {
-      async function quietEofy() {
-        if (Number(window.__haulageQuietUntil) > Date.now()) return;
+    if (typeof origEofy === "function" && !origEofy.__haulageQuietPatch && !origEofy.__haulageSummaryGuard) {
+      async function guardedEofy() {
         return origEofy.apply(this, arguments);
       }
-      quietEofy.__haulageQuietPatch = true;
-      globalThis.refreshEofyLive = quietEofy;
+      guardedEofy.__haulageQuietPatch = true;
+      guardedEofy.__haulageSummaryGuard = true;
+      globalThis.refreshEofyLive = guardedEofy;
     }
     setTimeout(wrapSetView, 0);
     setTimeout(wrapRefreshAll, 0);
