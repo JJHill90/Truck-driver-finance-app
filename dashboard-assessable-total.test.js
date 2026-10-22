@@ -11,8 +11,8 @@ describe("dashboard assessableTotal guard", () => {
     expect(src).toMatch(/function patchRenderStats/);
     expect(src).toMatch(/function patchRefreshEofyLive/);
     expect(src).toMatch(/Do not stub \/summary/);
-    expect(src).toMatch(/\/api\/haulage\/\(report\|forecast\)/);
-    expect(src).not.toMatch(/\/api\/haulage\/\(summary\|report\|forecast\)/);
+    expect(src).toMatch(/haulage\\\/\(report\|forecast\)/);
+    expect(src).not.toMatch(/summary\|report\|forecast/);
   });
 
   it("keeps last good summary and re-renders after the quiet window", () => {
