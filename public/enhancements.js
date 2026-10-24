@@ -6563,6 +6563,56 @@
     }
   }
 
+  function fyForDate(dateStr) {
+    const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const startYear = month >= 6 ? year : year - 1;
+    return `${startYear}-${String(startYear + 1).slice(-2)}`;
+  }
+
+  function addDaysIso(iso, days) {
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    dt.setDate(dt.getDate() + days);
+    return toIsoLocal(dt);
+  }
+
+  /** Every Mon–Sun slot that has already started in this FY (empty weeks included). */
+  function weeksElapsedInFinancialYear(fy, now = new Date()) {
+    const shared = globalThis.HaulageWeekSlots;
+    if (shared && typeof shared.weeksElapsedInFinancialYear === "function") {
+      return shared.weeksElapsedInFinancialYear(fy, now);
+    }
+    const startYear = Number(String(fy || "").slice(0, 4));
+    if (!Number.isFinite(startYear) || startYear < 2000) return [];
+    const fyStart = `${startYear}-07-01`;
+    const fyEnd = `${startYear + 1}-06-30`;
+    const todayDt = now instanceof Date ? now : new Date(now);
+    if (Number.isNaN(todayDt.getTime())) return [];
+    const today = toIsoLocal(todayDt);
+    const currentStart = weekStartMonday(today);
+    const first = weekStartMonday(fyStart);
+    const lastOfFy = weekStartMonday(fyEnd);
+    if (!first || !lastOfFy) return [];
+    if (today < fyStart) {
+      const overlaps =
+        currentStart &&
+        (fyForDate(currentStart) === fy || fyForDate(weekEndSunday(currentStart)) === fy);
+      return overlaps ? [{ start: currentStart, end: weekEndSunday(currentStart) }] : [];
+    }
+    const last = today > fyEnd ? lastOfFy : currentStart;
+    const out = [];
+    let cursor = first;
+    while (cursor && last && cursor <= last) {
+      out.push({ start: cursor, end: weekEndSunday(cursor) });
+      cursor = addDaysIso(cursor, 7);
+    }
+    return out;
+  }
+
   globalThis.HaulageWeeks = {
     pad2,
     toIsoLocal,
@@ -6574,6 +6624,9 @@
     registerStartedWeek,
     getActiveWeekStart,
     setActiveWeekStart,
+    fyForDate,
+    addDaysIso,
+    weeksElapsedInFinancialYear,
     ACTIVE_KEY,
     STARTED_KEY,
   };
@@ -6627,6 +6680,7 @@
     weekLabel,
     listStartedWeeks,
     registerStartedWeek,
+    weeksElapsedInFinancialYear,
   } = HaulageWeeks;
 
   function weekStorageKey(key) {
@@ -6849,6 +6903,13 @@
 
   function collectExpenseWeeks(fy, categoryScope) {
     const map = new Map();
+    const now = new Date();
+    const slotFy = fy && fy !== "all" ? fy : fyForDate(toIsoLocal(now));
+    if (slotFy && typeof weeksElapsedInFinancialYear === "function") {
+      for (const w of weeksElapsedInFinancialYear(slotFy, now)) {
+        if (w && w.start) map.set(w.start, w);
+      }
+    }
     let list = [];
     try {
       if (typeof getReceiptsWithImages === "function") list = getReceiptsWithImages("expense") || [];
@@ -7263,6 +7324,7 @@
     weekLabel,
     listStartedWeeks,
     registerStartedWeek,
+    weeksElapsedInFinancialYear,
   } = HaulageWeeks;
 
   /** Jul–Jun month options for an Australian financial year id like 2025-26. */
@@ -7431,6 +7493,11 @@
 
   function collectLedgerWeeks(fy, categoryScope) {
     const map = new Map();
+    if (fy && typeof weeksElapsedInFinancialYear === "function") {
+      for (const w of weeksElapsedInFinancialYear(fy, new Date())) {
+        if (w && w.start) map.set(w.start, w);
+      }
+    }
     let expenses = [];
     try {
       expenses = (state.records && state.records.expenses) || [];
@@ -7508,14 +7575,39 @@
     if (select.value !== chosen) select.value = chosen;
   }
 
+  function fallbackFyOptionsHtml(selected) {
+    const now = new Date();
+    const start = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    const years = [];
+    for (let y = start + 3; y >= start - 6; y -= 1) {
+      years.push(`${y}-${String(y + 1).slice(-2)}`);
+    }
+    if (selected && !years.includes(selected)) {
+      years.push(selected);
+      years.sort((a, b) => Number(b.split("-")[0]) - Number(a.split("-")[0]));
+    }
+    return years
+      .map((y) => `<option value="${esc(y)}">FY ${esc(String(y).replace("-", "–"))}</option>`)
+      .join("");
+  }
+
   /** Mirror the top FY picker's options and select the active year. */
   function syncFyOptions(select) {
+    if (!select) return;
     const top = document.getElementById("fy-select");
-    if (top && top.innerHTML && select.innerHTML !== top.innerHTML) {
-      select.innerHTML = top.innerHTML;
+    if (top && top.options && top.options.length) {
+      if (select.innerHTML !== top.innerHTML) select.innerHTML = top.innerHTML;
+    } else if (!select.options.length) {
+      select.innerHTML = fallbackFyOptionsHtml(currentFy());
     }
     const fy = currentFy();
     if (fy && select.value !== fy) {
+      if (![...select.options].some((opt) => opt.value === fy)) {
+        select.insertAdjacentHTML(
+          "afterbegin",
+          `<option value="${esc(fy)}">FY ${esc(String(fy).replace("-", "–"))}</option>`
+        );
+      }
       select.value = fy;
       if (select.value !== fy) {
         requestAnimationFrame(() => {
@@ -7529,8 +7621,6 @@
   function applyLedgerFilters(cfg) {
     const list = document.getElementById(cfg.listId);
     if (!list) return;
-    const table = list.querySelector(cfg.tableSel);
-    if (!table) return;
     const panel = list.closest(".panel");
     const fySelect = panel && panel.querySelector(".ledger-fy-select");
     const monthSelect = panel && panel.querySelector(".ledger-month-select");
@@ -7549,6 +7639,12 @@
       syncMonthOptions(cfg, monthSelect);
       period = getMonthFilter(cfg);
       periodKind = "month";
+    }
+
+    const table = list.querySelector(cfg.tableSel);
+    if (!table) {
+      updateEmptyNote(cfg, panel, fy, period, periodKind, 0, 0);
+      return;
     }
 
     let sum = 0;
@@ -8935,6 +9031,8 @@
     registerStartedWeek,
     getActiveWeekStart,
     setActiveWeekStart,
+    fyForDate,
+    weeksElapsedInFinancialYear,
   } = weeks;
 
   function announce(startIso) {
@@ -8943,10 +9041,19 @@
     if (typeof window.toast === "function") window.toast(msg);
   }
 
+  function seedElapsedWeeks(now = new Date()) {
+    const fy = typeof fyForDate === "function" ? fyForDate(weeks.toIsoLocal(now)) : null;
+    if (!fy || typeof weeksElapsedInFinancialYear !== "function") return;
+    for (const slot of weeksElapsedInFinancialYear(fy, now)) {
+      if (slot && slot.start) registerStartedWeek(slot.start);
+    }
+  }
+
   function checkRollover() {
     const thisMon = currentWeekStart();
     if (!thisMon) return;
     const prev = getActiveWeekStart();
+    seedElapsedWeeks();
     registerStartedWeek(thisMon);
     if (prev === thisMon) return;
 
