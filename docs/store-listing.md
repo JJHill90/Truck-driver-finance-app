@@ -106,15 +106,23 @@ Then in Play Console for `com.gotaxation.suite`:
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com` and
    `https://gotaxationsuite.com/support`
-9. Digital Asset Links (Android App Links). Play only accepts a URL that
-   appears in the **uploaded AAB** intent-filter. Until official DNS
-   points at Render, use the live host:
+9. Digital Asset Links (Android App Links). Two different Play boxes:
+
+   **Add domain** (website association) — host only, no path:
+   `go-taxation-suite.onrender.com`
+   Turn **off** credential sharing. Play then fetches
+   `https://go-taxation-suite.onrender.com/.well-known/assetlinks.json`
+   (already live). `go-taxation-suite.onrender.com/suite/` is invalid
+   here (Google rejects a site URL that contains a path).
+
+   **Check if a link is deep linked** — full app URL:
    `https://go-taxation-suite.onrender.com/suite/`
-   (Grow → Deep links, or a custom listing deep link). Do not paste
-   `gotaxationsuite.com` until
+   That only passes after Play has processed an AAB whose intent-filter
+   includes the onrender host (`versionCode` 7).
+
+   Official domain later: Add domain `gotaxationsuite.com` only when
    `https://gotaxationsuite.com/.well-known/assetlinks.json` returns 200.
-   Source file: `public/.well-known/assetlinks.json`. The same JSON is
-   already live on the onrender host.
+   Source file: `public/.well-known/assetlinks.json`.
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
