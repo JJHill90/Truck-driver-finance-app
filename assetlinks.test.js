@@ -48,6 +48,7 @@ describe("Digital Asset Links (Go Taxation Suite)", () => {
     expect(xml).toMatch(/android:autoVerify="true"/);
     expect(xml).toMatch(/android:host="gotaxationsuite.com"/);
     expect(xml).toMatch(/android:host="www.gotaxationsuite.com"/);
+    expect(xml).toMatch(/android:host="go-taxation-suite.onrender.com"/);
   });
 });
 

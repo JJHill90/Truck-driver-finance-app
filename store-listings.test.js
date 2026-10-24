@@ -24,6 +24,7 @@ describe("Suite store listing assets", () => {
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/terms/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/support/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/\.well-known\/assetlinks\.json/);
+    expect(listing).toMatch(/https:\/\/go-taxation-suite\.onrender\.com\/suite\//);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\//);
     const cap = JSON.parse(fs.readFileSync(CAP_CONFIG, "utf8"));
     expect(cap.server.url).toBeUndefined();
@@ -155,8 +156,8 @@ describe("Suite Android launch shell", () => {
 
   it("bumps the Play versionCode so testers can install the rebuild", () => {
     const gradle = fs.readFileSync(path.join(androidApp, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 6/);
-    expect(gradle).toMatch(/versionName "1\.0\.5"/);
+    expect(gradle).toMatch(/versionCode 7/);
+    expect(gradle).toMatch(/versionName "1\.0\.6"/);
   });
 });
 
