@@ -679,6 +679,7 @@
       f &&
         f.projected &&
         typeof f.projected === "object" &&
+        typeof f.projected.income !== "undefined" &&
         Array.isArray(f.scenarios) &&
         f.yearProgress
     );
@@ -707,7 +708,8 @@
     // rebuild freezes Android after "OCR finished" even though the file saved.
     window.__haulageSkipNextRefreshAll = true;
     installQuietRefreshAll();
-    // Still refresh /summary after the quiet window so dashboard pies sync.
+    // Still refresh /summary and /forecast after the quiet window so dashboard
+    // pies and Forecast projected totals / scenarios sync.
     scheduleTotalsSyncAfterQuiet();
   }
 
@@ -716,7 +718,7 @@
     if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     function guarded() {
       const s = window.state && window.state.summary;
-      if (!isUsableSummary(s)) return;
+      if (window.state && !isUsableSummary(s)) return;
       try {
         return orig.apply(this, arguments);
       } catch (err) {
@@ -732,7 +734,7 @@
     if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     function guarded() {
       const r = window.state && window.state.report;
-      if (r && !isUsableReport(r)) return;
+      if (window.state && r && !isUsableReport(r)) return;
       try {
         return orig.apply(this, arguments);
       } catch (err) {
@@ -748,7 +750,9 @@
     if (typeof orig !== "function" || orig.__haulageForecastGuard) return;
     function guarded() {
       const f = window.state && window.state.forecast;
-      if (f && !isUsableForecast(f)) return;
+      // app.js keeps `state` in script scope (not window.state). Only skip
+      // when we can see an unusable payload; otherwise call the original.
+      if (window.state && !isUsableForecast(f)) return;
       try {
         return orig.apply(this, arguments);
       } catch (err) {
@@ -757,6 +761,40 @@
     }
     guarded.__haulageForecastGuard = true;
     window.renderForecast = guarded;
+  }
+
+  function restoreForecast(prevForecast) {
+    if (!window.state) return;
+    if (isUsableForecast(window.state.forecast)) return;
+    if (isUsableForecast(prevForecast)) {
+      window.state.forecast = prevForecast;
+    } else if (lastForecastBody) {
+      try {
+        window.state.forecast = JSON.parse(lastForecastBody);
+      } catch {
+        /* keep the incomplete payload */
+      }
+    }
+    if (isUsableForecast(window.state.forecast) && typeof window.renderForecast === "function") {
+      window.renderForecast();
+    }
+  }
+
+  function patchLoadForecast() {
+    const orig = window.loadForecast;
+    if (typeof orig !== "function" || orig.__haulageForecastGuard) return;
+    async function patched() {
+      const prev = window.state && window.state.forecast;
+      try {
+        await orig.apply(this, arguments);
+      } catch (err) {
+        restoreForecast(prev);
+        return;
+      }
+      restoreForecast(prev);
+    }
+    patched.__haulageForecastGuard = true;
+    window.loadForecast = patched;
   }
 
   function patchRefreshEofyLive() {
@@ -780,6 +818,7 @@
             window.state.forecast = prevForecast;
           }
         }
+        restoreForecast(prevForecast);
         if (isUsableSummary(window.state && window.state.summary)) {
           if (typeof window.renderStats === "function") window.renderStats();
           return;
@@ -802,10 +841,7 @@
       if (window.state && window.state.report && !isUsableReport(window.state.report) && isUsableReport(prevReport)) {
         window.state.report = prevReport;
       }
-      if (window.state && window.state.forecast && !isUsableForecast(window.state.forecast) && isUsableForecast(prevForecast)) {
-        window.state.forecast = prevForecast;
-        if (typeof window.renderForecast === "function") window.renderForecast();
-      }
+      restoreForecast(prevForecast);
     }
     patched.__haulageSummaryGuard = true;
     patched.__haulageQuietPatch = true;
@@ -815,8 +851,9 @@
   function isQuietHeavyForecastGet(url, method) {
     if (!isQuietWindowActive()) return false;
     if (String(method || "GET").toUpperCase() !== "GET") return false;
-    // Do not stub /summary — a { ok: true } body crashes renderStats
-    // (s.income.assessableTotal) and leaves dashboard pies unsynced.
+    // Do not stub /summary or /forecast with { ok: true, quiet: true } —
+    // that crashes renderStats (assessableTotal) and renderForecast
+    // (projected.income / scenarios) and leaves the cards empty.
     return /\/api\/haulage\/(report|forecast)(\?|$)/.test(String(url || ""));
   }
 
@@ -829,7 +866,9 @@
   }
 
   function isForecastGet(url, method) {
-    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/forecast(\?|$)/.test(String(url || ""));
+    const u = String(url || "");
+    if (/\/api\/haulage\/fuelhub\/forecast\b/.test(u)) return false;
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/forecast(\?|$)/.test(u);
   }
 
   function cachedQuietForecastResponse(url) {
@@ -840,13 +879,13 @@
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (/\/forecast(\?|$)/.test(u) && lastForecastBody) {
+    if (/\/api\/haulage\/forecast(\?|$)/.test(u) && !/fuelhub/.test(u) && lastForecastBody) {
       return new Response(lastForecastBody, {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     }
-    // Never invent { ok: true } — renderForecast reads projected.income / scenarios.
+    // Never invent an empty { ok: true, quiet: true } body for totals APIs.
     return null;
   }
 
@@ -2472,10 +2511,12 @@
     patchRenderReport();
     patchRenderForecast();
     patchRefreshEofyLive();
+    patchLoadForecast();
     setTimeout(patchRenderStats, 0);
     setTimeout(patchRenderReport, 0);
     setTimeout(patchRenderForecast, 0);
     setTimeout(patchRefreshEofyLive, 0);
+    setTimeout(patchLoadForecast, 0);
     installQuietRefreshAll();
     patchUploadSkipRefresh();
     setTimeout(installQuietRefreshAll, 0);
