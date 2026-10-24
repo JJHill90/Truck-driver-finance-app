@@ -17,14 +17,14 @@ describe("forecast quiet-window stub", () => {
     expect(src).toMatch(/function isUsableForecast/);
     expect(src).toMatch(/function patchRenderForecast/);
     expect(src).toMatch(/lastForecastBody/);
-    expect(src).toMatch(/Never invent \{ ok: true \}/);
+    expect(src).toMatch(/Never invent an empty \{ ok: true, quiet: true \}/);
     expect(src).not.toMatch(/JSON\.stringify\(\{ ok: true, quiet: true \}\)/);
   });
 
   it("cache-busts enhancements so Play WebViews load the forecast guard", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public", "index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public", "suite", "index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=forecast-quiet-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=forecast-quiet-1/);
+    expect(hub).toMatch(/enhancements\.js\?v=forecast-totals-2/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=forecast-totals-2/);
   });
 });
