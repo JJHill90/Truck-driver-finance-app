@@ -117,6 +117,13 @@ events stay the same: `checkout.session.completed` and
 
 ## 5. Play Console / App Store Connect
 
+Until this domain returns 200 for `/.well-known/assetlinks.json`, Play
+deep links / custom listing must use
+`https://go-taxation-suite.onrender.com/suite/` (declared on the Suite
+AAB). `gotaxationsuite.com` shows **This URL is not deep linked** on an
+older AAB, or website association fails while Apache still hosts the
+apex.
+
 Once `https://gotaxationsuite.com/privacy` returns 200:
 
 - Privacy policy = `https://gotaxationsuite.com/privacy`

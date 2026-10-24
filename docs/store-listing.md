@@ -80,11 +80,12 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 6 / `1.0.5`). Keep the
+**Build → Generate Signed Bundle** (`versionCode` 7 / `1.0.6`). Keep the
 keystore **out of git**. A navy thumbnail that never becomes the login
 form is the WebView not reaching `/suite/` (Capacitor was proxying HTML
 through Java, which fails on Cloudflare / a cold Render box). Upload this
-AAB to the same closed track.
+AAB to the same closed track. The App Links intent-filter must be in the
+uploaded AAB or Play says **This URL is not deep linked**.
 
 Then in Play Console for `com.gotaxation.suite`:
 
@@ -105,12 +106,15 @@ Then in Play Console for `com.gotaxation.suite`:
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com` and
    `https://gotaxationsuite.com/support`
-9. Digital Asset Links (Android App Links): Play Console statement for
-   `com.gotaxation.suite` is served at
-   `https://gotaxationsuite.com/.well-known/assetlinks.json`
-   (same JSON on `www`). After this is on `main` and Render has deployed
-   `go-taxation-suite`, use Play’s **Verify** on that URL. Source file:
-   `public/.well-known/assetlinks.json`.
+9. Digital Asset Links (Android App Links). Play only accepts a URL that
+   appears in the **uploaded AAB** intent-filter. Until official DNS
+   points at Render, use the live host:
+   `https://go-taxation-suite.onrender.com/suite/`
+   (Grow → Deep links, or a custom listing deep link). Do not paste
+   `gotaxationsuite.com` until
+   `https://gotaxationsuite.com/.well-known/assetlinks.json` returns 200.
+   Source file: `public/.well-known/assetlinks.json`. The same JSON is
+   already live on the onrender host.
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
