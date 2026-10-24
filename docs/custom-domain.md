@@ -13,6 +13,7 @@ service **`go-taxation-suite`**. Then these paths are the public pages:
 | Privacy | `https://gotaxationsuite.com/privacy` |
 | Terms | `https://gotaxationsuite.com/terms` |
 | Support | `https://gotaxationsuite.com/support` |
+| Android App Links | `https://gotaxationsuite.com/.well-known/assetlinks.json` |
 | Stripe webhook | `https://gotaxationsuite.com/api/haulage/billing/webhook` |
 
 Use **HTTPS**. The `http://` form will not keep session cookies, Stripe

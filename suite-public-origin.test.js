@@ -68,6 +68,15 @@ describe("Suite official public origin", () => {
     const postReq = { ...req, method: "POST", originalUrl: "/api/haulage/billing/webhook" };
     expect(wwwToApexRedirect(postReq, res, () => {})).toBe(false);
     expect(res.redirected).toBeNull();
+
+    res.redirected = null;
+    const assetlinksReq = {
+      ...req,
+      method: "GET",
+      originalUrl: "/.well-known/assetlinks.json",
+    };
+    expect(wwwToApexRedirect(assetlinksReq, res, () => {})).toBe(false);
+    expect(res.redirected).toBeNull();
   });
 
   it("leaves onrender and localhost alone", () => {

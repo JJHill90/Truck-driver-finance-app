@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gotaxation.suite",
+      "sha256_cert_fingerprints": [
+        "6E:2A:70:1A:D0:5A:2C:47:E1:B5:BD:01:19:0E:BC:A3:F4:BB:26:18:76:E0:C5:4F:90:FC:DA:9C:E5:72:05:FD"
+      ]
+    }
+  }
+]

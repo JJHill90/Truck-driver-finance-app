@@ -4815,6 +4815,15 @@ app.get(
 );
 app.get(["/legal.css"], sendLegalPage("legal.css"));
 
+// Android App Links — Play Console Digital Asset Links for com.gotaxation.suite.
+// Must be HTTPS, application/json, no auth. Google fetches this on the site
+// domain (gotaxationsuite.com and www).
+app.get("/.well-known/assetlinks.json", (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/json");
+  res.sendFile(path.join(PUBLIC_DIR, ".well-known", "assetlinks.json"));
+});
+
 const WELCOME_SHOTS_DIR = path.join(
   __dirname,
   "mobile-suite",

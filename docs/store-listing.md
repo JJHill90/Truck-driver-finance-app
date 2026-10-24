@@ -105,6 +105,12 @@ Then in Play Console for `com.gotaxation.suite`:
 7. Category: **Business** or **Finance**
 8. Contact: `support@godriverhub.com` and
    `https://gotaxationsuite.com/support`
+9. Digital Asset Links (Android App Links): Play Console statement for
+   `com.gotaxation.suite` is served at
+   `https://gotaxationsuite.com/.well-known/assetlinks.json`
+   (same JSON on `www`). After this is on `main` and Render has deployed
+   `go-taxation-suite`, use Play’s **Verify** on that URL. Source file:
+   `public/.well-known/assetlinks.json`.
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView.
 
