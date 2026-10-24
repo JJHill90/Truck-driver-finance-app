@@ -80,6 +80,7 @@ const {
   shouldRasterPdf,
   mergeRasterIntoOcr,
 } = require("./lib/pdf-ocr");
+const pdfThumbnail = require("./lib/pdf-thumbnail");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
@@ -2388,7 +2389,10 @@ api.delete("/admin/users/:username/receipts/:id", (req, res) => {
     return;
   }
   const receipt = receipts[idx];
-  if (receipt.imagePath) storage.deleteReceiptFile(receipt.imagePath);
+  if (receipt.imagePath) {
+    pdfThumbnail.deleteThumb(receipt.imagePath, storage);
+    storage.deleteReceiptFile(receipt.imagePath);
+  }
   receipts.splice(idx, 1);
   persistTarget(loaded, { reason: "admin-delete-receipt", actor: sessionUsername(req) });
   res.json({ ok: true, id: req.params.id });
@@ -4294,6 +4298,8 @@ api.delete("/receipts/:id", (req, res) => {
     return;
   }
   const records = getRecords(req);
+  const existing = (records.receipts || []).find((r) => r.id === req.params.id);
+  if (existing) pdfThumbnail.deleteThumb(existing.imagePath, storage);
   const removed = storage.deleteReceipt(records, req.params.id);
   if (!removed) {
     res.status(404).json({ error: "Receipt not found." });
@@ -4340,14 +4346,26 @@ api.get("/receipts/:id/image", (req, res) => {
   }
   const records = getRecords(req);
   const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
-  if (
-    receipt &&
-    (/pdf/i.test(receipt.mimeType || "") || /\.pdf$/i.test(receipt.filename || receipt.imagePath || ""))
-  ) {
-    res.status(415).json({
-      error: "Use the file endpoint for PDF documents.",
-      isPdf: true,
-    });
+  if (pdfThumbnail.isPdfReceipt(receipt)) {
+    pdfThumbnail
+      .dataUrlForReceipt(receipt, storage)
+      .then((dataUrl) => {
+        if (dataUrl) {
+          res.json({ dataUrl, kind: "pdf-thumb" });
+          return;
+        }
+        res.status(415).json({
+          error: "Use the file endpoint for PDF documents.",
+          isPdf: true,
+        });
+      })
+      .catch((err) => {
+        console.warn("PDF thumbnail failed:", err && err.message);
+        res.status(415).json({
+          error: "Use the file endpoint for PDF documents.",
+          isPdf: true,
+        });
+      });
     return;
   }
   const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
