@@ -117,6 +117,15 @@ events stay the same: `checkout.session.completed` and
 
 ## 5. Play Console / App Store Connect
 
+Until this domain returns 200 for `/.well-known/assetlinks.json`, Play
+**Add domain** must be the host only:
+`go-taxation-suite.onrender.com`
+(no `/suite/`, credential sharing off). The deep-link *check* URL is
+`https://go-taxation-suite.onrender.com/suite/` and needs the AAB that
+declares that host. `gotaxationsuite.com` fails association while
+Apache still 404s the JSON; a path in Add domain also fails
+(`Something went wrong` / not deep linked).
+
 Once `https://gotaxationsuite.com/privacy` returns 200:
 
 - Privacy policy = `https://gotaxationsuite.com/privacy`

@@ -29,6 +29,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="gotaxationsuite.com" />
                 <data android:scheme="https" android:host="www.gotaxationsuite.com" />
+                <!-- Live Play WebView host until DNS for the official domain points at Render. -->
+                <data android:scheme="https" android:host="go-taxation-suite.onrender.com" />
             </intent-filter>
 
         </activity>
