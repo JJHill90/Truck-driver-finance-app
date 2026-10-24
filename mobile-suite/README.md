@@ -39,7 +39,7 @@ often dies on Cloudflare or a sleeping Render instance. This shell now
 loads the hosted page in the WebView itself and drops the splash after
 700ms. First open after idle can take up to a minute.
 
-Ship **versionCode 6** (`1.0.5`) to Closed testing and ask testers to update.
+Ship **versionCode 7** (`1.0.6`) to Closed testing and ask testers to update.
 
 Set `CORS_ALLOW_CAPACITOR=1` on the Suite Render service (Blueprint default)
 so session cookies work (`SameSite=None; Secure`).
