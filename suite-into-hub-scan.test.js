@@ -42,7 +42,7 @@ describe("Suite scan fixes on Taxation Hub", () => {
   });
 
   it("cache-busts enhancements so Play WebViews load the Suite port", () => {
-    expect(hub).toMatch(/enhancements\.js\?v=dashboard-totals-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=dashboard-totals-1/);
+    expect(hub).toMatch(/enhancements\.js\?v=pdf-thumb-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=pdf-thumb-1/);
   });
 });
