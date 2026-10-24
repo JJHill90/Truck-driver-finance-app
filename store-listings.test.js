@@ -23,6 +23,7 @@ describe("Suite store listing assets", () => {
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/privacy/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/terms/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/support/);
+    expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/\.well-known\/assetlinks\.json/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\//);
     const cap = JSON.parse(fs.readFileSync(CAP_CONFIG, "utf8"));
     expect(cap.server.url).toBeUndefined();
