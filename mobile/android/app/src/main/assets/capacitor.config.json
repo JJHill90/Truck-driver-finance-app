@@ -1,0 +1,34 @@
+{
+	"appId": "com.haulagefinance.app",
+	"appName": "Driver Hub",
+	"webDir": "www",
+	"server": {
+		"cleartext": false,
+		"androidScheme": "https",
+		"errorPath": "index.html",
+		"allowNavigation": [
+			"https://godriverhub.com/haulage*",
+			"https://godriverhub.com/api/haulage*",
+			"https://www.godriverhub.com/haulage*",
+			"https://www.godriverhub.com/api/haulage*"
+		]
+	},
+	"android": {
+		"allowMixedContent": false,
+		"backgroundColor": "#0b1f33"
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"backgroundColor": "#0b1f33",
+		"preferredContentMode": "mobile"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchAutoHide": true,
+			"backgroundColor": "#0b1f33"
+		},
+		"Camera": {
+			"saveToGallery": false
+		}
+	}
+}

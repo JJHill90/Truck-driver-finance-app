@@ -21,7 +21,8 @@ Checkout, or Play / App Store policy URLs. Render issues a certificate
 after DNS verifies.
 
 Do **not** attach this domain to Driver Hub (`haulage-finance`). Accounts
-stay on Suite disk `gotax-data`.
+stay on Suite disk `gotax-data`. Driver Hub’s official host is
+`https://godriverhub.com/` — see [`custom-domain-driverhub.md`](custom-domain-driverhub.md).
 
 ## 1. Add the domain on Render
 

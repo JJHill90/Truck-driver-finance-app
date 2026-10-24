@@ -3,10 +3,14 @@
   "appName": "Driver Hub",
   "webDir": "www",
   "server": {
-    "url": "https://haulage-finance.onrender.com/haulage/",
     "cleartext": false,
+    "androidScheme": "https",
+    "errorPath": "index.html",
     "allowNavigation": [
-      "https://haulage-finance.onrender.com/*"
+      "https://godriverhub.com/haulage*",
+      "https://godriverhub.com/api/haulage*",
+      "https://www.godriverhub.com/haulage*",
+      "https://www.godriverhub.com/api/haulage*"
     ]
   },
   "android": {
