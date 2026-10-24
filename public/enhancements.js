@@ -718,7 +718,7 @@
     if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     function guarded() {
       const s = window.state && window.state.summary;
-      if (!isUsableSummary(s)) return;
+      if (window.state && !isUsableSummary(s)) return;
       try {
         return orig.apply(this, arguments);
       } catch (err) {
@@ -734,7 +734,7 @@
     if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     function guarded() {
       const r = window.state && window.state.report;
-      if (r && !isUsableReport(r)) return;
+      if (window.state && r && !isUsableReport(r)) return;
       try {
         return orig.apply(this, arguments);
       } catch (err) {

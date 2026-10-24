@@ -15,6 +15,8 @@ describe("forecast projected totals guard", () => {
     expect(src).toMatch(/Never invent an empty/);
     expect(src).not.toMatch(/JSON\.stringify\(\{\s*ok:\s*true,\s*quiet:\s*true\s*\}/);
     expect(src).toMatch(/projected\.income/);
+    expect(src).toMatch(/app\.js keeps `state` in script scope/);
+    expect(src).toMatch(/if \(window\.state && !isUsableForecast\(f\)\) return/);
   });
 
   it("keeps last good forecast so scenarios can re-render after the quiet window", () => {
