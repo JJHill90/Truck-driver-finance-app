@@ -48,6 +48,13 @@ describe("marketing overview pages", () => {
     expect(suiteHtml).not.toMatch(/Fuel Hub/i);
     expect(suiteHtml).not.toMatch(/truck-driver/i);
     expect(suiteHtml).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/"/);
+    expect(suiteHtml).toMatch(/id="about"/);
+    expect(suiteHtml).toMatch(/About us/);
+    expect(suiteHtml).toMatch(/id="get-the-app"/);
+    expect(suiteHtml).toMatch(/id="help"/);
+    expect(suiteHtml).toMatch(/href="\/support"/);
+    expect(suiteHtml).toMatch(/data-store="appstore"/);
+    expect(suiteHtml).toMatch(/data-store="play"/);
   });
 
   it("Driver Hub overview links to /haulage/ and names both picker apps", () => {
@@ -196,6 +203,12 @@ describe("marketing overview HTTP", () => {
     const named = await get(server, "/welcome-suite");
     expect(named.status).toBe(200);
     expect(named.text).toMatch(/Go Taxation Suite/);
+    expect(named.text).toMatch(/About us/);
+    expect(named.text).toMatch(/Get the app/);
+
+    const about = await get(server, "/about");
+    expect(about.status).toBe(302);
+    expect(about.location).toBe("/#about");
 
     const suiteSupportPage = await get(server, "/support");
     expect(suiteSupportPage.status).toBe(200);

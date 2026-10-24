@@ -15,7 +15,7 @@
       content="Australian tax records for PAYG, sole traders and partnerships. Try it in the browser — App Store and Google Play listings are on the way."
     />
     <meta property="og:url" content="https://gotaxationsuite.com/" />
-    <meta property="og:image" content="/welcome/shots/02-dashboard.png" />
+    <meta property="og:image" content="https://gotaxationsuite.com/welcome/shots/02-dashboard.png" />
     <link rel="icon" type="image/png" href="/suite/icon-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,12 +27,15 @@
   </head>
   <body class="welcome-page welcome-suite">
     <header class="welcome-bar">
-      <img class="welcome-mark" src="/suite/icon-512.png" width="40" height="40" alt="" />
-      <div class="welcome-brand">Go Taxation Suite</div>
+      <a class="welcome-brand-link" href="/">
+        <img class="welcome-mark" src="/suite/icon-512.png" width="40" height="40" alt="" />
+        <div class="welcome-brand">Go Taxation Suite</div>
+      </a>
       <div class="welcome-bar-spacer"></div>
       <nav class="welcome-nav" aria-label="Website">
-        <a href="/welcome-suite" aria-current="page">Overview</a>
-        <a href="/welcome-support-suite">Support</a>
+        <a href="/" aria-current="page">Overview</a>
+        <a href="/#about">About</a>
+        <a href="/support">Support</a>
       </nav>
       <a class="btn primary" data-welcome-app href="/suite/">Open the app</a>
     </header>
@@ -48,11 +51,11 @@
         <div class="hero-actions">
           <a class="btn primary" data-welcome-app href="/suite/">Try it in the browser</a>
           <div class="store-row">
-            <a class="store-btn" id="welcome-appstore" aria-disabled="true">
+            <a class="store-btn" id="welcome-appstore" data-store="appstore" aria-disabled="true">
               <span class="store-btn-kicker">Coming soon on the</span>
               App Store
             </a>
-            <a class="store-btn" id="welcome-play" aria-disabled="true">
+            <a class="store-btn" id="welcome-play" data-store="play" aria-disabled="true">
               <span class="store-btn-kicker">Coming soon on</span>
               Google Play
             </a>
@@ -61,6 +64,24 @@
         <p class="store-note" id="welcome-store-note">
           App Store and Google Play listings are on the way. Use the web app today — same account
           later on your phone.
+        </p>
+      </section>
+
+      <section class="about" id="about" aria-labelledby="about-heading">
+        <h2 id="about-heading">About us</h2>
+        <p>
+          Go Taxation Suite is an independent Australian tax-records app for PAYG employees, sole
+          traders and partnerships — any occupation. Photograph receipts, save income, and keep a
+          live EOFY working paper you can take to your accountant.
+        </p>
+        <p>
+          New profiles start on Free (15 uploads a month and one on-screen report). Pro and Pro+
+          are paid on this website with Stripe — not as in-app purchases on Google Play or the
+          App Store. The same login works in the browser and in the Android / iOS apps.
+        </p>
+        <p>
+          We are not the ATO and we do not provide tax, financial or legal advice. The app does
+          not lodge a BAS or tax return. You (or your registered agent) lodge with the ATO.
         </p>
       </section>
 
@@ -83,8 +104,8 @@
         </article>
       </section>
 
-      <section class="shots">
-        <h2>A quick look</h2>
+      <section class="shots" id="preview" aria-labelledby="preview-heading">
+        <h2 id="preview-heading">A quick look</h2>
         <div class="shot-row">
           <figure>
             <img src="/welcome/shots/01-login.png" alt="Go Taxation Suite sign-in screen" width="180" height="360" />
@@ -109,6 +130,39 @@
         </div>
       </section>
 
+      <section class="get-app" id="get-the-app" aria-labelledby="get-app-heading">
+        <h2 id="get-app-heading">Get the app</h2>
+        <p>
+          Open it in your browser now. When the store listings are live, these buttons go to the
+          Android and iPhone apps — same account, no in-app purchases.
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" data-welcome-app href="/suite/">Open in the browser</a>
+          <div class="store-row">
+            <a class="store-btn" data-store="appstore" aria-disabled="true">
+              <span class="store-btn-kicker">Coming soon on the</span>
+              App Store
+            </a>
+            <a class="store-btn" data-store="play" aria-disabled="true">
+              <span class="store-btn-kicker">Coming soon on</span>
+              Google Play
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="support-teaser" id="help" aria-labelledby="help-heading">
+        <h2 id="help-heading">Support</h2>
+        <p>
+          Scanning, plans, or your account — read the tab guides and FAQ, send a message, or email
+          <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>.
+        </p>
+        <div class="support-teaser-actions">
+          <a class="btn primary" href="/support">Contact support</a>
+          <a class="btn secondary" href="/support">Help and FAQ</a>
+        </div>
+      </section>
+
       <p class="disclaimer">
         Not tax advice and not an official ATO product. The app does not lodge a BAS or tax return.
         You (or your registered agent) lodge with the ATO.
@@ -120,7 +174,7 @@
       ·
       <a href="/terms">Terms</a>
       ·
-      <a href="/welcome-support-suite">Support</a>
+      <a href="/support">Support</a>
       ·
       <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>
     </footer>
