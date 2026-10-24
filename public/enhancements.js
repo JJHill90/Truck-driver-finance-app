@@ -674,6 +674,22 @@
     return Boolean(r && r.summary && isUsableSummary(r.summary));
   }
 
+  function isUsableForecast(f) {
+    return Boolean(
+      f &&
+        f.projected &&
+        typeof f.projected === "object" &&
+        Array.isArray(f.scenarios) &&
+        f.yearProgress
+    );
+  }
+
+  function isQuietWindowActive() {
+    // Number(undefined) is NaN; NaN <= Date.now() is false, which would
+    // leave the quiet stub on forever. Require a real future deadline.
+    return Number(window.__haulageQuietUntil) > Date.now();
+  }
+
   function scheduleTotalsSyncAfterQuiet() {
     const wait = Math.max(0, Number(window.__haulageQuietUntil) - Date.now()) + 250;
     clearTimeout(window.__haulageTotalsSyncTimer);
@@ -727,12 +743,29 @@
     window.renderReport = guarded;
   }
 
+  function patchRenderForecast() {
+    const orig = window.renderForecast;
+    if (typeof orig !== "function" || orig.__haulageForecastGuard) return;
+    function guarded() {
+      const f = window.state && window.state.forecast;
+      if (f && !isUsableForecast(f)) return;
+      try {
+        return orig.apply(this, arguments);
+      } catch (err) {
+        if (typeof console !== "undefined") console.warn("renderForecast skipped:", err);
+      }
+    }
+    guarded.__haulageForecastGuard = true;
+    window.renderForecast = guarded;
+  }
+
   function patchRefreshEofyLive() {
     const orig = window.refreshEofyLive;
     if (typeof orig !== "function" || orig.__haulageSummaryGuard) return;
     async function patched() {
       const prevSummary = window.state && window.state.summary;
       const prevReport = window.state && window.state.report;
+      const prevForecast = window.state && window.state.forecast;
       try {
         await orig.apply(this, arguments);
       } catch (err) {
@@ -742,6 +775,9 @@
           }
           if (window.state.report && !isUsableReport(window.state.report) && isUsableReport(prevReport)) {
             window.state.report = prevReport;
+          }
+          if (window.state.forecast && !isUsableForecast(window.state.forecast) && isUsableForecast(prevForecast)) {
+            window.state.forecast = prevForecast;
           }
         }
         if (isUsableSummary(window.state && window.state.summary)) {
@@ -766,6 +802,10 @@
       if (window.state && window.state.report && !isUsableReport(window.state.report) && isUsableReport(prevReport)) {
         window.state.report = prevReport;
       }
+      if (window.state && window.state.forecast && !isUsableForecast(window.state.forecast) && isUsableForecast(prevForecast)) {
+        window.state.forecast = prevForecast;
+        if (typeof window.renderForecast === "function") window.renderForecast();
+      }
     }
     patched.__haulageSummaryGuard = true;
     patched.__haulageQuietPatch = true;
@@ -773,7 +813,7 @@
   }
 
   function isQuietHeavyForecastGet(url, method) {
-    if (Number(window.__haulageQuietUntil) <= Date.now()) return false;
+    if (!isQuietWindowActive()) return false;
     if (String(method || "GET").toUpperCase() !== "GET") return false;
     // Do not stub /summary — a { ok: true } body crashes renderStats
     // (s.income.assessableTotal) and leaves dashboard pies unsynced.
@@ -788,6 +828,10 @@
     return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/report(\?|$)/.test(String(url || ""));
   }
 
+  function isForecastGet(url, method) {
+    return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/forecast(\?|$)/.test(String(url || ""));
+  }
+
   function cachedQuietForecastResponse(url) {
     const u = String(url || "");
     if (/\/report(\?|$)/.test(u) && lastReportBody) {
@@ -796,18 +840,20 @@
         headers: { "Content-Type": "application/json" },
       });
     }
-    if (/\/report(\?|$)/.test(u) || /\/summary(\?|$)/.test(u)) {
-      return null;
+    if (/\/forecast(\?|$)/.test(u) && lastForecastBody) {
+      return new Response(lastForecastBody, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
-    return new Response(JSON.stringify({ ok: true, quiet: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    // Never invent { ok: true } — renderForecast reads projected.income / scenarios.
+    return null;
   }
 
   let lastRecordsBody = null;
   let lastSummaryBody = null;
   let lastReportBody = null;
+  let lastForecastBody = null;
 
   function isRecordsGet(url, method) {
     return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
@@ -969,7 +1015,7 @@
     if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
       return quietRecordsResponse();
     }
-    if (Number(window.__haulageQuietUntil) > Date.now() && isReceiptImageGet(url, fetchMethod)) {
+    if (isQuietWindowActive() && isReceiptImageGet(url, fetchMethod)) {
       return new Response(JSON.stringify({ error: "Use the file endpoint for PDF documents.", isPdf: true }), {
         status: 415,
         headers: { "Content-Type": "application/json" },
@@ -1319,6 +1365,15 @@
           const text = await res.clone().text();
           const data = JSON.parse(text);
           if (isUsableReport(data)) lastReportBody = text;
+        } catch {
+          /* keep the previous cache */
+        }
+      }
+      if (res && res.ok && isForecastGet(url, fetchMethod)) {
+        try {
+          const text = await res.clone().text();
+          const data = JSON.parse(text);
+          if (isUsableForecast(data)) lastForecastBody = text;
         } catch {
           /* keep the previous cache */
         }
@@ -2415,9 +2470,11 @@
     patchPdfReceiptViewer();
     patchRenderStats();
     patchRenderReport();
+    patchRenderForecast();
     patchRefreshEofyLive();
     setTimeout(patchRenderStats, 0);
     setTimeout(patchRenderReport, 0);
+    setTimeout(patchRenderForecast, 0);
     setTimeout(patchRefreshEofyLive, 0);
     installQuietRefreshAll();
     patchUploadSkipRefresh();
