@@ -24,6 +24,10 @@ Do **not** attach this domain to Driver Hub (`haulage-finance`). Accounts
 stay on Suite disk `gotax-data`. Driver Hub’s official host is
 `https://godriverhub.com/` — see [`custom-domain-driverhub.md`](custom-domain-driverhub.md).
 
+An optional static Ace Host pack (`cpanel-site/`, `npm run cpanel-site`) can
+park a preview homepage if the apex A record is still on cPanel. Official
+production stays on this Render service — see [`cpanel-site.md`](cpanel-site.md).
+
 ## 1. Add the domain on Render
 
 1. Open Render → service **`go-taxation-suite`** → **Settings → Custom Domains**.

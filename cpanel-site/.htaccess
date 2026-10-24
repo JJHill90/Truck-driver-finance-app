@@ -1,0 +1,13 @@
+# Go Taxation Suite preview website (cPanel).
+# The live app is NOT hosted here — it stays on Render.
+Options -Indexes
+DirectoryIndex index.html
+
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+RewriteRule ^support/?$ support.html [L]
+RewriteRule ^privacy/?$ privacy.html [L]
+RewriteRule ^terms/?$ terms.html [L]
+RewriteRule ^about/?$ index.html [L]

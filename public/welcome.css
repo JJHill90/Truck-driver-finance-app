@@ -25,12 +25,16 @@ body.welcome-page {
   color: var(--link);
 }
 .welcome-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   width: min(72rem, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 1rem 0;
+  padding: 0.85rem 0 1rem;
+  background: linear-gradient(180deg, #061018 72%, rgba(6, 16, 24, 0));
 }
 .welcome-mark {
   width: 40px;
@@ -43,6 +47,13 @@ body.welcome-page {
   letter-spacing: 0.04em;
   font-size: 1.15rem;
   text-transform: uppercase;
+}
+.welcome-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: inherit;
+  text-decoration: none;
 }
 .welcome-bar-spacer {
   flex: 1;
@@ -175,6 +186,51 @@ body.welcome-page {
   margin: 0;
   color: var(--muted);
   font-size: 0.92rem;
+}
+#about,
+#preview,
+#get-the-app,
+#help {
+  scroll-margin-top: 4.75rem;
+}
+.about,
+.get-app,
+.support-teaser {
+  margin: 2.4rem 0 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.3rem 1.35rem 1.4rem;
+  max-width: 46rem;
+}
+.about h2,
+.get-app h2,
+.support-teaser h2 {
+  margin: 0 0 0.7rem;
+  font-size: 1.28rem;
+}
+.about p,
+.get-app p,
+.support-teaser p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+.about p:last-child,
+.get-app p:last-child,
+.support-teaser p:last-child {
+  margin-bottom: 0;
+}
+.support-teaser-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 0.95rem 0 0;
+}
+.get-app .hero-actions {
+  margin-top: 0.95rem;
+}
+.shots {
+  margin-top: 2.4rem;
 }
 .shots h2 {
   margin: 0 0 0.85rem;

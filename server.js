@@ -4917,6 +4917,9 @@ app.use(
 app.get(["/welcome-suite", "/welcome-suite.html"], sendWelcomePage("suite"));
 app.get(["/welcome-driverhub", "/welcome-driverhub.html"], sendWelcomePage("haulage"));
 app.get(["/welcome", "/welcome.html"], sendWelcomePage());
+app.get(["/about", "/about.html"], (_req, res) => {
+  res.redirect(302, "/#about");
+});
 app.get(["/welcome-support-suite"], sendWelcomeSupport("suite"));
 app.get(["/welcome-support-driverhub"], sendWelcomeSupport("haulage"));
 app.get(["/support", "/support.html"], sendWelcomeSupport());

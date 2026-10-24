@@ -45,7 +45,8 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   (see `docs/store-listing-driverhub.md`). Keep Suite Play on the onrender
   `/suite/` URL until Suite DNS + TLS are verified. Native shells still
   load `/suite/` or `/haulage/`. Build Hub from `mobile/`, Suite from
-  `mobile-suite/`.
+  `mobile-suite/`. Optional Ace Host static pack: `npm run cpanel-site`
+  (see `docs/cpanel-site.md`) — does not replace the Render official host.
   When Play / App Store listings exist, set `SUITE_PLAY_STORE_URL` /
   `SUITE_APP_STORE_URL` (Suite host) or `DRIVERHUB_PLAY_STORE_URL` /
   `DRIVERHUB_APP_STORE_URL` (Driver Hub host); until then the buttons stay
