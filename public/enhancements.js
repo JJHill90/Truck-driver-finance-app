@@ -898,13 +898,6 @@
     return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
   }
 
-  function isReceiptImageGet(url, method) {
-    return (
-      String(method || "GET").toUpperCase() === "GET" &&
-      /\/api\/haulage\/receipts\/[^/]+\/image(\?|$)/.test(String(url || ""))
-    );
-  }
-
   function quietRecordsResponse() {
     return new Response(
       lastRecordsBody ||
@@ -1054,13 +1047,6 @@
     if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
       return quietRecordsResponse();
     }
-    if (isQuietWindowActive() && isReceiptImageGet(url, fetchMethod)) {
-      return new Response(JSON.stringify({ error: "Use the file endpoint for PDF documents.", isPdf: true }), {
-        status: 415,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
     // Inject cash / no-receipt flags from the manual expense form (app.js
     // builds its own payload and does not read these checkboxes).
     // Also ensure Profile presets land on expense saves when forms still have
@@ -2207,27 +2193,6 @@
 
   function patchPdfReceiptViewer() {
     const origFetchImage = window.fetchReceiptImageDataUrl;
-    if (typeof origFetchImage === "function" && !origFetchImage.__haulagePdfSafe) {
-      async function safeFetchImage(receiptId) {
-        const finder = window.findReceipt;
-        const receipt = typeof finder === "function" ? finder(receiptId) : null;
-        const pdf =
-          receipt &&
-          (typeof window.isReceiptPdf === "function"
-            ? window.isReceiptPdf(receipt)
-            : /pdf/i.test(receipt.mimeType || receipt.filename || ""));
-        if (pdf && isAndroidLike()) {
-          throw new Error("PDF preview opens as a file, not an image.");
-        }
-        if (pdf && typeof window.receiptFileUrl === "function") {
-          return window.receiptFileUrl(receiptId);
-        }
-        return origFetchImage(receiptId);
-      }
-      safeFetchImage.__haulagePdfSafe = true;
-      window.fetchReceiptImageDataUrl = safeFetchImage;
-    }
-
     const origOpen = window.openReceiptViewer;
     if (typeof origOpen === "function" && !origOpen.__haulagePdfSafe) {
       async function safeOpen(receiptId) {
@@ -2242,12 +2207,24 @@
             typeof window.receiptFileUrl === "function" ? window.receiptFileUrl(receiptId) : "#";
           if (title) title.innerHTML = `<strong>${esc(receipt.filename || "PDF")}</strong>`;
           if (body) {
-            body.innerHTML = `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
-              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
+            body.innerHTML = `<p class="muted">Loading preview…</p>`;
           }
           if (viewer) {
             viewer.classList.remove("hidden");
             document.body.style.overflow = "hidden";
+          }
+          let thumb = "";
+          try {
+            thumb = await origFetchImage(receiptId);
+          } catch {
+            thumb = "";
+          }
+          if (body) {
+            const preview = /^data:image\//i.test(thumb)
+              ? `<img src="${esc(thumb)}" alt="${esc(receipt.filename || "PDF preview")}" />`
+              : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
+            body.innerHTML = `${preview}
+              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
           }
           return;
         }
@@ -6379,6 +6356,67 @@
     if (spendHost) observer.observe(spendHost, { childList: true });
     if (grossTaxHost) observer.observe(grossTaxHost, { childList: true });
     renderAll({ force: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- PDF gallery thumbs: first page instead of a blank PDF tile ---------- */
+(function () {
+  "use strict";
+
+  function patchCardHtml() {
+    const orig = window.receiptGalleryCardHtml;
+    if (typeof orig !== "function" || orig.__haulagePdfThumb) return;
+    function patched(r, title) {
+      const html = orig.call(this, r, title);
+      const pdf =
+        typeof window.isReceiptPdf === "function"
+          ? window.isReceiptPdf(r)
+          : /pdf/i.test((r && (r.mimeType || r.filename || r.imagePath)) || "");
+      if (!pdf || !r || !r.id) return html;
+      return String(html).replace(
+        /<span class="receipt-pdf-icon">PDF<\/span>/,
+        `<img data-receipt-thumb="${r.id}" alt="" loading="lazy" class="receipt-pdf-thumb" />`
+      );
+    }
+    patched.__haulagePdfThumb = true;
+    window.receiptGalleryCardHtml = patched;
+  }
+
+  function swapPdfIcons(root) {
+    if (!root) return;
+    root.querySelectorAll(".receipt-pdf-icon").forEach((icon) => {
+      const card = icon.closest("[data-receipt-card], [data-receipt-id]");
+      const id = card && (card.dataset.receiptCard || card.dataset.receiptId);
+      if (!id) return;
+      const img = document.createElement("img");
+      img.setAttribute("data-receipt-thumb", id);
+      img.className = "receipt-pdf-thumb";
+      img.alt = "";
+      img.loading = "lazy";
+      icon.replaceWith(img);
+      if (typeof window.loadReceiptThumbnail === "function") {
+        void window.loadReceiptThumbnail(id, img);
+      }
+    });
+  }
+
+  function start() {
+    patchCardHtml();
+    setTimeout(patchCardHtml, 0);
+    setTimeout(patchCardHtml, 500);
+    ["receipt-gallery", "income-gallery", "car-receipt-gallery"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const mo = new MutationObserver(() => swapPdfIcons(el));
+      mo.observe(el, { childList: true, subtree: true });
+      swapPdfIcons(el);
+    });
   }
 
   if (document.readyState === "loading") {
