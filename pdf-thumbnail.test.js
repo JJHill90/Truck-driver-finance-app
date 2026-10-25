@@ -25,6 +25,9 @@ describe("pdf-thumbnail helpers", () => {
   it("maps a stored PDF path to a sibling thumb", () => {
     expect(siblingThumbRelative("receipts/abc-123.pdf")).toBe("receipts/abc-123.thumb.png");
     expect(siblingThumbRelative("receipts/shot.jpg")).toBeNull();
+    expect(
+      siblingThumbRelative("receipts/stub.jpg", { mimeType: "application/pdf", filename: "payslip.pdf" })
+    ).toBe("receipts/stub.thumb.png");
     expect(isPdfReceipt({ mimeType: "application/pdf", imagePath: "receipts/a.pdf" })).toBe(true);
     expect(isPdfReceipt({ mimeType: "image/jpeg", filename: "slip.jpg" })).toBe(false);
   });
@@ -139,7 +142,9 @@ describe("gallery uses PDF thumbs", () => {
     expect(src).toMatch(/receipt-pdf-thumb/);
     expect(src).toMatch(/data-receipt-thumb/);
     expect(src).toMatch(/__haulagePdfThumb/);
-    expect(hub).toMatch(/enhancements\.js\?v=receipt-file-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=receipt-file-1/);
+    expect(src).toMatch(/__suiteThumbFallback/);
+    expect(src).toMatch(/function restorePdfIcon/);
+    expect(hub).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
   });
 });

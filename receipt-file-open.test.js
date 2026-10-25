@@ -33,8 +33,8 @@ describe("receipt viewer file actions", () => {
   it("cache-busts enhancements so phones load the blob file actions", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public/suite/index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=receipt-file-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=receipt-file-1/);
+    expect(hub).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
   });
 });
 

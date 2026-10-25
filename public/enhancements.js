@@ -437,6 +437,27 @@
     return `${window.location.origin}/api/haulage`;
   }
 
+  function isGotaxSuitePage() {
+    try {
+      if (document.body && document.body.classList.contains("gotax-suite")) return true;
+      return /\/suite(\/|$)/i.test(String(window.location.pathname || ""));
+    } catch {
+      return false;
+    }
+  }
+
+  function withSuiteProductHeader(options) {
+    const opts = options || {};
+    if (!isGotaxSuitePage()) return opts;
+    const headers = Object.assign({}, opts.headers || {});
+    if (!headers["X-Gotax-Product"] && !headers["x-gotax-product"]) {
+      headers["X-Gotax-Product"] = "suite";
+    }
+    return Object.assign({}, opts, { headers });
+  }
+  window.__haulageWithSuiteProductHeader = withSuiteProductHeader;
+  window.__haulageIsGotaxSuitePage = isGotaxSuitePage;
+
   function isScanFieldDirty(el) {
     return Boolean(el && el.dataset && el.dataset.scanUserEdited === "1");
   }
@@ -1036,7 +1057,10 @@
 
   window.fetch = async function (...args) {
     let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
-    let options = args[1] || {};
+    let options = withSuiteProductHeader(args[1] || {});
+    if (args[0] !== url || args[1] !== options) {
+      args = [args[0], options];
+    }
     const fetchMethod = String(
       options.method || (args[0] && typeof args[0] === "object" && args[0].method) || "GET"
     ).toUpperCase();
@@ -2345,11 +2369,31 @@
         const receipt = resolveReceipt(receiptId);
         const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
         const headerOpen = document.querySelector("#receipt-viewer [data-open-receipt-file]");
+        const body = document.getElementById("receipt-viewer-body");
+        const hasPreview =
+          body &&
+          (body.querySelector("img[src^='data:'], img[src^='blob:']") ||
+            body.querySelector("iframe[src^='data:'], iframe[src^='blob:']"));
+        if (!hasPreview && body) {
+          try {
+            const blob = await fetchReceiptBlob(receiptId);
+            const objectUrl = URL.createObjectURL(blob);
+            if (pdf || /pdf/i.test(blob.type || "")) {
+              URL.revokeObjectURL(objectUrl);
+              paintPdfViewerBody(body, receipt || { id: receiptId }, receiptId, "");
+            } else {
+              body.innerHTML = `<img src="${objectUrl}" alt="${esc((receipt && receipt.filename) || "Document")}" />`;
+            }
+          } catch (err) {
+            body.innerHTML = `<p class="muted">${esc(
+              (err && err.message) || "Photo file missing — re-upload this document on this app."
+            )}</p>`;
+          }
+        }
         if (!pdf) {
           if (headerOpen) headerOpen.hidden = true;
           return result;
         }
-        const body = document.getElementById("receipt-viewer-body");
         if (!body) return result;
         const iframe = body.querySelector("iframe");
         const img = body.querySelector("img");
@@ -2542,12 +2586,15 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PDF_SCAN_TIMEOUT_MS);
     try {
-      const res = await origFetch(`${haulageApiRoot()}/receipts/scan`, {
-        method: "POST",
-        credentials: "same-origin",
-        body: form,
-        signal: controller.signal,
-      });
+      const res = await origFetch(
+        `${haulageApiRoot()}/receipts/scan`,
+        withSuiteProductHeader({
+          method: "POST",
+          credentials: "same-origin",
+          body: form,
+          signal: controller.signal,
+        })
+      );
       const data = await res.json().catch(() => ({}));
       return { status: res.status, data };
     } finally {
@@ -6804,6 +6851,75 @@
     window.receiptGalleryCardHtml = patched;
   }
 
+  function restorePdfIcon(imgEl) {
+    if (!imgEl || !imgEl.parentNode) return;
+    const thumb = imgEl.closest(".receipt-card-thumb");
+    const icon = document.createElement("span");
+    icon.className = "receipt-pdf-icon";
+    icon.textContent = "PDF";
+    imgEl.replaceWith(icon);
+    if (thumb) thumb.classList.add("is-pdf");
+  }
+
+  function patchLoadReceiptThumbnail() {
+    const origFetch = window.fetchReceiptImageDataUrl;
+    if (typeof origFetch === "function" && !origFetch.__suiteThumbFallback) {
+      async function wrappedFetch(receiptId) {
+        const dataUrl = await origFetch.call(this, receiptId);
+        if (!dataUrl || dataUrl === "null") {
+          const err = new Error("Could not load thumbnail");
+          err.kind = "empty";
+          throw err;
+        }
+        return dataUrl;
+      }
+      wrappedFetch.__suiteThumbFallback = true;
+      window.fetchReceiptImageDataUrl = wrappedFetch;
+    }
+    const orig = window.loadReceiptThumbnail;
+    if (typeof orig !== "function" || orig.__suiteThumbFallback) return;
+    async function wrapped(receiptId, imgEl) {
+      if (!imgEl) return;
+      try {
+        await orig.call(this, receiptId, imgEl);
+        if (imgEl.getAttribute("src") && imgEl.getAttribute("src") !== "null") return;
+      } catch {
+        /* fall through to file / PDF tile */
+      }
+      const receipt = typeof window.findReceipt === "function" ? window.findReceipt(receiptId) : null;
+      const pdf =
+        receipt && typeof window.isReceiptPdf === "function" ? window.isReceiptPdf(receipt) : false;
+      try {
+        const href =
+          typeof window.receiptFileUrl === "function"
+            ? window.receiptFileUrl(receiptId, true)
+            : `${window.location.origin}/api/haulage/receipts/${encodeURIComponent(receiptId)}/file?download=1`;
+        const res = await fetch(href, { credentials: "same-origin" });
+        if (res.ok) {
+          const blob = await res.blob();
+          if (/^image\//i.test(blob.type)) {
+            imgEl.src = URL.createObjectURL(blob);
+            imgEl.alt = "";
+            return;
+          }
+          if (pdf || /pdf/i.test(blob.type || "")) {
+            restorePdfIcon(imgEl);
+            return;
+          }
+        }
+        const data = await res.json().catch(() => ({}));
+        imgEl.alt = data.missingFile
+          ? "Photo file missing — re-upload this document"
+          : "Could not load thumbnail";
+      } catch {
+        if (pdf) restorePdfIcon(imgEl);
+        else imgEl.alt = "Could not load thumbnail";
+      }
+    }
+    wrapped.__suiteThumbFallback = true;
+    window.loadReceiptThumbnail = wrapped;
+  }
+
   function swapPdfIcons(root) {
     if (!root) return;
     root.querySelectorAll(".receipt-pdf-icon").forEach((icon) => {
@@ -6824,8 +6940,11 @@
 
   function start() {
     patchCardHtml();
+    patchLoadReceiptThumbnail();
     setTimeout(patchCardHtml, 0);
+    setTimeout(patchLoadReceiptThumbnail, 0);
     setTimeout(patchCardHtml, 500);
+    setTimeout(patchLoadReceiptThumbnail, 500);
     ["receipt-gallery", "income-gallery", "car-receipt-gallery"].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;

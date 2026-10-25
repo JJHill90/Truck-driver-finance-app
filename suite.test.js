@@ -288,6 +288,7 @@ describe("suite product detection", () => {
     delete process.env.GOTAX_STANDALONE;
     expect(suite.productOf({ headers: { cookie: "gotax_product=1" } })).toBe("suite");
     expect(suite.productOf({ headers: { referer: "http://localhost:3000/suite/" } })).toBe("suite");
+    expect(suite.productOf({ headers: { "x-gotax-product": "suite" } })).toBe("suite");
     expect(suite.productOf({ headers: { cookie: "" } })).toBe("haulage");
     expect(suite.publicHomePath()).toBe("/haulage/");
     expect(suite.recoveryPagePath({ headers: { cookie: "" } })).toBe("/haulage/recover.html");
