@@ -10382,10 +10382,17 @@
   function injectLodgementBrief() {
     const el = document.getElementById("report-content");
     if (!el) return;
-    el.querySelector(".report-lodgement-brief")?.remove();
     const report = typeof state !== "undefined" && state.report;
     const brief = report && report.lodgementBrief;
-    if (!brief) return;
+    const existing = el.querySelector(".report-lodgement-brief");
+    // Skip rebuild when the brief is already on the page. The report observer
+    // watches childList+subtree, so remove+append here used to re-enter
+    // enhanceReport forever and freeze boot for Pro+ (phone and desktop).
+    if (!brief) {
+      existing?.remove();
+      return;
+    }
+    if (existing) return;
     const ident = brief.identity || {};
     const pos = brief.taxPosition || {};
     const payerRows = (brief.payers || [])
@@ -10468,10 +10475,22 @@
     el.appendChild(section);
   }
 
+  let reportObserver = null;
+
   function enhanceReport() {
-    fixReportHeadings();
-    injectReportExpenseLedger();
-    injectLodgementBrief();
+    const report = document.getElementById("report-content");
+    if (!report) return;
+    // Disconnect while we mutate so append/remove cannot queue another pass.
+    if (reportObserver) reportObserver.disconnect();
+    try {
+      fixReportHeadings();
+      injectReportExpenseLedger();
+      injectLodgementBrief();
+    } finally {
+      if (reportObserver) {
+        reportObserver.observe(report, { childList: true, subtree: true });
+      }
+    }
   }
 
   function start() {
@@ -10486,7 +10505,8 @@
     }
     const report = document.getElementById("report-content");
     if (report) {
-      new MutationObserver(enhanceReport).observe(report, { childList: true, subtree: true });
+      reportObserver = new MutationObserver(enhanceReport);
+      reportObserver.observe(report, { childList: true, subtree: true });
       enhanceReport();
     }
   }
