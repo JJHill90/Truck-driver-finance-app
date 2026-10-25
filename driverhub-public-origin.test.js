@@ -73,6 +73,30 @@ describe("Driver Hub official public origin", () => {
     expect(wwwToApexRedirect(postReq, res, () => {})).toBe(false);
   });
 
+  it("does not redirect the apex (Render must not be answered with apex → www)", () => {
+    delete process.env.APP_PRODUCT;
+    let nextCalled = false;
+    const res = {
+      redirect() {
+        throw new Error("apex must be served, not redirected to www");
+      },
+    };
+    expect(
+      wwwToApexRedirect(
+        {
+          headers: { host: "godriverhub.com", "x-forwarded-proto": "https" },
+          originalUrl: "/",
+          method: "GET",
+        },
+        res,
+        () => {
+          nextCalled = true;
+        }
+      )
+    ).toBe(false);
+    expect(nextCalled).toBe(true);
+  });
+
   it("leaves onrender and localhost alone", () => {
     delete process.env.APP_PRODUCT;
     let nextCalled = false;
