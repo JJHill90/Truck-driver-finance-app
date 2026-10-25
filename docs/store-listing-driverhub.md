@@ -16,7 +16,7 @@ Compile **only** this listing:
 
 Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
 
-The Play package must load **`https://godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). `www.godriverhub.com` only redirects to the apex. Ship a new AAB after `curl -sI https://godriverhub.com/haulage/` returns 200 (see the redirect-loop steps in `docs/custom-domain-driverhub.md`). Play Console privacy and terms use `https://godriverhub.com/privacy` and `https://godriverhub.com/terms`. The same pages are also inside the app at `/haulage/privacy` and `/haulage/terms`.
+The Play package must load **`https://godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). `www.godriverhub.com` only redirects to the apex. This release is **versionCode 4 / `1.0.3`**. It opens the apex `/haulage/` directly (`curl -sI https://godriverhub.com/haulage/` is 200; see `docs/custom-domain-driverhub.md`). Play Console privacy and terms use `https://godriverhub.com/privacy` and `https://godriverhub.com/terms`. The same pages are also inside the app at `/haulage/privacy` and `/haulage/terms`. In the WebView, a tap on `/privacy`, `/terms`, or `/support` is sent to those `/haulage/…` pages so the marketing site stays in the browser.
 
 Build Driver Hub from this repo’s **`mobile/`** folder (`com.haulagefinance.app`). Do not open the Suite Android Studio project (`mobile-suite/` or a local `comgotaxationsuite` tree).
 
@@ -39,9 +39,10 @@ Still required **outside this repo**:
 | Android `targetSdk` 35, camera optional | Done | `mobile/android/` |
 | Crash-safe launch (no `server.url` proxy) | Done | `MainActivity` + `HubNavigationPlugin` |
 | Android 12 splash is a **color** (PNG crashes) | Done | `styles.xml` |
-| Public Privacy + Terms (Driver Hub) | Live | `/haulage/privacy` and `/haulage/terms` |
-| Public Support | Live | `/support` |
+| Public Privacy + Terms (Driver Hub) | Live | `https://godriverhub.com/privacy` and `https://godriverhub.com/terms` |
+| Public Support | Live | `https://godriverhub.com/support` |
 | Public marketing overview | Live | `https://godriverhub.com/` |
+| Play version for this release | `versionCode` 4 / `1.0.3` | `mobile/android/app/build.gradle` |
 | In-app account deletion | Done | Profile → Delete account |
 | Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
 | Play feature graphic 1024×500 | Done | `mobile/store/feature-graphic-1024x500.png` |
@@ -59,7 +60,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 3 / `1.0.2`). Always sync **before** the bundle. Create a Play App signing keystore and store it offline. Upload this AAB over any build that opened Chrome, the marketing homepage, or `www.gotaxation.com.au`.
+**Build → Generate Signed Bundle** (`versionCode` 4 / `1.0.3`). Always sync **before** the bundle. Use the **same upload keystore** already registered for `com.haulagefinance.app`. Keep it offline and out of git. This repository has no keystore and no GitHub Action that builds an AAB, so the signed file is produced only on that machine. Android Studio writes it under `mobile/android/app/build/outputs/bundle/release/app-release.aab` (or the folder you pick in the wizard). Upload that `.aab`. Confirm the bundle is versionCode **4**, versionName **1.0.3**. Do not upload a build that opened Chrome, the marketing homepage, or `www.gotaxation.com.au`.
 
 Then in Play Console for `com.haulagefinance.app`:
 
@@ -75,6 +76,27 @@ Then in Play Console for `com.haulagefinance.app`:
 10. Contact: `support@godriverhub.com` and `https://godriverhub.com/support`
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView. Subscriptions stay on the website.
+
+Play Console URLs for this listing:
+
+| Play field | URL |
+|------------|-----|
+| Privacy policy | `https://godriverhub.com/privacy` |
+| Terms | `https://godriverhub.com/terms` |
+| Support / contact website | `https://godriverhub.com/support` |
+| Marketing | `https://godriverhub.com/` |
+
+## Release notes (Play “What’s new”, versionCode 4 / 1.0.3)
+
+Paste for en-AU (under 500 characters):
+
+```text
+Opens Driver Hub at https://godriverhub.com/haulage/. www.godriverhub.com redirects to that site. Store links: privacy https://godriverhub.com/privacy, terms https://godriverhub.com/terms, support https://godriverhub.com/support.
+```
+
+## App Links
+
+Driver Hub does not use Android App Links. The manifest has only the launcher intent filter (no `VIEW` / `autoVerify` host). `https://godriverhub.com/.well-known/assetlinks.json` returns 200 and names **Go Taxation Suite** (`com.gotaxation.suite`), because the shared Express app serves that file. Do not paste that package or fingerprint into the Driver Hub Play listing, and do not add an App Link filter in this release.
 
 ## Listing copy (paste)
 

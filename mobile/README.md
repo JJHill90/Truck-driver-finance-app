@@ -37,7 +37,11 @@ npx cap open android
 ```
 
 In Android Studio: pick a device → **Run**. Then **Build → Generate Signed
-Bundle** for Play (`versionCode` 3 / `1.0.2`). Keep the keystore out of git.
+Bundle** for Play (`versionCode` 4 / `1.0.3`). Keep the keystore out of git.
+This repo does not contain the Play upload keystore and has no Actions
+workflow that signs an AAB. Sign on the machine that holds the existing
+`com.haulagefinance.app` upload key (see
+[`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md)).
 
 Store listing copy, Data safety answers, and reviewer notes:
 [`docs/store-listing-driverhub.md`](../docs/store-listing-driverhub.md).

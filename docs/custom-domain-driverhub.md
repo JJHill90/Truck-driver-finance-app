@@ -90,11 +90,13 @@ Do this on service **`haulage-finance`** only. Leave DNS and email alone.
 10. Play Console / App Store, after the checks below are green: privacy
     `https://godriverhub.com/privacy`, terms `https://godriverhub.com/terms`,
     support `https://godriverhub.com/support`, marketing
-    `https://godriverhub.com/`. Ship a new AAB before the Play WebView is
-    expected to open the apex. Builds already in the store still open
-    `www` `/haulage/`. After step 4, Render 301s that www URL to the apex
+    `https://godriverhub.com/`. The Play shell to upload is **versionCode 4**
+    (`1.0.3`) from `mobile/` — see
+    [`store-listing-driverhub.md`](store-listing-driverhub.md). It opens
+    `https://godriverhub.com/haulage/` directly. Builds already in the store
+    still open `www` `/haulage/`. Render 301s that www URL to the apex
     (including `/haulage/`). The WebView allowlist includes both hosts, so
-    the hop should stay in the app; the new AAB opens the apex directly.
+    the hop should stay in the app.
 
 Check (one hop, then stop):
 
