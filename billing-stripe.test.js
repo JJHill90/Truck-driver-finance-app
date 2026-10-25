@@ -3,6 +3,7 @@ const {
   configuredPriceId,
   ensurePriceId,
   isStripePriceId,
+  resolveCheckoutPlan,
 } = require("./lib/billing-stripe");
 
 describe("applySubscriptionToUser", () => {
@@ -98,5 +99,12 @@ describe("applySubscriptionToUser", () => {
       if (prev == null) delete process.env.STRIPE_PRICE_ID_SUITE_YEARLY;
       else process.env.STRIPE_PRICE_ID_SUITE_YEARLY = prev;
     }
+  });
+
+  it("starts Suite Pro+ checkout from Free without an existing Pro subscription", () => {
+    expect(resolveCheckoutPlan("suite", "pro_plus")).toBe("pro_plus");
+    expect(resolveCheckoutPlan("suite", "plus")).toBe("pro_plus");
+    expect(resolveCheckoutPlan("suite", "pro")).toBe("pro");
+    expect(resolveCheckoutPlan("haulage", "pro_plus")).toBe("pro");
   });
 });
