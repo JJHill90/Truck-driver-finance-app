@@ -21,6 +21,8 @@ describe("receipt viewer file actions", () => {
     expect(src).toMatch(/function saveBlobAsFile/);
     expect(src).toMatch(/function openReceiptBlob/);
     expect(src).toMatch(/data-open-receipt-file/);
+    expect(src).toMatch(/Open PDF/);
+    expect(src).toMatch(/#receipt-viewer \.modal-actions/);
     expect(src).toMatch(/__haulageActiveReceiptId/);
     expect(src).toMatch(/__haulageBlobDl/);
     expect(src).toMatch(/#receipt-viewer-download/);

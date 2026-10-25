@@ -2173,8 +2173,21 @@
     const preview = /^data:image\//i.test(thumb)
       ? `<img src="${esc(thumb)}" alt="${esc(receipt.filename || "PDF preview")}" />`
       : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
-    body.innerHTML = `${preview}
-      <p><button type="button" class="btn primary" data-open-receipt-file="${esc(receiptId)}">Open PDF</button></p>`;
+    body.innerHTML = preview;
+    const actions = document.querySelector("#receipt-viewer .modal-actions");
+    if (!actions) return;
+    let btn = actions.querySelector("[data-open-receipt-file]");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn primary";
+      btn.textContent = "Open PDF";
+      const download = actions.querySelector("#receipt-viewer-download");
+      if (download) download.after(btn);
+      else actions.prepend(btn);
+    }
+    btn.setAttribute("data-open-receipt-file", receiptId);
+    btn.hidden = false;
   }
 
   function patchReceiptFileActions() {
@@ -2331,7 +2344,11 @@
         const result = await origOpen.apply(this, arguments);
         const receipt = resolveReceipt(receiptId);
         const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
-        if (!pdf) return result;
+        const headerOpen = document.querySelector("#receipt-viewer [data-open-receipt-file]");
+        if (!pdf) {
+          if (headerOpen) headerOpen.hidden = true;
+          return result;
+        }
         const body = document.getElementById("receipt-viewer-body");
         if (!body) return result;
         const iframe = body.querySelector("iframe");
