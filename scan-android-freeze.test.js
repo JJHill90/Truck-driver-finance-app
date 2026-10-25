@@ -41,8 +41,8 @@ describe("Android post-OCR freeze guards", () => {
   it("cache-busts enhancements so the Play WebView loads the skip", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public/suite/index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
+    expect(hub).toMatch(/enhancements\.js\?v=lodgement-brief-2/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=lodgement-brief-2/);
   });
 });
 
