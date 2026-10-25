@@ -10382,10 +10382,16 @@
   function injectLodgementBrief() {
     const el = document.getElementById("report-content");
     if (!el) return;
-    el.querySelector(".report-lodgement-brief")?.remove();
+    const existing = el.querySelector(".report-lodgement-brief");
     const report = typeof state !== "undefined" && state.report;
     const brief = report && report.lodgementBrief;
-    if (!brief) return;
+    if (!brief) {
+      existing?.remove();
+      return;
+    }
+    // Same guard as the expense ledger: removing+reinserting retriggers the
+    // report MutationObserver and freezes startup for Pro+ / admin sessions.
+    if (existing) return;
     const ident = brief.identity || {};
     const pos = brief.taxPosition || {};
     const payerRows = (brief.payers || [])
@@ -10486,7 +10492,15 @@
     }
     const report = document.getElementById("report-content");
     if (report) {
-      new MutationObserver(enhanceReport).observe(report, { childList: true, subtree: true });
+      const observer = new MutationObserver(() => {
+        observer.disconnect();
+        try {
+          enhanceReport();
+        } finally {
+          observer.observe(report, { childList: true, subtree: true });
+        }
+      });
+      observer.observe(report, { childList: true, subtree: true });
       enhanceReport();
     }
   }
