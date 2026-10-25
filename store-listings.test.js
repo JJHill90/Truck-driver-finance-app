@@ -29,6 +29,8 @@ describe("Driver Hub store listing assets", () => {
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/terms/);
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/support/);
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
+    expect(listing).toMatch(/versionCode 4/);
+    expect(listing).toMatch(/1\.0\.3/);
     expect(listing).not.toMatch(/https:\/\/www\.godriverhub\.com/);
     expect(listing).toMatch(/gotaxation\.com\.au/);
     expect(listing).toMatch(/marketing site/);
@@ -108,14 +110,20 @@ describe("Driver Hub store listing assets", () => {
     expect(plugin).toMatch(/isAppPath/);
     expect(plugin).toMatch(/bounceToApp/);
     expect(plugin).toMatch(/isLocalHost/);
+    expect(plugin).toMatch(/https:\/\/godriverhub\.com\/haulage\/privacy/);
+    expect(plugin).toMatch(/https:\/\/godriverhub\.com\/haulage\/terms/);
+    expect(plugin).toMatch(/https:\/\/godriverhub\.com\/haulage\/support/);
     expect(plugin).not.toMatch(/gotaxation\.com\.au/);
+    const manifest = fs.readFileSync(path.join(hubAndroid, "src/main/AndroidManifest.xml"), "utf8");
+    expect(manifest).not.toMatch(/android:autoVerify/);
+    expect(manifest).not.toMatch(/android.intent.action.VIEW/);
     const launcher = fs.readFileSync(path.join(hubAndroid, "src/main/assets/public/index.html"), "utf8");
     expect(launcher).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
     expect(launcher).not.toMatch(/https:\/\/www\.godriverhub\.com/);
     expect(launcher).toMatch(/Try again/);
     const gradle = fs.readFileSync(path.join(hubAndroid, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 3/);
-    expect(gradle).toMatch(/versionName "1\.0\.2"/);
+    expect(gradle).toMatch(/versionCode 4/);
+    expect(gradle).toMatch(/versionName "1\.0\.3"/);
   });
 });
 
