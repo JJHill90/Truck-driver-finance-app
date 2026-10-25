@@ -3919,7 +3919,7 @@
     panel.id = "eofy-pro-plus-tools";
     panel.innerHTML = `
       <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-      <p class="muted">Read-only share link with a lodgement brief (payers, return labels, refund/payable, gaps), a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. The brief follows the Profile registration type — PAYG employee, sole trader or partnership. Included with Pro on Taxation Hub — same price, no extra tier.</p>
+      <p class="muted">Read-only share link, a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. Pro+ adds a lodgement brief (payers, return labels, refund/payable, gaps) that follows the Profile registration type — PAYG employee, sole trader or partnership. Share, BAS and year-compare are included with Pro on Taxation Hub — same price, no extra tier.</p>
       <div class="form-grid">
         <div class="span-2">
           <h3 class="profile-section-title">Accountant share link</h3>

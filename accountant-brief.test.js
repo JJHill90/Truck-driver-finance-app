@@ -1,4 +1,9 @@
-const { buildLodgementBrief, attachLodgementBrief, normalizeEntity } = require("./lib/accountant-brief");
+const {
+  buildLodgementBrief,
+  attachLodgementBrief,
+  shouldAttachLodgementBrief,
+  normalizeEntity,
+} = require("./lib/accountant-brief");
 const { buildReportPdf } = require("./lib/report-pdf");
 
 function fyIncome(overrides) {
@@ -176,17 +181,38 @@ describe("partnership brief", () => {
 });
 
 describe("attachLodgementBrief", () => {
-  it("hangs the brief on the accountant report", () => {
-    const report = {
-      summary: {
-        financialYear: "2025-26",
-        income: { breakdown: [], paygWithheld: 0 },
-        expenses: { breakdown: [], deductibleTotal: 0 },
-        taxEstimate: {},
-      },
-    };
-    attachLodgementBrief(report, { income: [], expenses: [] }, { name: "A", entityType: "employee" }, { product: "suite" });
+  const emptySummary = {
+    financialYear: "2025-26",
+    income: { breakdown: [], paygWithheld: 0 },
+    expenses: { breakdown: [], deductibleTotal: 0 },
+    taxEstimate: {},
+  };
+
+  it("hangs the brief on the accountant report for Pro+", () => {
+    const report = { summary: emptySummary };
+    attachLodgementBrief(
+      report,
+      { income: [], expenses: [] },
+      { name: "A", entityType: "employee" },
+      { product: "suite", entitlements: { isProPlus: true } }
+    );
     expect(report.lodgementBrief.entityLabel).toBe("Employee (PAYG)");
+  });
+
+  it("does not attach for Free, leftover trial, or Suite/Haulage Pro", () => {
+    expect(shouldAttachLodgementBrief(null)).toBe(false);
+    expect(shouldAttachLodgementBrief({ isPro: false, isProPlus: false })).toBe(false);
+    expect(shouldAttachLodgementBrief({ isPro: true, isProPlus: false })).toBe(false);
+    expect(shouldAttachLodgementBrief({ isProPlus: true })).toBe(true);
+
+    const report = { summary: emptySummary, lodgementBrief: { leftover: true } };
+    attachLodgementBrief(
+      report,
+      { income: [], expenses: [] },
+      { name: "A", entityType: "employee" },
+      { product: "suite", entitlements: { isPro: true, isProPlus: false } }
+    );
+    expect(report.lodgementBrief).toBeUndefined();
   });
 });
 
@@ -212,7 +238,7 @@ describe("EOFY PDF lodgement brief", () => {
       report,
       { income: [fyIncome()], expenses: [] },
       { name: "Alex Driver", employer: "Acme Transport", entityType: "employee", tfnSupplied: true },
-      { product: "suite" }
+      { product: "suite", entitlements: { isProPlus: true } }
     );
     const doc = buildReportPdf(report, { income: [fyIncome()], expenses: [] }, "2025-26");
     const buf = await new Promise((resolve, reject) => {
