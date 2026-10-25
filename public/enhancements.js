@@ -2874,6 +2874,23 @@
     }
   }
 
+  /**
+   * Go Taxation Hub marketing CTAs use ?app=taxationhub.
+   * Keep the allow-list in sync with lib/taxationhub-public-origin.js preferredHubApp.
+   * Any other value (including fuelhub) is ignored so /haulage/ with no query is unchanged.
+   */
+  function preferredHubAppFromUrl() {
+    try {
+      const app = String(new URLSearchParams(window.location.search || "").get("app") || "")
+        .trim()
+        .toLowerCase();
+      if (app === "taxationhub" || app === "financehub") return "taxationhub";
+    } catch {
+      /* ignore */
+    }
+    return "";
+  }
+
   function unlockApp() {
     document.body.classList.remove("auth-locked");
     const screen = byId("title-screen");
@@ -3158,7 +3175,8 @@
       try {
         await apiPost("/auth/login", readTitleCreds());
         resetReviewShown();
-        setSelectedHubApp(""); // land on app picker after reload
+        // Empty string still clears to the picker. ?app=taxationhub keeps Taxation Hub.
+        setSelectedHubApp(preferredHubAppFromUrl());
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
@@ -3201,7 +3219,7 @@
         }
         await apiPost("/auth/register", creds);
         resetReviewShown();
-        setSelectedHubApp("");
+        setSelectedHubApp(preferredHubAppFromUrl());
         window.location.reload();
       } catch (e) {
         setTitleMessage(e.message, true);
@@ -6460,6 +6478,9 @@
           applyProExportGates(me.entitlements);
         }
         // Driver Hub: signed-in users pick an app unless one is already open.
+        // ?app=taxationhub (Go Taxation Hub marketing site) opens that shell.
+        const preferred = preferredHubAppFromUrl();
+        if (preferred) setSelectedHubApp(preferred);
         const selectedApp = getSelectedHubApp();
         if (selectedApp === "taxationhub" || me.user.needsFirstRunTour) {
           openTaxationHub(me.user);
