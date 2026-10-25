@@ -368,12 +368,37 @@ describe("entitlements", () => {
     expect(leftoverTrial.canExportPdf).toBe(true);
     expect(leftoverTrial.canCloudOcr).toBe(false);
     expect(paid.canCloudOcr).toBe(false);
+    expect(paid.canLodgementBrief).toBe(false);
+    expect(leftoverTrial.canLodgementBrief).toBe(false);
     expect(complimentary.canShareAccountant).toBe(true);
+    expect(complimentary.canLodgementBrief).toBe(true);
     expect(paidPlus.canBasPack).toBe(true);
+    expect(paidPlus.canLodgementBrief).toBe(true);
     expect(paid.canUpload).toBe(true);
     expect(complimentary.canUpload).toBe(true);
     expect(paid.canExportPdf).toBe(complimentary.canExportPdf);
     expect(isProPlus({ planGrant: "pro_plus" })).toBe(true);
     expect(isProPlus({ subscriptionStatus: "active", subscriptionTier: "pro" })).toBe(false);
+
+    const suitePro = resolveEntitlements(
+      { subscriptionStatus: "active", currentPeriodEnd: "2026-09-15T00:00:00Z" },
+      { receipts: [] },
+      now,
+      { product: "suite" }
+    );
+    const suitePlus = resolveEntitlements(
+      {
+        subscriptionStatus: "active",
+        subscriptionTier: "pro_plus",
+        currentPeriodEnd: "2026-09-15T00:00:00Z",
+      },
+      { receipts: [] },
+      now,
+      { product: "suite" }
+    );
+    expect(suitePro.canShareAccountant).toBe(false);
+    expect(suitePro.canLodgementBrief).toBe(false);
+    expect(suitePlus.canShareAccountant).toBe(true);
+    expect(suitePlus.canLodgementBrief).toBe(true);
   });
 });

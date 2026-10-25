@@ -61,7 +61,7 @@
       title: "EOFY Report",
       body: [
         "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. It updates as you add or change records — use it as a live working paper for you or your accountant, not as a lodged return.",
-        "Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link, a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO, and a multi-year comparison for your agent.",
+        "Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link with a lodgement brief (payers, return labels, refund or payable, and gaps for PAYG, sole trader or partnership), a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO, and a multi-year comparison for your agent.",
       ],
     },
     forecast: {

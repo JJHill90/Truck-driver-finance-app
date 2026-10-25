@@ -50,6 +50,24 @@
       .share-stat strong {
         font-size: 1.15rem;
       }
+      .share-list {
+        margin: 0 0 16px;
+        padding-left: 18px;
+        color: #d5e0ec;
+      }
+      .share-list li { margin: 0 0 6px; }
+      .share-mini {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .share-mini th,
+      .share-mini td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #2a4660;
+      }
+      .share-mini .num { text-align: right; }
     </style>
   </head>
   <body class="share-pack">
@@ -64,14 +82,33 @@
         <div class="share-grid" id="share-tax"></div>
         <p class="share-muted" id="share-note"></p>
       </div>
+      <div class="share-card" id="share-brief-card" hidden>
+        <h2 id="share-brief-heading">Lodgement brief</h2>
+        <p class="share-muted" id="share-brief-purpose"></p>
+        <div class="share-grid" id="share-brief-stats"></div>
+        <ul class="share-list" id="share-brief-points"></ul>
+        <h2>Payers</h2>
+        <div id="share-payers"></div>
+        <h2>Return labels</h2>
+        <div id="share-labels"></div>
+        <h2>Ask the taxpayer</h2>
+        <ul class="share-list" id="share-questions"></ul>
+      </div>
     </div>
     <script>
       function money(n) {
         const v = Number(n) || 0;
         return v.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
       }
+      function esc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
       function stat(label, value) {
-        return `<div class="share-stat"><span>${label}</span><strong>${value}</strong></div>`;
+        return `<div class="share-stat"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
       }
       (async function () {
         const token = location.pathname.split("/").filter(Boolean).pop();
@@ -110,8 +147,61 @@
           stat("PAYG withheld", money(s.income && s.income.paygWithheld)),
           stat("Tax payable", money(tax.taxPayable)),
         ].join("");
+        const brief = (data.report && data.report.lodgementBrief) || null;
+        const pos = (brief && brief.taxPosition) || {};
         document.getElementById("share-note").textContent =
+          (brief && brief.disclaimer) ||
           "Prepared for accountant review. Not tax advice. Verify against current ATO guidance.";
+        if (brief) {
+          const card = document.getElementById("share-brief-card");
+          card.hidden = false;
+          document.getElementById("share-brief-heading").textContent = brief.returnTitle || "Lodgement brief";
+          document.getElementById("share-brief-purpose").textContent = brief.purpose || "";
+          document.getElementById("share-brief-stats").innerHTML = [
+            stat("Registration", brief.entityLabel || "—"),
+            stat("Occupation", (brief.identity && brief.identity.occupation) || "—"),
+            stat("ABN", (brief.identity && brief.identity.abn) || "—"),
+            stat("Tax position", pos.outcomeLabel || "—"),
+          ].join("");
+          document.getElementById("share-brief-points").innerHTML = (
+            (brief.entitySpecific && brief.entitySpecific.points) || []
+          )
+            .concat(brief.extraEntities || [])
+            .map((p) => `<li>${esc(p)}</li>`)
+            .join("");
+          const payers = brief.payers || [];
+          document.getElementById("share-payers").innerHTML = payers.length
+            ? `<table class="share-mini"><thead><tr><th>Payer</th><th>ABN</th><th class="num">Assessable</th><th class="num">PAYG</th></tr></thead><tbody>${payers
+                .map(
+                  (row) =>
+                    `<tr><td>${esc(row.payer)}</td><td>${esc(row.abn || "—")}</td><td class="num">${money(
+                      row.assessable
+                    )}</td><td class="num">${money(row.paygWithheld)}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="share-muted">No payer rows in this year.</p>`;
+          const labels = (brief.incomeLabels || []).concat(
+            (brief.deductionLabels || []).map((d) => ({
+              returnItem: d.schedule,
+              returnLabel: d.label,
+              assessable: d.deductible,
+            }))
+          );
+          document.getElementById("share-labels").innerHTML = labels.length
+            ? `<table class="share-mini"><thead><tr><th>Item</th><th>Label</th><th class="num">Amount</th></tr></thead><tbody>${labels
+                .map(
+                  (row) =>
+                    `<tr><td>${esc(row.returnItem)}</td><td>${esc(row.returnLabel)}</td><td class="num">${money(
+                      row.assessable
+                    )}</td></tr>`
+                )
+                .join("")}</tbody></table>`
+            : `<p class="share-muted">No labelled amounts yet.</p>`;
+          document.getElementById("share-questions").innerHTML = (brief.gaps || [])
+            .map((g) => `<li><strong>Gap:</strong> ${esc(g.message)}</li>`)
+            .concat((brief.questions || []).map((q) => `<li>${esc(q)}</li>`))
+            .join("");
+        }
       })();
     </script>
   </body>
