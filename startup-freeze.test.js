@@ -11,7 +11,9 @@ describe("startup freeze: lodgement brief observer", () => {
   });
 
   it("disconnects the report observer while enhancing so appends do not loop", () => {
-    const start = src.slice(src.indexOf("function start()"), src.indexOf("if (document.readyState === \"loading\")", src.indexOf("function start()")));
+    const fromInject = src.slice(src.indexOf("function injectLodgementBrief"));
+    const startAt = fromInject.indexOf("function start()");
+    const start = fromInject.slice(startAt, fromInject.indexOf("if (document.readyState === \"loading\")", startAt));
     expect(start).toMatch(/observer\.disconnect\(\)/);
     expect(start).toMatch(/observer\.observe\(report/);
   });
