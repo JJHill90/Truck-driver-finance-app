@@ -2033,6 +2033,106 @@
   }
 
   // --- Image lightbox -----------------------------------------------------
+  // Download / Open PDF used to point the WebView at /receipts/:id/file.
+  // Play and Capacitor treat that as in-app navigation, leave /haulage/, and
+  // Back lands on the public home page. Fetch the file with cookies and hand
+  // the user a blob download / share sheet instead.
+  let lastOpenedReceiptId = null;
+
+  function idFromReceiptFileUrl(url) {
+    const m = String(url || "").match(/\/receipts\/([^/?#]+)\/file/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  function resolveOpenedReceipt(receiptOrId) {
+    if (!receiptOrId) return null;
+    if (typeof receiptOrId === "object") return receiptOrId.id ? receiptOrId : null;
+    const finder = window.findReceipt;
+    return typeof finder === "function" ? finder(receiptOrId) : null;
+  }
+
+  function receiptFileHref(receiptId, download) {
+    if (typeof window.receiptFileUrl === "function") return window.receiptFileUrl(receiptId, download);
+    const q = download ? "?download=1" : "";
+    return `${window.location.origin}/api/haulage/receipts/${encodeURIComponent(receiptId)}/file${q}`;
+  }
+
+  async function fetchReceiptFileBlob(receipt) {
+    const id = receipt && receipt.id;
+    if (!id) throw new Error("Receipt not found");
+    const res = await fetch(receiptFileHref(id, true), { credentials: "same-origin" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Could not load that photo");
+    }
+    return res.blob();
+  }
+
+  function triggerBlobDownload(blob, filename) {
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename || "document";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+  }
+
+  async function shareReceiptBlob(receipt, blob) {
+    const name = (receipt && receipt.filename) || "document";
+    const type = (blob && blob.type) || (receipt && receipt.mimeType) || "application/octet-stream";
+    const file = new File([blob], name, { type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: name });
+      return true;
+    }
+    return false;
+  }
+
+  async function downloadOpenedReceipt(receiptOrId) {
+    const receipt = resolveOpenedReceipt(receiptOrId);
+    if (!receipt) throw new Error("Receipt not found");
+    const blob = await fetchReceiptFileBlob(receipt);
+    if (isAndroidLike()) {
+      try {
+        const shared = await shareReceiptBlob(receipt, blob);
+        if (shared) {
+          if (typeof window.toast === "function") window.toast("Shared");
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+    }
+    triggerBlobDownload(blob, receipt.filename || `receipt-${receipt.id}.jpg`);
+    if (typeof window.toast === "function") window.toast("Download started");
+  }
+
+  async function openOpenedReceipt(receiptOrId) {
+    const receipt = resolveOpenedReceipt(receiptOrId);
+    if (!receipt) throw new Error("Receipt not found");
+    const blob = await fetchReceiptFileBlob(receipt);
+    try {
+      const shared = await shareReceiptBlob(receipt, blob);
+      if (shared) return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+    }
+    const pdf =
+      (typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt)) ||
+      /pdf/i.test(String((blob && blob.type) || ""));
+    if (!pdf && /^image\//i.test(String(blob.type || ""))) {
+      openLightbox(URL.createObjectURL(blob), false, receipt.id);
+      return;
+    }
+    triggerBlobDownload(blob, receipt.filename || (pdf ? "document.pdf" : "receipt.jpg"));
+    if (typeof window.toast === "function") {
+      window.toast(pdf ? "PDF downloaded — open it from Files" : "Download started");
+    }
+  }
+
   function receiptViewerIsOpen() {
     const viewer = document.getElementById("receipt-viewer");
     return Boolean(viewer && !viewer.classList.contains("hidden"));
@@ -2080,17 +2180,21 @@
     );
   }
 
-  function openLightbox(src, isPdf) {
+  function openLightbox(src, isPdf, receiptId) {
     closeLightbox();
     const overlay = document.createElement("div");
     overlay.className = "enh-lightbox";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Scanned document");
+    const openId = receiptId || lastOpenedReceiptId || idFromReceiptFileUrl(src);
     const body =
       isPdf && isAndroidLike()
         ? `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
-           <p><a class="btn primary" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></p>`
+           <p><button type="button" class="btn primary" data-open-receipt-file="${esc(openId)}">Open PDF</button></p>`
+        : isPdf && /^https?:/i.test(String(src || "")) && /\/receipts\/[^/]+\/file/.test(String(src || ""))
+          ? `<p class="muted">This PDF is saved.</p>
+             <p><button type="button" class="btn primary" data-open-receipt-file="${esc(openId)}">Open PDF</button></p>`
         : isPdf
           ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
           : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
@@ -2157,7 +2261,7 @@
         openLightbox(src, false);
       } else if (latest && latest.receiptId) {
         // PDFs (and any doc without an inline preview image) open from storage.
-        openLightbox(`/api/haulage/receipts/${latest.receiptId}/file`, latest.isPdf);
+        openLightbox(`/api/haulage/receipts/${latest.receiptId}/file`, latest.isPdf, latest.receiptId);
       }
       return;
     }
@@ -2191,11 +2295,22 @@
   });
   previewMo.observe(document.body, { childList: true, subtree: true });
 
+  function paintAndroidPdfViewer(receipt, receiptId, thumb) {
+    const body = document.getElementById("receipt-viewer-body");
+    if (!body) return;
+    const preview = /^data:image\//i.test(thumb)
+      ? `<img src="${esc(thumb)}" alt="${esc((receipt && receipt.filename) || "PDF preview")}" />`
+      : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
+    body.innerHTML = `${preview}
+      <p><button type="button" class="btn primary" data-open-receipt-file="${esc(receiptId)}">Open PDF</button></p>`;
+  }
+
   function patchPdfReceiptViewer() {
     const origFetchImage = window.fetchReceiptImageDataUrl;
     const origOpen = window.openReceiptViewer;
     if (typeof origOpen === "function" && !origOpen.__haulagePdfSafe) {
       async function safeOpen(receiptId) {
+        lastOpenedReceiptId = receiptId;
         const finder = window.findReceipt;
         const receipt = typeof finder === "function" ? finder(receiptId) : null;
         const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
@@ -2203,36 +2318,130 @@
           const viewer = document.getElementById("receipt-viewer");
           const body = document.getElementById("receipt-viewer-body");
           const title = document.getElementById("receipt-viewer-title");
-          const href =
-            typeof window.receiptFileUrl === "function" ? window.receiptFileUrl(receiptId) : "#";
-          if (title) title.innerHTML = `<strong>${esc(receipt.filename || "PDF")}</strong>`;
-          if (body) {
-            body.innerHTML = `<p class="muted">Loading preview…</p>`;
-          }
+          if (title) title.innerHTML = `<strong>${esc((receipt && receipt.filename) || "PDF")}</strong>`;
+          if (body) body.innerHTML = `<p class="muted">Loading preview…</p>`;
           if (viewer) {
             viewer.classList.remove("hidden");
             document.body.style.overflow = "hidden";
           }
           let thumb = "";
           try {
-            thumb = await origFetchImage(receiptId);
+            thumb = origFetchImage ? await origFetchImage(receiptId) : "";
           } catch {
             thumb = "";
           }
-          if (body) {
-            const preview = /^data:image\//i.test(thumb)
-              ? `<img src="${esc(thumb)}" alt="${esc(receipt.filename || "PDF preview")}" />`
-              : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
-            body.innerHTML = `${preview}
-              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
-          }
+          paintAndroidPdfViewer(receipt || { id: receiptId }, receiptId, thumb);
           return;
         }
-        return origOpen.apply(this, arguments);
+        const opened = origOpen.apply(this, arguments);
+        return Promise.resolve(opened).then(async (value) => {
+          if (!receipt || pdf) return value;
+          const body = document.getElementById("receipt-viewer-body");
+          const img = body && body.querySelector("img");
+          if (img && img.src) return value;
+          const text = (body && body.textContent) || "";
+          if (!/not found|failed|file endpoint/i.test(text)) return value;
+          try {
+            const blob = await fetchReceiptFileBlob(receipt);
+            if (!/^image\//i.test(String(blob.type || ""))) return value;
+            const url = URL.createObjectURL(blob);
+            body.innerHTML = `<img src="${url}" alt="${esc(receipt.filename || "Receipt")}" />`;
+          } catch {
+            /* keep the original error */
+          }
+          return value;
+        });
       }
       safeOpen.__haulagePdfSafe = true;
       window.openReceiptViewer = safeOpen;
     }
+
+    const origDownload = window.downloadReceiptFile;
+    if (typeof origDownload === "function" && !origDownload.__haulageBlobSafe) {
+      function blobDownload(receiptOrId) {
+        const id = typeof receiptOrId === "string" ? receiptOrId : receiptOrId && receiptOrId.id;
+        if (id) lastOpenedReceiptId = id;
+        void downloadOpenedReceipt(receiptOrId || lastOpenedReceiptId).catch((err) => {
+          if (typeof window.toast === "function") window.toast(err.message || "Download failed");
+        });
+      }
+      blobDownload.__haulageBlobSafe = true;
+      window.downloadReceiptFile = blobDownload;
+    }
+  }
+
+  function bindReceiptFileActions() {
+    if (document.documentElement.dataset.receiptFileActions === "1") return;
+    document.documentElement.dataset.receiptFileActions = "1";
+    document.addEventListener(
+      "click",
+      (e) => {
+        const openBtn = e.target.closest && e.target.closest("[data-open-receipt-file]");
+        if (openBtn) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const id = openBtn.getAttribute("data-open-receipt-file") || lastOpenedReceiptId;
+          void openOpenedReceipt(id).catch((err) => {
+            if (typeof window.toast === "function") window.toast(err.message || "Could not open file");
+          });
+          return;
+        }
+        const fileLink = e.target.closest && e.target.closest('a[href*="/receipts/"][href*="/file"]');
+        if (fileLink) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const href = fileLink.getAttribute("href") || "";
+          const id = idFromReceiptFileUrl(href) || lastOpenedReceiptId;
+          const asDownload = /[?&]download=1\b/.test(href) || /download/i.test(fileLink.textContent || "");
+          const run = asDownload ? downloadOpenedReceipt : openOpenedReceipt;
+          void run(id).catch((err) => {
+            if (typeof window.toast === "function") window.toast(err.message || "Could not open file");
+          });
+          return;
+        }
+        const dl = e.target.closest && e.target.closest("#receipt-viewer-download");
+        if (dl) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          void downloadOpenedReceipt(lastOpenedReceiptId).catch((err) => {
+            if (typeof window.toast === "function") window.toast(err.message || "Download failed");
+          });
+          return;
+        }
+        const share = e.target.closest && e.target.closest("#receipt-viewer-share");
+        if (share) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const receipt = resolveOpenedReceipt(lastOpenedReceiptId);
+          if (!receipt) {
+            if (typeof window.toast === "function") window.toast("Receipt not found");
+            return;
+          }
+          void (async () => {
+            try {
+              const blob = await fetchReceiptFileBlob(receipt);
+              const shared = await shareReceiptBlob(receipt, blob);
+              if (shared) {
+                if (typeof window.toast === "function") window.toast("Shared");
+                return;
+              }
+              await downloadOpenedReceipt(receipt);
+            } catch (err) {
+              if (err && err.name === "AbortError") return;
+              if (typeof window.toast === "function") window.toast(err.message || "Share failed");
+            }
+          })();
+          return;
+        }
+        const del = e.target.closest && e.target.closest("#receipt-viewer-delete");
+        if (del && lastOpenedReceiptId && typeof window.deleteScannedPhoto === "function") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          void window.deleteScannedPhoto(lastOpenedReceiptId, { closeViewer: true });
+        }
+      },
+      true
+    );
   }
 
   function todayIsoLocal() {
@@ -2484,6 +2693,7 @@
     patchManualIncomeForm();
     patchPrefillIncomeForm();
     patchPdfReceiptViewer();
+    bindReceiptFileActions();
     patchRenderStats();
     patchRenderReport();
     patchRenderForecast();
