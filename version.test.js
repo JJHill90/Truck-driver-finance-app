@@ -56,6 +56,8 @@ describe("formatVersionLabel", () => {
     expect(formatVersionLabel(193)).toBe("Version 3.40");
     expect(formatVersionLabel(194)).toBe("Version 3.41");
     expect(formatVersionLabel(196)).toBe("Version 3.43");
+    expect(formatVersionLabel(197)).toBe("Version 3.44");
+    expect(formatVersionLabel(198)).toBe("Version 3.45");
     expect(formatVersionLabel(199)).toBe("Version 3.46");
   });
 
