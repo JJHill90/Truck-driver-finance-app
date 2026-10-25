@@ -102,7 +102,7 @@ const {
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
 const { repairVendorsFromScans } = require("./lib/vendor-repair");
-const { normalizeScanUpload } = require("./lib/scan-upload");
+const { normalizeScanUpload, isPdfIsolateStub } = require("./lib/scan-upload");
 const {
   extractTaxWithheld,
   attachIncomeTaxWithheld,
@@ -1684,6 +1684,13 @@ api.post("/fuelhub/receipts/scan", optionalScanMultipart, async (req, res) => {
     const { imageBase64, mimeType, filename } = normalizeScanUpload(req);
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
+      return;
+    }
+    if (isPdfIsolateStub(imageBase64)) {
+      res.status(400).json({
+        error: "That PDF did not upload — the original file was not saved. Try again.",
+        code: "PDF_STUB",
+      });
       return;
     }
     const ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
@@ -3530,7 +3537,7 @@ api.put("/expenses/:id", (req, res) => {
 });
 
 /** Attach a receipt photo/PDF to an unreconciled expense that has none yet. */
-api.post("/expenses/:id/attach-receipt", (req, res) => {
+api.post("/expenses/:id/attach-receipt", optionalScanMultipart, (req, res) => {
   if (!req.user) {
     res.status(401).json({
       error: "Log in to your profile before attaching a receipt.",
@@ -3539,11 +3546,11 @@ api.post("/expenses/:id/attach-receipt", (req, res) => {
   }
   if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
-  const body = req.body || {};
+  const upload = normalizeScanUpload(req);
   const result = attachReceiptToEntry(records, "expense", req.params.id, {
-    dataUrl: body.imageBase64 || body.dataUrl,
-    mimeType: body.mimeType,
-    filename: body.filename,
+    dataUrl: upload.imageBase64,
+    mimeType: upload.mimeType,
+    filename: upload.filename,
   });
   if (!result.ok) {
     res.status(result.status || 400).json({ error: result.error, code: result.code });
@@ -3710,7 +3717,7 @@ api.put("/income/:id", (req, res) => {
 });
 
 /** Attach a receipt/payslip photo/PDF to an unreconciled income row that has none yet. */
-api.post("/income/:id/attach-receipt", (req, res) => {
+api.post("/income/:id/attach-receipt", optionalScanMultipart, (req, res) => {
   if (!req.user) {
     res.status(401).json({
       error: "Log in to your profile before attaching a receipt.",
@@ -3719,11 +3726,11 @@ api.post("/income/:id/attach-receipt", (req, res) => {
   }
   if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
-  const body = req.body || {};
+  const upload = normalizeScanUpload(req);
   const result = attachReceiptToEntry(records, "income", req.params.id, {
-    dataUrl: body.imageBase64 || body.dataUrl,
-    mimeType: body.mimeType,
-    filename: body.filename,
+    dataUrl: upload.imageBase64,
+    mimeType: upload.mimeType,
+    filename: upload.filename,
   });
   if (!result.ok) {
     res.status(result.status || 400).json({ error: result.error, code: result.code });
@@ -3963,6 +3970,14 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     const { imageBase64, mimeType, filename, purpose } = upload;
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
+      return;
+    }
+    if (isPdfIsolateStub(imageBase64)) {
+      res.status(400).json({
+        error:
+          "That PDF did not upload — the original remittance was not saved. Try Upload file again, or take a photo of the page.",
+        code: "PDF_STUB",
+      });
       return;
     }
     const ocrPurpose = purpose === "income" ? "income" : "expense";

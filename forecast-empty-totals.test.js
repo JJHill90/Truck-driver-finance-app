@@ -26,7 +26,7 @@ describe("forecast projected totals guard", () => {
   });
 
   it("cache-busts enhancements so Play WebViews load the forecast guard", () => {
-    expect(hub).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=suite-thumbs-1/);
+    expect(hub).toMatch(/enhancements\.js\?v=suite-thumbs-2/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=suite-thumbs-2/);
   });
 });

@@ -3,6 +3,7 @@ const {
   entryNeedsReceiptAttach,
   hasRealImage,
 } = require("./lib/attach-receipt");
+const { PDF_ISOLATE_STUB_B64 } = require("./lib/scan-upload");
 
 function tinyPngDataUrl() {
   // 1x1 PNG
@@ -124,6 +125,22 @@ describe("attachReceiptToEntry", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.code).toBe("already_has_receipt");
+  });
+
+  it("refuses the Android isolate stub so a blank PDF is not stored", () => {
+    const records = {
+      expenses: [],
+      income: [{ id: "i2", date: "2026-09-30", amount: 1577.1, receiptId: null }],
+      receipts: [],
+    };
+    const result = attachReceiptToEntry(records, "income", "i2", {
+      dataUrl: `data:application/octet-stream;base64,${PDF_ISOLATE_STUB_B64}`,
+      mimeType: "application/pdf",
+      filename: "Remittance-30.09 $1577.10.pdf",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.code).toBe("pdf_stub");
+    expect(records.receipts).toHaveLength(0);
   });
 
   it("entryNeedsReceiptAttach is true for stubs and bare rows", () => {

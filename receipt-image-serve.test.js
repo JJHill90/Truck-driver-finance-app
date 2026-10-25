@@ -162,6 +162,109 @@ describe("GET /receipts/:id/image on Suite", () => {
   }, 30000);
 });
 
+describe("POST /receipts/scan rejects isolate stub", () => {
+  let server;
+  let tmp;
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = "test";
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pdf-stub-http-"));
+    auth.setDataDirForTests(tmp);
+    suite.setDataDirForTests(tmp);
+    fs.mkdirSync(path.join(tmp, "users"), { recursive: true });
+    fs.mkdirSync(path.join(tmp, "receipts"), { recursive: true });
+    auth.ensureAdminBootstrap();
+    const { app } = require("./server");
+    server = await new Promise((resolve) => {
+      const s = http.createServer(app);
+      s.listen(0, "127.0.0.1", () => resolve(s));
+    });
+  });
+
+  afterAll(async () => {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    auth.setDataDirForTests(null);
+    suite.setDataDirForTests(null);
+    if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("returns 400 PDF_STUB instead of saving a blank remittance", async () => {
+    const username = `pdfstub_${Date.now().toString(36)}`;
+    auth.createUser(username, strongPass, {}, `${username}@example.com`);
+    const token = auth.createSession(username);
+    const { port } = server.address();
+    const stub = "data:application/octet-stream;base64,JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK";
+    const scanRes = await fetch(`http://127.0.0.1:${port}/api/haulage/receipts/scan`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `haulage_sid=${token}`,
+        "X-Gotax-Product": "suite",
+      },
+      body: JSON.stringify({
+        imageBase64: stub,
+        mimeType: "application/pdf",
+        filename: "Remittance-30.09 $1577.10.pdf",
+        purpose: "income",
+      }),
+    });
+    const scan = await scanRes.json();
+    expect(scanRes.status).toBe(400);
+    expect(scan.code).toBe("PDF_STUB");
+  });
+
+  it("stores the real remittance bytes from multipart, not the isolate stub", async () => {
+    const username = `pdfreal_${Date.now().toString(36)}`;
+    auth.createUser(username, strongPass, {}, `${username}@example.com`);
+    const token = auth.createSession(username);
+    const { port } = server.address();
+    const attached = "/home/ubuntu/.cursor/projects/workspace/uploads/Remittance-30.09__1577.10_830a.pdf";
+    const pdf = fs.existsSync(attached)
+      ? fs.readFileSync(attached)
+      : Buffer.concat([
+          Buffer.from("%PDF-1.7\n1 0 obj<</Type/Catalog>>endobj\nRemittance Quirktrak 1577.10 not a stub\n"),
+          Buffer.alloc(120, 32),
+          Buffer.from("\n%%EOF\n"),
+        ]);
+    const form = new FormData();
+    form.append("file", new Blob([pdf], { type: "application/pdf" }), "Remittance-30.09 $1577.10.pdf");
+    form.append("mimeType", "application/pdf");
+    form.append("filename", "Remittance-30.09 $1577.10.pdf");
+    form.append("purpose", "income");
+    const scanRes = await fetch(`http://127.0.0.1:${port}/api/haulage/receipts/scan`, {
+      method: "POST",
+      headers: {
+        Cookie: `haulage_sid=${token}`,
+        "X-Gotax-Product": "suite",
+      },
+      body: form,
+    });
+    const scan = await scanRes.json();
+    expect(scanRes.status).toBe(200);
+    expect(scan.receipt && scan.receipt.id).toBeTruthy();
+    const recs = JSON.parse(fs.readFileSync(path.join(tmp, "suite", "users", `${username}.json`), "utf8"));
+    const saved = (recs.receipts || []).find((r) => r.id === scan.receipt.id);
+    expect(saved && saved.imagePath).toBeTruthy();
+    const abs = path.join(require("./lib/data-dir").getDataDir(), saved.imagePath);
+    const repoAbs = path.join(__dirname, "data", saved.imagePath);
+    const bytes = fs.existsSync(abs)
+      ? fs.readFileSync(abs)
+      : fs.existsSync(repoAbs)
+        ? fs.readFileSync(repoAbs)
+        : storage.readReceiptImage(saved.imagePath);
+    const raw =
+      Buffer.isBuffer(bytes) ? bytes : Buffer.from(String(bytes).split(",").pop() || "", "base64");
+    expect(raw.length).toBeGreaterThan(96);
+    expect(raw.toString("latin1")).not.toMatch(/trailer\s*<<\s*>>/);
+    if (fs.existsSync(attached)) {
+      expect(raw.equals(pdf)).toBe(true);
+      expect(raw.length).toBe(pdf.length);
+    } else {
+      expect(raw.toString("latin1")).toMatch(/1577\.10/);
+    }
+  });
+});
+
 describe("gallery fallback copy", () => {
   it("restores a PDF tile and names a missing Suite file", () => {
     const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
@@ -170,5 +273,7 @@ describe("gallery fallback copy", () => {
     expect(src).toMatch(/X-Gotax-Product/);
     expect(src).toMatch(/Photo file missing — re-upload this document/);
     expect(src).toMatch(/function withSuiteProductHeader/);
+    expect(src).toMatch(/PDF_STUB/);
+    expect(src).toMatch(/original remittance was not saved/);
   });
 });

@@ -1195,6 +1195,20 @@
           }
         }
 
+        const isolateStubRe = /JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK/;
+        const sendingStubJson =
+          typeof fetchOpts.body === "string" && isolateStubRe.test(fetchOpts.body);
+        if (sendingStubJson) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "That PDF did not upload — the original remittance was not saved. Try Upload file again, or take a photo of the page.",
+              code: "PDF_STUB",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
         const purpose = meta.purpose;
         const initialPhase = meta.forceDuplicate ? "rereading" : "reading";
         // PDFs used to wait on raster OCR; they now save on the text layer first.
@@ -8526,16 +8540,36 @@
         ? `/income/${encodeURIComponent(entryId)}/attach-receipt`
         : `/expenses/${encodeURIComponent(entryId)}/attach-receipt`;
     try {
-      const res = await fetch(`${apiBase()}${path}`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: prepared.dataUrl || prepared.imageBase64,
-          mimeType: prepared.mimeType || file.type,
-          filename: prepared.filename || file.name,
-        }),
-      });
+      const pdf = /\.pdf$/i.test(file.name || "") || /pdf/i.test(file.type || prepared.mimeType || "");
+      const stub =
+        /JVBERi0xLjEKdHJhaWxlcjw8Pj4KJSVFT0YK/.test(String(prepared.dataUrl || prepared.imageBase64 || ""));
+      let res;
+      if (pdf) {
+        const form = new FormData();
+        form.append("file", file, file.name || "document.pdf");
+        form.append("mimeType", "application/pdf");
+        form.append("filename", file.name || "document.pdf");
+        form.append("purpose", cfg.type === "income" ? "income" : "expense");
+        res = await fetch(`${apiBase()}${path}`, {
+          method: "POST",
+          credentials: "same-origin",
+          body: form,
+        });
+      } else {
+        if (stub) {
+          throw new Error("That PDF did not upload — try again, or take a photo of the page.");
+        }
+        res = await fetch(`${apiBase()}${path}`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: prepared.dataUrl || prepared.imageBase64,
+            mimeType: prepared.mimeType || file.type,
+            filename: prepared.filename || file.name,
+          }),
+        });
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not attach receipt.");
       if (typeof toast === "function") toast("Receipt attached");
