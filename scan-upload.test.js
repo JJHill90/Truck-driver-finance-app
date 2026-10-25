@@ -3,7 +3,7 @@ const {
   extractScanJsonFields,
   shouldUseMultipartScan,
 } = require("./lib/scan-body-client");
-const { normalizeScanUpload, fileToDataUrl } = require("./lib/scan-upload");
+const { normalizeScanUpload, fileToDataUrl, isPdfIsolateStub, PDF_ISOLATE_STUB_B64 } = require("./lib/scan-upload");
 
 describe("peekScanJsonMeta", () => {
   it("reads income purpose from the JSON tail without parsing", () => {
@@ -77,6 +77,31 @@ describe("normalizeScanUpload", () => {
     expect(out.purpose).toBe("income");
     expect(out.mimeType).toBe("application/pdf");
     expect(out.forceDuplicate).toBe(false);
+  });
+
+  it("detects the Android isolate stub so it is never written to disk", () => {
+    expect(isPdfIsolateStub(`data:application/octet-stream;base64,${PDF_ISOLATE_STUB_B64}`)).toBe(true);
+    expect(isPdfIsolateStub(PDF_ISOLATE_STUB_B64)).toBe(true);
+    const real = fileToDataUrl({
+      buffer: Buffer.from("%PDF-1.7\n% a remittance that is not the isolate stub\n"),
+      mimetype: "application/pdf",
+    });
+    expect(isPdfIsolateStub(real)).toBe(false);
+  });
+
+  it("keeps a real multipart PDF when JSON still carries the isolate stub", () => {
+    const buf = Buffer.from("%PDF-1.7\nreal remittance bytes for thumb\n%%EOF\n");
+    const out = normalizeScanUpload({
+      body: {
+        imageBase64: `data:application/octet-stream;base64,${PDF_ISOLATE_STUB_B64}`,
+        mimeType: "application/pdf",
+        filename: "Remittance-30.09 $1577.10.pdf",
+        purpose: "income",
+      },
+      file: { buffer: buf, mimetype: "application/pdf", originalname: "Remittance-30.09 $1577.10.pdf" },
+    });
+    expect(isPdfIsolateStub(out.imageBase64)).toBe(false);
+    expect(out.imageBase64).toBe(fileToDataUrl({ buffer: buf, mimetype: "application/pdf" }));
   });
 
   it("parses forceDuplicate from multipart string fields", () => {

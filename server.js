@@ -82,6 +82,7 @@ const {
   mergeRasterIntoOcr,
 } = require("./lib/pdf-ocr");
 const pdfThumbnail = require("./lib/pdf-thumbnail");
+const receiptImageServe = require("./lib/receipt-image-serve");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
@@ -101,7 +102,7 @@ const {
 const { findDuplicateMatches } = require("./lib/duplicate-receipt");
 const { refreshInvoiceDatesFromScans } = require("./lib/receipt-date-refresh");
 const { repairVendorsFromScans } = require("./lib/vendor-repair");
-const { normalizeScanUpload } = require("./lib/scan-upload");
+const { normalizeScanUpload, isPdfIsolateStub } = require("./lib/scan-upload");
 const {
   extractTaxWithheld,
   attachIncomeTaxWithheld,
@@ -1685,6 +1686,13 @@ api.post("/fuelhub/receipts/scan", optionalScanMultipart, async (req, res) => {
       res.status(400).json({ error: "Missing image data." });
       return;
     }
+    if (isPdfIsolateStub(imageBase64)) {
+      res.status(400).json({
+        error: "That PDF did not upload — the original file was not saved. Try again.",
+        code: "PDF_STUB",
+      });
+      return;
+    }
     const ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
       purpose: "expense",
     });
@@ -2916,6 +2924,7 @@ api.get("/records", (req, res) => {
     const base = {
       ...r,
       hasImage: Boolean(r.imagePath),
+      fileAvailable: receiptImageServe.fileAvailable(r.imagePath, storage),
       dataUrl: undefined,
       ocrResult: slimOcrResultForList(r.ocrResult),
     };
@@ -3528,7 +3537,7 @@ api.put("/expenses/:id", (req, res) => {
 });
 
 /** Attach a receipt photo/PDF to an unreconciled expense that has none yet. */
-api.post("/expenses/:id/attach-receipt", (req, res) => {
+api.post("/expenses/:id/attach-receipt", optionalScanMultipart, (req, res) => {
   if (!req.user) {
     res.status(401).json({
       error: "Log in to your profile before attaching a receipt.",
@@ -3537,11 +3546,11 @@ api.post("/expenses/:id/attach-receipt", (req, res) => {
   }
   if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
-  const body = req.body || {};
+  const upload = normalizeScanUpload(req);
   const result = attachReceiptToEntry(records, "expense", req.params.id, {
-    dataUrl: body.imageBase64 || body.dataUrl,
-    mimeType: body.mimeType,
-    filename: body.filename,
+    dataUrl: upload.imageBase64,
+    mimeType: upload.mimeType,
+    filename: upload.filename,
   });
   if (!result.ok) {
     res.status(result.status || 400).json({ error: result.error, code: result.code });
@@ -3708,7 +3717,7 @@ api.put("/income/:id", (req, res) => {
 });
 
 /** Attach a receipt/payslip photo/PDF to an unreconciled income row that has none yet. */
-api.post("/income/:id/attach-receipt", (req, res) => {
+api.post("/income/:id/attach-receipt", optionalScanMultipart, (req, res) => {
   if (!req.user) {
     res.status(401).json({
       error: "Log in to your profile before attaching a receipt.",
@@ -3717,11 +3726,11 @@ api.post("/income/:id/attach-receipt", (req, res) => {
   }
   if (!assertCanUpload(req, res)) return;
   const records = getRecords(req);
-  const body = req.body || {};
+  const upload = normalizeScanUpload(req);
   const result = attachReceiptToEntry(records, "income", req.params.id, {
-    dataUrl: body.imageBase64 || body.dataUrl,
-    mimeType: body.mimeType,
-    filename: body.filename,
+    dataUrl: upload.imageBase64,
+    mimeType: upload.mimeType,
+    filename: upload.filename,
   });
   if (!result.ok) {
     res.status(result.status || 400).json({ error: result.error, code: result.code });
@@ -3961,6 +3970,14 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     const { imageBase64, mimeType, filename, purpose } = upload;
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
+      return;
+    }
+    if (isPdfIsolateStub(imageBase64)) {
+      res.status(400).json({
+        error:
+          "That PDF did not upload — the original remittance was not saved. Try Upload file again, or take a photo of the page.",
+        code: "PDF_STUB",
+      });
       return;
     }
     const ocrPurpose = purpose === "income" ? "income" : "expense";
@@ -4362,41 +4379,31 @@ api.get("/receipts/:id", (req, res) => {
   );
 });
 
+function findReceiptForReq(req, id) {
+  const currentProd = productOf(req);
+  const current = getRecords(req);
+  const found = receiptImageServe.findReceiptInStores(id, [{ product: currentProd, records: current }]);
+  if (found.receipt) return found;
+  const siblingProd = currentProd === "suite" ? "haulage" : "suite";
+  const sibling = recordsForUser(req.user, siblingProd);
+  return receiptImageServe.findReceiptInStores(id, [{ product: siblingProd, records: sibling }]);
+}
+
 api.get("/receipts/:id/image", (req, res) => {
   if (!req.user) {
     res.status(401).json({ error: "Sign in to view receipt files." });
     return;
   }
-  const records = getRecords(req);
-  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
-  if (pdfThumbnail.isPdfReceipt(receipt)) {
-    pdfThumbnail
-      .dataUrlForReceipt(receipt, storage)
-      .then((dataUrl) => {
-        if (dataUrl) {
-          res.json({ dataUrl, kind: "pdf-thumb" });
-          return;
-        }
-        res.status(415).json({
-          error: "Use the file endpoint for PDF documents.",
-          isPdf: true,
-        });
-      })
-      .catch((err) => {
-        console.warn("PDF thumbnail failed:", err && err.message);
-        res.status(415).json({
-          error: "Use the file endpoint for PDF documents.",
-          isPdf: true,
-        });
-      });
-    return;
-  }
-  const dataUrl = receipt?.imagePath ? storage.readReceiptImage(receipt.imagePath) : null;
-  if (!dataUrl) {
-    res.status(404).json({ error: "Receipt image not found." });
-    return;
-  }
-  res.json({ dataUrl });
+  const { receipt } = findReceiptForReq(req, req.params.id);
+  receiptImageServe
+    .serveReceiptImage({ receipt, storage, pdfThumbnail })
+    .then((result) => {
+      res.status(result.status).json(result.body);
+    })
+    .catch((err) => {
+      console.warn("Receipt image failed:", err && err.message);
+      res.status(500).json({ error: "Could not load receipt image." });
+    });
 });
 
 api.get("/receipts/:id/file", (req, res) => {
@@ -4404,11 +4411,13 @@ api.get("/receipts/:id/file", (req, res) => {
     res.status(401).json({ error: "Sign in to view receipt files." });
     return;
   }
-  const records = getRecords(req);
-  const receipt = (records.receipts || []).find((r) => r.id === req.params.id);
-  const info = receipt?.imagePath ? storage.getReceiptFileInfo(receipt.imagePath) : null;
+  const { receipt } = findReceiptForReq(req, req.params.id);
+  const info = receipt?.imagePath ? receiptImageServe.getReceiptFileInfoSafe(receipt.imagePath, storage) : null;
   if (!info) {
-    res.status(404).json({ error: "Receipt file not found." });
+    res.status(404).json({
+      error: "Receipt file not found.",
+      missingFile: true,
+    });
     return;
   }
   res.setHeader("Content-Type", info.mime);
