@@ -2133,6 +2133,16 @@ tr.vending-machine-row {
 }
 .enh-billing-plan-actions { justify-content: stretch; }
 .enh-billing-plan-actions .btn { flex: 1 1 auto; }
+.enh-billing-plan-groups { display: grid; gap: 10px; margin: 12px 0 0; }
+.enh-billing-plan-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-2, transparent);
+}
+.enh-billing-plan-group h4 { margin: 0 0 4px; font-size: 0.98rem; }
+.enh-billing-plan-group p { margin: 0 0 8px; }
+.enh-billing-plan-plus { border-color: var(--accent); }
 
 /* --- Accounts + alerts -------------------------------------------------- */
 #account-panel { border-left: 4px solid var(--accent); }

@@ -3402,25 +3402,26 @@
     const storeNote = byId("billing-store-note");
     if (storeNote) storeNote.classList.toggle("hidden", !nativeShell);
 
+    const paidLive =
+      ent.hasStripeSubscription &&
+      ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
     if (upgradeBtn) {
       // Paid Pro checkout — website only. Native shells must not start Stripe
       // (Apple 3.1.1 / Play Billing). Subscribe from a browser.
-      const paidLive =
-        ent.hasStripeSubscription &&
-        ["active", "trialing", "past_due"].includes(String(ent.subscriptionStatus || ""));
       const hideUpgrade =
-        nativeShell || ent.isAdmin || ent.planGrant === "pro_plus" || paidLive;
+        nativeShell || ent.isAdmin || ent.planGrant === "pro_plus" || ent.isProPlus || paidLive;
       if (hideUpgrade) {
         upgradeBtn.classList.add("hidden");
       } else {
         upgradeBtn.classList.remove("hidden");
-        upgradeBtn.textContent = "Upgrade to Pro";
+        upgradeBtn.textContent = plusPrice ? "Start Pro" : "Upgrade to Pro";
       }
     }
     const plusBtn = byId("billing-upgrade-plus");
     if (plusBtn) {
       const canBuyPlus = Boolean(plusPrice) && !ent.isAdmin && !ent.isProPlus && !nativeShell;
       plusBtn.classList.toggle("hidden", !canBuyPlus);
+      plusBtn.textContent = paidLive ? "Upgrade to Pro+" : "Start Pro+";
     }
 
     if (cancelBtn) {
@@ -3702,29 +3703,52 @@
     const plusPrice = ent.plusPriceLabel;
     const plusYearly = ent.plusPriceYearlyLabel;
     const wantPlus = data && data.plan === "pro_plus";
+    const alreadyPro = Boolean(ent.isPro && !ent.isProPlus);
+    const canPlus = Boolean(plusPrice);
+    const showProButtons = !canPlus || !alreadyPro;
+    const title = canPlus
+      ? wantPlus && alreadyPro
+        ? "Upgrade to Pro+"
+        : "Choose Pro or Pro+"
+      : "Upgrade to Pro";
+    const defaultCopy = canPlus
+      ? `Start on either plan — you do not need Pro first. Pro is ${price} or ${yearly} (unlimited uploads, PDF export and forecast). Pro+ is ${plusPrice} or ${plusYearly} and adds accountant share, lodgement brief, extra entity, BAS, cloud OCR and priority support.`
+      : `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly} (same full access as a leftover ${trialLabel} trial).`;
+    const proGroup = showProButtons
+      ? `<div class="enh-billing-plan-group">
+            <h4>Pro</h4>
+            <p class="muted">Unlimited uploads, PDF export and forecast.</p>
+            <div class="enh-billing-plan-actions">
+              <button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro">Monthly — ${esc(price)}</button>
+              <button type="button" class="btn ${canPlus ? "secondary" : "primary"}" data-billing-upgrade="year" data-billing-plan="pro">Yearly — ${esc(yearly)}</button>
+            </div>
+          </div>`
+      : "";
+    const plusGroup = canPlus
+      ? `<div class="enh-billing-plan-group enh-billing-plan-plus">
+            <h4>Pro+</h4>
+            <p class="muted">${alreadyPro ? "Upgrade this subscription." : "Go straight to Pro+ — no Pro step."} Accountant share, lodgement brief, extra entity, BAS, cloud OCR and priority support.</p>
+            <div class="enh-billing-plan-actions">
+              <button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro_plus">Monthly — ${esc(plusPrice)}</button>
+              <button type="button" class="btn primary" data-billing-upgrade="year" data-billing-plan="pro_plus">Yearly — ${esc(plusYearly)}</button>
+            </div>
+          </div>`
+      : "";
     const modal = document.createElement("div");
     modal.id = "enh-billing-modal";
     modal.className = "enh-dup-modal";
-    const plusButtons = plusPrice
-      ? `<button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro_plus">Pro+ — ${esc(plusPrice)}</button>
-          <button type="button" class="btn primary" data-billing-upgrade="year" data-billing-plan="pro_plus">Pro+ — ${esc(plusYearly)}</button>`
-      : "";
     modal.innerHTML = `
       <div class="enh-dup-backdrop" data-billing-dismiss></div>
       <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-billing-title">
-        <h3 id="enh-billing-title">${wantPlus ? "Upgrade to Pro+" : "Upgrade to Pro"}</h3>
-        <p>${esc(
-          (data && data.error) ||
-            (plusPrice
-              ? `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly}. Pro+ (${plusPrice} or ${plusYearly}) adds accountant share, extra entity, BAS, cloud OCR and priority support.`
-              : `Pro unlocks unlimited uploads, PDF export and forecast — ${price} or ${yearly} (same full access as a leftover ${trialLabel} trial).`)
-        )}</p>
+        <h3 id="enh-billing-title">${title}</h3>
+        <p>${esc((data && data.error) || defaultCopy)}</p>
         <p class="muted">Free plan includes ${ent.freeUploadsPerMonth || 15} uploads per month and ${ent.freeOnscreenReports || 1} on-screen EOFY report. Local OCR stays on Free/Pro; cloud OCR is Pro+.</p>
-        <div class="enh-dup-actions enh-billing-plan-actions">
+        <div class="enh-billing-plan-groups">
+          ${proGroup}
+          ${plusGroup}
+        </div>
+        <div class="enh-dup-actions">
           <button type="button" class="btn secondary" data-billing-dismiss>Not now</button>
-          ${wantPlus ? "" : `<button type="button" class="btn secondary" data-billing-upgrade="month" data-billing-plan="pro">Pro — ${esc(price)}</button>
-          <button type="button" class="btn primary" data-billing-upgrade="year" data-billing-plan="pro">Pro — ${esc(yearly)}</button>`}
-          ${plusButtons}
         </div>
       </div>`;
     document.body.appendChild(modal);
