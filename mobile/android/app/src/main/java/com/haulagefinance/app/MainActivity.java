@@ -9,11 +9,11 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     /**
-     * Play package loads the hosted app (login + Taxation Hub / Fuel Hub).
-     * Cloudflare 301s apex → www, so the WebView must open www /haulage/
-     * directly — same idea as Suite opening /suite/ rather than the homepage.
+     * Play package loads the hosted app (login + Taxation Hub / Fuel Hub)
+     * on the apex. www.godriverhub.com only redirects there. Do not open
+     * the marketing homepage at /.
      */
-    static final String HUB_URL = "https://www.godriverhub.com/haulage/";
+    static final String HUB_URL = "https://godriverhub.com/haulage/";
     static final String NATIVE_UA = "DriverHubApp";
 
     @Override

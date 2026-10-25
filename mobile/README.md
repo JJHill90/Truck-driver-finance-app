@@ -1,9 +1,11 @@
 # Driver Hub — mobile shell (Capacitor)
 
 Native Android wrapper around the **hosted app** at
-`https://www.godriverhub.com/haulage/` — the Driver Hub login service, not the
+`https://godriverhub.com/haulage/` — the Driver Hub login service, not the
 public marketing site at `https://godriverhub.com/` and not
 `www.gotaxation.com.au` (that name does not resolve).
+`www.godriverhub.com` is only a redirect to the apex. Both hosts stay in
+`allowNavigation` so that one redirect remains inside the WebView.
 
 Open **this** project in Android Studio: `mobile/android` after `npx cap sync android`
 from `mobile/`. Application id is `com.haulagefinance.app`. Do **not** open

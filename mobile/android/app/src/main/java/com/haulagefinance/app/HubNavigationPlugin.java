@@ -7,8 +7,9 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
  * Keep the Play package on the Driver Hub <strong>app</strong>
- * ({@code https://www.godriverhub.com/haulage/}), not the public website and
+ * ({@code https://godriverhub.com/haulage/}), not the public website and
  * not an unknown host (those show {@code ERR_NAME_NOT_RESOLVED} in Chrome).
+ * www stays an official host so one www ↔ apex redirect stays in this WebView.
  *
  * Returning {@code null} lets Capacitor open Chrome or show
  * {@code ERR_NAME_NOT_RESOLVED}. Returning {@code false} keeps the load in
@@ -50,13 +51,13 @@ public class HubNavigationPlugin extends Plugin {
 
     static String bounceToApp(String path) {
         if ("/privacy".equals(path) || "/privacy.html".equals(path)) {
-            return "https://www.godriverhub.com/haulage/privacy";
+            return "https://godriverhub.com/haulage/privacy";
         }
         if ("/terms".equals(path) || "/terms.html".equals(path)) {
-            return "https://www.godriverhub.com/haulage/terms";
+            return "https://godriverhub.com/haulage/terms";
         }
         if ("/support".equals(path) || "/support.html".equals(path)) {
-            return "https://www.godriverhub.com/haulage/support";
+            return "https://godriverhub.com/haulage/support";
         }
         return MainActivity.HUB_URL;
     }

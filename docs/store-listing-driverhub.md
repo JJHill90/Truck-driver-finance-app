@@ -6,17 +6,17 @@ Compile **only** this listing:
 |-------|--------|
 | Name | Driver Hub |
 | Application id | `com.haulagefinance.app` |
-| Loads (Play WebView — the **app**) | `https://www.godriverhub.com/haulage/` |
+| Loads (Play WebView — the **app**) | `https://godriverhub.com/haulage/` |
 | Official marketing site (browser only) | `https://godriverhub.com/` |
-| Privacy (Hub, no login) | `https://www.godriverhub.com/haulage/privacy` |
-| Terms (Hub, no login) | `https://www.godriverhub.com/haulage/terms` |
-| Support | `https://www.godriverhub.com/support` |
+| Privacy (public, no login) | `https://godriverhub.com/privacy` |
+| Terms (public, no login) | `https://godriverhub.com/terms` |
+| Support | `https://godriverhub.com/support` |
 | Native project | `mobile/` |
 | Support email | `support@godriverhub.com` |
 
 Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
 
-The Play package must load **`https://www.godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). Live Cloudflare 301s apex → www, so the shell opens **www `/haulage/`** directly. Until Hub-legal pages are on `main`, Play Console privacy/terms must still use `/haulage/privacy` and `/haulage/terms`.
+The Play package must load **`https://godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). `www.godriverhub.com` only redirects to the apex. Ship a new AAB after `curl -sI https://godriverhub.com/haulage/` returns 200 (see the redirect-loop steps in `docs/custom-domain-driverhub.md`). Play Console privacy and terms use `https://godriverhub.com/privacy` and `https://godriverhub.com/terms`. The same pages are also inside the app at `/haulage/privacy` and `/haulage/terms`.
 
 Build Driver Hub from this repo’s **`mobile/`** folder (`com.haulagefinance.app`). Do not open the Suite Android Studio project (`mobile-suite/` or a local `comgotaxationsuite` tree).
 
@@ -41,7 +41,7 @@ Still required **outside this repo**:
 | Android 12 splash is a **color** (PNG crashes) | Done | `styles.xml` |
 | Public Privacy + Terms (Driver Hub) | Live | `/haulage/privacy` and `/haulage/terms` |
 | Public Support | Live | `/support` |
-| Public marketing overview | Live | `https://www.godriverhub.com/` |
+| Public marketing overview | Live | `https://godriverhub.com/` |
 | In-app account deletion | Done | Profile → Delete account |
 | Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
 | Play feature graphic 1024×500 | Done | `mobile/store/feature-graphic-1024x500.png` |
@@ -65,14 +65,14 @@ Then in Play Console for `com.haulagefinance.app`:
 
 1. Create the app (default language English (Australia) if offered).
 2. Upload the AAB to **Internal testing**, install on a phone, confirm login — then Production (or closed testing first).
-3. Privacy policy = `https://www.godriverhub.com/haulage/privacy`
+3. Privacy policy = `https://godriverhub.com/privacy`
 4. Data safety (answers below)
 5. Photo/video permission: camera and photos are for receipt capture only; not required (file upload works)
 6. IARC content rating (finance / tools — typically Everyone / PEGI 3)
-7. Store listing: copy below. Screenshots: `mobile/store/screenshots/play-1080x1920/`. Feature graphic: `mobile/store/feature-graphic-1024x500.png`. High-res icon: `mobile/store/icon-play-512.png`. Marketing URL: `https://www.godriverhub.com/`
+7. Store listing: copy below. Screenshots: `mobile/store/screenshots/play-1080x1920/`. Feature graphic: `mobile/store/feature-graphic-1024x500.png`. High-res icon: `mobile/store/icon-play-512.png`. Marketing URL: `https://godriverhub.com/`
 8. After the listing is live, set `DRIVERHUB_PLAY_STORE_URL` on `haulage-finance` so the overview Play button goes live.
 9. Category: **Business** or **Finance**
-10. Contact: `support@godriverhub.com` and `https://www.godriverhub.com/support`
+10. Contact: `support@godriverhub.com` and `https://godriverhub.com/support`
 
 Play does **not** get a Stripe/IAP product. This build is a login WebView. Subscriptions stay on the website.
 
@@ -107,8 +107,8 @@ Camera and photos are used only when you choose to photograph a receipt or paysl
 
 Delete your account any time: Profile → Delete account (type DELETE and your password), or email support@godriverhub.com.
 
-Support: https://www.godriverhub.com/support
-Privacy: https://www.godriverhub.com/haulage/privacy
+Support: https://godriverhub.com/support
+Privacy: https://godriverhub.com/privacy
 
 ## Data safety / App Privacy answers
 
@@ -142,7 +142,7 @@ The next boot creates a non-admin complimentary Pro+ profile with a small truck-
 
 Paste in Play review notes:
 
-- URL: `https://www.godriverhub.com/haulage/`
+- URL: `https://godriverhub.com/haulage/`
 - Username / password: the env values you set
 - How to delete: Profile → Delete account → type DELETE
 
