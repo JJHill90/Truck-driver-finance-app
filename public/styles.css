@@ -1684,6 +1684,10 @@ tr.vending-machine-row {
 .bas-worksheet-note { font-size: 0.82rem; color: var(--text-dim); margin: 8px 0 0; }
 .bas-worksheet-steps { margin: 8px 0 0; padding-left: 1.2rem; font-size: 0.86rem; }
 .bas-worksheet-banner { background: #fef3c7; color: #92400e; border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; margin: 8px 0; }
+.accountant-briefing { color: var(--text); }
+.accountant-briefing .bas-worksheet-table tr.briefing-status-have td:first-child { color: #067647; font-weight: 600; }
+.accountant-briefing .bas-worksheet-table tr.briefing-status-missing td:first-child { color: #b42318; font-weight: 600; }
+.accountant-briefing .bas-worksheet-table tr.briefing-status-unknown td:first-child { color: #b54708; font-weight: 600; }
 
 /* Modal */
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; }
