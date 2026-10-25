@@ -139,7 +139,7 @@ describe("gallery uses PDF thumbs", () => {
     expect(src).toMatch(/receipt-pdf-thumb/);
     expect(src).toMatch(/data-receipt-thumb/);
     expect(src).toMatch(/__haulagePdfThumb/);
-    expect(hub).toMatch(/enhancements\.js\?v=ledger-weeks-2/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=ledger-weeks-2/);
+    expect(hub).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
   });
 });

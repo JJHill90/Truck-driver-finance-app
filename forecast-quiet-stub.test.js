@@ -24,7 +24,7 @@ describe("forecast quiet-window stub", () => {
   it("cache-busts enhancements so Play WebViews load the forecast guard", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public", "index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public", "suite", "index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=ledger-weeks-2/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=ledger-weeks-2/);
+    expect(hub).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=lodgement-brief-1/);
   });
 });

@@ -3919,7 +3919,7 @@
     panel.id = "eofy-pro-plus-tools";
     panel.innerHTML = `
       <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-      <p class="muted">Read-only share link, a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. Included with Pro on Taxation Hub — same price, no extra tier.</p>
+      <p class="muted">Read-only share link with a lodgement brief (payers, return labels, refund/payable, gaps), a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. The brief follows the Profile registration type — PAYG employee, sole trader or partnership. Included with Pro on Taxation Hub — same price, no extra tier.</p>
       <div class="form-grid">
         <div class="span-2">
           <h3 class="profile-section-title">Accountant share link</h3>
@@ -10139,9 +10139,99 @@
     else el.appendChild(section);
   }
 
+  function injectLodgementBrief() {
+    const el = document.getElementById("report-content");
+    if (!el) return;
+    el.querySelector(".report-lodgement-brief")?.remove();
+    const report = typeof state !== "undefined" && state.report;
+    const brief = report && report.lodgementBrief;
+    if (!brief) return;
+    const ident = brief.identity || {};
+    const pos = brief.taxPosition || {};
+    const payerRows = (brief.payers || [])
+      .map(
+        (p) =>
+          `<tr><td>${esc(p.payer)}</td><td>${esc(p.abn || "—")}</td><td>${p.count}</td><td class="amount">${money(
+            p.assessable
+          )}</td><td class="amount">${money(p.paygWithheld)}</td></tr>`
+      )
+      .join("");
+    const incomeRows = (brief.incomeLabels || [])
+      .map(
+        (r) =>
+          `<tr><td>${esc(r.returnItem)}</td><td>${esc(r.returnLabel)}</td><td class="amount">${money(r.assessable)}</td></tr>`
+      )
+      .join("");
+    const dedRows = (brief.deductionLabels || [])
+      .map(
+        (r) =>
+          `<tr><td>${esc(r.label)}</td><td class="amount">${money(r.deductible)}</td><td>${r.count}</td></tr>`
+      )
+      .join("");
+    const points = ((brief.entitySpecific && brief.entitySpecific.points) || [])
+      .concat(brief.extraEntities || [])
+      .map((p) => `<li>${esc(p)}</li>`)
+      .join("");
+    const asks = (brief.gaps || [])
+      .map((g) => `<li><strong>Gap:</strong> ${esc(g.message)}</li>`)
+      .concat((brief.questions || []).map((q) => `<li>${esc(q)}</li>`))
+      .join("");
+    const section = document.createElement("div");
+    section.className = "report-section report-lodgement-brief";
+    section.innerHTML = `
+      <h3>Lodgement brief for your tax agent</h3>
+      <p class="muted">${esc(brief.returnTitle || "")} · ${esc(brief.entityLabel || "")}${
+        ident.occupation ? ` · ${esc(ident.occupation)}` : ""
+      }</p>
+      <p>${esc(brief.purpose || "")}</p>
+      <div class="cap-list">
+        <div class="cap-row"><span>Tax position</span><span>${esc(pos.outcomeLabel || "—")}</span></div>
+        <div class="cap-row"><span>PAYG withheld</span><span>${money(pos.paygWithheld)}</span></div>
+        <div class="cap-row"><span>Estimated tax</span><span>${money(pos.estimatedTax)}</span></div>
+        ${ident.abn ? `<div class="cap-row"><span>ABN</span><span>${esc(ident.abn)}</span></div>` : ""}
+        ${
+          brief.entityType === "partnership"
+            ? `<div class="cap-row"><span>Partner share</span><span>${esc(String(ident.partnerSharePercent))}%</span></div>`
+            : ""
+        }
+        ${
+          brief.entityType !== "employee"
+            ? `<div class="cap-row"><span>GST registered</span><span>${ident.gstRegistered ? "Yes" : "No"}</span></div>`
+            : ""
+        }
+      </div>
+      ${points ? `<ul class="lodgement-points">${points}</ul>` : ""}
+      ${
+        payerRows
+          ? `<h3>Payers / income statements</h3>
+      <table class="data"><thead><tr><th>Payer</th><th>ABN</th><th>Rows</th><th>Assessable</th><th>PAYG</th></tr></thead>
+      <tbody>${payerRows}</tbody></table>`
+          : ""
+      }
+      ${
+        incomeRows
+          ? `<h3>Suggested income labels</h3>
+      <table class="data"><thead><tr><th>Return item</th><th>Label</th><th>Assessable</th></tr></thead>
+      <tbody>${incomeRows}</tbody></table>`
+          : ""
+      }
+      ${
+        dedRows
+          ? `<h3>Suggested deduction labels</h3>
+      <table class="data"><thead><tr><th>Schedule</th><th>Deductible</th><th>Items</th></tr></thead>
+      <tbody>${dedRows}</tbody></table>`
+          : ""
+      }
+      ${asks ? `<h3>Ask the taxpayer</h3><ul class="lodgement-points">${asks}</ul>` : ""}
+      <p class="muted">${esc(brief.disclaimer || "")}</p>
+    `;
+    el.appendChild(section);
+  }
+
   function enhanceReport() {
     fixReportHeadings();
     injectReportExpenseLedger();
+    injectLodgementBrief();
   }
 
   function start() {
@@ -10581,7 +10671,7 @@
     report: {
       title: "EOFY Report",
       body: [
-        "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link, a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO, and a multi-year comparison for your agent.",
+        "The EOFY performance statement summarises income, deductions and estimated tax for the selected year. Pro downloads the PDF/JSON pack. Pro+ adds a read-only accountant share link with a lodgement brief (payers, return labels, refund or payable, and gaps for PAYG, sole trader or partnership), a BAS/GST activity statement worksheet (G1, 1A, G11, 1B, 9) you can download as PDF or Excel and use when lodging with the ATO, and a multi-year comparison for your agent.",
       ],
     },
     profile: {

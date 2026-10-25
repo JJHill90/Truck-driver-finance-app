@@ -57,6 +57,7 @@ const storage = require("./lib/storage");
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { decorateAccountantReport } = require("./lib/report-branding");
+const { attachLodgementBrief } = require("./lib/accountant-brief");
 
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
@@ -3196,6 +3197,7 @@ api.get("/report", (req, res) => {
     deductibleAmount: b.deductibleTotal,
     transactionCount: b.count,
   }));
+  attachLodgementBrief(report, records, profile, { product: productOf(req) });
   res.json(report);
 });
 
@@ -3221,6 +3223,7 @@ api.get("/report.pdf", (req, res) => {
     deductibleAmount: b.deductibleTotal,
     transactionCount: b.count,
   }));
+  attachLodgementBrief(report, records, profile, { product: productOf(req) });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
@@ -4430,6 +4433,7 @@ function buildSharePack(username, product, financialYear) {
   } else {
     applyHistoricalRates(report.summary, scoped, fy);
   }
+  attachLodgementBrief(report, scoped, profile, { product });
   return { records: scoped, report, financialYear: fy, profile };
 }
 

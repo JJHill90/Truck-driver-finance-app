@@ -1665,6 +1665,8 @@ tr.vending-machine-row {
 
 /* Report */
 .report-section { margin-bottom: 20px; }
+.report-lodgement-brief .lodgement-points { margin: 8px 0 16px; padding-left: 18px; }
+.report-lodgement-brief .lodgement-points li { margin: 0 0 6px; }
 .report-actions { margin-bottom: 14px; }
 .report-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .pro-plus-pack { margin-bottom: 16px; }
