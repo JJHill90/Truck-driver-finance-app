@@ -2080,20 +2080,151 @@
     );
   }
 
-  function openLightbox(src, isPdf) {
+  function receiptFileHref(receiptId, download) {
+    if (typeof window.receiptFileUrl === "function") return window.receiptFileUrl(receiptId, download);
+    const q = download ? "?download=1" : "";
+    return `${window.location.origin}/api/haulage/receipts/${encodeURIComponent(receiptId)}/file${q}`;
+  }
+
+  function resolveReceipt(receiptOrId) {
+    if (!receiptOrId) return null;
+    if (typeof receiptOrId === "object") return receiptOrId;
+    if (typeof window.findReceipt === "function") return window.findReceipt(receiptOrId);
+    return { id: receiptOrId };
+  }
+
+  function saveBlobAsFile(blob, filename) {
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename || "document";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  }
+
+  async function fetchReceiptBlob(receiptId) {
+    const res = await fetch(receiptFileHref(receiptId, true), { credentials: "same-origin" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Could not load the file");
+    }
+    return res.blob();
+  }
+
+  async function tryShareReceipt(blob, filename) {
+    if (typeof navigator.canShare !== "function") return false;
+    const file = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+    if (!navigator.canShare({ files: [file] })) return false;
+    await navigator.share({ files: [file], title: filename });
+    return true;
+  }
+
+  async function openReceiptBlob(receiptOrId, { download = false, preferShare = false } = {}) {
+    const receipt = resolveReceipt(receiptOrId);
+    if (!receipt || !receipt.id) throw new Error("Receipt not found");
+    const blob = await fetchReceiptBlob(receipt.id);
+    const filename = receipt.filename || `receipt-${receipt.id}`;
+    const typed =
+      blob.type && blob.type !== "application/octet-stream"
+        ? blob
+        : new Blob([await blob.arrayBuffer()], {
+            type: receipt.mimeType || (/\.pdf$/i.test(filename) ? "application/pdf" : blob.type || "application/octet-stream"),
+          });
+    if (download) {
+      saveBlobAsFile(typed, filename);
+      if (typeof toast === "function") toast("Download started");
+      return "download";
+    }
+    if (preferShare) {
+      try {
+        if (await tryShareReceipt(typed, filename)) {
+          if (typeof toast === "function") toast("Shared");
+          return "share";
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return "abort";
+      }
+    }
+    const objectUrl = URL.createObjectURL(typed);
+    const opened = window.open(objectUrl, "_blank", "noopener");
+    if (opened) {
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      return "open";
+    }
+    URL.revokeObjectURL(objectUrl);
+    try {
+      if (await tryShareReceipt(typed, filename)) {
+        if (typeof toast === "function") toast("Shared");
+        return "share";
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return "abort";
+    }
+    saveBlobAsFile(typed, filename);
+    if (typeof toast === "function") toast("Download started — open the file from Downloads");
+    return "download";
+  }
+
+  function paintPdfViewerBody(body, receipt, receiptId, thumb) {
+    if (!body) return;
+    const preview = /^data:image\//i.test(thumb)
+      ? `<img src="${esc(thumb)}" alt="${esc(receipt.filename || "PDF preview")}" />`
+      : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
+    body.innerHTML = `${preview}
+      <p><button type="button" class="btn primary" data-open-receipt-file="${esc(receiptId)}">Open PDF</button></p>`;
+  }
+
+  function patchReceiptFileActions() {
+    const origDownload = window.downloadReceiptFile;
+    if (typeof origDownload === "function" && !origDownload.__haulageBlobDl) {
+      function wrappedDownload(receiptOrId) {
+        const receipt = resolveReceipt(receiptOrId);
+        if (!receipt) return;
+        void openReceiptBlob(receipt, { download: true }).catch((err) => {
+          if (typeof toast === "function") toast(err.message || "Could not download");
+        });
+      }
+      wrappedDownload.__haulageBlobDl = true;
+      window.downloadReceiptFile = wrappedDownload;
+    }
+    const origShare = window.shareReceiptFile;
+    if (typeof origShare === "function" && !origShare.__haulageBlobShare) {
+      async function wrappedShare(receiptOrId) {
+        const receipt = resolveReceipt(receiptOrId);
+        if (!receipt) return;
+        try {
+          await openReceiptBlob(receipt, { preferShare: true });
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+          if (typeof toast === "function") toast(err.message || "Could not share");
+        }
+      }
+      wrappedShare.__haulageBlobShare = true;
+      window.shareReceiptFile = wrappedShare;
+    }
+  }
+
+  function openLightbox(src, isPdf, receiptId) {
     closeLightbox();
     const overlay = document.createElement("div");
     overlay.className = "enh-lightbox";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Scanned document");
+    const openBtn = receiptId
+      ? `<p><button type="button" class="btn primary" data-open-receipt-file="${esc(receiptId)}">Open PDF</button></p>`
+      : "";
     const body =
-      isPdf && isAndroidLike()
-        ? `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>
-           <p><a class="btn primary" href="${esc(src)}" target="_blank" rel="noopener">Open PDF</a></p>`
-        : isPdf
-          ? `<iframe src="${esc(src)}" title="Scanned document"></iframe>`
-          : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
+      isPdf
+        ? `${
+            /^data:image\//i.test(src)
+              ? `<img src="${esc(src)}" alt="PDF preview" />`
+              : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`
+          }${openBtn}`
+        : `<img src="${esc(src)}" alt="Scanned document (enlarged)" />`;
     overlay.innerHTML = `<div class="enh-lightbox-stage">${body}</div>
       <div class="enh-lightbox-bar">
         <button type="button" class="btn secondary enh-lightbox-done">Close</button>
@@ -2156,8 +2287,7 @@
       if (src) {
         openLightbox(src, false);
       } else if (latest && latest.receiptId) {
-        // PDFs (and any doc without an inline preview image) open from storage.
-        openLightbox(`/api/haulage/receipts/${latest.receiptId}/file`, latest.isPdf);
+        openLightbox("", latest.isPdf, latest.receiptId);
       }
       return;
     }
@@ -2192,48 +2322,74 @@
   previewMo.observe(document.body, { childList: true, subtree: true });
 
   function patchPdfReceiptViewer() {
-    const origFetchImage = window.fetchReceiptImageDataUrl;
     const origOpen = window.openReceiptViewer;
     if (typeof origOpen === "function" && !origOpen.__haulagePdfSafe) {
       async function safeOpen(receiptId) {
-        const finder = window.findReceipt;
-        const receipt = typeof finder === "function" ? finder(receiptId) : null;
+        window.__haulageActiveReceiptId = receiptId;
+        // Always run app.js first so `activeReceiptId` is set — Download / Share
+        // / Delete in the viewer header close over that let, not window.
+        const result = await origOpen.apply(this, arguments);
+        const receipt = resolveReceipt(receiptId);
         const pdf = receipt && typeof window.isReceiptPdf === "function" && window.isReceiptPdf(receipt);
-        if (pdf && isAndroidLike()) {
-          const viewer = document.getElementById("receipt-viewer");
-          const body = document.getElementById("receipt-viewer-body");
-          const title = document.getElementById("receipt-viewer-title");
-          const href =
-            typeof window.receiptFileUrl === "function" ? window.receiptFileUrl(receiptId) : "#";
-          if (title) title.innerHTML = `<strong>${esc(receipt.filename || "PDF")}</strong>`;
-          if (body) {
-            body.innerHTML = `<p class="muted">Loading preview…</p>`;
-          }
-          if (viewer) {
-            viewer.classList.remove("hidden");
-            document.body.style.overflow = "hidden";
-          }
-          let thumb = "";
-          try {
-            thumb = await origFetchImage(receiptId);
-          } catch {
-            thumb = "";
-          }
-          if (body) {
-            const preview = /^data:image\//i.test(thumb)
-              ? `<img src="${esc(thumb)}" alt="${esc(receipt.filename || "PDF preview")}" />`
-              : `<p class="muted">This PDF is saved. Opening it inside the app can freeze Android.</p>`;
-            body.innerHTML = `${preview}
-              <p><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">Open PDF</a></p>`;
-          }
-          return;
-        }
-        return origOpen.apply(this, arguments);
+        if (!pdf) return result;
+        const body = document.getElementById("receipt-viewer-body");
+        if (!body) return result;
+        const iframe = body.querySelector("iframe");
+        const img = body.querySelector("img");
+        const thumb =
+          (img && img.src) ||
+          (iframe && /^data:image\//i.test(iframe.src) ? iframe.src : "") ||
+          "";
+        paintPdfViewerBody(body, receipt, receiptId, thumb);
+        return result;
       }
       safeOpen.__haulagePdfSafe = true;
       window.openReceiptViewer = safeOpen;
     }
   }
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      const viewerDownload = e.target.closest("#receipt-viewer-download");
+      const viewerShare = e.target.closest("#receipt-viewer-share");
+      if (viewerDownload || viewerShare) {
+        const id = window.__haulageActiveReceiptId;
+        if (!id) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        void openReceiptBlob(id, {
+          download: Boolean(viewerDownload),
+          preferShare: Boolean(viewerShare),
+        }).catch((err) => {
+          if (typeof toast === "function") toast(err.message || "Could not open the file");
+        });
+        return;
+      }
+      const openBtn = e.target.closest("[data-open-receipt-file]");
+      if (openBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = openBtn.getAttribute("data-open-receipt-file");
+        void openReceiptBlob(id, { download: false }).catch((err) => {
+          if (typeof toast === "function") toast(err.message || "Could not open the file");
+        });
+        return;
+      }
+      const fileLink = e.target.closest('a[href*="/receipts/"][href*="/file"]');
+      if (!fileLink) return;
+      const href = fileLink.getAttribute("href") || "";
+      const match = href.match(/\/receipts\/([^/?#]+)\/file/);
+      if (!match) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const download = /[?&]download=1/.test(href) || /download/i.test(fileLink.textContent || "");
+      void openReceiptBlob(decodeURIComponent(match[1]), { download }).catch((err) => {
+        if (typeof toast === "function") toast(err.message || "Could not open the file");
+      });
+    },
+    true
+  );
 
   function todayIsoLocal() {
     const d = new Date();
@@ -2480,6 +2636,7 @@
   function init() {
     bindScanEditGuards();
     bindReceiptViewerClose();
+    patchReceiptFileActions();
     patchIncomeConfirmPayload();
     patchManualIncomeForm();
     patchPrefillIncomeForm();
@@ -2500,6 +2657,8 @@
     setTimeout(patchUploadSkipRefresh, 0);
     setTimeout(installQuietRefreshAll, 500);
     setTimeout(patchUploadSkipRefresh, 500);
+    setTimeout(patchReceiptFileActions, 0);
+    setTimeout(patchReceiptFileActions, 500);
     observe("scan-result", "expense");
     observe("income-scan-result", "income");
   }
