@@ -9,6 +9,7 @@ const {
   SUITE_PRO_PLUS_PRICE_AUD,
   SUITE_PRO_PLUS_PRICE_YEARLY_AUD,
   isProPlus,
+  availableCheckoutPlans,
   pricingForProduct,
   TRIAL_PRODUCT_LABEL,
   addTrialEnd,
@@ -400,5 +401,16 @@ describe("entitlements", () => {
     expect(suitePro.canLodgementBrief).toBe(false);
     expect(suitePlus.canShareAccountant).toBe(true);
     expect(suitePlus.canLodgementBrief).toBe(true);
+  });
+
+  it("lets a Suite Free user start on Pro+ without buying Pro first", () => {
+    const suite = availableCheckoutPlans("suite").map((p) => p.plan);
+    const hub = availableCheckoutPlans("haulage").map((p) => p.plan);
+    expect(suite).toEqual(["pro", "pro_plus"]);
+    expect(hub).toEqual(["pro"]);
+    expect(availableCheckoutPlans("suite").find((p) => p.plan === "pro_plus")).toMatchObject({
+      monthlyLabel: "$18/month",
+      yearlyLabel: "$190/year",
+    });
   });
 });
