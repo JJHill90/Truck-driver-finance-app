@@ -135,6 +135,15 @@ const {
   isDriverHubOfficialHost,
 } = require("./lib/driverhub-public-origin");
 const {
+  wwwToApexRedirect: taxationHubWwwToApexRedirect,
+  redirectHaulagePaths: taxationHubHaulageRedirect,
+  isTaxationHubOfficialHost,
+  isTaxationHubApexHost,
+  TAXHUB_SHOT_FILES,
+  sitemapXml: taxationHubSitemapXml,
+  robotsTxt: taxationHubRobotsTxt,
+} = require("./lib/taxationhub-public-origin");
+const {
   normalizeCars,
   primaryActiveWorkUsePercent,
 } = require("./lib/profile-cars");
@@ -778,6 +787,8 @@ const app = express();
 // (and vice versa) so both can share this Express app.
 app.use(suiteWwwToApexRedirect);
 app.use(driverHubWwwToApexRedirect);
+app.use(taxationHubWwwToApexRedirect);
+app.use(taxationHubHaulageRedirect);
 app.use(nativeAppToHaulageRedirect);
 // Allowlisted CORS for Play / iOS WebViews and any cross-origin frontends.
 // Same-origin Render deploys need no CORS_ORIGINS. See lib/cors.js.
@@ -4897,10 +4908,10 @@ function sendLegalPage(fileName) {
 
 /** True when this request should get Go Taxation Suite marketing / legal HTML. */
 function serveSuitePublicPages(req, kind) {
-  if (kind === "haulage") return false;
+  if (kind === "haulage" || kind === "taxationhub") return false;
   if (kind === "suite") return true;
   const host = publicHostFromRequest(req);
-  if (isDriverHubOfficialHost(host)) return false;
+  if (isDriverHubOfficialHost(host) || isTaxationHubOfficialHost(host)) return false;
   return (
     suite.isStandaloneSuite() ||
     isSuiteOfficialHost(host) ||
@@ -4911,11 +4922,13 @@ function serveSuitePublicPages(req, kind) {
 function sendProductLegalPage(kind) {
   const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
   const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
+  const taxHubFile = kind === "privacy" ? "privacy-taxationhub.html" : "terms-taxationhub.html";
   return (req, res) => {
     const pathName = String((req.originalUrl || req.path || "").split("?")[0]);
     let file = hubFile;
     if (pathName.startsWith("/haulage")) file = hubFile;
     else if (pathName.startsWith("/suite")) file = suiteFile;
+    else if (isTaxationHubOfficialHost(publicHostFromRequest(req))) file = taxHubFile;
     else if (serveSuitePublicPages(req)) file = suiteFile;
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
@@ -4950,11 +4963,17 @@ const WELCOME_SHOTS_DIR = path.join(
 );
 const WELCOME_HUB_SHOTS_DIR = path.join(PUBLIC_DIR, "welcome-hub-shots");
 
+function isTaxationHubMarketingRequest(req, kind) {
+  if (kind === "taxationhub") return true;
+  if (kind === "haulage" || kind === "suite") return false;
+  return isTaxationHubOfficialHost(publicHostFromRequest(req));
+}
+
 function sendWelcomePage(kind) {
   return (req, res) => {
-    const file = serveSuitePublicPages(req, kind)
-      ? "welcome-suite.html"
-      : "welcome-driverhub.html";
+    let file = "welcome-driverhub.html";
+    if (isTaxationHubMarketingRequest(req, kind)) file = "welcome-taxationhub.html";
+    else if (serveSuitePublicPages(req, kind)) file = "welcome-suite.html";
     res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
@@ -4962,9 +4981,9 @@ function sendWelcomePage(kind) {
 
 function sendWelcomeSupport(kind) {
   return (req, res) => {
-    const file = serveSuitePublicPages(req, kind)
-      ? "welcome-support-suite.html"
-      : "welcome-support-driverhub.html";
+    let file = "welcome-support-driverhub.html";
+    if (isTaxationHubMarketingRequest(req, kind)) file = "welcome-support-taxationhub.html";
+    else if (serveSuitePublicPages(req, kind)) file = "welcome-support-suite.html";
     res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.join(PUBLIC_DIR, file));
   };
@@ -4975,7 +4994,9 @@ app.get(["/welcome.js"], sendLegalPage("welcome.js"));
 app.get("/truck.svg", sendLegalPage("truck.svg"));
 app.get("/welcome.json", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const product = serveSuitePublicPages(req) ? "suite" : "haulage";
+  let product = "haulage";
+  if (isTaxationHubOfficialHost(publicHostFromRequest(req))) product = "taxationhub";
+  else if (serveSuitePublicPages(req)) product = "suite";
   res.json(storeLinks.linksForProduct(product));
 });
 app.use(
@@ -4988,12 +5009,37 @@ app.use(
 );
 app.get(["/welcome-suite", "/welcome-suite.html"], sendWelcomePage("suite"));
 app.get(["/welcome-driverhub", "/welcome-driverhub.html"], sendWelcomePage("haulage"));
+app.get(["/welcome-taxationhub", "/welcome-taxationhub.html"], sendWelcomePage("taxationhub"));
+app.get("/welcome/taxhub-shots/:name", (req, res) => {
+  const name = String(req.params.name || "");
+  if (!TAXHUB_SHOT_FILES.includes(name)) {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=604800");
+  res.sendFile(name, { root: path.join(__dirname, "mobile", "store", "screenshots", "play-1080x1920") });
+});
 app.get(["/welcome", "/welcome.html"], sendWelcomePage());
 app.get(["/about", "/about.html"], (_req, res) => {
   res.redirect(302, "/#about");
 });
 app.get(["/welcome-support-suite"], sendWelcomeSupport("suite"));
 app.get(["/welcome-support-driverhub"], sendWelcomeSupport("haulage"));
+app.get(["/welcome-support-taxationhub"], sendWelcomeSupport("taxationhub"));
+app.get(["/privacy-taxationhub", "/privacy-taxationhub.html"], sendLegalPage("privacy-taxationhub.html"));
+app.get(["/terms-taxationhub", "/terms-taxationhub.html"], sendLegalPage("terms-taxationhub.html"));
+app.get("/robots.txt", (req, res, next) => {
+  if (!isTaxationHubApexHost(publicHostFromRequest(req))) return next();
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("text/plain");
+  res.send(taxationHubRobotsTxt());
+});
+app.get("/sitemap.xml", (req, res, next) => {
+  if (!isTaxationHubApexHost(publicHostFromRequest(req))) return next();
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/xml");
+  res.send(taxationHubSitemapXml());
+});
 app.get(["/support", "/support.html"], sendWelcomeSupport());
 app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
 app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {

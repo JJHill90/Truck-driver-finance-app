@@ -51,6 +51,14 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   `SUITE_APP_STORE_URL` (Suite host) or `DRIVERHUB_PLAY_STORE_URL` /
   `DRIVERHUB_APP_STORE_URL` (Driver Hub host); until then the buttons stay
   “Coming soon”.
+- **Go Taxation Hub marketing site.** `https://gotaxationhub.com/` (apex
+  canonical; `www` 301s once to the apex — add only the apex on Render or
+  the edge loops) is host-routed on `haulage-finance`, not a third service
+  and not on `go-taxation-suite`. Same overview layout as godriverhub.com
+  with Fuel Hub removed. Pages: `/`, `/support`, `/privacy`, `/terms`.
+  Open-app CTAs go to `https://godriverhub.com/haulage/?app=taxationhub`.
+  Do not change `APP_BASE_URL` (stays `https://godriverhub.com`). See
+  `docs/custom-domain-taxationhub.md`.
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
   shells, set `CORS_ORIGINS` (comma-separated) and/or `CORS_ALLOW_CAPACITOR=1`
   (`lib/cors.js`). Allowlisted origins get credentialed ACAO headers; session

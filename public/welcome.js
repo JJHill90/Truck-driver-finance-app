@@ -20,6 +20,7 @@
   const CROSS_ORIGIN = APP !== window.location.origin;
   const FETCH_CREDS = CROSS_ORIGIN ? "omit" : "same-origin";
   const isSuite = document.body.classList.contains("welcome-suite");
+  const isTaxHub = document.body.classList.contains("welcome-taxhub");
 
   const HELP_SHARED = {
     expenses: {
@@ -134,7 +135,21 @@
     },
   };
 
-  const HELP = isSuite ? SUITE_HELP : HUB_HELP;
+  // Go Taxation Hub marketing support: same tab guides, no Fuel Hub topic.
+  // Profile text must not point at Driver Hub or Fuel Hub. Shallow copy so
+  // HUB_HELP (godriverhub.com) stays intact.
+  const TAXHUB_HELP = Object.assign({}, HUB_HELP);
+  delete TAXHUB_HELP.fuelhub;
+  TAXHUB_HELP.profile = {
+    title: "Profile",
+    body: [
+      "Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle, and tick whether your TFN is with your employer.",
+      "New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro is $5/month or $60/year. Pro+ is complimentary full Pro from the primary mod. Paid plans are sold on the website via Stripe — not as in-app purchases.",
+      "Account tools cover email on file, password changes, Forgot username / password on the login screen, and Delete account (type DELETE and your password).",
+    ],
+  };
+
+  const HELP = isSuite ? SUITE_HELP : isTaxHub ? TAXHUB_HELP : HUB_HELP;
 
   function bindStore(selector, url) {
     document.querySelectorAll(selector).forEach((el) => {
@@ -157,7 +172,12 @@
     try {
       const res = await fetch(`${APP}/welcome.json`, { credentials: FETCH_CREDS });
       const data = await res.json();
+      const fixedApp = document.body && document.body.getAttribute("data-app-url");
       document.querySelectorAll("[data-welcome-app]").forEach((a) => {
+        if (fixedApp) {
+          a.href = fixedApp;
+          return;
+        }
         if (data.appUrl) a.href = absolutizeAppPath(data.appUrl, APP);
       });
       bindStore("#welcome-appstore, [data-store='appstore']", data.appStoreUrl);
@@ -262,7 +282,11 @@
     const email = form.email.value.trim();
     const phone = form.phone.value.trim();
     const typed = form.message.value.trim();
-    const source = isSuite ? "Go Taxation Suite website" : "Driver Hub website";
+    const source = isSuite
+      ? "Go Taxation Suite website"
+      : isTaxHub
+        ? "Go Taxation Hub website"
+        : "Driver Hub website";
     const message = `[Sent from the ${source}]\n\n${typed}`;
     const btn = document.getElementById("support-send");
     if (btn) btn.disabled = true;

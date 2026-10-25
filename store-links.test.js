@@ -47,4 +47,17 @@ describe("store listing URLs", () => {
     expect(links.playStoreUrl).toContain("com.haulagefinance.app");
     expect(links.appStoreUrl).toContain("apps.apple.com");
   });
+
+  it("points Go Taxation Hub marketing links at the Driver Hub app", () => {
+    const links = linksForProduct("taxationhub", {
+      SUITE_PLAY_STORE_URL: "https://play.google.com/store/apps/details?id=com.gotaxation.suite",
+      DRIVERHUB_PLAY_STORE_URL: "https://play.google.com/store/apps/details?id=com.haulagefinance.app",
+      DRIVERHUB_APP_STORE_URL: "https://apps.apple.com/app/driver-hub/id000",
+    });
+    expect(links.product).toBe("taxationhub");
+    expect(links.appUrl).toBe("https://godriverhub.com/haulage/?app=taxationhub");
+    expect(links.playStoreUrl).toContain("com.haulagefinance.app");
+    expect(links.appStoreUrl).toContain("apps.apple.com");
+    expect(links.playStoreUrl).not.toContain("gotaxation.suite");
+  });
 });
