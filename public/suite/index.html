@@ -645,8 +645,18 @@
           </div>
           <div class="panel pro-plus-pack" id="eofy-pro-plus-tools">
             <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-            <p class="muted">Read-only share link, a downloadable BAS/GST activity statement worksheet, and a multi-year tax pack. Pro+ adds a lodgement brief (payers, return labels, refund or payable, and gaps) that follows your registration type — PAYG employee, sole trader or partnership.</p>
+            <p class="muted">Taxpayer briefing mapped to individual-return labels for PAYG, sole trader or partnership, a lodgement brief on the EOFY statement, a read-only share link, a BAS/GST worksheet, and a multi-year tax pack for your agent.</p>
             <div class="form-grid">
+              <div class="span-2">
+                <h3 class="profile-section-title">Taxpayer briefing for your tax agent</h3>
+                <p class="muted small">Uses the Profile registration (employee, sole trader or partnership) and maps saved income and deductions to individual-return labels. Includes a still-needed checklist. Not a lodged return.</p>
+                <div class="form-actions">
+                  <button type="button" class="btn primary" id="accountant-pack-load">Show briefing</button>
+                  <button type="button" class="btn secondary" id="accountant-pack-pdf">Download PDF</button>
+                  <button type="button" class="btn secondary" id="accountant-pack-json">Download JSON</button>
+                </div>
+                <div id="accountant-pack-result" class="pro-plus-result muted"></div>
+              </div>
               <div class="span-2">
                 <h3 class="profile-section-title">Accountant share link</h3>
                 <p class="muted small">Creates a read-only EOFY pack they can open without logging in.</p>
@@ -1116,7 +1126,7 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./enhancements.js?v=direct-plus-1"></script>
+    <script src="./enhancements.js?v=accountant-pack-2"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=pro-plus-2"></script>
     <script src="./companion.js?v=companion-2"></script>

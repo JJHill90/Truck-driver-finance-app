@@ -91,6 +91,8 @@ const {
 const { writeJsonAtomic } = require("./lib/atomic-write");
 const { createAuthSupportRateLimiters } = require("./lib/rate-limit");
 const { buildReportPdf } = require("./lib/report-pdf");
+const { buildAccountantPack } = require("./lib/accountant-pack");
+const { buildAccountantPackPdf } = require("./lib/accountant-pack-pdf");
 const {
   buildDocumentFilename,
   labelAmountFromScan,
@@ -597,7 +599,7 @@ function assertProPlusFeature(req, res, feature) {
   const ent = resolveReqEntitlements(req);
   // Driver Hub Taxation: share / BAS / multi-year unlock with Pro (same price).
   // Suite keeps a separate Pro+ tier for those packs.
-  const haulageEofyPacks = new Set(["share", "bas", "year_compare"]);
+  const haulageEofyPacks = new Set(["share", "bas", "year_compare", "accountant_pack"]);
   if (productOf(req) !== "suite" && haulageEofyPacks.has(feature) && ent.isPro) {
     return ent;
   }
@@ -4442,7 +4444,25 @@ function buildSharePack(username, product, financialYear) {
   const owner = auth.getUserRecord(username);
   const ownerEnt = entitlements.resolveEntitlements(owner, scoped, new Date(), { product });
   attachLodgementBrief(report, scoped, profile, { product, entitlements: ownerEnt });
-  return { records: scoped, report, financialYear: fy, profile };
+  const briefing = buildAccountantPack(scoped, profile, {
+    product,
+    financialYear: fy,
+    summary: report.summary,
+  });
+  return { records: scoped, report, financialYear: fy, profile, briefing };
+}
+
+function buildReqAccountantPack(req) {
+  const raw = getActiveRecords(req);
+  const records = productOf(req) === "suite" ? scopedSuiteRecords(raw) : raw;
+  const fy = req.query.financialYear || req.query.fy || records.profile.financialYear;
+  const profile = profileFor(records, fy);
+  const summary = summariseFor(req, records, profile);
+  return buildAccountantPack(records, profile, {
+    product: productOf(req),
+    financialYear: fy,
+    summary,
+  });
 }
 
 // --- Pro+ extras: share, BAS, year pack, extra entity, partnership --------
@@ -4521,8 +4541,39 @@ api.get("/share/:token", (req, res) => {
       occupation: pack.profile.occupation || "",
     },
     report: pack.report,
+    briefing: pack.briefing,
     product: meta.product,
   });
+});
+
+api.get("/accountant-pack", (req, res) => {
+  if (!assertProPlusFeature(req, res, "accountant_pack")) return;
+  const download =
+    String(req.query.download || "") === "1" || String(req.query.download || "").toLowerCase() === "json";
+  const pack = buildReqAccountantPack(req);
+  if (download) {
+    const prefix = productOf(req) === "suite" ? "gotax" : "haulage";
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${prefix}-taxpayer-briefing-${pack.financialYear || "fy"}.json"`
+    );
+  }
+  res.json(pack);
+});
+
+api.get("/accountant-pack.pdf", (req, res) => {
+  if (!assertProPlusFeature(req, res, "accountant_pack")) return;
+  const pack = buildReqAccountantPack(req);
+  const prefix = productOf(req) === "suite" ? "gotax" : "haulage";
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${prefix}-taxpayer-briefing-${pack.financialYear || "fy"}.pdf"`
+  );
+  const doc = buildAccountantPackPdf(pack);
+  doc.pipe(res);
+  doc.end();
 });
 
 function buildReqBasPack(req) {

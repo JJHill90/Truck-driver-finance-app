@@ -3943,8 +3943,18 @@
     panel.id = "eofy-pro-plus-tools";
     panel.innerHTML = `
       <div class="panel-header"><h2>Accountant packs (Pro+)</h2></div>
-      <p class="muted">Read-only share link, a downloadable BAS/GST activity statement worksheet (ATO boxes G1, 1A, G11, 1B, 9), and a multi-year tax pack. Pro+ adds a lodgement brief (payers, return labels, refund/payable, gaps) that follows the Profile registration type — PAYG employee, sole trader or partnership. Share, BAS and year-compare are included with Pro on Taxation Hub — same price, no extra tier.</p>
+      <p class="muted">Taxpayer briefing mapped to individual-return labels, a lodgement brief on the EOFY statement, a read-only share link, a BAS/GST worksheet, and a multi-year tax pack. Share, BAS and year-compare are included with Pro on Taxation Hub — same price, no extra tier.</p>
       <div class="form-grid">
+        <div class="span-2">
+          <h3 class="profile-section-title">Taxpayer briefing for your tax agent</h3>
+          <p class="muted small">Uses the Profile driver type (PAYG employee or owner-driver) and maps saved income and deductions to individual-return labels. Includes a still-needed checklist. Not a lodged return.</p>
+          <div class="form-actions">
+            <button type="button" class="btn primary" id="accountant-pack-load">Show briefing</button>
+            <button type="button" class="btn secondary" id="accountant-pack-pdf">Download PDF</button>
+            <button type="button" class="btn secondary" id="accountant-pack-json">Download JSON</button>
+          </div>
+          <div id="accountant-pack-result" class="pro-plus-result muted"></div>
+        </div>
         <div class="span-2">
           <h3 class="profile-section-title">Accountant share link</h3>
           <div class="form-actions">
@@ -4224,6 +4234,212 @@
           }
         } catch (err) {
           if (window.toast) window.toast(err.message || "Could not load tax pack");
+        }
+      });
+    }
+
+    function packQueryString() {
+      const fySel = byId("fy-select");
+      const fy = fySel && fySel.value ? fySel.value : "";
+      return fy ? `?financialYear=${encodeURIComponent(fy)}` : "";
+    }
+
+    function promptPackUpgrade(e) {
+      const plan = upgradePlanForPacks(cachedEntitlements);
+      if (!plan) return false;
+      if (e) e.preventDefault();
+      promptPaidFeature({
+        error:
+          plan === "pro_plus"
+            ? "The taxpayer briefing for your tax agent is included with Pro+."
+            : `The taxpayer briefing for your tax agent is included with Pro (${fallbackMonthlyPrice()} or ${fallbackYearlyPrice()}).`,
+        code: plan === "pro_plus" ? "PRO_PLUS_REQUIRED" : "PRO_REQUIRED",
+        plan,
+        entitlements: cachedEntitlements,
+      });
+      return true;
+    }
+
+    function renderAccountantBriefing(pack) {
+      const el = byId("accountant-pack-result");
+      if (!el) return;
+      el.classList.remove("muted");
+      const id = pack.identity || {};
+      const reg = pack.registration || {};
+      const income = pack.income || {};
+      const deductions = pack.deductions || {};
+      const totals = pack.totals || {};
+      const payg = pack.payg || {};
+      const travel = pack.travel || {};
+      const checklist = pack.checklist || {};
+      const payable =
+        payg.direction === "refund"
+          ? `Estimated refund ${moneyAud(payg.refundEstimate)}`
+          : payg.direction === "pay"
+            ? `Estimated tax payable ${moneyAud(totals.taxPayable)}`
+            : `Tax payable ${moneyAud(totals.taxPayable)}`;
+      const identityBits = [
+        ["Registration", reg.label],
+        ["Name", id.name],
+        ["Occupation", id.occupation || reg.driverTypeLabel],
+        reg.id === "employee" ? ["Employer", id.employer] : null,
+        reg.id === "sole_trader" ? ["Trading name", id.tradingName || id.employer] : null,
+        reg.id === "sole_trader" || reg.id === "partnership" ? ["ABN", id.abn] : null,
+        reg.id === "partnership" ? ["Partnership", id.partnershipName] : null,
+        reg.id === "partnership" ? ["Your share", id.partnerSharePercent != null ? `${id.partnerSharePercent}%` : ""] : null,
+        id.gstRegistered ? ["GST", "Registered"] : null,
+        id.licenceClass ? ["Licence", String(id.licenceClass).toUpperCase()] : null,
+      ]
+        .filter((row) => row && row[1])
+        .map((row) => `<div><span>${esc(row[0])}</span><br>${esc(row[1])}</div>`)
+        .join("");
+      const incRows = (income.items || [])
+        .map(
+          (row) =>
+            `<tr><td>Item ${esc(row.item)}</td><td>${esc(row.label)}</td><td>${esc(moneyAud(row.assessableTotal))}</td></tr>`
+        )
+        .join("");
+      const dedRows = (deductions.schedules || [])
+        .map(
+          (row) =>
+            `<tr><td>${esc(row.id)}</td><td>${esc(row.label)}</td><td>${esc(moneyAud(row.deductibleTotal))}</td></tr>`
+        )
+        .join("");
+      const payerRows = (income.payers || [])
+        .map(
+          (row) =>
+            `<tr><td>${esc(row.payer)}</td><td>${esc(moneyAud(row.assessableTotal))}</td><td>${esc(moneyAud(row.paygWithheld))}</td></tr>`
+        )
+        .join("");
+      const checkRows = (checklist.items || [])
+        .map((item) => {
+          const status = item.status === "have" ? "Have" : item.status === "missing" ? "Missing" : "Ask";
+          return `<tr class="briefing-status-${esc(item.status)}"><td>${esc(status)}</td><td>${esc(item.label)}</td><td>${esc(item.detail)}</td></tr>`;
+        })
+        .join("");
+      const notes = (pack.agentNotes || []).map((n) => `<li>${esc(n)}</li>`).join("");
+      const cars = (id.cars || [])
+        .map(
+          (c) =>
+            `${[c.make, c.model, c.registration].filter(Boolean).join(" ")}${
+              c.workUsePercent != null ? ` · ${c.workUsePercent}% work-use` : ""
+            }${c.active ? " · Active" : ""}`
+        )
+        .filter(Boolean)
+        .join("; ");
+      el.innerHTML = `
+        <div class="accountant-briefing">
+          <div class="bas-worksheet-banner">${esc(pack.disclaimer || "Prepared for a registered tax agent. Not a lodged return.")}</div>
+          <div class="bas-worksheet-meta">${identityBits}</div>
+          ${cars ? `<p class="bas-worksheet-note">Work cars: ${esc(cars)}</p>` : ""}
+          <div class="bas-worksheet-meta">
+            <div><span>Assessable income</span><br>${esc(moneyAud(totals.assessableIncome))}</div>
+            <div><span>Deductions</span><br>${esc(moneyAud(totals.deductibleExpenses))}</div>
+            <div><span>Taxable income</span><br>${esc(moneyAud(totals.taxableIncome))}</div>
+            <div><span>PAYG withheld</span><br>${esc(moneyAud(totals.paygWithheld))}</div>
+            <div><span>Estimated tax</span><br>${esc(moneyAud(totals.estimatedTax))}</div>
+            <div><span>Balance</span><br>${esc(payable)}</div>
+          </div>
+          ${
+            travel.daysClaimed
+              ? `<p class="bas-worksheet-note">Work travel / LAFHA days: ${esc(String(travel.daysClaimed))}${
+                  travel.determination ? ` · ${esc(travel.determination)}` : ""
+                }</p>`
+              : ""
+          }
+          <h4 class="profile-section-title">Income (individual-return labels)</h4>
+          <table class="bas-worksheet-table">
+            <thead><tr><th>Item</th><th>Label</th><th>Assessable</th></tr></thead>
+            <tbody>${incRows || `<tr><td colspan="3">No income recorded for this year.</td></tr>`}</tbody>
+          </table>
+          ${income.note ? `<p class="bas-worksheet-note">${esc(income.note)}</p>` : ""}
+          ${
+            payerRows
+              ? `<table class="bas-worksheet-table"><thead><tr><th>Payer</th><th>Assessable</th><th>PAYG</th></tr></thead><tbody>${payerRows}</tbody></table>`
+              : ""
+          }
+          <h4 class="profile-section-title">Deductions (ATO schedule)</h4>
+          <table class="bas-worksheet-table">
+            <thead><tr><th>Schedule</th><th>Label</th><th>Deductible</th></tr></thead>
+            <tbody>${dedRows || `<tr><td colspan="3">No deductions recorded for this year.</td></tr>`}</tbody>
+          </table>
+          ${deductions.note ? `<p class="bas-worksheet-note">${esc(deductions.note)}</p>` : ""}
+          <h4 class="profile-section-title">Still needed from the taxpayer</h4>
+          <table class="bas-worksheet-table">
+            <thead><tr><th>Status</th><th>Item</th><th>Detail</th></tr></thead>
+            <tbody>${checkRows}</tbody>
+          </table>
+          ${notes ? `<ol class="bas-worksheet-steps">${notes}</ol>` : ""}
+        </div>`;
+    }
+
+    async function downloadAccountantPackFile(path, fallbackName) {
+      const url = `${API}${path}${packQueryString()}`;
+      const res = await fetch(url, { credentials: "same-origin" });
+      if (res.status === 402) {
+        const data = await res.json().catch(() => ({}));
+        promptPaidFeature({
+          error: data.error || "The taxpayer briefing is included with a paid plan.",
+          code: data.code,
+          plan: data.plan || upgradePlanForPacks(cachedEntitlements) || "pro",
+          entitlements: data.entitlements || cachedEntitlements,
+        });
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Download failed");
+      }
+      const blob = await res.blob();
+      const match = /filename="([^"]+)"/i.exec(res.headers.get("content-disposition") || "");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = match ? match[1] : fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    }
+
+    const packBtn = byId("accountant-pack-load");
+    if (packBtn && !packBtn.dataset.wired) {
+      packBtn.dataset.wired = "1";
+      packBtn.addEventListener("click", async (e) => {
+        if (promptPackUpgrade(e)) return;
+        try {
+          const pack = await apiGet(`/accountant-pack${packQueryString()}`);
+          if (pack.error) throw new Error(pack.error);
+          renderAccountantBriefing(pack);
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Could not load taxpayer briefing");
+        }
+      });
+    }
+    const packPdfBtn = byId("accountant-pack-pdf");
+    if (packPdfBtn && !packPdfBtn.dataset.wired) {
+      packPdfBtn.dataset.wired = "1";
+      packPdfBtn.addEventListener("click", async (e) => {
+        if (promptPackUpgrade(e)) return;
+        if (window.toast) window.toast("Preparing taxpayer briefing PDF…");
+        try {
+          await downloadAccountantPackFile("/accountant-pack.pdf", "taxpayer-briefing.pdf");
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Briefing PDF download failed");
+        }
+      });
+    }
+    const packJsonBtn = byId("accountant-pack-json");
+    if (packJsonBtn && !packJsonBtn.dataset.wired) {
+      packJsonBtn.dataset.wired = "1";
+      packJsonBtn.addEventListener("click", async (e) => {
+        if (promptPackUpgrade(e)) return;
+        if (window.toast) window.toast("Preparing taxpayer briefing JSON…");
+        try {
+          const qs = packQueryString();
+          const join = qs ? "&" : "?";
+          await downloadAccountantPackFile(`/accountant-pack${qs}${join}download=1`, "taxpayer-briefing.json");
+        } catch (err) {
+          if (window.toast) window.toast(err.message || "Briefing JSON download failed");
         }
       });
     }

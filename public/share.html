@@ -94,6 +94,28 @@
         <h2>Ask the taxpayer</h2>
         <ul class="share-list" id="share-questions"></ul>
       </div>
+      <div class="share-card" id="share-identity-card" hidden>
+        <h2>Identity from Profile</h2>
+        <div class="share-grid" id="share-identity"></div>
+      </div>
+      <div class="share-card" id="share-income-card" hidden>
+        <h2>Income (individual-return labels)</h2>
+        <p class="share-muted" id="share-income-note"></p>
+        <div id="share-income"></div>
+      </div>
+      <div class="share-card" id="share-deductions-card" hidden>
+        <h2>Deductions (ATO schedule)</h2>
+        <p class="share-muted" id="share-deductions-note"></p>
+        <div id="share-deductions"></div>
+      </div>
+      <div class="share-card" id="share-checklist-card" hidden>
+        <h2>Still needed from the taxpayer</h2>
+        <div id="share-checklist"></div>
+      </div>
+      <div class="share-card" id="share-notes-card" hidden>
+        <h2>Notes for the registered agent</h2>
+        <ul class="share-list" id="share-notes"></ul>
+      </div>
     </div>
     <script>
       function money(n) {
@@ -201,6 +223,67 @@
             .map((g) => `<li><strong>Gap:</strong> ${esc(g.message)}</li>`)
             .concat((brief.questions || []).map((q) => `<li>${esc(q)}</li>`))
             .join("");
+        }
+        const briefing = data.briefing || null;
+        if (briefing) {
+          const identity = briefing.identity || {};
+          const reg = briefing.registration || {};
+          const identityRows = [
+            ["Registration", reg.label],
+            ["Name", identity.name],
+            ["Occupation", identity.occupation || reg.driverTypeLabel],
+            ["Employer", identity.employer],
+            ["Trading name", identity.tradingName],
+            ["Partnership", identity.partnershipName],
+            ["Share %", identity.partnershipName ? `${identity.partnerSharePercent}%` : ""],
+            ["ABN", identity.abn],
+            ["GST", identity.gstRegistered ? "Registered" : ""],
+            ["Licence", identity.licenceClass],
+          ]
+            .filter((row) => row[1])
+            .map((row) => stat(row[0], row[1]))
+            .join("");
+          if (identityRows) {
+            document.getElementById("share-identity-card").hidden = false;
+            document.getElementById("share-identity").innerHTML = identityRows;
+          }
+          const income = briefing.income || {};
+          document.getElementById("share-income-note").textContent = income.note || "";
+          document.getElementById("share-income").innerHTML = `<table class="share-mini"><thead><tr><th>Item</th><th>Label</th><th class="num">Assessable</th></tr></thead><tbody>${
+            (income.items || [])
+              .map(
+                (row) =>
+                  `<tr><td>Item ${esc(row.item)}</td><td>${esc(row.label)}</td><td class="num">${money(row.assessableTotal)}</td></tr>`
+              )
+              .join("") || "<tr><td colspan=\"3\">No income recorded.</td></tr>"
+          }</tbody></table>`;
+          document.getElementById("share-income-card").hidden = false;
+          const deductions = briefing.deductions || {};
+          document.getElementById("share-deductions-note").textContent = deductions.note || "";
+          document.getElementById("share-deductions").innerHTML = `<table class="share-mini"><thead><tr><th>Schedule</th><th>Label</th><th class="num">Deductible</th></tr></thead><tbody>${
+            (deductions.schedules || [])
+              .map(
+                (row) =>
+                  `<tr><td>${esc(row.id)}</td><td>${esc(row.label)}</td><td class="num">${money(row.deductibleTotal)}</td></tr>`
+              )
+              .join("") || "<tr><td colspan=\"3\">No deductions recorded.</td></tr>"
+          }</tbody></table>`;
+          document.getElementById("share-deductions-card").hidden = false;
+          const check = briefing.checklist || {};
+          document.getElementById("share-checklist").innerHTML = `<table class="share-mini"><thead><tr><th>Status</th><th>Item</th><th>Detail</th></tr></thead><tbody>${
+            (check.items || [])
+              .map((item) => {
+                const status = item.status === "have" ? "Have" : item.status === "missing" ? "Missing" : "Ask";
+                return `<tr><td>${esc(status)}</td><td>${esc(item.label)}</td><td>${esc(item.detail)}</td></tr>`;
+              })
+              .join("")
+          }</tbody></table>`;
+          document.getElementById("share-checklist-card").hidden = false;
+          const notes = (briefing.agentNotes || []).map((n) => `<li>${esc(n)}</li>`).join("");
+          if (notes) {
+            document.getElementById("share-notes-card").hidden = false;
+            document.getElementById("share-notes").innerHTML = notes;
+          }
         }
       })();
     </script>
