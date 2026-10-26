@@ -56,7 +56,8 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   the edge loops) is host-routed on `haulage-finance`, not a third service
   and not on `go-taxation-suite`. Same overview layout as godriverhub.com
   with Fuel Hub removed. Pages: `/`, `/support`, `/privacy`, `/terms`.
-  Open-app CTAs go to `https://godriverhub.com/haulage/?app=taxationhub`.
+  Copy names Go Taxation Hub (Taxation Hub for the driver app).
+  Open-app CTAs still go to `https://godriverhub.com/haulage/?app=taxationhub`.
   Do not change `APP_BASE_URL` (stays `https://godriverhub.com`). See
   `docs/custom-domain-taxationhub.md`.
 - **CORS (Play / iOS).** Same-origin web needs no CORS. For cross-origin store
