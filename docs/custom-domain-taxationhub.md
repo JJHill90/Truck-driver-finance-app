@@ -41,6 +41,12 @@ Screenshots are the existing Taxation Hub Play captures, served from
 
 ## Open the app
 
+Visible copy names **Go Taxation Hub** (Taxation Hub for the driver app)
+and says it is part of the Driver Hub slate of apps, currently the first
+built for the drivers by the drivers. The buttons are labelled **Open
+DriverHub** and still open the Driver Hub app, which is the standalone
+sign-in.
+
 Taxation Hub has no origin of its own. Sign-in is the Driver Hub login at
 `/haulage/`. After a session exists, the shell opens Taxation Hub when
 `localStorage.driverhub-selected-app` is `taxationhub` (legacy

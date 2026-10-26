@@ -100,7 +100,10 @@ describe("marketing overview pages", () => {
 
   it("Go Taxation Hub overview keeps the Driver Hub layout and drops Fuel Hub", () => {
     expect(taxHtml).toMatch(/Go Taxation Hub/);
-    expect(taxHtml).toMatch(/Try it in the browser/);
+    expect(taxHtml).toMatch(/Taxation Hub for the driver app/);
+    expect(taxHtml).toMatch(/part of the Driver Hub slate of\s+apps/);
+    expect(taxHtml).toMatch(/first to be\s+built for the drivers by the drivers/);
+    expect(taxHtml).toMatch(/>Open DriverHub</);
     expect(taxHtml).toMatch(/href="https:\/\/godriverhub\.com\/haulage\/\?app=taxationhub"/);
     expect(taxHtml).toMatch(/id="welcome-appstore"/);
     expect(taxHtml).toMatch(/id="welcome-play"/);
@@ -114,7 +117,6 @@ describe("marketing overview pages", () => {
     expect(taxHtml).not.toMatch(/01-login\.png/);
     expect(taxHtml).not.toMatch(/Fuel Hub/i);
     expect(taxHtml).not.toMatch(/fuelhub/i);
-    expect(taxHtml).not.toMatch(/Driver Hub/);
     expect(taxHtml).toMatch(/rel="canonical" href="https:\/\/gotaxationhub\.com\/"/);
     expect(taxHtml).toMatch(/property="og:url" content="https:\/\/gotaxationhub\.com\/"/);
     expect(taxHtml).toMatch(
@@ -128,9 +130,13 @@ describe("marketing overview pages", () => {
       expect(html).toMatch(/support@godriverhub\.com/);
       expect(html).not.toMatch(/Fuel Hub/i);
       expect(html).not.toMatch(/fuelhub/i);
-      expect(html).not.toMatch(/Driver Hub/);
+      expect(html).toMatch(/part of the Driver Hub slate of\s+apps/);
+      expect(html).toMatch(/first to be\s+built for the drivers by the drivers/);
       expect(html).toMatch(/https:\/\/gotaxationhub\.com\//);
     }
+    expect(taxSupport).toMatch(/Taxation Hub for the driver app/);
+    expect(taxPrivacy).toMatch(/Taxation Hub for the driver app/);
+    expect(taxTerms).toMatch(/Taxation Hub for the driver app/);
     expect(taxSupport).toMatch(/id="support-contact-form"/);
     expect(taxSupport).toMatch(/How each tab works/);
     expect(taxSupport).toMatch(/FAQ/);
@@ -284,8 +290,11 @@ describe("marketing overview HTTP", () => {
     expect(home.status).toBe(200);
     expect(home.location).toBeNull();
     expect(home.text).toMatch(/Go Taxation Hub/);
+    expect(home.text).toMatch(/Taxation Hub for the driver app/);
+    expect(home.text).toMatch(/https:\/\/godriverhub\.com\/haulage\/\?app=taxationhub/);
+    expect(home.text).toMatch(/>Open DriverHub</);
+    expect(home.text).toMatch(/part of the Driver Hub slate of\s+apps/);
     expect(home.text).not.toMatch(/Fuel Hub/i);
-    expect(home.text).not.toMatch(/Driver Hub/);
     expect(home.text).toMatch(/rel="canonical" href="https:\/\/gotaxationhub\.com\/"/);
 
     const support = await get(server, "/support", apex);
