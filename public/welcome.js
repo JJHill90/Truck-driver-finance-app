@@ -184,7 +184,7 @@
       bindStore("#welcome-play, [data-store='play']", data.playStoreUrl);
       const note = document.getElementById("welcome-store-note");
       const storeName = isTaxHub ? "Taxation Hub" : "the app";
-      const storeOpen = isTaxHub ? "open Taxation Hub in your browser" : "open it in your browser";
+      const storeOpen = isTaxHub ? "open DriverHub in your browser" : "open it in your browser";
       if (note && data.appStoreUrl && data.playStoreUrl) {
         note.textContent = `Get ${storeName} on the App Store or Google Play, or ${storeOpen}.`;
       } else if (note && data.appStoreUrl) {
