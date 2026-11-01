@@ -16,7 +16,7 @@ Compile **only** this listing:
 
 Do not submit Go Taxation Suite (`com.gotaxation.suite` / `mobile-suite/`) from this pack.
 
-The Play package must load **`https://godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). `www.godriverhub.com` only redirects to the apex. This release is **versionCode 4 / `1.0.3`**. It opens the apex `/haulage/` directly (`curl -sI https://godriverhub.com/haulage/` is 200; see `docs/custom-domain-driverhub.md`). Play Console privacy and terms use `https://godriverhub.com/privacy` and `https://godriverhub.com/terms`. The same pages are also inside the app at `/haulage/privacy` and `/haulage/terms`. In the WebView, a tap on `/privacy`, `/terms`, or `/support` is sent to those `/haulage/…` pages so the marketing site stays in the browser.
+The Play package must load **`https://godriverhub.com/haulage/`** (Driver Hub login + Taxation Hub / Fuel Hub) — the same “go straight to the service” pattern as Suite’s `/suite/`. Do **not** point the WebView at `https://godriverhub.com/` (marketing homepage), and do **not** use `www.gotaxation.com.au` (that host does not exist). `www.godriverhub.com` only redirects to the apex. This release is **versionCode 5 / `1.0.4`**. It opens the apex `/haulage/` directly (`curl -sI https://godriverhub.com/haulage/` is 200; see `docs/custom-domain-driverhub.md`). Play Console privacy and terms use `https://godriverhub.com/privacy` and `https://godriverhub.com/terms`. The same pages are also inside the app at `/haulage/privacy` and `/haulage/terms`. In the WebView, a tap on `/privacy`, `/terms`, or `/support` is sent to those `/haulage/…` pages so the marketing site stays in the browser.
 
 Build Driver Hub from this repo’s **`mobile/`** folder (`com.haulagefinance.app`). Do not open the Suite Android Studio project (`mobile-suite/` or a local `comgotaxationsuite` tree).
 
@@ -42,7 +42,7 @@ Still required **outside this repo**:
 | Public Privacy + Terms (Driver Hub) | Live | `https://godriverhub.com/privacy` and `https://godriverhub.com/terms` |
 | Public Support | Live | `https://godriverhub.com/support` |
 | Public marketing overview | Live | `https://godriverhub.com/` |
-| Play version for this release | `versionCode` 4 / `1.0.3` | `mobile/android/app/build.gradle` |
+| Play version for this release | `versionCode` 5 / `1.0.4` | `mobile/android/app/build.gradle` |
 | In-app account deletion | Done | Profile → Delete account |
 | Hide Stripe checkout in the native shell | Done | `enhancements.js` `isNativeShell()` |
 | Play feature graphic 1024×500 | Done | `mobile/store/feature-graphic-1024x500.png` |
@@ -60,7 +60,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 4 / `1.0.3`). Always sync **before** the bundle. Use the **same upload keystore** already registered for `com.haulagefinance.app`. Keep it offline and out of git. This repository has no keystore and no GitHub Action that builds an AAB, so the signed file is produced only on that machine. Android Studio writes it under `mobile/android/app/build/outputs/bundle/release/app-release.aab` (or the folder you pick in the wizard). Upload that `.aab`. Confirm the bundle is versionCode **4**, versionName **1.0.3**. Do not upload a build that opened Chrome, the marketing homepage, or `www.gotaxation.com.au`.
+**Build → Generate Signed Bundle** (`versionCode` 5 / `1.0.4`). Always sync **before** the bundle. Use the **same upload keystore** already registered for `com.haulagefinance.app`. Keep it offline and out of git. This repository has no keystore and no GitHub Action that builds an AAB, so the signed file is produced only on that machine. Android Studio writes it under `mobile/android/app/build/outputs/bundle/release/app-release.aab` (or the folder you pick in the wizard). Upload that `.aab`. Confirm the bundle is versionCode **5**, versionName **1.0.4**. Do not upload a build that opened Chrome, the marketing homepage, or `www.gotaxation.com.au`. Confirm the merged manifest has no `READ_MEDIA_IMAGES` grant (the app manifest uses `tools:node="remove"`).
 
 Then in Play Console for `com.haulagefinance.app`:
 
@@ -68,7 +68,7 @@ Then in Play Console for `com.haulagefinance.app`:
 2. Upload the AAB to **Internal testing**, install on a phone, confirm login — then Production (or closed testing first).
 3. Privacy policy = `https://godriverhub.com/privacy`
 4. Data safety (answers below)
-5. Photo/video permission: camera and photos are for receipt capture only; not required (file upload works)
+5. Photo and video permissions: do **not** submit a broad-access declaration for `READ_MEDIA_IMAGES`. The Android photo picker fully supports this app. Drivers photograph one receipt or payslip with the in-app camera (`CAMERA` only) or choose one file with the system picker. Upload versionCode **5** so Play stops seeing the old permission. If the form is already open, leave the “why the picker is not enough” box empty and remove the permission instead of explaining a need the app does not have.
 6. IARC content rating (finance / tools — typically Everyone / PEGI 3)
 7. Store listing: copy below. Screenshots: `mobile/store/screenshots/play-1080x1920/`. Feature graphic: `mobile/store/feature-graphic-1024x500.png`. High-res icon: `mobile/store/icon-play-512.png`. Marketing URL: `https://godriverhub.com/`
 8. After the listing is live, set `DRIVERHUB_PLAY_STORE_URL` on `haulage-finance` so the overview Play button goes live.
@@ -86,12 +86,12 @@ Play Console URLs for this listing:
 | Support / contact website | `https://godriverhub.com/support` |
 | Marketing | `https://godriverhub.com/` |
 
-## Release notes (Play “What’s new”, versionCode 4 / 1.0.3)
+## Release notes (Play “What’s new”, versionCode 5 / 1.0.4)
 
 Paste for en-AU (under 500 characters):
 
 ```text
-Opens Driver Hub at https://godriverhub.com/haulage/. www.godriverhub.com redirects to that site. Store links: privacy https://godriverhub.com/privacy, terms https://godriverhub.com/terms, support https://godriverhub.com/support.
+Opens Driver Hub at https://godriverhub.com/haulage/. Receipt and payslip photos are taken in the app or chosen one at a time with the system photo picker. The app does not ask for your whole photo library. Privacy https://godriverhub.com/privacy, terms https://godriverhub.com/terms, support https://godriverhub.com/support.
 ```
 
 ## App Links

@@ -90,8 +90,8 @@ Do this on service **`haulage-finance`** only. Leave DNS and email alone.
 10. Play Console / App Store, after the checks below are green: privacy
     `https://godriverhub.com/privacy`, terms `https://godriverhub.com/terms`,
     support `https://godriverhub.com/support`, marketing
-    `https://godriverhub.com/`. The Play shell to upload is **versionCode 4**
-    (`1.0.3`) from `mobile/` — see
+    `https://godriverhub.com/`. The Play shell to upload is **versionCode 5**
+    (`1.0.4`) from `mobile/` — see
     [`store-listing-driverhub.md`](store-listing-driverhub.md). It opens
     `https://godriverhub.com/haulage/` directly. Builds already in the store
     still open `www` `/haulage/`. Render 301s that www URL to the apex

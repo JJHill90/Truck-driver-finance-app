@@ -80,7 +80,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 7 / `1.0.6`). Keep the
+**Build → Generate Signed Bundle** (`versionCode` 8 / `1.0.7`). Keep the
 keystore **out of git**. A navy thumbnail that never becomes the login
 form is the WebView not reaching `/suite/` (Capacitor was proxying HTML
 through Java, which fails on Cloudflare / a cold Render box). Upload this
@@ -94,8 +94,13 @@ Then in Play Console for `com.gotaxation.suite`:
    (fallback `https://go-taxation-suite.onrender.com/privacy` until DNS/TLS
    on the official domain is verified — see `docs/custom-domain.md`)
 3. Data safety (answers below)
-4. Photo/video permission: camera and photos are for receipt capture only;
-   not required (file upload works)
+4. Photo and video permissions: do **not** submit a broad-access declaration
+   for `READ_MEDIA_IMAGES`. The Android photo picker fully supports this app.
+   Drivers photograph one receipt or payslip with the in-app camera
+   (`CAMERA` only) or choose one file with the system picker. Upload
+   versionCode **8** so Play stops seeing the old permission. If the form is
+   already open, leave the “why the picker is not enough” box empty and
+   remove the permission instead of explaining a need the app does not have.
 5. IARC content rating (finance / tools — typically Everyone / PEGI 3)
 6. Store listing: copy below. Screenshots:
    `mobile-suite/store/screenshots/play-1080x1920/`. Feature graphic:
@@ -118,7 +123,7 @@ Then in Play Console for `com.gotaxation.suite`:
    **Check if a link is deep linked** — full app URL:
    `https://go-taxation-suite.onrender.com/suite/`
    That only passes after Play has processed an AAB whose intent-filter
-   includes the onrender host (`versionCode` 7).
+   includes the onrender host (`versionCode` 8).
 
    Official domain later: Add domain `gotaxationsuite.com` only when
    `https://gotaxationsuite.com/.well-known/assetlinks.json` returns 200.
