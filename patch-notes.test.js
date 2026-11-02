@@ -30,8 +30,8 @@ describe("Driver Hub patch notes", () => {
   const label = formatVersionLabel(HAULAGE_PR_NUMBER);
 
   it("publishes this version with the new bullets and the support contact", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(207);
-    expect(label).toBe("Version 4.03");
+    expect(HAULAGE_PR_NUMBER).toBe(208);
+    expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
     expect(notes[0].prNumber).toBe(HAULAGE_PR_NUMBER);
     expect(notes[0].label).toBe(label);
