@@ -125,7 +125,19 @@ describe("fuel assessment", () => {
     expect(assessment.safety.safetyRatio).toBeGreaterThan(1);
     expect(assessment.safety.reserveMarginL).toBeGreaterThan(0);
     expect(["ok", "watch", "slim", "stranded"]).toContain(assessment.safety.safetyStatus);
-    expect(assessment.distance.varianceKm).not.toBeNull();
+    expect(assessment.distance.varianceKm).toBe(30);
+  });
+
+  it("counts extra GPS kilometres past the planned distance as variance", () => {
+    const assessment = buildAssessment({
+      store: {
+        truck,
+        lastPlan: { origin: "Sydney", destination: "Melbourne", distanceKm: 50 },
+        trips: [],
+        activeTrack: { km: 62, points: [] },
+      },
+    });
+    expect(assessment.distance.varianceKm).toBe(12);
   });
 
   it("marks a short remaining hop as slim when the tank cannot cover 1.3× the distance", () => {
