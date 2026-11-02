@@ -713,13 +713,15 @@ table.income-ledger .tag.tag-reconciled {
   box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45);
 }
 .btn.ledger-reconcile-btn {
-  background: var(--reconcile);
-  color: var(--reconcile-ink);
+  /* Brighter, more saturated than --reconcile so the action reads on navy. */
+  background: #3ef0b0;
+  color: #042016;
   border: 1px solid transparent;
+  font-weight: 800;
 }
 .btn.ledger-reconcile-btn:hover:not(:disabled) {
-  background: var(--reconcile-strong);
-  color: var(--reconcile-ink);
+  background: #6ff6c4;
+  color: #042016;
 }
 .tag.tag-deleted {
   color: #450a0a;
@@ -861,6 +863,23 @@ table.income-ledger .tag.tag-reconciled {
   gap: 10px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+/* Matches the amber left edge on a selected edit field (--accent). */
+.enh-ledger-edit-foot .ledger-edit-continue {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-weight: 800;
+}
+.enh-ledger-edit-foot .ledger-edit-continue:hover:not(:disabled) {
+  background: var(--accent-strong);
+  color: #fff;
+}
+.enh-ledger-edit-foot .ledger-edit-continue:disabled {
+  background: var(--accent);
+  color: #fff;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .enh-ledger-edit-foot .ledger-edit-save-btn {
   background: var(--panel-2);
@@ -1534,8 +1553,47 @@ table.data th, table.data td { text-align: left; padding: 9px 10px; border-botto
 table.data th { color: var(--text-dim); font-weight: 600; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
 table.data td.amount, table.data th:last-child { text-align: right; }
 table.data tfoot td { border-top: 2px solid var(--border); }
+table.expense-ledger td,
+table.income-ledger td {
+  font-weight: 600;
+  color: #f7fafc;
+}
+table.expense-ledger td.amount,
+table.income-ledger td.amount { font-weight: 700; }
+table.expense-ledger .income-mini-title,
+table.income-ledger .income-mini-title { font-weight: 700; color: #f7fafc; }
+table.expense-ledger .income-mini-breakdown,
+table.income-ledger .income-mini-breakdown { font-weight: 600; color: #f7fafc; }
 .amount { font-variant-numeric: tabular-nums; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+/* Row actions were sitting on the navy panel. 50% brighter than --panel-2 (#1c2b47 → #2a416b). */
+table.expense-ledger .row-actions .btn,
+table.income-ledger .row-actions .btn {
+  font-weight: 800;
+}
+table.expense-ledger .row-actions .btn.secondary,
+table.income-ledger .row-actions .btn.secondary {
+  background: #2a416b;
+  border-color: #5b7ab8;
+  color: #fff;
+}
+table.expense-ledger .row-actions .btn.secondary:hover,
+table.income-ledger .row-actions .btn.secondary:hover {
+  background: #3d5c96;
+  color: #fff;
+}
+table.expense-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled),
+table.income-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled) {
+  background: #ff4b4b;
+  color: #fff;
+  border-color: transparent;
+}
+table.expense-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled):hover,
+table.income-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled):hover {
+  background: #ff2a2a;
+  filter: none;
+  color: #fff;
+}
 .draft-row { opacity: 0.75; }
 .out-of-period { opacity: 0.55; }
 .just-added { background: rgba(52, 211, 153, 0.12); }

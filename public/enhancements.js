@@ -9285,7 +9285,7 @@
               <p class="muted small enh-ledger-edit-count" data-edit-count></p>
               <div class="enh-dup-actions">
                 <button type="button" class="btn secondary" data-edit-close>Cancel</button>
-                <button type="button" class="btn" data-edit-continue>Continue</button>
+                <button type="button" class="btn ledger-edit-continue" data-edit-continue>Continue</button>
               </div>
             </div>
           </div>
