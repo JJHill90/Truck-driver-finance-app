@@ -3075,6 +3075,24 @@ tr.vending-machine-row {
   font-size: 0.75rem;
   line-height: 1.3;
 }
+.fuelhub-assessment .fuelhub-stats {
+  margin-bottom: 10px;
+}
+.fuelhub-stat.is-ok {
+  border-color: color-mix(in srgb, var(--green, #34d399) 45%, var(--border));
+}
+.fuelhub-stat.is-ok strong {
+  color: var(--green, #34d399);
+}
+.fuelhub-stat.is-warn {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.fuelhub-stat.is-danger {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+}
+.fuelhub-stat.is-danger strong {
+  color: var(--red);
+}
 .fuelhub-stop {
   border: 1px solid var(--border);
   border-radius: 12px;

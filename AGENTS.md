@@ -76,9 +76,15 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
 -   **Fuel Hub.** `GET/POST /api/haulage/fuelhub*` (`lib/fuel-*.js`, `lib/fuelhub-store.js`,
   `lib/fuel-dashboard.js`, `lib/fuel-forecast.js`, `public/fuelhub.js`). Sidebar: Profile (same Driver Hub
   identity as Taxation Hub), Dashboard, Forecast, Plan fills, GPS, Truck & load, cards and
-  prices. Dashboard summarises the current planned/GPS run, previous saved trips,
+  prices.   Dashboard summarises the current planned/GPS run, previous saved trips,
   and cheapest truck-access diesel in the current area from NHVR corridor sites
   plus ACCC / FuelWatch / FuelCheck-style public tables (cards come off after).
+  **Run assessment** (`lib/fuel-assessment.js`, Dashboard + GPS) tracks
+  average and instantaneous L/100 km, litres used on the current track,
+  trip km vs planned remaining, distance variance, reserve volumetric margin,
+  distance-to-empty, fuel safety ratio (DTE / remaining; under 1.3 is slim),
+  and idle/auxiliary litres from stationary GPS. These are planning estimates
+  from the truck model plus GPS — not an ECU fuel-map.
   **Forecast** is the live-fueling counterpart of Taxation Hub Forecast:
   Conservative / Baseline / Optimistic L/km from freight tonnes, diesel mass in
   the tanks, and hours on the road (slower loaded running lifts litres). Averages
