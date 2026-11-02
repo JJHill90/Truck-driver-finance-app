@@ -130,7 +130,7 @@ const {
   hostFromRequest: publicHostFromRequest,
   officialPageUrl: suiteOfficialPageUrl,
 } = require("./lib/suite-public-origin");
-const { renderPatchNotesPage } = require("./lib/patch-notes-page");
+const { renderPatchNotesPage } = require("./lib/suite-patch-notes-page");
 const {
   wwwToApexRedirect: driverHubWwwToApexRedirect,
   nativeAppToHaulageRedirect,
@@ -5060,10 +5060,12 @@ app.get("/sitemap.xml", (req, res, next) => {
 });
 app.get(["/support", "/support.html"], sendWelcomeSupport());
 app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
-app.get(
-  ["/updates", "/updates.html", "/patch-notes", "/patch-notes.html"],
-  sendSuitePatchNotes
-);
+app.get(["/updates", "/updates.html"], sendSuitePatchNotes);
+app.get(["/patch-notes", "/patch-notes.html"], (req, res, next) => {
+  // Driver Hub owns /patch-notes on its own host. Suite keeps it as an alias.
+  if (!serveSuitePublicPages(req)) return next();
+  sendSuitePatchNotes(req, res);
+});
 app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {
   if (suite.isStandaloneSuite()) return next();
   sendWelcomeSupport("haulage")(req, res);

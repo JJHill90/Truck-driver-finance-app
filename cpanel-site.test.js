@@ -39,7 +39,7 @@ describe("cPanel static preview site", () => {
     expect(index).not.toMatch(/Driver Hub/i);
     expect(fs.existsSync(path.join(dir, "support.html"))).toBe(true);
     const updates = fs.readFileSync(path.join(dir, "updates.html"), "utf8");
-    expect(updates).toMatch(/Version 4\.03/);
+    expect(updates).toMatch(/Version 4\.05/);
     expect(updates).toMatch(/id="support-contact-form"/);
     expect(updates).toMatch(/href="updates.html"/);
     expect(updates).not.toMatch(/Driver Hub/i);

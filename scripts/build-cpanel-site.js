@@ -10,7 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const { renderPatchNotesPage } = require("../lib/patch-notes-page");
+const { renderPatchNotesPage } = require("../lib/suite-patch-notes-page");
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "cpanel-site");
 const PUBLIC = path.join(ROOT, "public");
