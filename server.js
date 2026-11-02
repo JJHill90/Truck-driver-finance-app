@@ -838,6 +838,13 @@ app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
 
+// Android WebView will replay a cached GET of /records or /receipts/:id and
+// keep showing the pre-raster extraction after the server has finished.
+api.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 /** Multipart scan uploads (Firefox-friendly alternative to giant JSON base64). */
 const scanUpload = multer({
   storage: multer.memoryStorage(),
@@ -5051,12 +5058,23 @@ app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));
 });
 
+function appShellStatic(root) {
+  return express.static(root, {
+    setHeaders(res, filePath) {
+      if (/\.(?:html|js|css)$/i.test(filePath)) {
+        res.setHeader("Cache-Control", "no-store");
+      }
+    },
+  });
+}
+
 app.get(["/suite", "/suite/"], redirectSuiteToSibling, (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));
 });
 app.use("/suite", redirectSuiteToSibling);
-app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
-app.use("/suite", express.static(PUBLIC_DIR));
+app.use("/suite", appShellStatic(path.join(PUBLIC_DIR, "suite")));
+app.use("/suite", appShellStatic(PUBLIC_DIR));
 
 // --- Static UI at /haulage (Driver Hub) ---------------------------------
 // Dedicated Go Taxation Suite hosts (APP_PRODUCT=suite) send / and /haulage
@@ -5073,8 +5091,11 @@ if (suite.isStandaloneSuite()) {
     res.redirect(302, `/suite${rest}`);
   });
 } else {
-  app.use("/haulage", express.static(PUBLIC_DIR));
-  app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+  app.use("/haulage", appShellStatic(PUBLIC_DIR));
+  app.get("/haulage", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+  });
 }
 app.get("/", sendWelcomePage());
 

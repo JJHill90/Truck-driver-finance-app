@@ -80,7 +80,7 @@ npx cap sync android
 npx cap open android
 ```
 
-**Build → Generate Signed Bundle** (`versionCode` 8 / `1.0.7`). Keep the
+**Build → Generate Signed Bundle** (`versionCode` 9 / `1.0.8`). Keep the
 keystore **out of git**. A navy thumbnail that never becomes the login
 form is the WebView not reaching `/suite/` (Capacitor was proxying HTML
 through Java, which fails on Cloudflare / a cold Render box). Upload this
@@ -98,7 +98,7 @@ Then in Play Console for `com.gotaxation.suite`:
    for `READ_MEDIA_IMAGES`. The Android photo picker fully supports this app.
    Drivers photograph one receipt or payslip with the in-app camera
    (`CAMERA` only) or choose one file with the system picker. Upload
-   versionCode **8** so Play stops seeing the old permission. If the form is
+   versionCode **9** so Play stops seeing the old permission. If the form is
    already open, leave the “why the picker is not enough” box empty and
    remove the permission instead of explaining a need the app does not have.
 5. IARC content rating (finance / tools — typically Everyone / PEGI 3)
@@ -123,7 +123,7 @@ Then in Play Console for `com.gotaxation.suite`:
    **Check if a link is deep linked** — full app URL:
    `https://go-taxation-suite.onrender.com/suite/`
    That only passes after Play has processed an AAB whose intent-filter
-   includes the onrender host (`versionCode` 8).
+   includes the onrender host (`versionCode` 9).
 
    Official domain later: Add domain `gotaxationsuite.com` only when
    `https://gotaxationsuite.com/.well-known/assetlinks.json` returns 200.
