@@ -14,6 +14,7 @@ Attach **`https://godriverhub.com/`** as a custom domain on Render service
 | Privacy | `https://godriverhub.com/privacy` |
 | Terms | `https://godriverhub.com/terms` |
 | Support | `https://godriverhub.com/support` |
+| Patch notes | `https://godriverhub.com/patch-notes` |
 | Stripe webhook | `https://godriverhub.com/api/haulage/billing/webhook` |
 
 Use **HTTPS**. The `http://` form will not keep session cookies, Stripe
@@ -23,6 +24,18 @@ after DNS verifies.
 Do **not** attach this domain to Go Taxation Suite (`go-taxation-suite`).
 Accounts stay on Driver Hub disk `haulage-data`. Suite stays on
 `https://gotaxationsuite.com/` — see [`custom-domain.md`](custom-domain.md).
+
+## Patch notes
+
+`https://godriverhub.com/patch-notes` is the public Driver Hub changelog
+(also `localhost` on a Hub process). It is not served when `APP_PRODUCT=suite`,
+and not on `gotaxationsuite.com` or `gotaxationhub.com`.
+
+Future Driver Hub changes: bump `HAULAGE_PR_NUMBER` in `lib/version.js`,
+then append one entry in `lib/patch-notes.js` for that same PR number.
+The page shows `formatVersionLabel` (Version .N / 1.00 ladder). Summarise
+only what that change did. Do not invent older fixes, and do not add this
+page to Go Taxation Suite.
 
 ## Redirect loop (apex ↔ www)
 

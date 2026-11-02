@@ -456,3 +456,7 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
  `Version .1`…`Version .50`; next → `Version 1.00`, then `1.01`…`1.50`,
  then rounds to `2.00`, then `2.01`…`2.50` → `3.00`, and so on (after 1.00
  each major includes minors `.00`–`.50` before the next whole number).
+ Driver Hub public patch notes are `/patch-notes` (`lib/patch-notes.js`),
+ Hub host and localhost only — not Suite, not gotaxationhub.com. When a
+ Driver Hub change bumps `HAULAGE_PR_NUMBER`, append one entry there with
+ that version label. See `docs/custom-domain-driverhub.md`.

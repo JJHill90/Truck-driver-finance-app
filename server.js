@@ -123,6 +123,7 @@ const billingStripe = require("./lib/billing-stripe");
 const accountDelete = require("./lib/account-delete");
 const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
+const patchNotes = require("./lib/patch-notes");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
   wwwToApexRedirect: suiteWwwToApexRedirect,
@@ -5046,6 +5047,17 @@ app.get("/sitemap.xml", (req, res, next) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
   res.type("application/xml");
   res.send(taxationHubSitemapXml());
+});
+// Driver Hub public changelog. Hub process only — not APP_PRODUCT=suite,
+// not gotaxationsuite.com, not gotaxationhub.com. Notes live in lib/patch-notes.js.
+app.get(["/patch-notes", "/patch-notes.html"], (req, res) => {
+  if (!patchNotes.shouldServeDriverHubPatchNotes(req)) {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html");
+  res.send(patchNotes.renderPage());
 });
 app.get(["/support", "/support.html"], sendWelcomeSupport());
 app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
