@@ -29,8 +29,9 @@ describe("Driver Hub store listing assets", () => {
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/terms/);
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/support/);
     expect(listing).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
-    expect(listing).toMatch(/versionCode 4/);
-    expect(listing).toMatch(/1\.0\.3/);
+    expect(listing).toMatch(/versionCode 6/);
+    expect(listing).toMatch(/1\.0\.5/);
+    expect(listing).toMatch(/do \*\*not\*\* submit a broad-access declaration/);
     expect(listing).not.toMatch(/https:\/\/www\.godriverhub\.com/);
     expect(listing).toMatch(/gotaxation\.com\.au/);
     expect(listing).toMatch(/marketing site/);
@@ -101,6 +102,8 @@ describe("Driver Hub store listing assets", () => {
     expect(main).not.toMatch(/https:\/\/www\.godriverhub\.com\/haulage\//);
     expect(main).toMatch(/SplashScreen\.installSplashScreen/);
     expect(main).toMatch(/DriverHubApp/);
+    expect(main).toMatch(/LOAD_NO_CACHE/);
+    expect(main).toMatch(/clearCache\(true\)/);
     expect(main).toMatch(/url\.contains\("\/haulage"\)/);
     const plugin = fs.readFileSync(
       path.join(hubAndroid, "src/main/java/com/haulagefinance/app/HubNavigationPlugin.java"),
@@ -117,13 +120,18 @@ describe("Driver Hub store listing assets", () => {
     const manifest = fs.readFileSync(path.join(hubAndroid, "src/main/AndroidManifest.xml"), "utf8");
     expect(manifest).not.toMatch(/android:autoVerify/);
     expect(manifest).not.toMatch(/android.intent.action.VIEW/);
+    expect(manifest).toMatch(/android\.permission\.CAMERA"/);
+    expect(manifest).toMatch(/android\.permission\.READ_MEDIA_IMAGES" tools:node="remove"/);
+    expect(manifest).toMatch(/android\.permission\.READ_EXTERNAL_STORAGE" tools:node="remove"/);
+    expect(manifest).not.toMatch(/READ_MEDIA_IMAGES" \/>/);
+    expect(manifest).not.toMatch(/READ_EXTERNAL_STORAGE" android:maxSdkVersion/);
     const launcher = fs.readFileSync(path.join(hubAndroid, "src/main/assets/public/index.html"), "utf8");
     expect(launcher).toMatch(/https:\/\/godriverhub\.com\/haulage\//);
     expect(launcher).not.toMatch(/https:\/\/www\.godriverhub\.com/);
     expect(launcher).toMatch(/Try again/);
     const gradle = fs.readFileSync(path.join(hubAndroid, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 4/);
-    expect(gradle).toMatch(/versionName "1\.0\.3"/);
+    expect(gradle).toMatch(/versionCode 6/);
+    expect(gradle).toMatch(/versionName "1\.0\.5"/);
   });
 });
 
@@ -135,6 +143,8 @@ describe("Suite store listing assets", () => {
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/support/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\/\.well-known\/assetlinks\.json/);
     expect(listing).toMatch(/https:\/\/go-taxation-suite\.onrender\.com\/suite\//);
+    expect(listing).toMatch(/do \*\*not\*\* submit a broad-access declaration/);
+    expect(listing).toMatch(/versionCode \*\*9\*\*/);
     expect(listing).toMatch(/https:\/\/gotaxationsuite\.com\//);
     const cap = JSON.parse(fs.readFileSync(CAP_CONFIG, "utf8"));
     expect(cap.server.url).toBeUndefined();
@@ -260,14 +270,22 @@ describe("Suite Android launch shell", () => {
     expect(main).toMatch(/setKeepOnScreenCondition/);
     expect(main).toMatch(/https:\/\/go-taxation-suite\.onrender\.com\/suite\//);
     expect(main).toMatch(/openHostedSuite/);
+    expect(main).toMatch(/LOAD_NO_CACHE/);
+    expect(main).toMatch(/clearCache\(true\)/);
     expect(plugin).toMatch(/shouldOverrideLoad/);
     expect(plugin).toMatch(/go-taxation-suite\.onrender\.com/);
   });
 
   it("bumps the Play versionCode so testers can install the rebuild", () => {
     const gradle = fs.readFileSync(path.join(androidApp, "build.gradle"), "utf8");
-    expect(gradle).toMatch(/versionCode 7/);
-    expect(gradle).toMatch(/versionName "1\.0\.6"/);
+    expect(gradle).toMatch(/versionCode 9/);
+    expect(gradle).toMatch(/versionName "1\.0\.8"/);
+    const manifest = fs.readFileSync(path.join(androidApp, "src/main/AndroidManifest.xml"), "utf8");
+    expect(manifest).toMatch(/android\.permission\.CAMERA"/);
+    expect(manifest).toMatch(/android\.permission\.READ_MEDIA_IMAGES" tools:node="remove"/);
+    expect(manifest).toMatch(/android\.permission\.READ_EXTERNAL_STORAGE" tools:node="remove"/);
+    expect(manifest).not.toMatch(/READ_MEDIA_IMAGES" \/>/);
+    expect(manifest).not.toMatch(/READ_EXTERNAL_STORAGE" android:maxSdkVersion/);
   });
 });
 

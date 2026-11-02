@@ -576,6 +576,21 @@
         setFormFieldValue(form, "description", o.description);
         if (o.date) setFormFieldValue(form, "date", o.date);
       }
+      const title = document.querySelector("#income-scan-result .income-mini-title");
+      const entityEl = document.getElementById("income-confirm-entity");
+      if (title && entityEl && !isScanFieldDirty(entityEl)) {
+        title.textContent = o.entity || o.vendor || "Entity / company";
+      }
+      const mini = document.querySelectorAll("#income-scan-result .income-mini-row strong");
+      if (mini[0] && o.grossTotal != null) mini[0].textContent = fmt(o.grossTotal);
+      if (mini[1] && (primary || o.netPay)) mini[1].textContent = fmt(primary || o.netPay);
+    } else {
+      setScanFieldValue("scan-confirm-vendor", o.vendor || o.entity);
+      setScanFieldValue("scan-confirm-amount", primary || o.amount);
+      setScanFieldValue("scan-confirm-description", o.description);
+      setScanFieldValue("scan-confirm-abn", o.vendorAbn);
+      if (o.suggestedCategory) setScanFieldValue("scan-confirm-category", o.suggestedCategory);
+      if (o.date) setScanFieldValue("scan-confirm-date", o.date);
     }
     if (data && data.componentBreakdown) {
       latest = {
@@ -593,17 +608,39 @@
     }
   }
 
-  async function pollDeferredScanOcr(receiptId, purpose) {
+  let deferredScanPollToken = 0;
+
+  function stopDeferredScanPoll() {
+    deferredScanPollToken += 1;
+  }
+
+  function scheduleDeferredScanPoll(receiptId, purpose) {
     if (!receiptId) return;
-    for (let i = 0; i < 8; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+    const token = ++deferredScanPollToken;
+    // The 30s quiet window only blocks refreshAll. That full reload freezes
+    // Android. The reader fields follow the server without waiting for it.
+    setTimeout(() => {
+      if (token !== deferredScanPollToken) return;
+      void pollDeferredScanOcr(receiptId, purpose, token);
+    }, 700);
+  }
+
+  async function pollDeferredScanOcr(receiptId, purpose, token) {
+    if (!receiptId) return;
+    const mine = token == null ? deferredScanPollToken : token;
+    for (let i = 0; i < 60; i += 1) {
+      if (mine !== deferredScanPollToken) return;
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (mine !== deferredScanPollToken) return;
       try {
         const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
           credentials: "same-origin",
+          cache: "no-store",
         });
         if (!res.ok) continue;
         const data = await res.json();
         if (!data || data.ocrPending) continue;
+        if (mine !== deferredScanPollToken) return;
         applyDeferredScanOcr(data, purpose);
         return;
       } catch {
@@ -1367,10 +1404,7 @@
               }, 1500);
             }
             if (data.ocrPending && data.receipt && data.receipt.id) {
-              const waitMs = Math.max(800, Number(window.__haulageQuietUntil) - Date.now() + 400);
-              setTimeout(() => {
-                void pollDeferredScanOcr(data.receipt.id, purpose);
-              }, Number.isFinite(waitMs) ? waitMs : 2500);
+              scheduleDeferredScanPoll(data.receipt.id, purpose);
             }
           }
 
@@ -2530,6 +2564,7 @@
 
   async function confirmIncomePdfScan(receiptId, confirmed) {
     const box = document.getElementById("income-scan-result");
+    stopDeferredScanPoll();
     window.__haulageBlockRefreshAll = 0;
     window.__haulageSkipNextRefreshAll = false;
     if (!confirmed) {
@@ -2667,6 +2702,9 @@
       await yieldToUi();
       await new Promise((resolve) => setTimeout(resolve, 80));
       if (box) paintIncomePdfConfirm(box, data, blob.name || file.name);
+      if (data.ocrPending && data.receipt && data.receipt.id) {
+        scheduleDeferredScanPoll(data.receipt.id, "income");
+      }
       if (typeof window.toast === "function") {
         window.toast("Income summary ready — approve before saving");
       }
@@ -9247,7 +9285,7 @@
               <p class="muted small enh-ledger-edit-count" data-edit-count></p>
               <div class="enh-dup-actions">
                 <button type="button" class="btn secondary" data-edit-close>Cancel</button>
-                <button type="button" class="btn" data-edit-continue>Continue</button>
+                <button type="button" class="btn ledger-edit-continue" data-edit-continue>Continue</button>
               </div>
             </div>
           </div>
