@@ -10,6 +10,7 @@
 const fs = require("fs");
 const path = require("path");
 
+const { renderPatchNotesPage } = require("../lib/patch-notes-page");
 const ROOT = path.join(__dirname, "..");
 const OUT = path.join(ROOT, "cpanel-site");
 const PUBLIC = path.join(ROOT, "public");
@@ -32,6 +33,8 @@ function rewriteHtml(html, origin) {
   out = out.replace(/href="\/privacy(?:\.html)?"/g, 'href="privacy.html"');
   out = out.replace(/href="\/terms(?:\.html)?"/g, 'href="terms.html"');
   out = out.replace(/href="\/support(?:\.html)?"/g, 'href="support.html"');
+  out = out.replace(/href="\/updates(?:\.html)?"/g, 'href="updates.html"');
+  out = out.replace(/href="\/patch-notes(?:\.html)?"/g, 'href="updates.html"');
   out = out.replace(/href="\/welcome-support-suite"/g, 'href="support.html"');
   out = out.replace(/href="\/welcome-suite(?:\.html)?"/g, 'href="index.html"');
   out = out.replace(/href="\/#about"/g, 'href="index.html#about"');
@@ -71,6 +74,8 @@ RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 RewriteRule ^support/?$ support.html [L]
+RewriteRule ^updates/?$ updates.html [L]
+RewriteRule ^patch-notes/?$ updates.html [L]
 RewriteRule ^privacy/?$ privacy.html [L]
 RewriteRule ^terms/?$ terms.html [L]
 RewriteRule ^about/?$ index.html [L]
@@ -92,6 +97,7 @@ function build(env = process.env, outDir = OUT) {
     const html = fs.readFileSync(path.join(PUBLIC, srcName), "utf8");
     fs.writeFileSync(path.join(outDir, destName), rewriteHtml(html, origin));
   }
+  fs.writeFileSync(path.join(outDir, "updates.html"), rewriteHtml(renderPatchNotesPage(), origin));
 
   copyFile(path.join(PUBLIC, "welcome.css"), path.join(outDir, "welcome.css"));
   copyFile(path.join(PUBLIC, "welcome.js"), path.join(outDir, "welcome.js"));

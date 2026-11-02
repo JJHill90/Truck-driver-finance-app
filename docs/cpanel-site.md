@@ -98,6 +98,7 @@ After upload:
 
 - `https://gotaxationsuite.com/` → preview (About, shots, store buttons)
 - `https://gotaxationsuite.com/support` → contact form + FAQ
+- `https://gotaxationsuite.com/updates` → patch notes for each shipped version
 - `https://gotaxationsuite.com/privacy` and `/terms`
 - **Open the app** → `https://go-taxation-suite.onrender.com/suite/`
 

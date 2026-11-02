@@ -38,6 +38,11 @@ describe("cPanel static preview site", () => {
     expect(index).toMatch(/href="https:\/\/go-taxation-suite\.onrender\.com\/suite\/"/);
     expect(index).not.toMatch(/Driver Hub/i);
     expect(fs.existsSync(path.join(dir, "support.html"))).toBe(true);
+    const updates = fs.readFileSync(path.join(dir, "updates.html"), "utf8");
+    expect(updates).toMatch(/Version 4\.03/);
+    expect(updates).toMatch(/id="support-contact-form"/);
+    expect(updates).toMatch(/href="updates.html"/);
+    expect(updates).not.toMatch(/Driver Hub/i);
     expect(fs.existsSync(path.join(dir, "privacy.html"))).toBe(true);
     expect(fs.existsSync(path.join(dir, "terms.html"))).toBe(true);
     expect(fs.existsSync(path.join(dir, "welcome.js"))).toBe(true);
@@ -45,6 +50,7 @@ describe("cPanel static preview site", () => {
     const ht = fs.readFileSync(path.join(dir, ".htaccess"), "utf8");
     expect(ht).toMatch(/Options -Indexes/);
     expect(ht).toMatch(/RewriteRule \^support/);
+    expect(ht).toMatch(/RewriteRule \^updates/);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

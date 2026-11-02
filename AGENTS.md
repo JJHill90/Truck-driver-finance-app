@@ -452,7 +452,10 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   vehicle profile, not this preset.
 - **Version label** sits under the Support button (sidebar bottom-left) and on
  the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
- Bump `HAULAGE_PR_NUMBER` with each new PR. Display ladder: PR 1–50 →
+ Bump `HAULAGE_PR_NUMBER` with each new PR, and add that release as the
+ first entry in `lib/patch-notes.js` (same PR number, point-form summary of
+ what shipped). That list is the public Updates page at
+ `https://gotaxationsuite.com/updates`. Display ladder: PR 1–50 →
  `Version .1`…`Version .50`; next → `Version 1.00`, then `1.01`…`1.50`,
  then rounds to `2.00`, then `2.01`…`2.50` → `3.00`, and so on (after 1.00
  each major includes minors `.00`–`.50` before the next whole number).
