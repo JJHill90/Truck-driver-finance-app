@@ -155,7 +155,10 @@ describe("ledger edit modal", () => {
     expect(css).toMatch(/\.ledger-edit-continue[\s\S]*color:\s*#fff/);
     expect(css).toMatch(/table\.expense-ledger td[\s\S]*font-weight:\s*600/);
     expect(css).toMatch(/row-actions \.btn\.secondary[\s\S]*background:\s*#2a416b/);
-    expect(css).toMatch(/row-actions \.btn\.danger:not\(\.is-locked\)[\s\S]*background:\s*#ff4b4b/);
+    expect(css).toMatch(/row-actions \.btn[\s\S]*font-weight:\s*700/);
+    expect(css).toMatch(/row-actions \.btn\.secondary[\s\S]*color:\s*var\(--text\)/);
+    expect(css).toMatch(/row-actions \.btn\.danger:not\(\.is-locked\)[\s\S]*background:\s*#ff7171/);
+    expect(css).toMatch(/row-actions \.btn\.danger:not\(\.is-locked\)[\s\S]*color:\s*var\(--text\)/);
     expect(css).toMatch(/\.btn\.ledger-reconcile-btn[\s\S]*background:\s*#3ef0b0/);
     expect(src).toMatch(/data-edit-select-all/);
     expect(src).toMatch(/function selectedLedgerPayload/);

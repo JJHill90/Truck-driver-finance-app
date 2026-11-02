@@ -1566,33 +1566,38 @@ table.expense-ledger .income-mini-breakdown,
 table.income-ledger .income-mini-breakdown { font-weight: 600; color: #f7fafc; }
 .amount { font-variant-numeric: tabular-nums; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-/* Row actions were sitting on the navy panel. 50% brighter than --panel-2 (#1c2b47 → #2a416b). */
+/* Row actions were sitting on the navy panel. 50% brighter than --panel-2 (#1c2b47 → #2a416b).
+   Labels match Refresh invoice dates: --text at the same 700 weight and small size. */
 table.expense-ledger .row-actions .btn,
 table.income-ledger .row-actions .btn {
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 5px 10px;
+  color: var(--text);
 }
 table.expense-ledger .row-actions .btn.secondary,
 table.income-ledger .row-actions .btn.secondary {
   background: #2a416b;
   border-color: #5b7ab8;
-  color: #fff;
+  color: var(--text);
 }
 table.expense-ledger .row-actions .btn.secondary:hover,
 table.income-ledger .row-actions .btn.secondary:hover {
   background: #3d5c96;
-  color: #fff;
+  color: var(--text);
 }
+/* #ff4b4b × 1.5, channels clamped — a brighter red, same label as the header buttons. */
 table.expense-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled),
 table.income-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled) {
-  background: #ff4b4b;
-  color: #fff;
+  background: #ff7171;
+  color: var(--text);
   border-color: transparent;
 }
 table.expense-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled):hover,
 table.income-ledger .row-actions .btn.danger:not(.is-locked):not(:disabled):hover {
-  background: #ff2a2a;
+  background: #ff8f8f;
   filter: none;
-  color: #fff;
+  color: var(--text);
 }
 .draft-row { opacity: 0.75; }
 .out-of-period { opacity: 0.55; }
