@@ -33,8 +33,8 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(216);
-    expect(notes[0].label).toBe("Version 4.12");
+    expect(notes[0].prNumber).toBe(217);
+    expect(notes[0].label).toBe("Version 4.13");
     expect(notes[0].bullets.join("\n")).toMatch(/centre of the amber frame/);
     expect(notes[0].bullets.join("\n")).toMatch(/camera's own pixels/);
     const liveReload = notes.find((note) => note.prNumber === 215);
