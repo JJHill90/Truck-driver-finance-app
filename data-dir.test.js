@@ -82,11 +82,19 @@ describe("data-dir binds writers to the persistent disk", () => {
       }, null, 2)
     );
 
+    fs.mkdirSync(path.join(ephemeral, "receipts"), { recursive: true });
+    fs.mkdirSync(path.join(disk, "receipts"), { recursive: true });
+    fs.writeFileSync(path.join(ephemeral, "receipts", "old-invoice.jpg"), "photo-bytes");
+    fs.writeFileSync(path.join(disk, "receipts", "already.jpg"), "keep");
+
     const adopted = dataDir.adoptFrom(ephemeral, disk);
     expect(adopted.copied).toBe("skipped-dest-richer");
+    expect(adopted.receiptsMerged).toBe(1);
     const users = JSON.parse(fs.readFileSync(path.join(disk, "users.json"), "utf8"));
     expect(users.users.pat).toBeTruthy();
     expect(users.users.demo).toBeTruthy();
+    expect(fs.readFileSync(path.join(disk, "receipts", "old-invoice.jpg"), "utf8")).toBe("photo-bytes");
+    expect(fs.readFileSync(path.join(disk, "receipts", "already.jpg"), "utf8")).toBe("keep");
   });
 
   it("counts accounts for /version storage diagnostics", () => {

@@ -54,6 +54,8 @@ const recordsHistory = require("./lib/records-history");
 const adminAssist = require("./lib/admin-assist");
 const { moveEntries } = require("./lib/ledger-move");
 const storage = require("./lib/storage");
+const receiptFiles = require("./lib/receipt-files");
+receiptFiles.installPersistentReceiptStore(storage);
 const auth = require("./lib/auth");
 const { calcExpenseDeduction, summariseYear, buildAccountantReport } = require("./lib/tax-calculator");
 const { decorateAccountantReport } = require("./lib/report-branding");
@@ -5147,12 +5149,23 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
-  const storage = dataDir.adoptAndBind();
+  const storageInfo = dataDir.adoptAndBind();
   console.log(
-    `Storage: ${storage.dataDir} (source=${storage.source}, mounted=${storage.mounted}, accounts=${storage.accountCount})`
+    `Storage: ${storageInfo.dataDir} (source=${storageInfo.source}, mounted=${storageInfo.mounted}, accounts=${storageInfo.accountCount})`
   );
-  backup
-    .restoreLatestIfStoreEmpty()
+  receiptFiles
+    .collectMissingReceiptFiles()
+    .then((report) => {
+      if (report && (report.copied || report.restored)) {
+        console.log(
+          `Receipts: kept ${report.copied} file(s) from a previous folder and restored ${report.restored} from backups into ${report.dir}`
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn("Receipt file recovery skipped:", err.message);
+    })
+    .then(() => backup.restoreLatestIfStoreEmpty())
     .then((restored) => {
       if (restored && restored.restored) {
         console.log(`Restored profiles from backup ${restored.id} after empty data dir`);

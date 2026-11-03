@@ -33,12 +33,15 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(208);
-    expect(notes[0].label).toBe(label);
-    expect(notes[0].bullets.join("\n")).toMatch(/public Driver Hub patch notes page at \/patch-notes/);
-    expect(notes[0].bullets.join("\n")).toMatch(/same version label the app shows/);
-    expect(notes[0].bullets.join("\n")).toMatch(/support@godriverhub\.com/);
-    expect(notes[0].bullets.join("\n")).toMatch(/first public entry/);
+    expect(notes[0].prNumber).toBe(211);
+    expect(notes[0].label).toBe("Version 4.07");
+    expect(notes[0].bullets.join("\n")).toMatch(/photos stay saved/);
+    const first = notes.find((note) => note.prNumber === 208);
+    expect(first && first.label).toBe(label);
+    expect(first.bullets.join("\n")).toMatch(/public Driver Hub patch notes page at \/patch-notes/);
+    expect(first.bullets.join("\n")).toMatch(/same version label the app shows/);
+    expect(first.bullets.join("\n")).toMatch(/support@godriverhub\.com/);
+    expect(first.bullets.join("\n")).toMatch(/first public entry/);
 
     const html = patchNotes.renderPage();
     expect(html).toContain(label);
