@@ -273,6 +273,10 @@ describe("fuel hub dashboard", () => {
     expect(dash.previousJourneys[0].destination).toBe("Mount Isa");
     expect(dash.journeyStats.tripCount).toBe(1);
     expect(dash.journeyStats.totalFillL).toBe(900);
+    expect(dash.assessment.efficiency.averageLPer100km).toBeGreaterThan(0);
+    expect(dash.assessment.safety.rangeKm).toBeGreaterThan(0);
+    expect(dash.assessment.distance.targetKind).toBe("destination");
+    expect(dash.assessment.distance.targetRemainingKm).toBe(840);
   });
 
   it("does not list car-only 7-Eleven Craigieburn as a B-double deal", () => {

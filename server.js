@@ -160,6 +160,7 @@ const hubProfile = require("./lib/hub-profile");
 const fuelDashboard = require("./lib/fuel-dashboard");
 const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 const fuelForecast = require("./lib/fuel-forecast");
+const fuelAssessment = require("./lib/fuel-assessment");
 const fuelReceipts = require("./lib/fuel-receipts");
 const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
@@ -1624,11 +1625,17 @@ api.post("/fuelhub/track", (req, res) => {
     return;
   }
   try {
-    const { store } = fuelhubState(req);
+    const { store, hub } = fuelhubState(req);
     const track = fuelhubStore.appendTrack(store, req.body || {});
     persist(req, { reason: "fuelhub-track" });
-    const efficiency = fuelEfficiency.describeEfficiency(store.truck);
-    const remainingKm = Math.max(0, efficiency.rangeKm - (track.km || 0));
+    const efficiency = fuelEfficiency.describeEfficiency(store.truck, {
+      driverType: hub.driverType,
+    });
+    const assessment = fuelAssessment.buildAssessment({ store, hub, efficiency });
+    const remainingKm =
+      assessment.safety && assessment.safety.rangeKm != null
+        ? assessment.safety.rangeKm
+        : efficiency.rangeKm;
     res.json({
       track: {
         id: track.id,
@@ -1637,8 +1644,9 @@ api.post("/fuelhub/track", (req, res) => {
         updatedAt: track.updatedAt,
         pointCount: (track.points || []).length,
       },
-      remainingKm: Math.round(remainingKm * 10) / 10,
+      remainingKm: Math.round(Number(remainingKm) * 10) / 10,
       efficiency,
+      assessment,
     });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
