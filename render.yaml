@@ -140,6 +140,8 @@ services:
       - key: STRIPE_PRICE_ID
         sync: false
     # Persist accounts + receipts across deploys (required for multi-user admin).
+    # Receipt bytes are stored on this disk under receipts/. Do not change
+    # mountPath on a service that already has data — a new path starts empty.
     disk:
       name: haulage-data
       mountPath: /opt/render/project/src/data
@@ -273,6 +275,8 @@ services:
         sync: false
       - key: STRIPE_PRICE_ID_SUITE_YEARLY
         sync: false
+    # Same rule as haulage-data: receipt files live on this disk. Do not change
+    # mountPath on a service that already has uploads.
     disk:
       name: gotax-data
       mountPath: /opt/render/project/src/data
