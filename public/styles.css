@@ -1464,6 +1464,27 @@ input[type="checkbox"] { width: 16px; height: 16px; }
   opacity: 0.5;
   cursor: not-allowed;
 }
+.receipt-camera-focus-ring {
+  position: absolute;
+  width: 76px;
+  height: 76px;
+  margin-left: -38px;
+  margin-top: -38px;
+  border: 2px solid #fbbf24;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+}
+.receipt-camera-focus-ring.is-on {
+  animation: camera-focus-pulse 0.7s ease-out;
+}
+@keyframes camera-focus-pulse {
+  0% { opacity: 1; transform: scale(1.35); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
 .receipt-camera-status {
   position: absolute;
   top: calc(12px + env(safe-area-inset-top, 0px));

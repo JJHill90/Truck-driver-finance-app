@@ -155,6 +155,7 @@ describe("scan camera permission check", () => {
     const blockedArm = open.slice(open.indexOf('outcome.action === "blocked"'), open.indexOf('outcome.action === "failed"'));
     expect(blockedArm).toMatch(/showCameraBlocked/);
     expect(blockedArm).not.toMatch(/fallbackId/);
-    expect(src).toMatch(/height: \{ ideal: 3840 \}/);
+    expect(src).toMatch(/height: \{ ideal: 2560, max: 2560 \}/);
+    expect(src).not.toMatch(/ideal: 3840/);
   });
 });

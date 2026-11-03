@@ -33,11 +33,13 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(215);
-    expect(notes[0].label).toBe("Version 4.11");
-    expect(notes[0].bullets.join("\n")).toMatch(/loads a new version on its own/);
-    expect(notes[0].bullets.join("\n")).toMatch(/even when the file is already missing/);
-    expect(notes[0].bullets.join("\n")).toMatch(/same day and amount/);
+    expect(notes[0].prNumber).toBe(216);
+    expect(notes[0].label).toBe("Version 4.12");
+    expect(notes[0].bullets.join("\n")).toMatch(/focuses on the page inside the amber frame/);
+    expect(notes[0].bullets.join("\n")).toMatch(/Tap the page if it looks soft/);
+    const duplicate = notes.find((note) => note.prNumber === 215);
+    expect(duplicate && duplicate.label).toBe("Version 4.11");
+    expect(duplicate.bullets.join("\n")).toMatch(/same day and amount/);
     const keptPhoto = notes.find((note) => note.prNumber === 214);
     expect(keptPhoto && keptPhoto.label).toBe("Version 4.10");
     expect(keptPhoto.bullets.join("\n")).toMatch(/keeps the photo on the disk/);
