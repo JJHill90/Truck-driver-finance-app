@@ -135,6 +135,20 @@ describe("receipt files stay on the persistent data directory", () => {
     expect(fs.readFileSync(path.join(receipts, "keep.jpg"), "utf8")).toBe("already-on-disk");
   });
 
+  it("keeps the photo when the app folder is a symlink onto the disk", () => {
+    const disk = path.join(tmp, "disk");
+    const link = path.join(tmp, "app-data");
+    fs.mkdirSync(path.join(disk, "receipts"), { recursive: true });
+    const stored = path.join(disk, "receipts", "live.jpg");
+    fs.writeFileSync(stored, "jpeg-bytes");
+    fs.symlinkSync(disk, link);
+    const viaLink = path.join(link, "receipts", "live.jpg");
+    expect(receiptFiles.sameFile(viaLink, stored)).toBe(true);
+    receiptFiles.moveSourceToDest(viaLink, stored);
+    expect(fs.readFileSync(stored, "utf8")).toBe("jpeg-bytes");
+    expect(fs.existsSync(viaLink)).toBe(true);
+  });
+
   it("rejects receipt paths that leave the receipts folder", () => {
     expect(receiptFiles.safeRelative("receipts/../../package.json")).toBe("");
     expect(receiptFiles.isReceiptMember("receipts/ok.jpg")).toBe(true);
