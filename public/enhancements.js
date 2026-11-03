@@ -13781,6 +13781,261 @@
     }
   }
 
+  /**
+   * Whether Scan with camera should cancel and show "camera permission blocked".
+   *
+   * Android WebView's Permissions API often reports camera as "denied" before
+   * getUserMedia has asked the user. That is still a prompt. Only a confirmed
+   * denial cancels: Capacitor's native "denied", or a browser Permissions API
+   * "denied" after getUserMedia on a normal browser.
+   *
+   * "prompt", "prompt-with-rationale", "granted", and a missing Permissions API
+   * (null / "unavailable") always request the camera.
+   */
+  function cameraScanPermissionDecision(input) {
+    const phase = input && input.phase === "after-getUserMedia" ? "after-getUserMedia" : "before-getUserMedia";
+    const webState = input && input.webState;
+    const nativeState = input && input.nativeState;
+    const androidWebView = Boolean(input && input.androidWebView);
+    if (nativeState === "denied") return "blocked";
+    if (
+      nativeState === "prompt" ||
+      nativeState === "prompt-with-rationale" ||
+      nativeState === "granted"
+    ) {
+      return "request";
+    }
+    if (webState == null || webState === "unavailable") return "request";
+    if (phase !== "after-getUserMedia") return "request";
+    if (webState === "prompt" || webState === "granted") return "request";
+    if (webState === "denied" && androidWebView) return "request";
+    if (webState === "denied") return "blocked";
+    return "request";
+  }
+
+  function cameraFlowShouldCancel(input) {
+    return cameraScanPermissionDecision(input) === "blocked";
+  }
+
+  function isCameraPermissionRejection(err) {
+    const name = err && err.name ? String(err.name) : "";
+    return name === "NotAllowedError" || name === "PermissionDeniedError";
+  }
+
+  function cameraBlockedMessage(env) {
+    if (env && env.native) {
+      return "Camera permission blocked. Open your phone Settings, choose Apps, choose this app, then Permissions, and turn Camera on. Then tap Scan with camera again. Or use Upload file.";
+    }
+    return "Camera permission blocked. Open the lock or site settings in the address bar and set Camera to Allow. Then tap Scan with camera again. Or use Upload file.";
+  }
+
+  function cameraPermissionOutcome(input) {
+    if (!cameraFlowShouldCancel(input)) return { action: "request", message: "" };
+    return {
+      action: "blocked",
+      message: cameraBlockedMessage({
+        native: Boolean(input && (input.nativeShell || input.androidWebView)),
+      }),
+    };
+  }
+
+  function isAndroidCameraWebView() {
+    try {
+      const ua = String(navigator.userAgent || "");
+      if (/\b(DriverHubApp|GoTaxationSuiteApp)\b/i.test(ua)) return true;
+      const cap = window.Capacitor;
+      if (cap && typeof cap.getPlatform === "function" && cap.getPlatform() === "android") return true;
+      return /Android/i.test(ua) && /\bwv\b/.test(ua);
+    } catch {
+      return false;
+    }
+  }
+
+  function isNativeCameraShell() {
+    try {
+      if (typeof window.haulageIsNativeShell === "function" && window.haulageIsNativeShell()) return true;
+    } catch {
+      /* ignore */
+    }
+    return isAndroidCameraWebView();
+  }
+
+  function capacitorCameraPlugin() {
+    try {
+      const cap = window.Capacitor;
+      if (!cap || !cap.Plugins || !cap.Plugins.Camera) return null;
+      return cap.Plugins.Camera;
+    } catch {
+      return null;
+    }
+  }
+
+  function nativeCameraState(status) {
+    const state = status && status.camera;
+    if (
+      state === "granted" ||
+      state === "denied" ||
+      state === "prompt" ||
+      state === "prompt-with-rationale"
+    ) {
+      return state;
+    }
+    return null;
+  }
+
+  async function readWebCameraState() {
+    try {
+      const perms = navigator.permissions;
+      if (!perms || typeof perms.query !== "function") return null;
+      const status = await perms.query({ name: "camera" });
+      const state = status && status.state;
+      if (state === "granted" || state === "denied" || state === "prompt") return state;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function readNativeCameraState() {
+    const camera = capacitorCameraPlugin();
+    if (!camera || typeof camera.checkPermissions !== "function") return null;
+    try {
+      return nativeCameraState(await camera.checkPermissions());
+    } catch {
+      return null;
+    }
+  }
+
+  async function requestNativeCamera() {
+    const camera = capacitorCameraPlugin();
+    if (!camera || typeof camera.requestPermissions !== "function") return null;
+    try {
+      return nativeCameraState(await camera.requestPermissions({ permissions: ["camera"] }));
+    } catch {
+      return null;
+    }
+  }
+
+  function permissionSnapshot(phase, webState, nativeState, androidWebView) {
+    return {
+      phase: phase,
+      webState: webState,
+      nativeState: nativeState,
+      androidWebView: androidWebView,
+      nativeShell: isNativeCameraShell(),
+    };
+  }
+
+  async function openCameraStream(preferHighRes) {
+    const simple = {
+      audio: false,
+      video: { facingMode: { ideal: "environment" } },
+    };
+    const portrait = {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 2160 },
+        height: { ideal: 3840 },
+      },
+    };
+    if (!preferHighRes) return navigator.mediaDevices.getUserMedia(simple);
+    try {
+      return await navigator.mediaDevices.getUserMedia(portrait);
+    } catch (err) {
+      if (isCameraPermissionRejection(err)) throw err;
+      return navigator.mediaDevices.getUserMedia(simple);
+    }
+  }
+
+  async function attachCameraStream(mediaStream) {
+    const video = document.getElementById("receipt-camera-video");
+    const shutter = document.getElementById("receipt-camera-shutter");
+    await sharpenCameraTrack(mediaStream);
+    applyCameraFrame(savedCameraFrame());
+    if (shutter) shutter.disabled = false;
+    if (video) {
+      video.srcObject = mediaStream;
+      await video.play().catch(() => {});
+    }
+  }
+
+  function showCameraBlocked(message) {
+    closeCamera();
+    notify(message || cameraBlockedMessage({ native: isNativeCameraShell() }));
+  }
+
+  function keepCameraAwaitingPrompt() {
+    const shutter = document.getElementById("receipt-camera-shutter");
+    const status = document.getElementById("receipt-camera-status");
+    if (shutter) shutter.disabled = true;
+    if (status) status.textContent = "Allow camera to scan";
+    notify(
+      "Allow the camera request to continue the scan. If no prompt appeared, tap Cancel and then Scan with camera again. Or use Upload file."
+    );
+  }
+
+  /**
+   * Ask for the camera after the amber frame is on screen. A pre-request
+   * "denied" from the Permissions API does not cancel. A permission rejection
+   * is not followed by another getUserMedia while that prompt may still be up.
+   */
+  async function acquireCameraStream() {
+    const androidWebView = isAndroidCameraWebView();
+    let webState = await readWebCameraState();
+    let nativeState = await readNativeCameraState();
+    let outcome = cameraPermissionOutcome(permissionSnapshot("before-getUserMedia", webState, nativeState, androidWebView));
+    if (outcome.action === "blocked") return outcome;
+
+    if (nativeState === "prompt" || nativeState === "prompt-with-rationale") {
+      const requested = await requestNativeCamera();
+      if (requested) nativeState = requested;
+      outcome = cameraPermissionOutcome(permissionSnapshot("before-getUserMedia", webState, nativeState, androidWebView));
+      if (outcome.action === "blocked") return outcome;
+    }
+
+    const preferHighRes = nativeState === "granted" || (nativeState == null && webState === "granted");
+    try {
+      stream = await openCameraStream(preferHighRes);
+      return { action: "ok", message: "" };
+    } catch (err) {
+      if (!isCameraPermissionRejection(err)) return { action: "failed", message: "" };
+      webState = await readWebCameraState();
+      nativeState = (await readNativeCameraState()) || nativeState;
+      outcome = cameraPermissionOutcome(
+        permissionSnapshot("after-getUserMedia", webState, nativeState, androidWebView)
+      );
+      if (outcome.action === "blocked") return outcome;
+      if (nativeState === "granted") {
+        try {
+          stream = await openCameraStream(true);
+          return { action: "ok", message: "" };
+        } catch (err2) {
+          if (!isCameraPermissionRejection(err2)) return { action: "failed", message: "" };
+          return { action: "prompt", message: "" };
+        }
+      }
+      if (nativeState === "prompt" || nativeState === "prompt-with-rationale") {
+        const requested = await requestNativeCamera();
+        if (requested) nativeState = requested;
+        outcome = cameraPermissionOutcome(
+          permissionSnapshot("before-getUserMedia", webState, nativeState, androidWebView)
+        );
+        if (outcome.action === "blocked") return outcome;
+        if (nativeState === "granted") {
+          try {
+            stream = await openCameraStream(true);
+            return { action: "ok", message: "" };
+          } catch (err2) {
+            if (!isCameraPermissionRejection(err2)) return { action: "failed", message: "" };
+            return { action: "prompt", message: "" };
+          }
+        }
+      }
+      return { action: "prompt", message: "" };
+    }
+  }
+
   async function openCamera(purpose) {
     cameraPurpose = purpose === "income" ? "income" : "expense";
     const copy = purposeCopy();
@@ -13790,9 +14045,21 @@
       return;
     }
 
+    const early = cameraPermissionOutcome(
+      permissionSnapshot(
+        "before-getUserMedia",
+        await readWebCameraState(),
+        await readNativeCameraState(),
+        isAndroidCameraWebView()
+      )
+    );
+    if (early.action === "blocked") {
+      notify(early.message);
+      return;
+    }
+
     ensureModal();
     syncCameraCopy();
-    const video = document.getElementById("receipt-camera-video");
     const shutter = document.getElementById("receipt-camera-shutter");
     const status = document.getElementById("receipt-camera-status");
     if (shutter) shutter.disabled = true;
@@ -13801,39 +14068,31 @@
     document.body.style.overflow = "hidden";
 
     stopStream();
-    try {
-      const portrait = {
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 2160 },
-          height: { ideal: 3840 },
-        },
-      };
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(portrait);
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: "environment" } },
-        });
-      }
-      await sharpenCameraTrack(stream);
-      video.srcObject = stream;
-      await video.play().catch(() => {});
-      if (status) status.textContent = copy.status;
-      if (shutter) shutter.disabled = false;
-    } catch (err) {
-      closeCamera();
-      const denied = /NotAllowed|Permission|denied/i.test(String(err && err.name) + err.message);
-      notify(
-        denied
-          ? "Camera permission blocked — allow camera access, or use Upload file"
-          : "Could not open camera — use Upload file instead"
-      );
-      document.getElementById(copy.fallbackId)?.click();
+    const outcome = await acquireCameraStream();
+    if (outcome.action === "blocked") {
+      showCameraBlocked(outcome.message);
+      return;
     }
+    if (outcome.action === "failed") {
+      closeCamera();
+      notify("Could not open camera — use Upload file instead");
+      document.getElementById(copy.fallbackId)?.click();
+      return;
+    }
+    if (outcome.action === "prompt") {
+      keepCameraAwaitingPrompt();
+      return;
+    }
+    await attachCameraStream(stream);
   }
+
+  window.haulageCameraPermission = {
+    cameraScanPermissionDecision: cameraScanPermissionDecision,
+    cameraFlowShouldCancel: cameraFlowShouldCancel,
+    isCameraPermissionRejection: isCameraPermissionRejection,
+    cameraBlockedMessage: cameraBlockedMessage,
+    cameraPermissionOutcome: cameraPermissionOutcome,
+  };
 
   function start() {
     bindCameraClose();
