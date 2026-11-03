@@ -2444,8 +2444,16 @@ api.delete("/admin/users/:username/receipts/:id", (req, res) => {
   }
   const receipt = receipts[idx];
   if (receipt.imagePath) {
-    pdfThumbnail.deleteThumb(receipt.imagePath, storage);
-    storage.deleteReceiptFile(receipt.imagePath);
+    try {
+      pdfThumbnail.deleteThumb(receipt.imagePath, storage, receipt);
+    } catch (err) {
+      console.warn("Admin receipt thumb delete failed:", err && err.message);
+    }
+    try {
+      storage.deleteReceiptFile(receipt.imagePath);
+    } catch (err) {
+      console.warn("Admin receipt file delete failed:", err && err.message);
+    }
   }
   receipts.splice(idx, 1);
   persistTarget(loaded, { reason: "admin-delete-receipt", actor: sessionUsername(req) });
@@ -3488,6 +3496,52 @@ api.post("/expenses/preview", (req, res) => {
   res.json(analysis);
 });
 
+const DUPLICATE_LEDGER_MESSAGE =
+  "possible duplicate detected, do you wish to continue with the upload?";
+
+function blockDuplicateLedger(res, records, purpose, payload, excludeReceiptId) {
+  if (!payload || payload.forceDuplicate) return false;
+  const isIncome = purpose === "income";
+  const vendor = isIncome
+    ? payload.entity || payload.payer || payload.vendor || ""
+    : payload.vendor || payload.entity || "";
+  const primary = isIncome
+    ? payload.grossTotal ?? payload.amount ?? payload.netPay
+    : payload.amount;
+  const matches = findDuplicateMatches(
+    records,
+    {
+      date: payload.date,
+      vendor,
+      entity: payload.entity || vendor,
+      payer: payload.payer || payload.entity || vendor,
+      amount: payload.amount,
+      grossTotal: payload.grossTotal,
+      netPay: payload.netPay,
+      taxableIncome: payload.taxableIncome,
+    },
+    isIncome ? "income" : "expense",
+    primary,
+    excludeReceiptId ? { excludeReceiptId } : undefined
+  );
+  if (!matches.length) return false;
+  res.status(409).json({
+    possibleDuplicate: true,
+    code: "POSSIBLE_DUPLICATE",
+    message: DUPLICATE_LEDGER_MESSAGE,
+    error: DUPLICATE_LEDGER_MESSAGE,
+    matches,
+    ocrResult: {
+      date: payload.date || null,
+      vendor,
+      entity: isIncome ? payload.entity || vendor : vendor,
+      amount: primary,
+      grossTotal: payload.grossTotal,
+    },
+  });
+  return true;
+}
+
 api.post("/expenses", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate({ ...(req.body || {}) });
@@ -3499,6 +3553,7 @@ api.post("/expenses", (req, res) => {
   applyActiveCarWorkUse(records, body);
   delete body.workUseFromCarProfile;
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  if (blockDuplicateLedger(res, records, "expense", body)) return;
   if (recurringExpenses.wantsRecurring(body)) {
     const result = handleRecurringExpenseCreate(req, records, body);
     res.status(result.status).json(result.json);
@@ -3720,6 +3775,7 @@ api.post("/income", (req, res) => {
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  if (blockDuplicateLedger(res, records, "income", body)) return;
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
   attachIncomeTaxWithheld(entry, body, null);
@@ -4197,6 +4253,7 @@ api.post("/receipts/manual", (req, res) => {
     return;
   }
   if (!assertCanUpload(req, res)) return;
+  if (blockDuplicateLedger(res, records, "expense", body)) return;
   const { expense, receipt } = storage.addManualReceipt(records, body);
   // Cash / no-receipt / vending flags (layered; storage.js is verbatim).
   if (body.cashTransaction != null) {
@@ -4304,6 +4361,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
 
     const incomePayload = { ...payload, receiptId: receipt?.id || null };
     if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, incomePayload);
+    if (blockDuplicateLedger(res, records, "income", incomePayload, receipt && receipt.id)) return;
     const entry = storage.addIncome(records, incomePayload);
     attachTravelAllowanceToIncome(entry, payload, receipt);
     attachIncomeTaxWithheld(entry, payload, receipt);
@@ -4338,6 +4396,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
   applyActiveCarWorkUse(records, expensePayload);
   delete expensePayload.workUseFromCarProfile;
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, expensePayload);
+  if (blockDuplicateLedger(res, records, "expense", expensePayload, receipt && receipt.id)) return;
   const entry = storage.addExpense(records, expensePayload);
   rememberVendor(records, {
     name: expensePayload.vendor || entry.vendor,
@@ -4368,16 +4427,27 @@ api.delete("/receipts/:id", (req, res) => {
     res.status(401).json({ error: "Log in to delete scanned photos from your profile." });
     return;
   }
-  const records = getRecords(req);
-  const existing = (records.receipts || []).find((r) => r.id === req.params.id);
-  if (existing) pdfThumbnail.deleteThumb(existing.imagePath, storage);
-  const removed = storage.deleteReceipt(records, req.params.id);
-  if (!removed) {
-    res.status(404).json({ error: "Receipt not found." });
-    return;
+  try {
+    const records = getRecords(req);
+    const existing = (records.receipts || []).find((r) => r && r.id === req.params.id);
+    if (existing) {
+      try {
+        pdfThumbnail.deleteThumb(existing.imagePath, storage, existing);
+      } catch (err) {
+        console.warn("Receipt thumb delete failed:", err && err.message);
+      }
+    }
+    const removed = storage.deleteReceipt(records, req.params.id);
+    if (!removed) {
+      res.status(404).json({ error: "Receipt not found." });
+      return;
+    }
+    persist(req);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Receipt delete failed:", err && err.message);
+    res.status(500).json({ error: "Could not delete that photo or PDF. Try again." });
   }
-  persist(req);
-  res.json({ ok: true });
 });
 
 api.get("/receipts/:id", (req, res) => {

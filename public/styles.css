@@ -1749,8 +1749,24 @@ tr.vending-machine-row {
 .receipt-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .receipt-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 0; overflow: hidden; text-align: left; display: flex; flex-direction: column; }
 .receipt-card-open { background: transparent; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; width: 100%; }
-.receipt-card-thumb { aspect-ratio: 4/3; background: var(--bg-2); display: flex; align-items: center; justify-content: center; }
+.receipt-card-thumb { aspect-ratio: 4/3; background: var(--bg-2); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .receipt-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.receipt-card.is-file-missing .receipt-card-thumb img { opacity: 0.2; }
+.receipt-file-missing {
+  position: absolute;
+  inset: 8px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--text);
+  pointer-events: none;
+  z-index: 1;
+}
 .receipt-card-thumb.is-pdf { color: var(--text-dim); font-weight: 800; background: #f8fafc; }
 .receipt-card-thumb.is-pdf img,
 .receipt-card-thumb img.receipt-pdf-thumb {
@@ -1761,7 +1777,27 @@ tr.vending-machine-row {
 .receipt-card-meta { padding: 8px 10px; display: flex; flex-direction: column; }
 .receipt-card-meta strong { font-size: 0.9rem; }
 .receipt-card-meta span { color: var(--text-dim); font-size: 0.78rem; }
-.receipt-card-actions { padding: 0 10px 10px; display: flex; justify-content: flex-end; }
+.receipt-card-actions { position: relative; z-index: 2; padding: 0 10px 10px; display: flex; justify-content: flex-end; }
+.enh-delete-receipt {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(8, 16, 32, 0.72);
+}
+.enh-delete-receipt-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.enh-delete-receipt-card h3 { margin: 0 0 8px; }
+.enh-delete-receipt-card p { margin: 0; }
+.enh-delete-receipt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
 /* Forecast */
 .forecast-progress { margin-top: 12px; }

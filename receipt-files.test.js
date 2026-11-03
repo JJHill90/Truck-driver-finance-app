@@ -149,6 +149,104 @@ describe("receipt files stay on the persistent data directory", () => {
     expect(fs.existsSync(viaLink)).toBe(true);
   });
 
+  it("removes the receipt row when the photo or PDF is already missing", () => {
+    const records = {
+      receipts: [
+        { id: "gone-jpg", filename: "01.01.26 AUD$1.00.jpg", imagePath: "receipts/gone-jpg.jpg" },
+        { id: "keep", filename: "keep.jpg", imagePath: "receipts/keep.jpg" },
+      ],
+      expenses: [{ id: "e1", receiptId: "gone-jpg" }],
+      income: [{ id: "i1", receiptId: "gone-jpg" }],
+      vendors: [],
+    };
+    expect(storage.deleteReceipt(records, "gone-jpg")).toBe(true);
+    expect(records.receipts.map((row) => row.id)).toEqual(["keep"]);
+    expect(records.expenses[0].receiptId).toBeNull();
+    expect(records.income[0].receiptId).toBeNull();
+  });
+
+  it("removes the receipt row when the photo path is a folder and cannot be unlinked", () => {
+    const records = { receipts: [], expenses: [{ id: "e1", receiptId: null }], income: [], vendors: [] };
+    const receipt = storage.addReceipt(records, {
+      filename: "blocked.jpg",
+      mimeType: "image/jpeg",
+      dataUrl: "data:image/jpeg;base64," + Buffer.from("jpeg-bytes").toString("base64"),
+    });
+    records.expenses[0].receiptId = receipt.id;
+    const blocked = path.join(dataDir.REPO_DATA_DIR, receipt.imagePath);
+    fs.rmSync(blocked, { recursive: true, force: true });
+    fs.mkdirSync(blocked, { recursive: true });
+    try {
+      expect(storage.deleteReceipt(records, receipt.id)).toBe(true);
+      expect(records.receipts).toHaveLength(0);
+      expect(records.expenses[0].receiptId).toBeNull();
+    } finally {
+      fs.rmSync(blocked, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes a PDF and its thumbnail when the original PDF is already gone", () => {
+    const prev = process.env.APP_PRODUCT;
+    process.env.APP_PRODUCT = "suite";
+    try {
+      const records = { receipts: [], expenses: [], income: [], vendors: [] };
+      const receipt = storage.addReceipt(records, {
+        filename: "payslip.pdf",
+        mimeType: "application/pdf",
+        dataUrl: "data:application/pdf;base64," + Buffer.from("%PDF-1.4 payslip").toString("base64"),
+      });
+      const name = path.basename(receipt.imagePath);
+      const pdf = path.join(tmp, receipt.imagePath);
+      const thumb = path.join(tmp, "receipts", name.replace(/\.pdf$/i, ".thumb.png"));
+      const suiteThumb = path.join(tmp, "suite", "receipts", name.replace(/\.pdf$/i, ".thumb.png"));
+      fs.writeFileSync(thumb, "thumb");
+      fs.writeFileSync(suiteThumb, "suite-thumb");
+      fs.rmSync(pdf, { force: true });
+      fs.rmSync(path.join(tmp, "suite", "receipts", name), { force: true });
+      expect(storage.getReceiptFileInfo(receipt.imagePath)).toBeNull();
+      expect(storage.deleteReceipt(records, receipt.id)).toBe(true);
+      expect(records.receipts).toHaveLength(0);
+      expect(fs.existsSync(thumb)).toBe(false);
+      expect(fs.existsSync(suiteThumb)).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.APP_PRODUCT;
+      else process.env.APP_PRODUCT = prev;
+    }
+  });
+
+  it("does not keep a receipt row when the upload has no photo or PDF bytes", () => {
+    const records = { receipts: [], expenses: [], income: [], vendors: [] };
+    expect(() =>
+      storage.addReceipt(records, {
+        filename: "empty.jpg",
+        mimeType: "image/jpeg",
+        dataUrl: "not-a-data-url",
+      })
+    ).toThrow(/not saved/);
+    expect(records.receipts).toHaveLength(0);
+    const empty = { receipts: [], expenses: [], income: [], vendors: [] };
+    expect(() =>
+      storage.addReceipt(empty, {
+        filename: "zero.jpg",
+        mimeType: "image/jpeg",
+        dataUrl: "data:image/jpeg;base64,",
+      })
+    ).toThrow(/not saved/);
+    expect(empty.receipts).toHaveLength(0);
+  });
+
+  it("keeps a PDF on the data directory", () => {
+    const records = { receipts: [], expenses: [], income: [], vendors: [] };
+    const receipt = storage.addReceipt(records, {
+      filename: "invoice.pdf",
+      mimeType: "application/pdf",
+      dataUrl: "data:application/pdf;base64," + Buffer.from("%PDF-1.4 invoice").toString("base64"),
+    });
+    expect(receipt.imagePath).toMatch(/\.pdf$/);
+    expect(fs.readFileSync(path.join(tmp, receipt.imagePath), "utf8")).toBe("%PDF-1.4 invoice");
+    expect(receiptFiles.storedReceiptFile(receipt.imagePath)).toBe(path.join(tmp, receipt.imagePath));
+  });
+
   it("rejects receipt paths that leave the receipts folder", () => {
     expect(receiptFiles.safeRelative("receipts/../../package.json")).toBe("");
     expect(receiptFiles.isReceiptMember("receipts/ok.jpg")).toBe(true);
