@@ -23,7 +23,7 @@ describe("dashboard assessableTotal guard", () => {
   });
 
   it("cache-busts enhancements so Play WebViews load the guard", () => {
-    expect(hub).toMatch(/enhancements\.js\?v=215/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=215/);
+    expect(hub).toMatch(/enhancements\.js\?v=216/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=216/);
   });
 });
