@@ -2444,8 +2444,16 @@ api.delete("/admin/users/:username/receipts/:id", (req, res) => {
   }
   const receipt = receipts[idx];
   if (receipt.imagePath) {
-    pdfThumbnail.deleteThumb(receipt.imagePath, storage);
-    storage.deleteReceiptFile(receipt.imagePath);
+    try {
+      pdfThumbnail.deleteThumb(receipt.imagePath, storage, receipt);
+    } catch (err) {
+      console.warn("Admin receipt thumb delete failed:", err && err.message);
+    }
+    try {
+      storage.deleteReceiptFile(receipt.imagePath);
+    } catch (err) {
+      console.warn("Admin receipt file delete failed:", err && err.message);
+    }
   }
   receipts.splice(idx, 1);
   persistTarget(loaded, { reason: "admin-delete-receipt", actor: sessionUsername(req) });
@@ -4368,16 +4376,27 @@ api.delete("/receipts/:id", (req, res) => {
     res.status(401).json({ error: "Log in to delete scanned photos from your profile." });
     return;
   }
-  const records = getRecords(req);
-  const existing = (records.receipts || []).find((r) => r.id === req.params.id);
-  if (existing) pdfThumbnail.deleteThumb(existing.imagePath, storage);
-  const removed = storage.deleteReceipt(records, req.params.id);
-  if (!removed) {
-    res.status(404).json({ error: "Receipt not found." });
-    return;
+  try {
+    const records = getRecords(req);
+    const existing = (records.receipts || []).find((r) => r && r.id === req.params.id);
+    if (existing) {
+      try {
+        pdfThumbnail.deleteThumb(existing.imagePath, storage, existing);
+      } catch (err) {
+        console.warn("Receipt thumb delete failed:", err && err.message);
+      }
+    }
+    const removed = storage.deleteReceipt(records, req.params.id);
+    if (!removed) {
+      res.status(404).json({ error: "Receipt not found." });
+      return;
+    }
+    persist(req);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Receipt delete failed:", err && err.message);
+    res.status(500).json({ error: "Could not delete that photo or PDF. Try again." });
   }
-  persist(req);
-  res.json({ ok: true });
 });
 
 api.get("/receipts/:id", (req, res) => {

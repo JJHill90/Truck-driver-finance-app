@@ -6934,6 +6934,19 @@
     if (thumb) thumb.classList.add("is-pdf");
   }
 
+  function markMissingReceiptCard(imgEl) {
+    const card = imgEl && imgEl.closest ? imgEl.closest(".receipt-card") : null;
+    if (!card) return;
+    card.classList.add("is-file-missing");
+    const thumb = imgEl.closest(".receipt-card-thumb");
+    if (thumb && !thumb.querySelector(".receipt-file-missing")) {
+      const note = document.createElement("p");
+      note.className = "receipt-file-missing";
+      note.textContent = "Photo file missing — re-upload this document";
+      thumb.appendChild(note);
+    }
+  }
+
   function patchLoadReceiptThumbnail() {
     const origFetch = window.fetchReceiptImageDataUrl;
     if (typeof origFetch === "function" && !origFetch.__suiteThumbFallback) {
@@ -6984,6 +6997,7 @@
         imgEl.alt = data.missingFile
           ? "Photo file missing — re-upload this document"
           : "Could not load thumbnail";
+        if (data.missingFile) markMissingReceiptCard(imgEl);
       } catch {
         if (pdf) restorePdfIcon(imgEl);
         else imgEl.alt = "Could not load thumbnail";
@@ -12578,6 +12592,266 @@
   } else {
     void loadVersionLabels();
   }
+})();
+
+/* --- Live version + delete a photo or PDF whose file is already gone -----
+ * An open app keeps the page it loaded. Ask the server which build is live
+ * and reload when that number changes, unless a scan, camera, or form is in
+ * use. Gallery Delete uses an in-page confirm so a missing file can still
+ * be removed when the phone does not show window.confirm.
+ */
+(function () {
+  "use strict";
+  /* global closeReceiptViewer, receiptImageCache */
+
+  const RELOAD_KEY = "haulage-live-reloaded-for";
+  let toldToReopen = false;
+  let deletePrompt = null;
+  let receiptWrite = 0;
+
+  function pageBuild() {
+    const meta = document.querySelector('meta[name="haulage-build"]');
+    return meta ? Number(meta.getAttribute("content")) : 0;
+  }
+
+  function apiBase() {
+    if (typeof API !== "undefined" && API) return API;
+    return `${window.location.origin}/api/haulage`;
+  }
+
+  function readReloadedFor() {
+    try {
+      return sessionStorage.getItem(RELOAD_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function writeReloadedFor(value) {
+    try {
+      sessionStorage.setItem(RELOAD_KEY, String(value));
+    } catch {
+      /* private mode */
+    }
+  }
+
+  function pageIsBusy() {
+    if (receiptWrite > 0) return true;
+    const camera = document.getElementById("receipt-camera-modal");
+    if (camera && !camera.hidden) return true;
+    const ocr = document.getElementById("ocr-progress");
+    if (ocr && !ocr.hidden && !ocr.classList.contains("hidden")) return true;
+    if (document.querySelector(".scan-confirm")) return true;
+    const viewer = document.getElementById("receipt-viewer");
+    if (viewer && !viewer.classList.contains("hidden")) return true;
+    if (document.getElementById("enh-delete-receipt")) return true;
+    const active = document.activeElement;
+    if (!active || active === document.body || active === document.documentElement) return false;
+    const tag = active.tagName;
+    if (tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (tag === "INPUT") {
+      const type = String(active.type || "text").toLowerCase();
+      if (!["button", "submit", "reset", "checkbox", "radio", "file", "hidden"].includes(type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function decide(serverPr) {
+    const api = globalThis.HaulageLiveReload;
+    if (!api || typeof api.decideLiveReload !== "function") {
+      return { reload: false, reason: "missing" };
+    }
+    return api.decideLiveReload({
+      pagePr: pageBuild(),
+      serverPr: serverPr,
+      busy: pageIsBusy(),
+      alreadyReloadedFor: readReloadedFor(),
+    });
+  }
+
+  async function checkLiveVersion() {
+    if (!pageBuild()) return;
+    try {
+      const res = await fetch(`${apiBase()}/version?t=${Date.now()}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const decision = decide(data && data.prNumber);
+      if (decision.reload) {
+        writeReloadedFor(decision.serverPr);
+        window.location.reload();
+        return;
+      }
+      if (decision.reason === "already-reloaded" && !toldToReopen) {
+        toldToReopen = true;
+        if (typeof toast === "function") {
+          toast("A new version is ready. Close the app and open it again to finish updating.");
+        }
+      }
+    } catch {
+      /* the next check will try again */
+    }
+  }
+
+  function startLiveVersion() {
+    setTimeout(() => void checkLiveVersion(), 4000);
+    setInterval(() => void checkLiveVersion(), 60000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") void checkLiveVersion();
+    });
+    window.addEventListener("focus", () => void checkLiveVersion());
+  }
+
+  function receiptLabel(receiptId) {
+    let receipt = null;
+    try {
+      if (typeof findReceipt === "function") receipt = findReceipt(receiptId);
+    } catch {
+      receipt = null;
+    }
+    return (receipt && receipt.filename) || "this photo or PDF";
+  }
+
+  function forgetReceipt(receiptId) {
+    try {
+      if (typeof state !== "undefined" && state.records && Array.isArray(state.records.receipts)) {
+        state.records.receipts = state.records.receipts.filter((row) => row && row.id !== receiptId);
+      }
+    } catch {
+      /* records not loaded yet */
+    }
+    try {
+      if (typeof receiptImageCache !== "undefined" && receiptImageCache && receiptImageCache.delete) {
+        receiptImageCache.delete(receiptId);
+      }
+    } catch {
+      /* cache is local to the page */
+    }
+    document.querySelectorAll(".receipt-card").forEach((card) => {
+      const id = card.dataset.receiptCard || card.dataset.receiptId;
+      if (id === receiptId) card.remove();
+    });
+  }
+
+  function closeDeletePrompt(result) {
+    const pending = deletePrompt;
+    deletePrompt = null;
+    if (pending && pending.overlay) pending.overlay.remove();
+    if (pending) pending.resolve(Boolean(result));
+  }
+
+  function askDelete(label) {
+    if (deletePrompt) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.id = "enh-delete-receipt";
+      overlay.className = "enh-delete-receipt";
+      overlay.innerHTML = `
+        <div class="enh-delete-receipt-card" role="dialog" aria-modal="true" aria-labelledby="enh-delete-receipt-title">
+          <h3 id="enh-delete-receipt-title">Delete this photo or PDF?</h3>
+          <p>${String(label)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")}</p>
+          <p class="muted">The file is removed. The amount stays in the ledger. This still works when the photo is already missing.</p>
+          <div class="enh-delete-receipt-actions">
+            <button type="button" class="btn secondary" data-enh-delete-cancel>Cancel</button>
+            <button type="button" class="btn danger" data-enh-delete-confirm>Delete</button>
+          </div>
+        </div>`;
+      deletePrompt = { overlay, resolve };
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay || event.target.closest("[data-enh-delete-cancel]")) {
+          closeDeletePrompt(false);
+          return;
+        }
+        if (event.target.closest("[data-enh-delete-confirm]")) closeDeletePrompt(true);
+      });
+      document.body.appendChild(overlay);
+      const cancel = overlay.querySelector("[data-enh-delete-cancel]");
+      if (cancel) cancel.focus();
+    });
+  }
+
+  async function deleteStoredReceipt(receiptId) {
+    if (!receiptId) return false;
+    const ok = await askDelete(receiptLabel(receiptId));
+    if (!ok) return false;
+    receiptWrite += 1;
+    let res;
+    try {
+      res = await fetch(`${apiBase()}/receipts/${encodeURIComponent(receiptId)}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+    } catch {
+      if (typeof toast === "function") toast("Could not delete photo");
+      return false;
+    } finally {
+      receiptWrite = Math.max(0, receiptWrite - 1);
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && res.status !== 404) {
+      if (typeof toast === "function") toast(data.error || "Could not delete photo");
+      return false;
+    }
+    forgetReceipt(receiptId);
+    try {
+      if (typeof closeReceiptViewer === "function") closeReceiptViewer();
+    } catch {
+      /* viewer already closed */
+    }
+    if (typeof toast === "function") {
+      toast(res.status === 404 ? "Removed the missing photo" : "Scanned photo deleted");
+    }
+    try {
+      if (typeof refreshAll === "function") await refreshAll();
+    } catch {
+      /* the card is already gone locally */
+    }
+    return true;
+  }
+
+  function receiptIdFromDeleteClick(target) {
+    const galleryBtn = target && target.closest ? target.closest("[data-del-receipt]") : null;
+    if (galleryBtn) return galleryBtn.getAttribute("data-del-receipt") || "";
+    const viewerBtn = target && target.closest ? target.closest("#receipt-viewer-delete") : null;
+    if (!viewerBtn) return "";
+    return globalThis.__haulageActiveReceiptId || "";
+  }
+
+  function bindDelete() {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const id = receiptIdFromDeleteClick(event.target);
+        if (!id) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        void deleteStoredReceipt(id);
+      },
+      true
+    );
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !deletePrompt) return;
+      event.preventDefault();
+      closeDeletePrompt(false);
+    });
+  }
+
+  function start() {
+    bindDelete();
+    startLiveVersion();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();
 
 /* --- Profile employer predictive text + driver-type salary defaults ------
