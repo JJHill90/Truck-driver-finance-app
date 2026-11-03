@@ -13504,20 +13504,70 @@
     );
   }
 
+  /* A4 portrait is ISO 216: 210mm × 297mm. Receipt is a till slip.
+     Long is a taller roll so more of a long docket stays inside the frame. */
+  const CAMERA_FRAMES = {
+    a4: {
+      label: "A4 invoice",
+      hint: "Fit the whole A4 page inside the amber frame, including all four corners.",
+      status: "A4 invoice",
+    },
+    receipt: {
+      label: "Receipt",
+      hint: "Line the receipt up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
+      status: "Receipt",
+    },
+    long: {
+      label: "Long receipt",
+      hint: "Taller frame for a long docket. Keep the top and the total inside the amber edges.",
+      status: "Long receipt",
+    },
+  };
+  const CAMERA_FRAME_KEY = "haulage-camera-frame";
+
+  function savedCameraFrame() {
+    try {
+      const saved = sessionStorage.getItem(CAMERA_FRAME_KEY);
+      if (CAMERA_FRAMES[saved]) return saved;
+    } catch {
+      /* private mode */
+    }
+    return "a4";
+  }
+
+  function applyCameraFrame(mode) {
+    const key = CAMERA_FRAMES[mode] ? mode : "a4";
+    try {
+      sessionStorage.setItem(CAMERA_FRAME_KEY, key);
+    } catch {
+      /* ignore */
+    }
+    const frame = document.getElementById("receipt-camera-frame");
+    if (frame) frame.dataset.frame = key;
+    if (modal) {
+      modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
+        const on = btn.getAttribute("data-camera-frame") === key;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      const hint = modal.querySelector(".receipt-camera-hint");
+      if (hint) hint.innerHTML = CAMERA_FRAMES[key].hint;
+    }
+    const status = document.getElementById("receipt-camera-status");
+    if (status) status.textContent = CAMERA_FRAMES[key].status;
+    return key;
+  }
+
   function purposeCopy() {
     return cameraPurpose === "income"
       ? {
           label: "Scan payslip with camera",
-          hint: "Line the payslip up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
-          status: "Align payslip in frame",
           shutter: "Capture payslip",
           fallbackId: "income-file",
           filename: () => `payslip-scan-${Date.now()}.jpg`,
         }
       : {
           label: "Scan receipt with camera",
-          hint: "Line the receipt up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
-          status: "Align receipt in frame",
           shutter: "Capture receipt",
           fallbackId: "receipt-file",
           filename: () => `receipt-scan-${Date.now()}.jpg`,
@@ -13528,12 +13578,9 @@
     if (!modal) return;
     const copy = purposeCopy();
     modal.setAttribute("aria-label", copy.label);
-    const hint = modal.querySelector(".receipt-camera-hint");
-    if (hint) hint.innerHTML = copy.hint;
-    const status = document.getElementById("receipt-camera-status");
-    if (status) status.textContent = copy.status;
     const shutter = document.getElementById("receipt-camera-shutter");
     if (shutter) shutter.setAttribute("aria-label", copy.shutter);
+    applyCameraFrame(savedCameraFrame());
   }
 
   function ensureModal() {
@@ -13553,18 +13600,22 @@
       <div class="receipt-camera-stage">
         <video class="receipt-camera-video" id="receipt-camera-video" playsinline muted autoplay></video>
         <div class="receipt-camera-overlay" aria-hidden="true">
-          <div class="receipt-camera-frame" id="receipt-camera-frame">
+          <div class="receipt-camera-frame" id="receipt-camera-frame" data-frame="a4">
             <span class="receipt-camera-corner tl"></span>
             <span class="receipt-camera-corner tr"></span>
             <span class="receipt-camera-corner bl"></span>
             <span class="receipt-camera-corner br"></span>
           </div>
           <p class="receipt-camera-hint">
-            Line the receipt up inside the amber frame — include the
-            <strong>top of the slip</strong> and the <strong>date</strong>.
+            Fit the whole A4 page inside the amber frame, including all four corners.
           </p>
         </div>
-        <div class="receipt-camera-status" id="receipt-camera-status">Align receipt in frame</div>
+        <div class="receipt-camera-status" id="receipt-camera-status">A4 invoice</div>
+        <div class="receipt-camera-modes" role="group" aria-label="Frame size">
+          <button type="button" class="is-on" data-camera-frame="a4" aria-pressed="true">A4 invoice</button>
+          <button type="button" data-camera-frame="receipt" aria-pressed="false">Receipt</button>
+          <button type="button" data-camera-frame="long" aria-pressed="false">Long receipt</button>
+        </div>
         <div class="receipt-camera-toolbar">
           <button type="button" class="btn secondary" id="receipt-camera-cancel">Cancel</button>
           <button type="button" class="receipt-camera-capture" id="receipt-camera-shutter" aria-label="Capture receipt"></button>
@@ -13576,7 +13627,37 @@
     modal.querySelector("#receipt-camera-shutter")?.addEventListener("click", () => {
       void captureAndUpload();
     });
+    modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyCameraFrame(btn.getAttribute("data-camera-frame"));
+      });
+    });
     return modal;
+  }
+
+  async function sharpenCameraTrack(mediaStream) {
+    const track = mediaStream && mediaStream.getVideoTracks && mediaStream.getVideoTracks()[0];
+    if (!track || typeof track.getCapabilities !== "function" || typeof track.applyConstraints !== "function") {
+      return;
+    }
+    let caps = {};
+    try {
+      caps = track.getCapabilities() || {};
+    } catch {
+      return;
+    }
+    const next = {};
+    if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
+      next.focusMode = "continuous";
+    }
+    if (caps.width && caps.width.max) next.width = { ideal: caps.width.max };
+    if (caps.height && caps.height.max) next.height = { ideal: caps.height.max };
+    if (!Object.keys(next).length) return;
+    try {
+      await track.applyConstraints(next);
+    } catch {
+      /* the open preview is still usable */
+    }
   }
 
   function stopStream() {
@@ -13721,14 +13802,23 @@
 
     stopStream();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const portrait = {
         audio: false,
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 2160 },
+          height: { ideal: 3840 },
         },
-      });
+      };
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(portrait);
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" } },
+        });
+      }
+      await sharpenCameraTrack(stream);
       video.srcObject = stream;
       await video.play().catch(() => {});
       if (status) status.textContent = copy.status;
