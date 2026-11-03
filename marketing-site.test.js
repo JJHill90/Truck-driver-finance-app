@@ -387,7 +387,8 @@ describe("marketing overview HTTP", () => {
       "x-forwarded-host": "godriverhub.com",
       "x-forwarded-proto": "https",
     });
-    expect(driverAlias.status).toBe(404);
+    expect(driverAlias.status).toBe(200);
+    expect(driverAlias.text).toMatch(/Patch notes — Driver Hub/);
 
     const { port } = server.address();
     const posted = await fetch(`http://127.0.0.1:${port}/api/haulage/support/contact`, {

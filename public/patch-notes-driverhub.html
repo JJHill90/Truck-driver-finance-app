@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Patch notes — Driver Hub</title>
+    <link rel="canonical" href="https://godriverhub.com/patch-notes" />
+    <meta
+      name="description"
+      content="Public patch notes for Driver Hub, Taxation Hub and Fuel Hub. Newest version first. Email support@godriverhub.com."
+    />
+    <link rel="icon" type="image/svg+xml" href="/truck.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/welcome.css" />
+    <style>
+      body.patch-notes-page .patch-log-start {
+        margin: 0 0 1rem;
+        color: var(--muted);
+      }
+      body.patch-notes-page .patch-note {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 1.05rem 1.1rem;
+        margin: 0 0 0.75rem;
+      }
+      body.patch-notes-page .patch-note h2 {
+        margin: 0 0 0.45rem;
+        font-size: 1.2rem;
+      }
+      body.patch-notes-page .patch-note ul {
+        margin: 0;
+        padding-left: 1.15rem;
+      }
+      body.patch-notes-page .patch-note li {
+        margin: 0.28rem 0;
+        color: var(--muted);
+      }
+      body.patch-notes-page .patch-contact {
+        margin-top: 1.5rem;
+      }
+      body.patch-notes-page .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body class="welcome-page welcome-hub patch-notes-page">
+    <header class="welcome-bar">
+      <img class="welcome-mark" src="/truck.svg" width="40" height="40" alt="" />
+      <div class="welcome-brand">Driver <span>Hub</span></div>
+      <div class="welcome-bar-spacer"></div>
+      <nav class="welcome-nav" aria-label="Website">
+        <a href="/welcome-driverhub">Overview</a>
+        <a href="/patch-notes" aria-current="page">Patch notes</a>
+        <a href="/welcome-support-driverhub">Support</a>
+      </nav>
+      <a class="btn primary" data-welcome-app href="/haulage/">Open the app</a>
+    </header>
+
+    <main class="welcome-main">
+      <section class="hero">
+        <h1>Patch notes</h1>
+        <p class="hero-lead">
+          Fixes and updates for Driver Hub, Taxation Hub and Fuel Hub. Newest version first.
+          Questions go to
+          <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>
+          or the contact form below. The
+          <a href="/support">Driver Hub support page</a>
+          has the same form, plus how-to guides.
+        </p>
+      </section>
+
+      <section aria-labelledby="versions-heading">
+        <h2 id="versions-heading" class="visually-hidden">Versions</h2>
+        <!-- PATCH_NOTES_ENTRIES -->
+      </section>
+
+      <section class="support-panel patch-contact" aria-labelledby="contact-heading">
+        <h2 id="contact-heading">Contact support</h2>
+        <p>
+          Send a message and we’ll get back to you. Your request goes to
+          <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>,
+          and you’ll get a confirmation notice on the email you enter below.
+          This is the same guest form as
+          <a href="/welcome-support-driverhub">Driver Hub support</a>.
+        </p>
+        <form id="support-contact-form" class="welcome-form">
+          <label>Name
+            <input type="text" name="name" id="support-name" autocomplete="name" required placeholder="Your name" />
+          </label>
+          <label>Email
+            <input type="email" name="email" id="support-email" autocomplete="email" required placeholder="Reply-to address" />
+          </label>
+          <label class="span-2">Phone number
+            <input type="tel" name="phone" id="support-phone" autocomplete="tel" placeholder="Optional — for a call back" />
+          </label>
+          <label class="span-2">Message
+            <textarea name="message" id="support-message" rows="6" required placeholder="Describe your question or issue…"></textarea>
+          </label>
+          <div class="span-2">
+            <button type="submit" class="btn primary" id="support-send">Send message</button>
+          </div>
+        </form>
+        <div id="support-contact-status" role="status" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="welcome-foot">
+      <a href="/privacy">Privacy</a>
+      ·
+      <a href="/terms">Terms</a>
+      ·
+      <a href="/welcome-driverhub">Overview</a>
+      ·
+      <a href="/support">Support</a>
+      ·
+      <a href="mailto:support@godriverhub.com">support@godriverhub.com</a>
+    </footer>
+    <script src="/welcome.js"></script>
+  </body>
+</html>

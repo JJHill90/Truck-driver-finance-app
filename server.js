@@ -123,6 +123,7 @@ const billingStripe = require("./lib/billing-stripe");
 const accountDelete = require("./lib/account-delete");
 const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
+const patchNotes = require("./lib/patch-notes");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
   wwwToApexRedirect: suiteWwwToApexRedirect,
@@ -5070,9 +5071,20 @@ app.get(["/support", "/support.html"], sendWelcomeSupport());
 app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
 app.get(["/updates", "/updates.html"], sendSuitePatchNotes);
 app.get(["/patch-notes", "/patch-notes.html"], (req, res, next) => {
-  // Driver Hub owns /patch-notes on its own host. Suite keeps it as an alias.
+  // Suite keeps /patch-notes as an alias of /updates. Driver Hub owns it elsewhere.
   if (!serveSuitePublicPages(req)) return next();
   sendSuitePatchNotes(req, res);
+});
+// Driver Hub public changelog. Hub process only — not APP_PRODUCT=suite,
+// not gotaxationsuite.com, not gotaxationhub.com. Notes live in lib/patch-notes.js.
+app.get(["/patch-notes", "/patch-notes.html"], (req, res) => {
+  if (!patchNotes.shouldServeDriverHubPatchNotes(req)) {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html");
+  res.send(patchNotes.renderPage());
 });
 app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {
   if (suite.isStandaloneSuite()) return next();
