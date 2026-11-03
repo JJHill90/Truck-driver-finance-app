@@ -22,7 +22,7 @@ describe("suite patch notes", () => {
     expect(html).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/updates"/);
     expect(html).toMatch(/href="\/updates" aria-current="page"/);
     expect(html).toMatch(/<h2>Version 4\.08<\/h2>/);
-    expect(html).toMatch(/saved with your tax records/);
+    expect(html).toMatch(/saved on the server disk/);
     expect(html).toMatch(/<h2>Version 4\.07<\/h2>/);
     expect(html).toMatch(/Invoice and receipt photos stay on the server/);
     expect(html).toMatch(/<h2>Version 4\.06<\/h2>/);

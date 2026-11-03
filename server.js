@@ -5166,7 +5166,7 @@ if (process.env.NODE_ENV !== "test") {
     .then(() => {
       const storageInfo = dataDir.adoptAndBind();
       console.log(
-        `Storage: ${storageInfo.dataDir} (source=${storageInfo.source}, mounted=${storageInfo.mounted}, accounts=${storageInfo.accountCount})`
+        `Storage: ${storageInfo.dataDir} (source=${storageInfo.source}, mounted=${storageInfo.mounted}, accounts=${storageInfo.accountCount}, receiptBytes=${storageInfo.receiptBytes}, repoReceiptBytes=${storageInfo.repoReceiptBytes}, dockerMount=${storageInfo.dockerMount})`
       );
     })
     .then(() => backup.restoreLatestIfStoreEmpty())

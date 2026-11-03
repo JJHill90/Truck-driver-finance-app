@@ -141,5 +141,15 @@ describe("data-dir binds writers to the persistent disk", () => {
     const info = dataDir.describeStorage();
     expect(info.usersFile).toBe(true);
     expect(info.accountCount).toBe(2);
+    fs.mkdirSync(path.join(tmp, "receipts"), { recursive: true });
+    fs.writeFileSync(path.join(tmp, "receipts", "one.jpg"), "abcdef");
+    const withPhoto = dataDir.describeStorage();
+    expect(withPhoto.receiptBytes).toBe(6);
+    expect(withPhoto.receiptFiles).toBe(1);
+  });
+
+  it("does not declare a Docker volume that hides the Render disk", () => {
+    const dockerfile = fs.readFileSync(path.join(__dirname, "Dockerfile"), "utf8");
+    expect(dockerfile).not.toMatch(/^\s*VOLUME\b/m);
   });
 });
