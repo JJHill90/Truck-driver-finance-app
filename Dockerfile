@@ -17,8 +17,10 @@ ENV PORT=3000
 # /opt/render/project/src/data. render.yaml sets DATA_DIR on the service.
 EXPOSE 3000
 
-# Runtime data (JSON store, receipts, user accounts) lives here. Mount a
-# persistent volume at /app/data, or set DATA_DIR to the host mount path.
-VOLUME ["/app/data"]
+# Do not declare VOLUME /app/data. On the Suite image that instruction creates
+# a second mount next to the Render disk. lib/storage.js writes photos there,
+# Render's disk graph stays empty, and the volume is thrown away on every deploy.
+# Local docker run still persists with -v gotax-data:/app/data. On Render the
+# disk is DATA_DIR (/opt/render/project/src/data), same path Driver Hub uses.
 
 CMD ["node", "server.js"]

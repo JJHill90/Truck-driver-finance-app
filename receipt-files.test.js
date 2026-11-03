@@ -41,6 +41,61 @@ describe("receipt files stay on the persistent data directory", () => {
     expect(fs.existsSync(path.join(dataDir.REPO_DATA_DIR, receipt.imagePath))).toBe(false);
     expect(storage.readReceiptImage(receipt.imagePath)).toMatch(/^data:image\/jpeg;base64,/);
     expect(storage.getReceiptFileInfo(receipt.imagePath).filePath).toBe(onDisk);
+    expect(fs.existsSync(path.join(tmp, "suite", "receipts"))).toBe(false);
+  });
+
+  it("stores a Go Taxation Suite photo beside the suite ledger and deletes both copies", () => {
+    const prev = process.env.APP_PRODUCT;
+    process.env.APP_PRODUCT = "suite";
+    try {
+      const records = { receipts: [], vendors: [], expenses: [], income: [] };
+      const receipt = storage.addReceipt(records, {
+        filename: "invoice.jpg",
+        mimeType: "image/jpeg",
+        dataUrl: "data:image/jpeg;base64," + Buffer.from("suite-bytes").toString("base64"),
+      });
+      const shared = path.join(tmp, receipt.imagePath);
+      const durable = path.join(tmp, "suite", "receipts", path.basename(receipt.imagePath));
+      expect(fs.readFileSync(shared, "utf8")).toBe("suite-bytes");
+      expect(fs.readFileSync(durable, "utf8")).toBe("suite-bytes");
+      expect(storage.getReceiptFileInfo(receipt.imagePath).filePath).toBe(durable);
+
+      fs.rmSync(shared, { force: true });
+      expect(storage.readReceiptImage(receipt.imagePath)).toMatch(/^data:image\/jpeg;base64,/);
+
+      storage.deleteReceiptFile(receipt.imagePath);
+      expect(fs.existsSync(shared)).toBe(false);
+      expect(fs.existsSync(durable)).toBe(false);
+      expect(storage.getReceiptFileInfo(receipt.imagePath)).toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.APP_PRODUCT;
+      else process.env.APP_PRODUCT = prev;
+    }
+  });
+
+  it("restores a Suite photo that a backup stored only under suite/receipts", async () => {
+    const prev = process.env.APP_PRODUCT;
+    process.env.APP_PRODUCT = "suite";
+    try {
+      const stage = path.join(tmp, "stage");
+      fs.mkdirSync(path.join(stage, "suite", "receipts"), { recursive: true });
+      fs.writeFileSync(path.join(stage, "suite", "receipts", "kept-on-suite.jpg"), "suite-backup");
+      const archive = path.join(tmp, "backups", "haulage-backup-20261103T020000Z-def456.tar.gz");
+      fs.mkdirSync(path.dirname(archive), { recursive: true });
+      execFileSync("tar", ["-czf", archive, "-C", stage, "suite/receipts/kept-on-suite.jpg"]);
+
+      const report = await receiptFiles.collectMissingReceiptFiles();
+      expect(report.restored).toBe(1);
+      const durable = path.join(tmp, "suite", "receipts", "kept-on-suite.jpg");
+      const shared = path.join(tmp, "receipts", "kept-on-suite.jpg");
+      expect(fs.readFileSync(durable, "utf8")).toBe("suite-backup");
+      expect(fs.readFileSync(shared, "utf8")).toBe("suite-backup");
+      expect(receiptFiles.isReceiptMember("suite/receipts/kept-on-suite.jpg")).toBe(true);
+      expect(receiptFiles.isReceiptMember("suite/users/pat.json")).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.APP_PRODUCT;
+      else process.env.APP_PRODUCT = prev;
+    }
   });
 
   it("still reads a photo that was left in the repo data folder", () => {

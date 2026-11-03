@@ -5149,10 +5149,8 @@ app.use((err, _req, res, _next) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
-  const storageInfo = dataDir.adoptAndBind();
-  console.log(
-    `Storage: ${storageInfo.dataDir} (source=${storageInfo.source}, mounted=${storageInfo.mounted}, accounts=${storageInfo.accountCount})`
-  );
+  // Copy photo bytes onto the disk before adoptAndBind renames and deletes
+  // the ephemeral data folder. On Go Taxation Suite that copy is suite/receipts.
   receiptFiles
     .collectMissingReceiptFiles()
     .then((report) => {
@@ -5164,6 +5162,12 @@ if (process.env.NODE_ENV !== "test") {
     })
     .catch((err) => {
       console.warn("Receipt file recovery skipped:", err.message);
+    })
+    .then(() => {
+      const storageInfo = dataDir.adoptAndBind();
+      console.log(
+        `Storage: ${storageInfo.dataDir} (source=${storageInfo.source}, mounted=${storageInfo.mounted}, accounts=${storageInfo.accountCount}, receiptBytes=${storageInfo.receiptBytes}, repoReceiptBytes=${storageInfo.repoReceiptBytes}, dockerMount=${storageInfo.dockerMount})`
+      );
     })
     .then(() => backup.restoreLatestIfStoreEmpty())
     .then((restored) => {
