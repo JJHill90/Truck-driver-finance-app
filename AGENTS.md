@@ -79,9 +79,15 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
 -   **Fuel Hub.** `GET/POST /api/haulage/fuelhub*` (`lib/fuel-*.js`, `lib/fuelhub-store.js`,
   `lib/fuel-dashboard.js`, `lib/fuel-forecast.js`, `public/fuelhub.js`). Sidebar: Profile (same Driver Hub
   identity as Taxation Hub), Dashboard, Forecast, Plan fills, GPS, Truck & load, cards and
-  prices. Dashboard summarises the current planned/GPS run, previous saved trips,
+  prices.   Dashboard summarises the current planned/GPS run, previous saved trips,
   and cheapest truck-access diesel in the current area from NHVR corridor sites
   plus ACCC / FuelWatch / FuelCheck-style public tables (cards come off after).
+  **Run assessment** (`lib/fuel-assessment.js`, Dashboard + GPS) tracks
+  average and instantaneous L/100 km, litres used on the current track,
+  trip km vs planned remaining, distance variance, reserve volumetric margin,
+  distance-to-empty, fuel safety ratio (DTE / remaining; under 1.3 is slim),
+  and idle/auxiliary litres from stationary GPS. These are planning estimates
+  from the truck model plus GPS — not an ECU fuel-map.
   **Forecast** is the live-fueling counterpart of Taxation Hub Forecast:
   Conservative / Baseline / Optimistic L/km from freight tonnes, diesel mass in
   the tanks, and hours on the road (slower loaded running lifts litres). Averages
@@ -455,7 +461,14 @@ price bands, fuel cards and GPS or offline route planning. Standard commands
   vehicle profile, not this preset.
 - **Version label** sits under the Support button (sidebar bottom-left) and on
  the title/login screen. Source: `lib/version.js` / `GET /api/haulage/version`.
- Bump `HAULAGE_PR_NUMBER` with each new PR. Display ladder: PR 1–50 →
+ Bump `HAULAGE_PR_NUMBER` with each new PR, and add that release as the
+ first entry in `lib/suite-patch-notes.js` (same PR number, point-form summary of
+ what shipped). That list is the public Updates page at
+ `https://gotaxationsuite.com/updates`. Display ladder: PR 1–50 →
  `Version .1`…`Version .50`; next → `Version 1.00`, then `1.01`…`1.50`,
  then rounds to `2.00`, then `2.01`…`2.50` → `3.00`, and so on (after 1.00
  each major includes minors `.00`–`.50` before the next whole number).
+ Driver Hub public patch notes are `/patch-notes` (`lib/patch-notes.js`),
+ Hub host and localhost only — not Suite, not gotaxationhub.com. When a
+ Driver Hub change bumps `HAULAGE_PR_NUMBER`, append one entry there with
+ that version label. See `docs/custom-domain-driverhub.md`.

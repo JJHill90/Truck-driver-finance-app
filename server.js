@@ -123,12 +123,15 @@ const billingStripe = require("./lib/billing-stripe");
 const accountDelete = require("./lib/account-delete");
 const reviewerDemo = require("./lib/reviewer-demo");
 const { HAULAGE_PR_NUMBER, formatVersionLabel } = require("./lib/version");
+const patchNotes = require("./lib/patch-notes");
 const { corsMiddleware, sessionCookieFlags } = require("./lib/cors");
 const {
   wwwToApexRedirect: suiteWwwToApexRedirect,
   isSuiteOfficialHost,
   hostFromRequest: publicHostFromRequest,
+  officialPageUrl: suiteOfficialPageUrl,
 } = require("./lib/suite-public-origin");
+const { renderPatchNotesPage } = require("./lib/suite-patch-notes-page");
 const {
   wwwToApexRedirect: driverHubWwwToApexRedirect,
   nativeAppToHaulageRedirect,
@@ -158,6 +161,7 @@ const hubProfile = require("./lib/hub-profile");
 const fuelDashboard = require("./lib/fuel-dashboard");
 const fuelVehicleClass = require("./lib/fuel-vehicle-class");
 const fuelForecast = require("./lib/fuel-forecast");
+const fuelAssessment = require("./lib/fuel-assessment");
 const fuelReceipts = require("./lib/fuel-receipts");
 const suite = require("./lib/suite");
 const accountantShare = require("./lib/accountant-share");
@@ -837,6 +841,13 @@ app.post(
 app.use(express.json({ limit: "30mb" }));
 
 const api = express.Router();
+
+// Android WebView will replay a cached GET of /records or /receipts/:id and
+// keep showing the pre-raster extraction after the server has finished.
+api.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 
 /** Multipart scan uploads (Firefox-friendly alternative to giant JSON base64). */
 const scanUpload = multer({
@@ -1615,11 +1626,17 @@ api.post("/fuelhub/track", (req, res) => {
     return;
   }
   try {
-    const { store } = fuelhubState(req);
+    const { store, hub } = fuelhubState(req);
     const track = fuelhubStore.appendTrack(store, req.body || {});
     persist(req, { reason: "fuelhub-track" });
-    const efficiency = fuelEfficiency.describeEfficiency(store.truck);
-    const remainingKm = Math.max(0, efficiency.rangeKm - (track.km || 0));
+    const efficiency = fuelEfficiency.describeEfficiency(store.truck, {
+      driverType: hub.driverType,
+    });
+    const assessment = fuelAssessment.buildAssessment({ store, hub, efficiency });
+    const remainingKm =
+      assessment.safety && assessment.safety.rangeKm != null
+        ? assessment.safety.rangeKm
+        : efficiency.rangeKm;
     res.json({
       track: {
         id: track.id,
@@ -1628,8 +1645,9 @@ api.post("/fuelhub/track", (req, res) => {
         updatedAt: track.updatedAt,
         pointCount: (track.points || []).length,
       },
-      remainingKm: Math.round(remainingKm * 10) / 10,
+      remainingKm: Math.round(Number(remainingKm) * 10) / 10,
       efficiency,
+      assessment,
     });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
@@ -4919,6 +4937,15 @@ function serveSuitePublicPages(req, kind) {
   );
 }
 
+function sendSuitePatchNotes(req, res) {
+  if (!serveSuitePublicPages(req)) {
+    res.redirect(302, suiteOfficialPageUrl("/updates"));
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(renderPatchNotesPage());
+}
+
 function sendProductLegalPage(kind) {
   const suiteFile = kind === "privacy" ? "privacy.html" : "terms.html";
   const hubFile = kind === "privacy" ? "privacy-driverhub.html" : "terms-driverhub.html";
@@ -5042,6 +5069,23 @@ app.get("/sitemap.xml", (req, res, next) => {
 });
 app.get(["/support", "/support.html"], sendWelcomeSupport());
 app.get(["/suite/support", "/suite/support.html"], sendWelcomeSupport("suite"));
+app.get(["/updates", "/updates.html"], sendSuitePatchNotes);
+app.get(["/patch-notes", "/patch-notes.html"], (req, res, next) => {
+  // Suite keeps /patch-notes as an alias of /updates. Driver Hub owns it elsewhere.
+  if (!serveSuitePublicPages(req)) return next();
+  sendSuitePatchNotes(req, res);
+});
+// Driver Hub public changelog. Hub process only — not APP_PRODUCT=suite,
+// not gotaxationsuite.com, not gotaxationhub.com. Notes live in lib/patch-notes.js.
+app.get(["/patch-notes", "/patch-notes.html"], (req, res) => {
+  if (!patchNotes.shouldServeDriverHubPatchNotes(req)) {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html");
+  res.send(patchNotes.renderPage());
+});
 app.get(["/haulage/support", "/haulage/support.html"], (req, res, next) => {
   if (suite.isStandaloneSuite()) return next();
   sendWelcomeSupport("haulage")(req, res);
@@ -5051,12 +5095,23 @@ app.get(["/suite/share/:token", "/haulage/share/:token", "/share/:token"], (_req
   res.sendFile(path.join(PUBLIC_DIR, "share.html"));
 });
 
+function appShellStatic(root) {
+  return express.static(root, {
+    setHeaders(res, filePath) {
+      if (/\.(?:html|js|css)$/i.test(filePath)) {
+        res.setHeader("Cache-Control", "no-store");
+      }
+    },
+  });
+}
+
 app.get(["/suite", "/suite/"], redirectSuiteToSibling, (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(PUBLIC_DIR, "suite", "index.html"));
 });
 app.use("/suite", redirectSuiteToSibling);
-app.use("/suite", express.static(path.join(PUBLIC_DIR, "suite")));
-app.use("/suite", express.static(PUBLIC_DIR));
+app.use("/suite", appShellStatic(path.join(PUBLIC_DIR, "suite")));
+app.use("/suite", appShellStatic(PUBLIC_DIR));
 
 // --- Static UI at /haulage (Driver Hub) ---------------------------------
 // Dedicated Go Taxation Suite hosts (APP_PRODUCT=suite) send / and /haulage
@@ -5073,8 +5128,11 @@ if (suite.isStandaloneSuite()) {
     res.redirect(302, `/suite${rest}`);
   });
 } else {
-  app.use("/haulage", express.static(PUBLIC_DIR));
-  app.get("/haulage", (_req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
+  app.use("/haulage", appShellStatic(PUBLIC_DIR));
+  app.get("/haulage", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+  });
 }
 app.get("/", sendWelcomePage());
 

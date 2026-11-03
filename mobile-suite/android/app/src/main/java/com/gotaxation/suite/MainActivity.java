@@ -3,12 +3,14 @@ package com.gotaxation.suite;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     static final String SUITE_URL = "https://go-taxation-suite.onrender.com/suite/";
+    private boolean liveCacheCleared;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,7 +32,10 @@ public class MainActivity extends BridgeActivity {
             new Handler(Looper.getMainLooper()).postDelayed(this::openHostedSuite, 250);
             return;
         }
-        webView.post(() -> webView.loadUrl(SUITE_URL));
+        webView.post(() -> {
+            useLiveServer(webView);
+            webView.loadUrl(SUITE_URL);
+        });
     }
 
     private void openHostedSuiteIfStillLocal() {
@@ -41,7 +46,19 @@ public class MainActivity extends BridgeActivity {
         String url = String.valueOf(webView.getUrl());
         boolean hosted = url.contains(SuiteNavigationPlugin.HOSTED_HOST);
         if (!hosted) {
-            webView.post(() -> webView.loadUrl(SUITE_URL));
+            webView.post(() -> {
+                useLiveServer(webView);
+                webView.loadUrl(SUITE_URL);
+            });
+        }
+    }
+
+    /** Drop a cached shell so receipt extraction matches the live Render app. */
+    private void useLiveServer(WebView webView) {
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        if (!liveCacheCleared) {
+            webView.clearCache(true);
+            liveCacheCleared = true;
         }
     }
 

@@ -149,6 +149,17 @@ describe("ledger edit modal", () => {
     expect(src).toMatch(/Tick the fields you want to change/);
     expect(src).toMatch(/data-edit-field/);
     expect(src).toMatch(/data-edit-continue/);
+    expect(src).toMatch(/ledger-edit-continue/);
+    const css = fs.readFileSync(path.join(__dirname, "public/styles.css"), "utf8");
+    expect(css).toMatch(/\.ledger-edit-continue[\s\S]*background:\s*var\(--accent\)/);
+    expect(css).toMatch(/\.ledger-edit-continue[\s\S]*color:\s*#fff/);
+    expect(css).toMatch(/table\.expense-ledger td[\s\S]*font-weight:\s*600/);
+    expect(css).toMatch(/row-actions \.btn\.secondary[\s\S]*background:\s*#2a416b/);
+    expect(css).toMatch(/row-actions \.btn[\s\S]*font-weight:\s*700/);
+    expect(css).toMatch(/row-actions \.btn\.secondary[\s\S]*color:\s*var\(--text\)/);
+    expect(css).toMatch(/row-actions \.btn\.danger:not\(\.is-locked\)[\s\S]*background:\s*#ff7171/);
+    expect(css).toMatch(/row-actions \.btn\.danger:not\(\.is-locked\)[\s\S]*color:\s*var\(--text\)/);
+    expect(css).toMatch(/\.btn\.ledger-reconcile-btn[\s\S]*background:\s*#3ef0b0/);
     expect(src).toMatch(/data-edit-select-all/);
     expect(src).toMatch(/function selectedLedgerPayload/);
     expect(src).toMatch(/Change fields/);

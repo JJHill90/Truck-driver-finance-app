@@ -21,6 +21,10 @@ describe("Android post-OCR freeze guards", () => {
     expect(src).toMatch(/__haulageSkipNextRefreshAll = true/);
     expect(src).toMatch(/function installQuietRefreshAll/);
     expect(src).toMatch(/function quietUiAfterScanSave/);
+    expect(src).toMatch(/function scheduleDeferredScanPoll/);
+    expect(src).toMatch(/cache: "no-store"/);
+    expect(src).toMatch(/setScanFieldValue\("scan-confirm-amount"/);
+    expect(src).toMatch(/scheduleDeferredScanPoll\(data\.receipt\.id, "income"\)/);
     expect(src).toMatch(/function slimClientScanPayload/);
     expect(src).toMatch(/isQuietHeavyForecastGet/);
   });
@@ -41,8 +45,8 @@ describe("Android post-OCR freeze guards", () => {
   it("cache-busts enhancements so the Play WebView loads the skip", () => {
     const hub = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
     const suiteHtml = fs.readFileSync(path.join(__dirname, "public/suite/index.html"), "utf8");
-    expect(hub).toMatch(/enhancements\.js\?v=suite-thumbs-2/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=suite-thumbs-2/);
+    expect(hub).toMatch(/enhancements\.js\?v=live-extract-1/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=live-extract-1/);
   });
 });
 
@@ -107,5 +111,12 @@ describe("scan HTTP confirm payload", () => {
     const saved = (records.receipts || []).find((r) => r.id === data.receipt.id);
     expect(saved).toBeTruthy();
     expect(saved.ocrResult.rawText).toBeUndefined();
+
+    const versionRes = await fetch(`http://127.0.0.1:${port}/api/haulage/version`);
+    expect(versionRes.headers.get("cache-control")).toMatch(/no-store/);
+    const shellRes = await fetch(`http://127.0.0.1:${port}/haulage/`);
+    expect(shellRes.headers.get("cache-control")).toMatch(/no-store/);
+    const jsRes = await fetch(`http://127.0.0.1:${port}/haulage/enhancements.js`);
+    expect(jsRes.headers.get("cache-control")).toMatch(/no-store/);
   }, 30000);
 });

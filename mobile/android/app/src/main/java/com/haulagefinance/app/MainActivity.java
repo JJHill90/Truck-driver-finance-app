@@ -3,6 +3,7 @@ package com.haulagefinance.app;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import androidx.core.splashscreen.SplashScreen;
 import com.getcapacitor.BridgeActivity;
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
      */
     static final String HUB_URL = "https://godriverhub.com/haulage/";
     static final String NATIVE_UA = "DriverHubApp";
+    private boolean liveCacheCleared;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,6 +40,7 @@ public class MainActivity extends BridgeActivity {
         }
         webView.post(() -> {
             markNativeUserAgent(webView);
+            useLiveServer(webView);
             webView.loadUrl(HUB_URL);
         });
     }
@@ -53,8 +56,18 @@ public class MainActivity extends BridgeActivity {
         if (!inApp) {
             webView.post(() -> {
                 markNativeUserAgent(webView);
+                useLiveServer(webView);
                 webView.loadUrl(HUB_URL);
             });
+        }
+    }
+
+    /** Drop a cached shell so receipt extraction matches the live Render app. */
+    private void useLiveServer(WebView webView) {
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        if (!liveCacheCleared) {
+            webView.clearCache(true);
+            liveCacheCleared = true;
         }
     }
 

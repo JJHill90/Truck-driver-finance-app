@@ -576,6 +576,21 @@
         setFormFieldValue(form, "description", o.description);
         if (o.date) setFormFieldValue(form, "date", o.date);
       }
+      const title = document.querySelector("#income-scan-result .income-mini-title");
+      const entityEl = document.getElementById("income-confirm-entity");
+      if (title && entityEl && !isScanFieldDirty(entityEl)) {
+        title.textContent = o.entity || o.vendor || "Entity / company";
+      }
+      const mini = document.querySelectorAll("#income-scan-result .income-mini-row strong");
+      if (mini[0] && o.grossTotal != null) mini[0].textContent = fmt(o.grossTotal);
+      if (mini[1] && (primary || o.netPay)) mini[1].textContent = fmt(primary || o.netPay);
+    } else {
+      setScanFieldValue("scan-confirm-vendor", o.vendor || o.entity);
+      setScanFieldValue("scan-confirm-amount", primary || o.amount);
+      setScanFieldValue("scan-confirm-description", o.description);
+      setScanFieldValue("scan-confirm-abn", o.vendorAbn);
+      if (o.suggestedCategory) setScanFieldValue("scan-confirm-category", o.suggestedCategory);
+      if (o.date) setScanFieldValue("scan-confirm-date", o.date);
     }
     if (data && data.componentBreakdown) {
       latest = {
@@ -593,17 +608,39 @@
     }
   }
 
-  async function pollDeferredScanOcr(receiptId, purpose) {
+  let deferredScanPollToken = 0;
+
+  function stopDeferredScanPoll() {
+    deferredScanPollToken += 1;
+  }
+
+  function scheduleDeferredScanPoll(receiptId, purpose) {
     if (!receiptId) return;
-    for (let i = 0; i < 8; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 2500));
+    const token = ++deferredScanPollToken;
+    // The 30s quiet window only blocks refreshAll. That full reload freezes
+    // Android. The reader fields follow the server without waiting for it.
+    setTimeout(() => {
+      if (token !== deferredScanPollToken) return;
+      void pollDeferredScanOcr(receiptId, purpose, token);
+    }, 700);
+  }
+
+  async function pollDeferredScanOcr(receiptId, purpose, token) {
+    if (!receiptId) return;
+    const mine = token == null ? deferredScanPollToken : token;
+    for (let i = 0; i < 60; i += 1) {
+      if (mine !== deferredScanPollToken) return;
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (mine !== deferredScanPollToken) return;
       try {
         const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}`, {
           credentials: "same-origin",
+          cache: "no-store",
         });
         if (!res.ok) continue;
         const data = await res.json();
         if (!data || data.ocrPending) continue;
+        if (mine !== deferredScanPollToken) return;
         applyDeferredScanOcr(data, purpose);
         return;
       } catch {
@@ -1367,10 +1404,7 @@
               }, 1500);
             }
             if (data.ocrPending && data.receipt && data.receipt.id) {
-              const waitMs = Math.max(800, Number(window.__haulageQuietUntil) - Date.now() + 400);
-              setTimeout(() => {
-                void pollDeferredScanOcr(data.receipt.id, purpose);
-              }, Number.isFinite(waitMs) ? waitMs : 2500);
+              scheduleDeferredScanPoll(data.receipt.id, purpose);
             }
           }
 
@@ -2530,6 +2564,7 @@
 
   async function confirmIncomePdfScan(receiptId, confirmed) {
     const box = document.getElementById("income-scan-result");
+    stopDeferredScanPoll();
     window.__haulageBlockRefreshAll = 0;
     window.__haulageSkipNextRefreshAll = false;
     if (!confirmed) {
@@ -2667,6 +2702,9 @@
       await yieldToUi();
       await new Promise((resolve) => setTimeout(resolve, 80));
       if (box) paintIncomePdfConfirm(box, data, blob.name || file.name);
+      if (data.ocrPending && data.receipt && data.receipt.id) {
+        scheduleDeferredScanPoll(data.receipt.id, "income");
+      }
       if (typeof window.toast === "function") {
         window.toast("Income summary ready — approve before saving");
       }
@@ -9247,7 +9285,7 @@
               <p class="muted small enh-ledger-edit-count" data-edit-count></p>
               <div class="enh-dup-actions">
                 <button type="button" class="btn secondary" data-edit-close>Cancel</button>
-                <button type="button" class="btn" data-edit-continue>Continue</button>
+                <button type="button" class="btn ledger-edit-continue" data-edit-continue>Continue</button>
               </div>
             </div>
           </div>
@@ -11240,7 +11278,7 @@
     profile: {
       title: "Profile",
       body: [
-        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
+        "You sign in once on Driver Hub, then open Taxation Hub or Fuel Hub from the app picker. Taxation Hub Profile is where you set your display name, employer, annual salary, licence class, driver type and work vehicle (rigid / B-double / road train), and tick whether your TFN is with your employer. Fuel Hub has its own Profile tab that writes the same record — register fuel-class vehicles there (samples XN93DX, YN16BQ, YN17BQ, or a custom code) with tank litres to monitor; that tank drives fill spacing instead of a generic heavy rigid. Driver type plus work vehicle feed Fuel Hub diesel L/100 km on planned runs. Fuel Hub Dashboard summarises the current run, saved trips and cheapest NHVR truck-access diesel nearby from government-style public tables. Run assessment on Dashboard and GPS tracks average and instantaneous L/100 km, litres used, trip km vs remaining, distance variance, reserve margin, distance-to-empty, fuel safety ratio (under 1.3 is slim) and idle/auxiliary litres. Forecast (same Conservative / Baseline / Optimistic idea as Taxation Hub) averages L/km across trips from freight, fuel load and hours, then sizes a minimum vs ideal fill at a nominated town so you are not brim-filling at inflated west-QLD bowsers — e.g. St George → Longreach → Barcaldine (refuel) with added freight through to Gracemere. Plan fills is the live fueling side of that forecast. Start typing an employer (e.g. “Lindsay”) to pick from known transport fleets — we’ll then ask your driver type and fill a standard salary, licence class and vehicle you can still edit before saving.",
         "Account tools cover email on file, password changes, and optional presets so new expenses start closer to how you work. New profiles start on Free (15 uploads/month + 1 on-screen EOFY report). Pro is the paid plan with unlimited scans, PDF/JSON export and forecast. Pro+ adds accountant share, extra entity, partnership seat, BAS/GST pack, cloud OCR and priority support. Use Driver Hub Apps in the sidebar to switch apps or return to the hub. After login or logout the page reloads so every tab shows your data only.",
         "Primary mod can create or delete driver profiles, upgrade or downgrade Free ↔ Pro+ for both Taxation Hub and Fuel Hub, and add, edit or remove that driver’s Taxation Hub ledger and Fuel Hub data. Opening another user does not switch your signed-in session. Guests can browse read-only; uploads and ledger changes need a signed-in Driver Hub profile.",
       ],
@@ -13466,20 +13504,70 @@
     );
   }
 
+  /* A4 portrait is ISO 216: 210mm × 297mm. Receipt is a till slip.
+     Long is a taller roll so more of a long docket stays inside the frame. */
+  const CAMERA_FRAMES = {
+    a4: {
+      label: "A4 invoice",
+      hint: "Fit the whole A4 page inside the amber frame, including all four corners.",
+      status: "A4 invoice",
+    },
+    receipt: {
+      label: "Receipt",
+      hint: "Line the receipt up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
+      status: "Receipt",
+    },
+    long: {
+      label: "Long receipt",
+      hint: "Taller frame for a long docket. Keep the top and the total inside the amber edges.",
+      status: "Long receipt",
+    },
+  };
+  const CAMERA_FRAME_KEY = "haulage-camera-frame";
+
+  function savedCameraFrame() {
+    try {
+      const saved = sessionStorage.getItem(CAMERA_FRAME_KEY);
+      if (CAMERA_FRAMES[saved]) return saved;
+    } catch {
+      /* private mode */
+    }
+    return "a4";
+  }
+
+  function applyCameraFrame(mode) {
+    const key = CAMERA_FRAMES[mode] ? mode : "a4";
+    try {
+      sessionStorage.setItem(CAMERA_FRAME_KEY, key);
+    } catch {
+      /* ignore */
+    }
+    const frame = document.getElementById("receipt-camera-frame");
+    if (frame) frame.dataset.frame = key;
+    if (modal) {
+      modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
+        const on = btn.getAttribute("data-camera-frame") === key;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      const hint = modal.querySelector(".receipt-camera-hint");
+      if (hint) hint.innerHTML = CAMERA_FRAMES[key].hint;
+    }
+    const status = document.getElementById("receipt-camera-status");
+    if (status) status.textContent = CAMERA_FRAMES[key].status;
+    return key;
+  }
+
   function purposeCopy() {
     return cameraPurpose === "income"
       ? {
           label: "Scan payslip with camera",
-          hint: "Line the payslip up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
-          status: "Align payslip in frame",
           shutter: "Capture payslip",
           fallbackId: "income-file",
           filename: () => `payslip-scan-${Date.now()}.jpg`,
         }
       : {
           label: "Scan receipt with camera",
-          hint: "Line the receipt up inside the amber frame — include the <strong>top of the slip</strong> and the <strong>date</strong>.",
-          status: "Align receipt in frame",
           shutter: "Capture receipt",
           fallbackId: "receipt-file",
           filename: () => `receipt-scan-${Date.now()}.jpg`,
@@ -13490,12 +13578,9 @@
     if (!modal) return;
     const copy = purposeCopy();
     modal.setAttribute("aria-label", copy.label);
-    const hint = modal.querySelector(".receipt-camera-hint");
-    if (hint) hint.innerHTML = copy.hint;
-    const status = document.getElementById("receipt-camera-status");
-    if (status) status.textContent = copy.status;
     const shutter = document.getElementById("receipt-camera-shutter");
     if (shutter) shutter.setAttribute("aria-label", copy.shutter);
+    applyCameraFrame(savedCameraFrame());
   }
 
   function ensureModal() {
@@ -13515,18 +13600,22 @@
       <div class="receipt-camera-stage">
         <video class="receipt-camera-video" id="receipt-camera-video" playsinline muted autoplay></video>
         <div class="receipt-camera-overlay" aria-hidden="true">
-          <div class="receipt-camera-frame" id="receipt-camera-frame">
+          <div class="receipt-camera-frame" id="receipt-camera-frame" data-frame="a4">
             <span class="receipt-camera-corner tl"></span>
             <span class="receipt-camera-corner tr"></span>
             <span class="receipt-camera-corner bl"></span>
             <span class="receipt-camera-corner br"></span>
           </div>
           <p class="receipt-camera-hint">
-            Line the receipt up inside the amber frame — include the
-            <strong>top of the slip</strong> and the <strong>date</strong>.
+            Fit the whole A4 page inside the amber frame, including all four corners.
           </p>
         </div>
-        <div class="receipt-camera-status" id="receipt-camera-status">Align receipt in frame</div>
+        <div class="receipt-camera-status" id="receipt-camera-status">A4 invoice</div>
+        <div class="receipt-camera-modes" role="group" aria-label="Frame size">
+          <button type="button" class="is-on" data-camera-frame="a4" aria-pressed="true">A4 invoice</button>
+          <button type="button" data-camera-frame="receipt" aria-pressed="false">Receipt</button>
+          <button type="button" data-camera-frame="long" aria-pressed="false">Long receipt</button>
+        </div>
         <div class="receipt-camera-toolbar">
           <button type="button" class="btn secondary" id="receipt-camera-cancel">Cancel</button>
           <button type="button" class="receipt-camera-capture" id="receipt-camera-shutter" aria-label="Capture receipt"></button>
@@ -13538,7 +13627,37 @@
     modal.querySelector("#receipt-camera-shutter")?.addEventListener("click", () => {
       void captureAndUpload();
     });
+    modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyCameraFrame(btn.getAttribute("data-camera-frame"));
+      });
+    });
     return modal;
+  }
+
+  async function sharpenCameraTrack(mediaStream) {
+    const track = mediaStream && mediaStream.getVideoTracks && mediaStream.getVideoTracks()[0];
+    if (!track || typeof track.getCapabilities !== "function" || typeof track.applyConstraints !== "function") {
+      return;
+    }
+    let caps = {};
+    try {
+      caps = track.getCapabilities() || {};
+    } catch {
+      return;
+    }
+    const next = {};
+    if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
+      next.focusMode = "continuous";
+    }
+    if (caps.width && caps.width.max) next.width = { ideal: caps.width.max };
+    if (caps.height && caps.height.max) next.height = { ideal: caps.height.max };
+    if (!Object.keys(next).length) return;
+    try {
+      await track.applyConstraints(next);
+    } catch {
+      /* the open preview is still usable */
+    }
   }
 
   function stopStream() {
@@ -13683,14 +13802,23 @@
 
     stopStream();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const portrait = {
         audio: false,
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 2160 },
+          height: { ideal: 3840 },
         },
-      });
+      };
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(portrait);
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" } },
+        });
+      }
+      await sharpenCameraTrack(stream);
       video.srcObject = stream;
       await video.play().catch(() => {});
       if (status) status.textContent = copy.status;

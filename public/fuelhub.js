@@ -262,6 +262,94 @@
     return (state && state.dashboard) || {};
   }
 
+  function assessmentOf() {
+    return (dash().assessment || (state && state.assessment) || null);
+  }
+
+  function assessmentTone(status) {
+    if (status === "stranded" || status === "below_reserve" || status === "empty") return "is-danger";
+    if (status === "slim" || status === "tight") return "is-warn";
+    if (status === "ok" || status === "clear") return "is-ok";
+    return "";
+  }
+
+  function fmtSigned(n) {
+    if (n == null || Number.isNaN(Number(n))) return "—";
+    const v = Number(n);
+    const shown = Math.abs(v) >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+    return `${v > 0 ? "+" : ""}${shown}`;
+  }
+
+  function renderAssessmentCard() {
+    const a = assessmentOf();
+    if (!a) return "";
+    const eff = a.efficiency || {};
+    const dist = a.distance || {};
+    const safety = a.safety || {};
+    const instant =
+      eff.instantaneousMode === "idle"
+        ? `${esc(eff.instantaneousLPerHour)} L/h idle`
+        : `${esc(eff.instantaneousLPer100km != null ? eff.instantaneousLPer100km : "—")} L/100 km`;
+    const remaining =
+      dist.targetRemainingKm == null
+        ? "No planned remaining"
+        : `${esc(dist.targetRemainingKm)} km to ${esc(dist.targetLabel || "target")}`;
+    const variance =
+      dist.varianceKm == null
+        ? "—"
+        : `${fmtSigned(dist.varianceKm)} km vs plan`;
+    const ratio =
+      safety.safetyRatio == null
+        ? "—"
+        : `${esc(safety.safetyRatio)}×`;
+    const ratioNote =
+      safety.safetyStatus === "stranded"
+        ? "DTE is short of the remaining run"
+        : safety.safetyStatus === "slim"
+          ? "Under 1.3 — safety margin is slim"
+          : safety.safetyStatus === "watch"
+            ? "Keep an eye on the next fill"
+            : safety.safetyStatus === "ok"
+              ? "DTE covers the remaining run with buffer"
+              : "Set a planned run to score the remaining hop";
+    const reserveNote =
+      safety.reserveStatus === "below_reserve" || safety.reserveStatus === "empty"
+        ? "Below the 10–15% reserve"
+        : safety.reserveStatus === "tight"
+          ? "Inside the 10–15% tank buffer"
+          : "Above reserve";
+    return `
+      <div class="fuelhub-card fuelhub-assessment">
+        <h2>Run assessment</h2>
+        <p class="fuelhub-muted">${esc(a.note || "Live efficiency, distance vs plan, and fuel safety from this truck, GPS and last planned corridor.")}</p>
+        <h3 class="fuelhub-subhead">Core efficiency</h3>
+        <div class="fuelhub-stats">
+          <div class="fuelhub-stat"><strong>${esc(eff.averageLPer100km || "—")}</strong><span>Average L / 100 km</span></div>
+          <div class="fuelhub-stat"><strong>${esc(instant)}</strong><span>Instantaneous use</span></div>
+          <div class="fuelhub-stat"><strong>${esc(eff.totalFuelConsumedL != null ? `${eff.totalFuelConsumedL} L` : "—")}</strong><span>Fuel used this track</span></div>
+          <div class="fuelhub-stat"><strong>${esc(eff.averageKmPerLitre || "—")}</strong><span>km / L (baseline)</span></div>
+        </div>
+        <h3 class="fuelhub-subhead">Distance &amp; milestones</h3>
+        <div class="fuelhub-stats">
+          <div class="fuelhub-stat"><strong>${esc(dist.tripKm != null ? `${dist.tripKm} km` : "—")}</strong><span>Trip distance achieved</span></div>
+          <div class="fuelhub-stat"><strong>${esc(remaining)}</strong><span>Target distance remaining</span></div>
+          <div class="fuelhub-stat"><strong>${esc(variance)}</strong><span>Distance variance</span></div>
+        </div>
+        <h3 class="fuelhub-subhead">Safety &amp; margin</h3>
+        <div class="fuelhub-stats">
+          <div class="fuelhub-stat ${assessmentTone(safety.reserveStatus)}"><strong>${esc(
+            safety.reserveMarginL != null ? `${safety.reserveMarginL} L` : "—"
+          )}</strong><span>Reserve volumetric margin</span></div>
+          <div class="fuelhub-stat"><strong>${esc(safety.rangeKm != null ? `${safety.rangeKm} km` : "—")}</strong><span>Distance-to-empty / range</span></div>
+          <div class="fuelhub-stat ${assessmentTone(safety.safetyStatus)}"><strong>${esc(ratio)}</strong><span>Fuel safety ratio</span></div>
+          <div class="fuelhub-stat"><strong>${esc(
+            safety.idleHours != null ? `${safety.idleHours} h · ${safety.idleL || 0} L` : "—"
+          )}</strong><span>Idling / auxiliary</span></div>
+        </div>
+        <p class="fuelhub-muted">${esc(ratioNote)}. ${esc(reserveNote)} (${esc(safety.tankPercent || 0)}% of tank · reserve ${esc(safety.reserveL || "—")} L).</p>
+      </div>`;
+  }
+
   function renderDashboard() {
     const el = byId("fuel-view-dashboard");
     if (!el) return;
@@ -337,7 +425,7 @@
       ${profileBanner()}
       <div class="fuelhub-stats">
         <div class="fuelhub-stat"><strong>${current.consumptionLPer100km || "—"}</strong><span>L / 100 km now</span></div>
-        <div class="fuelhub-stat"><strong>${current.remainingKm || "—"} km</strong><span>Range before reserve</span></div>
+        <div class="fuelhub-stat"><strong>${current.remainingKm || "—"} km</strong><span>Distance-to-empty</span></div>
         <div class="fuelhub-stat"><strong>${esc(current.combinationLabel || hub.workCombinationLabel || "—")}</strong><span>${esc(current.driverTypeLabel || hub.driverTypeLabel || "Duty cycle")}</span></div>
         <div class="fuelhub-stat"><strong>${
           current.fuelClassCode || (hub.activeFuelVehicle && hub.activeFuelVehicle.classCode) || "—"
@@ -373,6 +461,7 @@
         ${area.nhvrPlannerUrl ? ` <a href="${esc(area.nhvrPlannerUrl)}" target="_blank" rel="noopener">NHVR Route Planner</a>.` : ""}
         Sources: ${((area.sources || []).map((s) => s.name) || []).map(esc).join(" · ")}</p>
       </div>
+      ${renderAssessmentCard()}
     `;
     el.querySelectorAll("[data-fuel-jump]").forEach((btn) => {
       btn.addEventListener("click", () => setView(btn.getAttribute("data-fuel-jump")));
@@ -857,13 +946,15 @@
     const track = state.activeTrack;
     const eff = state.efficiency || {};
     const km = track ? track.km : 0;
+    const a = assessmentOf();
+    const dte = (a && a.safety && a.safety.rangeKm != null) ? a.safety.rangeKm : eff.rangeKm;
     el.innerHTML = `
       ${profileBanner()}
       <div class="fuelhub-card">
         <h2>Live GPS</h2>
-        <p class="fuelhub-muted">Uses this device’s location to accumulate kilometres. Offline you can still type a route on Plan fills. Remaining range uses current tank, load and fuel mass.</p>
+        <p class="fuelhub-muted">Uses this device’s location to accumulate kilometres and split idle from moving so Dashboard can score consumption, remaining distance and fuel safety. Offline you can still type a route on Plan fills.</p>
         <p class="fuelhub-live">${km} km</p>
-        <p class="fuelhub-muted">${track ? `${track.pointCount || 0} points` : "Not tracking"} · about ${eff.rangeKm || "—"} km of usable diesel from the saved tank.</p>
+        <p class="fuelhub-muted">${track ? `${track.pointCount || 0} points` : "Not tracking"} · about ${dte || "—"} km distance-to-empty after estimated burn and reserve.</p>
         <div class="fuelhub-actions">
           <button type="button" class="btn primary" id="fuel-gps-start">${watchId ? "GPS running" : "Start GPS"}</button>
           <button type="button" class="btn secondary" id="fuel-gps-stop">Stop</button>
@@ -871,6 +962,7 @@
         </div>
         <p id="fuel-gps-msg" class="fuelhub-muted"></p>
       </div>
+      ${renderAssessmentCard()}
     `;
     el.querySelector("#fuel-gps-start")?.addEventListener("click", startGps);
     el.querySelector("#fuel-gps-stop")?.addEventListener("click", stopGps);
@@ -1624,9 +1716,13 @@
           });
           state.activeTrack = data.track;
           state.efficiency = data.efficiency;
+          if (data.assessment) {
+            state.assessment = data.assessment;
+            if (state.dashboard) state.dashboard.assessment = data.assessment;
+          }
           if (view === "track") renderTrack();
           if (view === "dashboard") void refreshDashboard();
-          gpsMessage(`Range remaining ~${data.remainingKm} km after this track.`);
+          gpsMessage(`Distance-to-empty ~${data.remainingKm} km after this track.`);
         } catch (err) {
           gpsMessage(err.message || "Could not save GPS point.");
         } finally {
