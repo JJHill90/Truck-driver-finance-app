@@ -33,9 +33,13 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(212);
-    expect(notes[0].label).toBe("Version 4.08");
-    expect(notes[0].bullets.join("\n")).toMatch(/copied onto the saved disk/);
+    expect(notes[0].prNumber).toBe(213);
+    expect(notes[0].label).toBe("Version 4.09");
+    expect(notes[0].bullets.join("\n")).toMatch(/camera permission is blocked/);
+    expect(notes[0].bullets.join("\n")).toMatch(/turn Camera on in settings/);
+    const previous = notes.find((note) => note.prNumber === 212);
+    expect(previous && previous.label).toBe("Version 4.08");
+    expect(previous.bullets.join("\n")).toMatch(/copied onto the saved disk/);
     const kept = notes.find((note) => note.prNumber === 211);
     expect(kept && kept.label).toBe("Version 4.07");
     expect(kept.bullets.join("\n")).toMatch(/photos stay saved/);
