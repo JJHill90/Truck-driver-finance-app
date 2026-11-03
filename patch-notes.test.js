@@ -37,6 +37,7 @@ describe("Driver Hub patch notes", () => {
     expect(notes[0].label).toBe("Version 4.11");
     expect(notes[0].bullets.join("\n")).toMatch(/loads a new version on its own/);
     expect(notes[0].bullets.join("\n")).toMatch(/even when the file is already missing/);
+    expect(notes[0].bullets.join("\n")).toMatch(/same day and amount/);
     const keptPhoto = notes.find((note) => note.prNumber === 214);
     expect(keptPhoto && keptPhoto.label).toBe("Version 4.10");
     expect(keptPhoto.bullets.join("\n")).toMatch(/keeps the photo on the disk/);

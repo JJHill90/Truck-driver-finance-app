@@ -24,6 +24,7 @@ describe("suite patch notes", () => {
     expect(html).toMatch(/<h2>Version 4\.11<\/h2>/);
     expect(html).toMatch(/loads a new version on its own/);
     expect(html).toMatch(/even when the file is already missing/);
+    expect(html).toMatch(/same day and amount/);
     expect(html).toMatch(/<h2>Version 4\.10<\/h2>/);
     expect(html).toMatch(/keeps the photo or PDF/);
     expect(html).toMatch(/<h2>Version 4\.09<\/h2>/);

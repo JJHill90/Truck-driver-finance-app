@@ -1001,8 +1001,8 @@
         <div class="enh-dup-card" role="dialog" aria-modal="true" aria-labelledby="enh-dup-title">
           <h3 id="enh-dup-title">Possible duplicate detected</h3>
           <p>possible duplicate detected, do you wish to continue with the upload?</p>
-          <p class="muted">This file looks similar to an existing entry:</p>
-          <ul class="enh-dup-matches">${matchRows || "<li class='muted'>Matching date, vendor and amount</li>"}</ul>
+          <p class="muted">A saved entry already has this amount on the same day. The shop name can differ. Continuing adds another copy.</p>
+          <ul class="enh-dup-matches">${matchRows || "<li class='muted'>Same day and amount</li>"}</ul>
           <p class="enh-dup-scan muted">Scanned: <strong>${esc(o.vendor || o.entity || "—")}</strong> · ${esc(fmtDateShort(o.date))} · ${fmt(o.amount ?? o.grossTotal)}</p>
           <div class="enh-dup-actions">
             <button type="button" class="btn secondary" data-dup-cancel>Cancel upload</button>
@@ -1021,6 +1021,59 @@
         el.addEventListener("click", () => finish(false));
       });
       modal.querySelector("[data-dup-continue]")?.addEventListener("click", () => finish(true));
+    });
+  }
+
+  function isLedgerSavePost(url, method) {
+    if (String(method || "GET").toUpperCase() !== "POST") return false;
+    const path = String(url || "").split("?")[0];
+    return (
+      /\/api\/haulage\/expenses$/.test(path) ||
+      /\/api\/haulage\/income$/.test(path) ||
+      /\/api\/haulage\/receipts\/manual$/.test(path) ||
+      /\/api\/haulage\/receipts\/[^/]+\/confirm$/.test(path)
+    );
+  }
+
+  /** Ask before a second ledger row is saved. Continue retries with forceDuplicate. */
+  async function settleDuplicateSave(url, options, res) {
+    let data = null;
+    try {
+      data = await res.clone().json();
+    } catch {
+      return res;
+    }
+    if (!data || !data.possibleDuplicate) return res;
+    const proceed = await promptDuplicateContinue(data);
+    if (!proceed) {
+      const cancelBody = {
+        error: "Not saved — that date and amount is already in the ledger.",
+        possibleDuplicate: true,
+        code: "POSSIBLE_DUPLICATE",
+      };
+      if (!/\/confirm(\?|$)/.test(String(url || "")) && typeof window.toast === "function") {
+        window.toast(cancelBody.error);
+      }
+      return new Response(JSON.stringify(cancelBody), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    let bodyObj = null;
+    try {
+      bodyObj = JSON.parse(options && options.body);
+    } catch {
+      return res;
+    }
+    bodyObj.forceDuplicate = true;
+    return origFetch(url, {
+      method: "POST",
+      credentials: (options && options.credentials) || "same-origin",
+      headers: {
+        ...((options && options.headers) || {}),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bodyObj),
     });
   }
 
@@ -1441,6 +1494,10 @@
       // Soft gate for paid features. GET /forecast is browse-safe so opening
       // Forecast or EOFY (which refreshes forecast) does not pop the modal.
       const res = await origFetch.apply(this, args);
+      if (isLedgerSavePost(url, fetchMethod)) {
+        const settled = await settleDuplicateSave(url, options, res);
+        if (settled !== res) return settled;
+      }
       if (res && res.ok && isRecordsGet(url, fetchMethod)) {
         try {
           lastRecordsBody = await res.clone().text();
@@ -2606,13 +2663,30 @@
       description: document.getElementById("income-confirm-description")?.value || "",
     };
     try {
-      const res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
+      let res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json().catch(() => ({}));
+      let data = await res.json().catch(() => ({}));
+      if (data && data.possibleDuplicate && !payload.forceDuplicate) {
+        const proceed = await promptDuplicateContinue(data);
+        if (!proceed) {
+          if (typeof window.toast === "function") {
+            window.toast("Not saved — that date and amount is already in the ledger.");
+          }
+          return;
+        }
+        payload.forceDuplicate = true;
+        res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        data = await res.json().catch(() => ({}));
+      }
       if (!res.ok) throw new Error(data.error || "Could not save totals");
       if (box) {
         box.innerHTML = `<h3>Payslip / remittance saved</h3>
@@ -12642,6 +12716,7 @@
     const ocr = document.getElementById("ocr-progress");
     if (ocr && !ocr.hidden && !ocr.classList.contains("hidden")) return true;
     if (document.querySelector(".scan-confirm")) return true;
+    if (document.getElementById("enh-dup-modal")) return true;
     const viewer = document.getElementById("receipt-viewer");
     if (viewer && !viewer.classList.contains("hidden")) return true;
     if (document.getElementById("enh-delete-receipt")) return true;
