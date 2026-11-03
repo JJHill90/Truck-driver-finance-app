@@ -13803,6 +13803,14 @@
 /* --- Live receipt / payslip camera with scan-frame guide -----------------
  * Opens rear camera, shows a tall receipt frame overlay (safeguard), captures
  * the framed region, then hands a File to uploadReceiptFile or uploadIncomeFile.
+ *
+ * The amber frame is a crop guide. Centering the receipt does not move the
+ * lens by itself. object-fit: cover only scales the preview. The saved JPEG
+ * is cropped from the camera buffer (or a larger still), never from the CSS
+ * pixel size of that preview. Focus is a continuous / single-shot request at
+ * the frame centre. Android WebView often ignores those constraints; the
+ * Driver Hub shell then takes a Camera2 still (HubScanCamera) after the
+ * preview track is released. A soft frame does not cancel the camera.
  */
 (function () {
   "use strict";
@@ -13979,33 +13987,296 @@
     modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
       btn.addEventListener("click", () => {
         applyCameraFrame(btn.getAttribute("data-camera-frame"));
+        void refocusOpenCamera();
       });
     });
     return modal;
   }
 
-  async function sharpenCameraTrack(mediaStream) {
-    const track = mediaStream && mediaStream.getVideoTracks && mediaStream.getVideoTracks()[0];
-    if (!track || typeof track.getCapabilities !== "function" || typeof track.applyConstraints !== "function") {
-      return;
+  const FOCUS_SETTLE_MS = 550;
+
+  function clamp01(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    if (n > 1) return 1;
+    return n;
+  }
+
+  function closeFocusDistance(range) {
+    // Diopters. A receipt on a desk is about 20 cm, which is 5 diopters.
+    const closeDiopters = 5;
+    if (!range || typeof range.min !== "number" || typeof range.max !== "number") return null;
+    if (!(range.max >= 2)) return null;
+    return Math.min(range.max, Math.max(range.min, closeDiopters));
+  }
+
+  function normalizePoint(point) {
+    return {
+      x: clamp01(point && point.x != null ? point.x : 0.5),
+      y: clamp01(point && point.y != null ? point.y : 0.5),
+    };
+  }
+
+  /**
+   * Constraints to ask of the lens. An empty capability list (typical Android
+   * WebView) still attempts continuous and single-shot — those browsers often
+   * accept the constraint without advertising it. A listed mode is respected.
+   * zoom is held at 1 so a high ideal resolution is not a digital zoom.
+   */
+  function planFocusAttempts(point, caps) {
+    const poi = normalizePoint(point);
+    const modes = caps && Array.isArray(caps.focusMode) ? caps.focusMode : null;
+    const allows = (mode) => modes == null || modes.length === 0 || modes.includes(mode);
+    const attempts = [];
+    if (allows("continuous")) {
+      attempts.push({
+        label: "continuous",
+        advanced: [{ focusMode: "continuous", pointsOfInterest: [poi] }],
+      });
     }
+    if (allows("single-shot")) {
+      attempts.push({
+        label: "single-shot",
+        advanced: [{ focusMode: "single-shot", pointsOfInterest: [poi] }],
+      });
+    }
+    const distance = closeFocusDistance(caps && caps.focusDistance);
+    if (distance != null && (modes == null || modes.length === 0 || modes.includes("manual"))) {
+      attempts.push({
+        label: "close-manual",
+        advanced: [{ focusMode: "manual", focusDistance: distance, pointsOfInterest: [poi] }],
+      });
+    }
+    attempts.push({ label: "zoom-1", advanced: [{ zoom: 1 }] });
+    return attempts;
+  }
+
+  function previewFocusAttempts(attempts) {
+    return (attempts || []).filter((attempt) => attempt.label === "continuous" || attempt.label === "zoom-1");
+  }
+
+  function shutterFocusAttempts(attempts) {
+    const list = attempts || [];
+    const single = list.filter((attempt) => attempt.label === "single-shot");
+    if (single.length) return single;
+    const continuous = list.filter((attempt) => attempt.label === "continuous");
+    if (continuous.length) return continuous;
+    return list.filter((attempt) => attempt.label === "close-manual");
+  }
+
+  function focusPointFromCrop(videoWidth, videoHeight, crop) {
+    if (!(videoWidth > 0 && videoHeight > 0) || !crop) return { x: 0.5, y: 0.5 };
+    return {
+      x: clamp01((crop.sx + crop.sw / 2) / videoWidth),
+      y: clamp01((crop.sy + crop.sh / 2) / videoHeight),
+    };
+  }
+
+  function normalizedCropFromPixels(videoWidth, videoHeight, crop) {
+    if (!(videoWidth > 0 && videoHeight > 0) || !crop) return { x: 0, y: 0, w: 1, h: 1 };
+    return {
+      x: crop.sx / videoWidth,
+      y: crop.sy / videoHeight,
+      w: crop.sw / videoWidth,
+      h: crop.sh / videoHeight,
+    };
+  }
+
+  function cropRectOnSource(sourceWidth, sourceHeight, norm) {
+    const safeW = Math.max(0, Math.round(Number(sourceWidth) || 0));
+    const safeH = Math.max(0, Math.round(Number(sourceHeight) || 0));
+    if (!(safeW > 0 && safeH > 0)) return { sx: 0, sy: 0, sw: 0, sh: 0 };
+    const nx = clamp01(norm && norm.x);
+    const ny = clamp01(norm && norm.y);
+    let nw = clamp01(norm && norm.w);
+    let nh = clamp01(norm && norm.h);
+    if (!(nw > 0)) nw = 1;
+    if (!(nh > 0)) nh = 1;
+    let sx = Math.round(nx * safeW);
+    let sy = Math.round(ny * safeH);
+    let sw = Math.round(nw * safeW);
+    let sh = Math.round(nh * safeH);
+    if (sx >= safeW) sx = safeW - 1;
+    if (sy >= safeH) sy = safeH - 1;
+    if (sw < 1) sw = 1;
+    if (sh < 1) sh = 1;
+    if (sx + sw > safeW) sw = safeW - sx;
+    if (sy + sh > safeH) sh = safeH - sy;
+    return { sx, sy, sw, sh };
+  }
+
+  function aspectClose(a, b) {
+    if (!(a > 0 && b > 0)) return false;
+    return Math.abs(a - b) / b <= 0.08;
+  }
+
+  /**
+   * Prefer a larger still only when it matches the preview aspect, so the
+   * amber-frame crop still lines up. Otherwise keep the video buffer.
+   * Never select the CSS layout size of the preview.
+   */
+  function chooseCaptureBitmap(still, video) {
+    if (video && video.width > 0 && video.height > 0) {
+      if (
+        still &&
+        still.width > 0 &&
+        still.height > 0 &&
+        aspectClose(still.width / still.height, video.width / video.height) &&
+        Math.max(still.width, still.height) >= Math.max(video.width, video.height)
+      ) {
+        return { from: "still", width: still.width, height: still.height };
+      }
+      return { from: "video-buffer", width: video.width, height: video.height };
+    }
+    if (still && still.width > 0 && still.height > 0) {
+      return { from: "still", width: still.width, height: still.height };
+    }
+    return { from: "none", width: 0, height: 0 };
+  }
+
+  function cameraOpenConstraints() {
+    return {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 2160 },
+        height: { ideal: 3840 },
+        advanced: [
+          { resizeMode: "none" },
+          { focusMode: "continuous", pointsOfInterest: [{ x: 0.5, y: 0.5 }] },
+          { zoom: 1 },
+        ],
+      },
+    };
+  }
+
+  function lensAcceptedFocus(track) {
+    try {
+      if (!track || typeof track.getSettings !== "function") return false;
+      const settings = track.getSettings() || {};
+      if (settings.focusMode === "continuous" || settings.focusMode === "single-shot") return true;
+      // Manual only counts when the lens was actually parked close (about 50 cm or nearer).
+      return settings.focusMode === "manual" && typeof settings.focusDistance === "number" && settings.focusDistance >= 2;
+    } catch {
+      return false;
+    }
+  }
+
+  function videoTrack(mediaStream) {
+    if (!mediaStream || typeof mediaStream.getVideoTracks !== "function") return null;
+    const tracks = mediaStream.getVideoTracks();
+    return tracks && tracks[0] ? tracks[0] : null;
+  }
+
+  function waitForFocus(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function applyFocusAttempt(track, attempt) {
+    const sets = (attempt && attempt.advanced) || [];
+    if (!sets.length || !track || typeof track.applyConstraints !== "function") return false;
+    try {
+      await track.applyConstraints({ advanced: sets });
+      return true;
+    } catch {
+      /* try each piece; WebView sometimes rejects the grouped set */
+    }
+    let ok = false;
+    for (const set of sets) {
+      const pieces = [set];
+      if (set.focusMode && set.pointsOfInterest) {
+        pieces.push({ focusMode: set.focusMode });
+        pieces.push({ pointsOfInterest: set.pointsOfInterest });
+      }
+      for (const piece of pieces) {
+        try {
+          await track.applyConstraints({ advanced: [piece] });
+          ok = true;
+          continue;
+        } catch {
+          /* flat dictionary */
+        }
+        try {
+          await track.applyConstraints(piece);
+          ok = true;
+        } catch {
+          /* this camera does not accept the constraint */
+        }
+      }
+    }
+    return ok;
+  }
+
+  /**
+   * Ask for a native-sized frame. resizeMode "none" tells the browser not to
+   * scale a small sensor up to the ideal size (that scale is what made the
+   * preview look soft). zoom 1 turns digital zoom off. Do not force the
+   * capability maximum — on some phones that maximum is a cropped zoom mode
+   * that cannot focus at receipt distance.
+   */
+  async function raiseNativeResolution(track) {
+    if (!track || typeof track.applyConstraints !== "function") return;
+    const bundles = [
+      { resizeMode: "none", width: { ideal: 2160 }, height: { ideal: 3840 }, zoom: 1 },
+      { width: { ideal: 2160 }, height: { ideal: 3840 } },
+    ];
+    let sized = false;
+    for (const bundle of bundles) {
+      try {
+        await track.applyConstraints(bundle);
+        sized = true;
+        break;
+      } catch {
+        /* try the next bundle */
+      }
+    }
+    if (!sized) {
+      try {
+        await track.applyConstraints({ zoom: 1 });
+      } catch {
+        /* the open preview is still usable */
+      }
+    }
+  }
+
+  async function focusCenteredReceipt(mediaStream, point, phase) {
+    const track = videoTrack(mediaStream);
+    if (!track) return false;
+    if (phase !== "shutter") await raiseNativeResolution(track);
     let caps = {};
     try {
-      caps = track.getCapabilities() || {};
+      caps = typeof track.getCapabilities === "function" ? track.getCapabilities() || {} : {};
     } catch {
-      return;
+      caps = {};
     }
-    const next = {};
-    if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) {
-      next.focusMode = "continuous";
+    const planned = planFocusAttempts(point || { x: 0.5, y: 0.5 }, caps);
+    const chosen = phase === "shutter" ? shutterFocusAttempts(planned) : previewFocusAttempts(planned);
+    let applied = false;
+    for (const attempt of chosen) {
+      if (attempt.label === "zoom-1") continue;
+      if (await applyFocusAttempt(track, attempt)) applied = true;
     }
-    if (caps.width && caps.width.max) next.width = { ideal: caps.width.max };
-    if (caps.height && caps.height.max) next.height = { ideal: caps.height.max };
-    if (!Object.keys(next).length) return;
+    // Continuous was listed but the camera stayed in a far manual focus.
+    // Park the lens at a desk distance for this one photo.
+    if (phase === "shutter" && !lensAcceptedFocus(track)) {
+      const close = planned.find((attempt) => attempt.label === "close-manual");
+      if (close && (await applyFocusAttempt(track, close))) applied = true;
+    }
+    return applied;
+  }
+
+  async function refocusOpenCamera() {
+    if (!stream || !cameraIsOpen()) return;
+    const video = document.getElementById("receipt-camera-video");
+    const frame = document.getElementById("receipt-camera-frame");
+    let point = { x: 0.5, y: 0.5 };
+    if (video && frame && video.videoWidth > 0) {
+      point = focusPointFromCrop(video.videoWidth, video.videoHeight, frameCropInVideo(video, frame));
+    }
     try {
-      await track.applyConstraints(next);
+      await focusCenteredReceipt(stream, point, "preview");
     } catch {
-      /* the open preview is still usable */
+      /* a failed focus attempt must not close the camera */
     }
   }
 
@@ -14074,6 +14345,143 @@
     return { sx, sy, sw, sh };
   }
 
+  function drawCrop(source, sourceWidth, sourceHeight, norm) {
+    const rect = cropRectOnSource(sourceWidth, sourceHeight, norm || { x: 0, y: 0, w: 1, h: 1 });
+    const canvas = document.createElement("canvas");
+    const width = rect.sw > 0 ? rect.sw : Math.max(1, sourceWidth);
+    const height = rect.sh > 0 ? rect.sh : Math.max(1, sourceHeight);
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (rect.sw > 0 && rect.sh > 0) {
+      ctx.drawImage(source, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, rect.sw, rect.sh);
+    } else {
+      ctx.drawImage(source, 0, 0, width, height);
+    }
+    return canvas;
+  }
+
+  function canvasToJpeg(canvas) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not capture photo"))), "image/jpeg", 0.92);
+    });
+  }
+
+  function bitmapSize(bmp) {
+    return {
+      width: (bmp && (bmp.width || bmp.naturalWidth || bmp.videoWidth)) || 0,
+      height: (bmp && (bmp.height || bmp.naturalHeight || bmp.videoHeight)) || 0,
+    };
+  }
+
+  function closeBitmap(bmp) {
+    try {
+      if (bmp && typeof bmp.close === "function") bmp.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function bitmapFromBlob(blob) {
+    if (!blob) return null;
+    if (typeof createImageBitmap === "function") {
+      try {
+        return await createImageBitmap(blob);
+      } catch {
+        /* fall through to Image */
+      }
+    }
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
+  }
+
+  async function bitmapFromBase64Jpeg(encoded) {
+    if (!encoded) return null;
+    try {
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return bitmapFromBlob(new Blob([bytes], { type: "image/jpeg" }));
+    } catch {
+      return null;
+    }
+  }
+
+  function withTimeout(promise, ms) {
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(null);
+      }, ms);
+      Promise.resolve(promise).then(
+        (value) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve(value);
+        },
+        () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve(null);
+        }
+      );
+    });
+  }
+
+  async function stillLargerThanVideo(track, video) {
+    const Capture = globalThis.ImageCapture;
+    if (typeof Capture !== "function" || !track || !video) return null;
+    const shot = await withTimeout(
+      new Capture(track).takePhoto().catch(() => null),
+      1200
+    );
+    if (!shot) return null;
+    const bmp = await bitmapFromBlob(shot);
+    if (!bmp) return null;
+    const size = bitmapSize(bmp);
+    const decision = chooseCaptureBitmap(size, { width: video.videoWidth, height: video.videoHeight });
+    if (decision.from !== "still") {
+      closeBitmap(bmp);
+      return null;
+    }
+    return bmp;
+  }
+
+  function hubScanCameraBridge() {
+    try {
+      const bridge = window.HubScanCamera;
+      if (bridge && typeof bridge.captureFocusedJpeg === "function") return bridge;
+    } catch {
+      /* not the Driver Hub shell */
+    }
+    return null;
+  }
+
+  function readNativeFocusedJpeg(point, videoWidth, videoHeight) {
+    const bridge = hubScanCameraBridge();
+    if (!bridge) return "";
+    try {
+      return String(bridge.captureFocusedJpeg(point.x, point.y, videoWidth | 0, videoHeight | 0) || "");
+    } catch {
+      return "";
+    }
+  }
+
   async function captureAndUpload() {
     const video = document.getElementById("receipt-camera-video");
     const frame = document.getElementById("receipt-camera-frame");
@@ -14084,26 +14492,55 @@
       return;
     }
     if (shutter) shutter.disabled = true;
-    if (status) status.textContent = "Capturing…";
     const copy = purposeCopy();
 
     try {
-      const crop = frameCropInVideo(video, frame);
-      const canvas = document.createElement("canvas");
-      if (crop) {
-        canvas.width = crop.sw;
-        canvas.height = crop.sh;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
-      } else {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext("2d").drawImage(video, 0, 0);
+      if (status) status.textContent = "Focusing…";
+      let videoWidth = video.videoWidth;
+      let videoHeight = video.videoHeight;
+      let crop = frameCropInVideo(video, frame);
+      let point = focusPointFromCrop(videoWidth, videoHeight, crop);
+      let norm = normalizedCropFromPixels(videoWidth, videoHeight, crop);
+      const focused = await focusCenteredReceipt(stream, point, "shutter");
+      if (focused) await waitForFocus(FOCUS_SETTLE_MS);
+      if (!cameraIsOpen()) return;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        videoWidth = video.videoWidth;
+        videoHeight = video.videoHeight;
+        crop = frameCropInVideo(video, frame);
+        point = focusPointFromCrop(videoWidth, videoHeight, crop);
+        norm = normalizedCropFromPixels(videoWidth, videoHeight, crop);
+      }
+      const track = videoTrack(stream);
+      let canvas = drawCrop(video, videoWidth, videoHeight, norm);
+      const still = await stillLargerThanVideo(track, video);
+      if (still) {
+        const size = bitmapSize(still);
+        canvas = drawCrop(still, size.width, size.height, norm);
+        closeBitmap(still);
       }
 
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not capture photo"))), "image/jpeg", 0.92);
-      });
+      /* WebView getUserMedia often never reports a focus mode. Release the
+         preview (keep this dialog open) and take a Camera2 still that can
+         actually hunt at close range. A failed still keeps the frame above. */
+      if (track && !lensAcceptedFocus(track) && hubScanCameraBridge()) {
+        stopStream();
+        video.srcObject = null;
+        const encoded = readNativeFocusedJpeg(point, videoWidth, videoHeight);
+        const nativeBmp = await bitmapFromBase64Jpeg(encoded);
+        if (nativeBmp) {
+          const size = bitmapSize(nativeBmp);
+          const decision = chooseCaptureBitmap(size, { width: videoWidth, height: videoHeight });
+          if (decision.from === "still") {
+            canvas = drawCrop(nativeBmp, size.width, size.height, norm);
+          }
+          closeBitmap(nativeBmp);
+        }
+      }
+
+      if (!cameraIsOpen()) return;
+      if (status) status.textContent = "Capturing…";
+      const blob = await canvasToJpeg(canvas);
       const file = new File([blob], copy.filename(), {
         type: "image/jpeg",
         lastModified: Date.now(),
@@ -14125,7 +14562,7 @@
       }
     } catch (err) {
       notify(err.message || "Capture failed");
-      if (status) status.textContent = copy.status;
+      applyCameraFrame(savedCameraFrame());
       if (shutter) shutter.disabled = false;
     }
   }
@@ -14280,17 +14717,9 @@
       audio: false,
       video: { facingMode: { ideal: "environment" } },
     };
-    const portrait = {
-      audio: false,
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 2160 },
-        height: { ideal: 3840 },
-      },
-    };
     if (!preferHighRes) return navigator.mediaDevices.getUserMedia(simple);
     try {
-      return await navigator.mediaDevices.getUserMedia(portrait);
+      return await navigator.mediaDevices.getUserMedia(cameraOpenConstraints());
     } catch (err) {
       if (isCameraPermissionRejection(err)) throw err;
       return navigator.mediaDevices.getUserMedia(simple);
@@ -14300,13 +14729,31 @@
   async function attachCameraStream(mediaStream) {
     const video = document.getElementById("receipt-camera-video");
     const shutter = document.getElementById("receipt-camera-shutter");
-    await sharpenCameraTrack(mediaStream);
     applyCameraFrame(savedCameraFrame());
     if (shutter) shutter.disabled = false;
     if (video) {
       video.srcObject = mediaStream;
-      await video.play().catch(() => {});
+      try {
+        await video.play();
+      } catch {
+        /* the shutter can still try once the first frame arrives */
+      }
+      if (!(video.videoWidth > 0)) {
+        await new Promise((resolve) => {
+          const done = () => resolve();
+          video.addEventListener("loadedmetadata", done, { once: true });
+          setTimeout(done, 800);
+        });
+      }
     }
+    await new Promise((resolve) => {
+      if (typeof requestAnimationFrame !== "function") {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+    await refocusOpenCamera();
   }
 
   function showCameraBlocked(message) {
@@ -14441,6 +14888,19 @@
     isCameraPermissionRejection: isCameraPermissionRejection,
     cameraBlockedMessage: cameraBlockedMessage,
     cameraPermissionOutcome: cameraPermissionOutcome,
+  };
+
+  window.haulageCameraFocus = {
+    cameraOpenConstraints: cameraOpenConstraints,
+    planFocusAttempts: planFocusAttempts,
+    previewFocusAttempts: previewFocusAttempts,
+    shutterFocusAttempts: shutterFocusAttempts,
+    closeFocusDistance: closeFocusDistance,
+    focusPointFromCrop: focusPointFromCrop,
+    normalizedCropFromPixels: normalizedCropFromPixels,
+    cropRectOnSource: cropRectOnSource,
+    chooseCaptureBitmap: chooseCaptureBitmap,
+    lensAcceptedFocus: lensAcceptedFocus,
   };
 
   function start() {

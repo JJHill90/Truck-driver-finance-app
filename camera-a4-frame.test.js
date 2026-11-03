@@ -15,7 +15,7 @@ describe("A4 camera frame", () => {
     expect(js).toMatch(/function applyCameraFrame/);
     expect(js).toMatch(/haulage-camera-frame/);
     expect(js).toMatch(/height: \{ ideal: 3840 \}/);
-    expect(js).toMatch(/focusMode = "continuous"/);
+    expect(js).toMatch(/focusMode: "continuous"/);
   });
 
   it("sizes the default frame to A4 portrait and keeps the other shapes", () => {

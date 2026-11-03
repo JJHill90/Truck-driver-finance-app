@@ -33,6 +33,7 @@ public class MainActivity extends BridgeActivity {
     private boolean liveCacheCleared;
     private ActivityResultLauncher<String> cameraPermissionLauncher;
     private PermissionRequest pendingCameraRequest;
+    private ScanCameraFocus scanCameraFocus;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,6 +76,7 @@ public class MainActivity extends BridgeActivity {
         }
         webView.post(() -> {
             installCameraPermissionBridge(webView);
+            installScanCameraBridge(webView);
             markNativeUserAgent(webView);
             useLiveServer(webView);
             webView.loadUrl(HUB_URL);
@@ -92,13 +94,26 @@ public class MainActivity extends BridgeActivity {
         if (!inApp) {
             webView.post(() -> {
                 installCameraPermissionBridge(webView);
+                installScanCameraBridge(webView);
                 markNativeUserAgent(webView);
                 useLiveServer(webView);
                 webView.loadUrl(HUB_URL);
             });
         } else {
-            webView.post(() -> installCameraPermissionBridge(webView));
+            webView.post(() -> {
+                installCameraPermissionBridge(webView);
+                installScanCameraBridge(webView);
+            });
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (scanCameraFocus != null) {
+            scanCameraFocus.shutdown();
+            scanCameraFocus = null;
+        }
+        super.onDestroy();
     }
 
     /**
@@ -113,6 +128,17 @@ public class MainActivity extends BridgeActivity {
         if (existing instanceof CameraPermissionChromeClient) return;
         webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         webView.setWebChromeClient(new CameraPermissionChromeClient(existing));
+    }
+
+    /**
+     * WebView getUserMedia often ignores focusMode. The page calls
+     * HubScanCamera.captureFocusedJpeg after it releases the preview track.
+     * This does not grant or deny RESOURCE_VIDEO_CAPTURE.
+     */
+    private void installScanCameraBridge(WebView webView) {
+        if (webView == null) return;
+        if (scanCameraFocus == null) scanCameraFocus = new ScanCameraFocus(this);
+        webView.addJavascriptInterface(scanCameraFocus, "HubScanCamera");
     }
 
     /** Drop a cached shell so receipt extraction matches the live Render app. */
