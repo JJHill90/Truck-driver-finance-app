@@ -266,6 +266,17 @@ describe("marketing overview HTTP", () => {
     expect(suiteSupportPage.text).toMatch(/id="support-contact-form"/);
     expect(suiteSupportPage.text).not.toMatch(/Driver Hub/);
 
+    const updates = await get(server, "/updates");
+    expect(updates.status).toBe(200);
+    expect(updates.text).toMatch(/Version 4\.05/);
+    expect(updates.text).toMatch(/id="support-contact-form"/);
+    expect(updates.text).toMatch(/support@godriverhub\.com/);
+    expect(updates.text).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/updates"/);
+    expect(updates.text).not.toMatch(/Driver Hub/);
+    const alias = await get(server, "/patch-notes");
+    expect(alias.status).toBe(200);
+    expect(alias.text).toMatch(/<h2>Version 4\.02<\/h2>/);
+
     const privacy = await get(server, "/privacy");
     expect(privacy.status).toBe(200);
     expect(privacy.text).toMatch(/Go Taxation Suite/);
@@ -356,6 +367,28 @@ describe("marketing overview HTTP", () => {
       "x-forwarded-host": "godriverhub.com",
     });
     expect(driverSitemap.status).toBe(404);
+
+    const suiteUpdates = await get(server, "/updates", {
+      "x-forwarded-host": "gotaxationsuite.com",
+      "x-forwarded-proto": "https",
+    });
+    expect(suiteUpdates.status).toBe(200);
+    expect(suiteUpdates.text).toMatch(/<h2>Version 4\.05<\/h2>/);
+    expect(suiteUpdates.text).toMatch(/id="support-contact-form"/);
+
+    const driverUpdates = await get(server, "/updates", {
+      "x-forwarded-host": "godriverhub.com",
+      "x-forwarded-proto": "https",
+    });
+    expect(driverUpdates.status).toBe(302);
+    expect(driverUpdates.location).toBe("https://gotaxationsuite.com/updates");
+
+    const driverAlias = await get(server, "/patch-notes", {
+      "x-forwarded-host": "godriverhub.com",
+      "x-forwarded-proto": "https",
+    });
+    expect(driverAlias.status).toBe(200);
+    expect(driverAlias.text).toMatch(/Patch notes — Driver Hub/);
 
     const { port } = server.address();
     const posted = await fetch(`http://127.0.0.1:${port}/api/haulage/support/contact`, {

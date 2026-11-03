@@ -1340,16 +1340,30 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .receipt-camera-frame {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: min(72vw, 340px);
-  height: min(78vh, 560px);
+  top: calc(46% - 4px);
   transform: translate(-50%, -50%);
+  /* A4 portrait, ISO 216: 210mm × 297mm. Width stays inside the screen,
+     and the height follows so a full invoice page fits the amber frame. */
+  aspect-ratio: 210 / 297;
+  width: min(90vw, 640px, calc((100vh - 250px) * 210 / 297));
+  width: min(90vw, 640px, calc((100dvh - 250px) * 210 / 297));
+  height: auto;
   border: 2px solid rgba(245, 158, 11, 0.95);
   border-radius: 14px;
   box-shadow:
     0 0 0 9999px rgba(2, 6, 23, 0.58),
     inset 0 0 0 1px rgba(255, 255, 255, 0.12);
   background: transparent;
+}
+.receipt-camera-frame[data-frame="receipt"] {
+  aspect-ratio: 1 / 2.2;
+  width: min(68vw, 280px, calc((100vh - 240px) / 2.2));
+  width: min(68vw, 280px, calc((100dvh - 240px) / 2.2));
+}
+.receipt-camera-frame[data-frame="long"] {
+  aspect-ratio: 1 / 3.5;
+  width: min(54vw, 220px, calc((100vh - 280px) / 3.5));
+  width: min(54vw, 220px, calc((100dvh - 280px) / 3.5));
 }
 .receipt-camera-frame::before,
 .receipt-camera-frame::after {
@@ -1384,15 +1398,43 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 .receipt-camera-hint {
   position: absolute;
   left: 50%;
-  top: calc(50% + min(39vh, 280px) + 14px);
+  top: calc(48px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
-  width: min(86vw, 360px);
+  width: min(92vw, 520px);
+  margin: 0;
   text-align: center;
   font-size: 0.88rem;
   line-height: 1.35;
   color: #e2e8f0;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
   pointer-events: none;
+}
+.receipt-camera-modes {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: auto;
+}
+.receipt-camera-modes button {
+  border: 1px solid rgba(245, 158, 11, 0.65);
+  background: rgba(15, 23, 42, 0.88);
+  color: #e6edf7;
+  font-weight: 700;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.receipt-camera-modes button.is-on {
+  background: #f59e0b;
+  color: #1a1205;
+  border-color: #f59e0b;
 }
 .receipt-camera-hint strong { color: #fbbf24; }
 .receipt-camera-toolbar {
@@ -3074,6 +3116,24 @@ tr.vending-machine-row {
   color: var(--text-dim);
   font-size: 0.75rem;
   line-height: 1.3;
+}
+.fuelhub-assessment .fuelhub-stats {
+  margin-bottom: 10px;
+}
+.fuelhub-stat.is-ok {
+  border-color: color-mix(in srgb, var(--green, #34d399) 45%, var(--border));
+}
+.fuelhub-stat.is-ok strong {
+  color: var(--green, #34d399);
+}
+.fuelhub-stat.is-warn {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.fuelhub-stat.is-danger {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+}
+.fuelhub-stat.is-danger strong {
+  color: var(--red);
 }
 .fuelhub-stop {
   border: 1px solid var(--border);

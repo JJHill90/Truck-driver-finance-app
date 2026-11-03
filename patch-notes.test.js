@@ -27,13 +27,13 @@ async function get(server, urlPath, headers = {}) {
 }
 
 describe("Driver Hub patch notes", () => {
-  const label = formatVersionLabel(HAULAGE_PR_NUMBER);
+  const label = formatVersionLabel(208);
 
   it("publishes this version with the new bullets and the support contact", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(208);
+    expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(HAULAGE_PR_NUMBER);
+    expect(notes[0].prNumber).toBe(208);
     expect(notes[0].label).toBe(label);
     expect(notes[0].bullets.join("\n")).toMatch(/public Driver Hub patch notes page at \/patch-notes/);
     expect(notes[0].bullets.join("\n")).toMatch(/same version label the app shows/);
@@ -107,7 +107,7 @@ describe("Driver Hub patch notes HTTP", () => {
   let app;
   let server;
   const prevProduct = process.env.APP_PRODUCT;
-  const label = formatVersionLabel(HAULAGE_PR_NUMBER);
+  const label = formatVersionLabel(208);
 
   beforeAll(async () => {
     delete process.env.APP_PRODUCT;
@@ -131,11 +131,9 @@ describe("Driver Hub patch notes HTTP", () => {
     expect(res.text).toContain('href="/support"');
   }
 
-  function expectNotPatchPage(res) {
-    expect(res.status).not.toBe(200);
-    expect(res.text).not.toContain('id="support-contact-form"');
+  function expectNotDriverHubPatchPage(res) {
     expect(res.text).not.toContain("Patch notes — Driver Hub");
-    expect(res.text).not.toContain(label);
+    expect(res.text).not.toContain("Published this public Driver Hub patch notes page");
   }
 
   it("serves the page on localhost and godriverhub.com, and the overview links to it", async () => {
@@ -176,16 +174,17 @@ describe("Driver Hub patch notes HTTP", () => {
 
   it("does not serve the page for Suite standalone, the Suite host, or Go Taxation Hub", async () => {
     delete process.env.APP_PRODUCT;
-    expectNotPatchPage(
-      await get(server, "/patch-notes", { "x-forwarded-host": "gotaxationsuite.com" })
-    );
-    expectNotPatchPage(
+    const suiteNotes = await get(server, "/patch-notes", { "x-forwarded-host": "gotaxationsuite.com" });
+    expect(suiteNotes.status).toBe(200);
+    expect(suiteNotes.text).toContain("Updates — Go Taxation Suite");
+    expectNotDriverHubPatchPage(suiteNotes);
+    expectNotDriverHubPatchPage(
       await get(server, "/patch-notes", { "x-forwarded-host": "www.gotaxationsuite.com" })
     );
-    expectNotPatchPage(
-      await get(server, "/patch-notes", { "x-forwarded-host": "gotaxationhub.com" })
-    );
-    expectNotPatchPage(
+    const taxNotes = await get(server, "/patch-notes", { "x-forwarded-host": "gotaxationhub.com" });
+    expect(taxNotes.status).not.toBe(200);
+    expectNotDriverHubPatchPage(taxNotes);
+    expectNotDriverHubPatchPage(
       await get(server, "/patch-notes", { "x-forwarded-host": "www.gotaxationhub.com" })
     );
 
@@ -199,10 +198,13 @@ describe("Driver Hub patch notes HTTP", () => {
 
     process.env.APP_PRODUCT = "suite";
     try {
-      expectNotPatchPage(await get(server, "/patch-notes"));
-      expectNotPatchPage(
-        await get(server, "/patch-notes", { "x-forwarded-host": "godriverhub.com" })
-      );
+      const suiteLocal = await get(server, "/patch-notes");
+      expect(suiteLocal.status).toBe(200);
+      expect(suiteLocal.text).toContain("Updates — Go Taxation Suite");
+      expectNotDriverHubPatchPage(suiteLocal);
+      const suiteOnHubHost = await get(server, "/patch-notes", { "x-forwarded-host": "godriverhub.com" });
+      expect(suiteOnHubHost.status).not.toBe(200);
+      expectNotDriverHubPatchPage(suiteOnHubHost);
       const suiteRoot = await get(server, "/");
       expect(suiteRoot.status).toBe(200);
       expect(suiteRoot.text).toMatch(/Go Taxation Suite/);
