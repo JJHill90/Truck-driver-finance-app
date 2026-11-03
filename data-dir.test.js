@@ -95,6 +95,41 @@ describe("data-dir binds writers to the persistent disk", () => {
     expect(users.users.demo).toBeTruthy();
     expect(fs.readFileSync(path.join(disk, "receipts", "old-invoice.jpg"), "utf8")).toBe("photo-bytes");
     expect(fs.readFileSync(path.join(disk, "receipts", "already.jpg"), "utf8")).toBe("keep");
+    expect(adopted.suiteReceiptsMerged).toBe(0);
+    expect(fs.existsSync(path.join(disk, "suite", "receipts", "old-invoice.jpg"))).toBe(false);
+  });
+
+  it("keeps Suite photos under suite/receipts when the disk already has the accounts", () => {
+    const prev = process.env.APP_PRODUCT;
+    process.env.APP_PRODUCT = "suite";
+    try {
+      const ephemeral = path.join(tmp, "app-data");
+      const disk = path.join(tmp, "disk");
+      fs.mkdirSync(path.join(ephemeral, "receipts"), { recursive: true });
+      fs.mkdirSync(path.join(ephemeral, "suite", "receipts"), { recursive: true });
+      fs.mkdirSync(path.join(disk, "receipts"), { recursive: true });
+      fs.writeFileSync(path.join(ephemeral, "users.json"), JSON.stringify({ users: {} }, null, 2));
+      fs.writeFileSync(
+        path.join(disk, "users.json"),
+        JSON.stringify({ users: { pat: { username: "pat" }, demo: { username: "demo" } } }, null, 2)
+      );
+      fs.writeFileSync(path.join(ephemeral, "receipts", "wiped-folder.jpg"), "from-receipts");
+      fs.writeFileSync(path.join(ephemeral, "suite", "receipts", "already-durable.jpg"), "from-suite");
+
+      const adopted = dataDir.adoptFrom(ephemeral, disk);
+      expect(adopted.copied).toBe("skipped-dest-richer");
+      expect(fs.readFileSync(path.join(disk, "suite", "receipts", "wiped-folder.jpg"), "utf8")).toBe(
+        "from-receipts"
+      );
+      expect(fs.readFileSync(path.join(disk, "suite", "receipts", "already-durable.jpg"), "utf8")).toBe(
+        "from-suite"
+      );
+      expect(fs.readFileSync(path.join(disk, "receipts", "wiped-folder.jpg"), "utf8")).toBe("from-receipts");
+      expect(fs.readFileSync(path.join(disk, "receipts", "already-durable.jpg"), "utf8")).toBe("from-suite");
+    } finally {
+      if (prev === undefined) delete process.env.APP_PRODUCT;
+      else process.env.APP_PRODUCT = prev;
+    }
   });
 
   it("counts accounts for /version storage diagnostics", () => {

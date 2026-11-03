@@ -78,6 +78,20 @@ describe("receipt-image-serve helpers", () => {
     fs.mkdirSync(path.join(dir, "receipts"), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), tinyJpeg());
     expect(fileAvailable(rel, { getReceiptFileInfo: () => null })).toBe(true);
+    const prev = process.env.APP_PRODUCT;
+    process.env.APP_PRODUCT = "suite";
+    try {
+      const suiteOnly = path.join(dir, "suite", "receipts", "suite-only.jpg");
+      fs.mkdirSync(path.dirname(suiteOnly), { recursive: true });
+      fs.writeFileSync(suiteOnly, tinyJpeg());
+      expect(fileAvailable("receipts/suite-only.jpg", { getReceiptFileInfo: () => null })).toBe(true);
+      expect(getReceiptFileInfoSafe("receipts/suite-only.jpg", { getReceiptFileInfo: () => null }).filePath).toBe(
+        suiteOnly
+      );
+    } finally {
+      if (prev === undefined) delete process.env.APP_PRODUCT;
+      else process.env.APP_PRODUCT = prev;
+    }
     const info = getReceiptFileInfoSafe(rel, { getReceiptFileInfo: () => null });
     expect(info.filePath).toBe(path.join(dir, rel));
     setDataDirForTests(null);

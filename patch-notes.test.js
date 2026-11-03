@@ -33,9 +33,12 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(211);
-    expect(notes[0].label).toBe("Version 4.07");
-    expect(notes[0].bullets.join("\n")).toMatch(/photos stay saved/);
+    expect(notes[0].prNumber).toBe(212);
+    expect(notes[0].label).toBe("Version 4.08");
+    expect(notes[0].bullets.join("\n")).toMatch(/copied onto the saved disk/);
+    const kept = notes.find((note) => note.prNumber === 211);
+    expect(kept && kept.label).toBe("Version 4.07");
+    expect(kept.bullets.join("\n")).toMatch(/photos stay saved/);
     const first = notes.find((note) => note.prNumber === 208);
     expect(first && first.label).toBe(label);
     expect(first.bullets.join("\n")).toMatch(/public Driver Hub patch notes page at \/patch-notes/);
