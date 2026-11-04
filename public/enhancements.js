@@ -14015,27 +14015,21 @@
   }
 
   /**
-   * Constraints for the picture the driver is looking at. The long side is at
-   * least 1280 device pixels and at most 1920, so a tiny stream is not
-   * stretched across the phone, and we do not jump to the sensor maximum
-   * (that restart drops close focus). Focus is continuous at the amber-frame
-   * centre, or at the point the driver taps.
+   * Constraints for the picture the driver is looking at. Size is the same
+   * landscape sensor preview the stream was opened with (3840×2160). A smaller
+   * ideal made the phone hand back a tiny picture that the screen stretched.
+   * Focus is continuous at the amber-frame centre, or at the point tapped.
+   * The view size is accepted so a caller can pass the phone pixels; it does
+   * not shrink the sensor preview.
    */
-  function livePreviewConstraints(viewPxWidth, viewPxHeight, point) {
-    const widthPx = Math.max(1, Math.round(Number(viewPxWidth) || 1));
-    const heightPx = Math.max(1, Math.round(Number(viewPxHeight) || 1));
-    const longSide = Math.max(widthPx, heightPx);
-    const shortSide = Math.min(widthPx, heightPx);
-    const targetLong = Math.max(1280, Math.min(1920, longSide));
-    const targetShort = Math.max(720, Math.min(1080, shortSide));
-    const portrait = heightPx >= widthPx;
+  function livePreviewConstraints(_viewPxWidth, _viewPxHeight, point) {
     const spot = {
       x: clamp01(point && point.x != null ? point.x : 0.5),
       y: clamp01(point && point.y != null ? point.y : 0.46),
     };
     return {
-      width: { ideal: portrait ? targetShort : targetLong },
-      height: { ideal: portrait ? targetLong : targetShort },
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
       advanced: [
         { focusMode: "continuous", pointsOfInterest: [spot] },
         { resizeMode: "none" },
@@ -14167,43 +14161,26 @@
   }
 
   /**
-   * Focus constraints only. Resolution stays out of this call — asking for
-   * the sensor maximum restarts the camera and the close-up focus is lost.
+   * Focus constraints only when the camera actually lists a focus mode.
+   * Android WebView usually returns an empty capability object. Sending a
+   * focus or a guessed focus distance anyway restarts the preview at a
+   * tiny size, or locks the lens metres away, and the receipt goes soft.
    */
-  function closeFocusDistance(range) {
-    // Diopters. A receipt on a desk is about 20 cm, which is 5 diopters.
-    const closeDiopters = 5;
-    if (!range || typeof range.min !== "number" || typeof range.max !== "number") return null;
-    if (!(range.max >= 2)) return null;
-    return Math.min(range.max, Math.max(range.min, closeDiopters));
-  }
-
   function cameraFocusConstraints(caps, point, intent) {
     const modes = caps && Array.isArray(caps.focusMode) ? caps.focusMode : [];
     const spot = {
       x: clamp01(point && point.x != null ? point.x : 0.5),
       y: clamp01(point && point.y != null ? point.y : 0.5),
     };
-    // An empty capability object is what Android WebView usually returns.
-    // Still ask for a focus hunt. A listed mode is respected.
-    const omitted = !caps || (modes.length === 0 && caps.pointsOfInterest == null && caps.focusDistance == null && caps.focusMode == null);
-    const allows = (mode) => omitted || modes.includes(mode);
     let mode = null;
-    if (intent === "single-shot" && allows("single-shot")) mode = "single-shot";
-    else if (allows("continuous")) mode = "continuous";
-    else if (allows("single-shot")) mode = "single-shot";
-    const canPoint = Boolean(caps && caps.pointsOfInterest) || omitted;
-    const distance = closeFocusDistance(caps && caps.focusDistance);
-    if (!mode && distance != null && (omitted || modes.includes("manual"))) {
-      const direct = { focusMode: "manual", focusDistance: distance };
-      if (canPoint) direct.pointsOfInterest = [spot];
-      return { direct, mode: "manual", point: spot };
-    }
+    if (intent === "single-shot" && modes.includes("single-shot")) mode = "single-shot";
+    else if (modes.includes("continuous")) mode = "continuous";
+    else if (modes.includes("single-shot")) mode = "single-shot";
+    const canPoint = Boolean(caps && caps.pointsOfInterest);
     if (!mode && !canPoint) return null;
     const direct = {};
     if (mode) direct.focusMode = mode;
     if (canPoint) direct.pointsOfInterest = [spot];
-    if (!direct.focusMode && !direct.pointsOfInterest) return null;
     return { direct, mode, point: spot };
   }
 
@@ -14217,7 +14194,33 @@
   }
 
   function cameraFocusSettleMs(mode) {
-    return mode === "single-shot" ? 550 : 220;
+    if (mode === "single-shot") return 550;
+    if (mode === "continuous") return 220;
+    return 0;
+  }
+
+  function trackSettings(track) {
+    try {
+      return (track && typeof track.getSettings === "function" && track.getSettings()) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** Keep the current picture size while a focus change is applied. */
+  function cameraFocusHold(settings, direct) {
+    const width = Number(settings && settings.width);
+    const height = Number(settings && settings.height);
+    const focus = direct && typeof direct === "object" ? direct : {};
+    if (!(width >= 2 && height >= 2)) return Object.assign({}, focus);
+    return Object.assign({ width: { exact: width }, height: { exact: height } }, focus);
+  }
+
+  function previewWentSoft(before, after) {
+    const beforeLong = Math.max(Number(before && before.width) || 0, Number(before && before.height) || 0);
+    const afterLong = Math.max(Number(after && after.width) || 0, Number(after && after.height) || 0);
+    if (beforeLong < 640) return false;
+    return !(afterLong >= beforeLong * 0.75);
   }
 
   function stopStream() {
@@ -14308,26 +14311,11 @@
     }
   }
 
-  function closeManualFocusPlan(caps, point) {
-    const distance = closeFocusDistance(caps && caps.focusDistance);
-    if (distance == null) return null;
-    const modes = caps && Array.isArray(caps.focusMode) ? caps.focusMode : null;
-    if (modes && modes.length && !modes.includes("manual")) return null;
-    const spot = {
-      x: clamp01(point && point.x != null ? point.x : 0.5),
-      y: clamp01(point && point.y != null ? point.y : 0.5),
-    };
-    const direct = { focusMode: "manual", focusDistance: distance };
-    if (!modes || !modes.length || (caps && caps.pointsOfInterest)) direct.pointsOfInterest = [spot];
-    return { direct, mode: "manual", point: spot };
-  }
-
   function lensAcceptedFocus(track) {
     try {
       if (!track || typeof track.getSettings !== "function") return false;
       const settings = track.getSettings() || {};
-      if (settings.focusMode === "continuous" || settings.focusMode === "single-shot") return true;
-      return settings.focusMode === "manual" && typeof settings.focusDistance === "number" && settings.focusDistance >= 2;
+      return settings.focusMode === "continuous" || settings.focusMode === "single-shot";
     } catch {
       return false;
     }
@@ -14337,23 +14325,26 @@
     if (!track || typeof track.applyConstraints !== "function") return null;
     const caps = readTrackCaps(track);
     const plan = cameraFocusConstraints(caps, point, intent);
-    if (plan) {
+    if (!plan) return null;
+    const before = trackSettings(track);
+    try {
+      await track.applyConstraints(cameraFocusHold(before, plan.direct));
+    } catch {
+      return null;
+    }
+    const after = trackSettings(track);
+    if (previewWentSoft(before, after)) {
       try {
-        await track.applyConstraints(plan.direct);
+        await track.applyConstraints(cameraFocusHold(before, {}));
       } catch {
-        if (plan.mode) {
-          try {
-            await track.applyConstraints({ focusMode: plan.mode });
-          } catch {
-            /* preview stays usable */
-          }
-        }
+        /* the previous picture size could not be put back */
       }
+      return null;
     }
     const clarity = cameraClarityConstraints(caps);
     if (clarity) {
       try {
-        await track.applyConstraints(clarity);
+        await track.applyConstraints(cameraFocusHold(trackSettings(track), clarity));
       } catch {
         /* exposure stays on the camera default */
       }
@@ -14364,19 +14355,9 @@
   async function focusCamera(intent, point) {
     const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
     const aim = point || currentFocusPoint();
-    let plan = await applyCameraFocus(track, aim, intent);
-    if (track && !lensAcceptedFocus(track)) {
-      const close = closeManualFocusPlan(readTrackCaps(track), aim);
-      if (close) {
-        try {
-          await track.applyConstraints(close.direct);
-          plan = close;
-        } catch {
-          /* the shutter can still use the Android close-focus still */
-        }
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, cameraFocusSettleMs(plan && plan.mode)));
+    const plan = await applyCameraFocus(track, aim, intent);
+    const wait = cameraFocusSettleMs(plan && plan.mode);
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
     return plan;
   }
 
@@ -14693,43 +14674,85 @@
     };
   }
 
-  async function openCameraStream(preferDetail) {
-    // Cap the long side at 2560. The previous 3840 request, then a jump to
-    // the sensor maximum, restarted the lens and close-up focus never locked.
-    const detailed = {
+  async function upgradeSoftPreview(mediaStream) {
+    const track = mediaStream && mediaStream.getVideoTracks && mediaStream.getVideoTracks()[0];
+    const settings = trackSettings(track);
+    const longSide = Math.max(Number(settings.width) || 0, Number(settings.height) || 0);
+    if (longSide >= 1280) return mediaStream;
+    const deviceId = settings && settings.deviceId ? String(settings.deviceId) : "";
+    const video = {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    };
+    if (deviceId) video.deviceId = { exact: deviceId };
+    else video.facingMode = { ideal: "environment" };
+    try {
+      const sharper = await navigator.mediaDevices.getUserMedia({ audio: false, video: video });
+      const next = trackSettings(sharper.getVideoTracks && sharper.getVideoTracks()[0]);
+      const nextLong = Math.max(Number(next.width) || 0, Number(next.height) || 0);
+      if (nextLong > longSide) {
+        mediaStream.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch {
+            /* ignore */
+          }
+        });
+        return sharper;
+      }
+      sharper.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {
+          /* ignore */
+        }
+      });
+    } catch (err) {
+      if (isCameraPermissionRejection(err)) throw err;
+    }
+    return mediaStream;
+  }
+
+  async function openCameraStream() {
+    // Landscape sensor sizes. A portrait ideal with a 2560 cap, or a request
+    // with no size, made the phone hand back a small preview. The screen then
+    // stretched that picture and the receipt looked out of focus. Focus is
+    // not part of this request.
+    const high = {
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1920, max: 2560 },
-        height: { ideal: 2560, max: 2560 },
-        focusMode: { ideal: "continuous" },
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
       },
     };
-    const focused = {
+    const hd = {
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        focusMode: { ideal: "continuous" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
       },
     };
     const bare = {
       audio: false,
       video: { facingMode: { ideal: "environment" } },
     };
-    const first = preferDetail ? detailed : focused;
+    let mediaStream = null;
     try {
-      return await navigator.mediaDevices.getUserMedia(first);
+      mediaStream = await navigator.mediaDevices.getUserMedia(high);
     } catch (err) {
       if (isCameraPermissionRejection(err)) throw err;
-      if (first !== focused) {
-        try {
-          return await navigator.mediaDevices.getUserMedia(focused);
-        } catch (err2) {
-          if (isCameraPermissionRejection(err2)) throw err2;
-        }
-      }
-      return navigator.mediaDevices.getUserMedia(bare);
     }
+    if (!mediaStream) {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia(hd);
+      } catch (err2) {
+        if (isCameraPermissionRejection(err2)) throw err2;
+      }
+    }
+    if (!mediaStream) mediaStream = await navigator.mediaDevices.getUserMedia(bare);
+    return upgradeSoftPreview(mediaStream);
   }
 
   async function attachCameraStream(mediaStream) {
@@ -14787,9 +14810,8 @@
       if (outcome.action === "blocked") return outcome;
     }
 
-    const preferHighRes = nativeState === "granted" || (nativeState == null && webState === "granted");
     try {
-      stream = await openCameraStream(preferHighRes);
+      stream = await openCameraStream();
       return { action: "ok", message: "" };
     } catch (err) {
       if (!isCameraPermissionRejection(err)) return { action: "failed", message: "" };
@@ -14801,7 +14823,7 @@
       if (outcome.action === "blocked") return outcome;
       if (nativeState === "granted") {
         try {
-          stream = await openCameraStream(true);
+          stream = await openCameraStream();
           return { action: "ok", message: "" };
         } catch (err2) {
           if (!isCameraPermissionRejection(err2)) return { action: "failed", message: "" };
@@ -14817,7 +14839,7 @@
         if (outcome.action === "blocked") return outcome;
         if (nativeState === "granted") {
           try {
-            stream = await openCameraStream(true);
+            stream = await openCameraStream();
             return { action: "ok", message: "" };
           } catch (err2) {
             if (!isCameraPermissionRejection(err2)) return { action: "failed", message: "" };

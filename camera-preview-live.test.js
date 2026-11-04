@@ -65,13 +65,12 @@ describe("live scan preview", () => {
     expect(applied).toBe(true);
     expect(calls.length).toBeGreaterThan(0);
     const live = calls[0];
-    expect(live.width.ideal).toBeGreaterThanOrEqual(720);
-    expect(live.height.ideal).toBeGreaterThanOrEqual(1280);
-    expect(live.height.ideal).toBeLessThanOrEqual(1920);
+    expect(live.width.ideal).toBe(3840);
+    expect(live.height.ideal).toBe(2160);
     expect(live.advanced[0].focusMode).toBe("continuous");
     expect(live.advanced[0].pointsOfInterest[0]).toEqual(point);
     expect(live.advanced.some((set) => set.resizeMode === "none")).toBe(true);
-    expect(JSON.stringify(live)).not.toMatch(/3840/);
+    expect(live.width.max).toBeUndefined();
 
     const attach = extractFunction(src, "attachCameraStream");
     expect(attach).toMatch(/applyLivePreviewToTrack/);

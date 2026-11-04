@@ -14,9 +14,9 @@ describe("A4 camera frame", () => {
     expect(js).toMatch(/Fit the whole A4 page inside the amber frame/);
     expect(js).toMatch(/function applyCameraFrame/);
     expect(js).toMatch(/haulage-camera-frame/);
-    expect(js).toMatch(/height: \{ ideal: 2560, max: 2560 \}/);
-    expect(js).toMatch(/focusMode: \{ ideal: "continuous" \}/);
-    expect(js).not.toMatch(/ideal: 3840/);
+    expect(js).toMatch(/width: \{ ideal: 3840 \}/);
+    expect(js).toMatch(/height: \{ ideal: 2160 \}/);
+    expect(js).not.toMatch(/max: 2560/);
     expect(js).not.toMatch(/caps\.width\.max/);
   });
 

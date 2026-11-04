@@ -23,6 +23,9 @@ describe("suite patch notes", () => {
     expect(html).toMatch(/href="\/updates" aria-current="page"/);
     expect(html).toMatch(/<h2>Version 4\.15<\/h2>/);
     expect(html).toMatch(/live scan picture focuses/);
+    expect(html).toMatch(/<h2>Version 4\.14<\/h2>/);
+    expect(html).toMatch(/full preview/);
+    expect(html).toMatch(/guessed focus distance/);
     expect(html).toMatch(/<h2>Version 4\.13<\/h2>/);
     expect(html).toMatch(/does not report focus/);
     expect(html).toMatch(/<h2>Version 4\.12<\/h2>/);

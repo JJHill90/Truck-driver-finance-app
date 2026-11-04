@@ -38,6 +38,10 @@ describe("Driver Hub patch notes", () => {
     expect(notes[0].bullets).toHaveLength(1);
     expect(notes[0].bullets.join("\n")).toMatch(/live scan picture focuses/);
     expect(notes[0].bullets.join("\n")).toMatch(/tap on the slip refocuses/);
+    const fullPreview = notes.find((note) => note.prNumber === 218);
+    expect(fullPreview && fullPreview.label).toBe("Version 4.14");
+    expect(fullPreview.bullets.join("\n")).toMatch(/full preview/);
+    expect(fullPreview.bullets.join("\n")).toMatch(/guessed focus distance/);
     const closeFocus = notes.find((note) => note.prNumber === 217);
     expect(closeFocus && closeFocus.label).toBe("Version 4.13");
     expect(closeFocus.bullets.join("\n")).toMatch(/does not report focus/);
