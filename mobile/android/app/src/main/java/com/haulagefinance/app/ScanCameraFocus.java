@@ -57,6 +57,7 @@ public class ScanCameraFocus {
     private final Context context;
     private final HandlerThread thread;
     private final Handler handler;
+    private ScanCameraPreview livePreview;
 
     ScanCameraFocus(Context context) {
         this.context = context.getApplicationContext();
@@ -65,8 +66,49 @@ public class ScanCameraFocus {
         handler = new Handler(thread.getLooper());
     }
 
+    void attachPreview(ScanCameraPreview preview) {
+        livePreview = preview;
+    }
+
     void shutdown() {
+        if (livePreview != null) livePreview.shutdown();
         thread.quitSafely();
+    }
+
+    /**
+     * Shows the Camera2 viewfinder. Returns "ok" or "" when CAMERA is not
+     * granted. Does not request permission and does not deny a WebView capture.
+     */
+    @JavascriptInterface
+    public String startLivePreview(double focusX, double focusY, String frameMode) {
+        if (livePreview == null) return "";
+        return livePreview.start(focusX, focusY, frameMode);
+    }
+
+    @JavascriptInterface
+    public void refocusPreview(double focusX, double focusY) {
+        if (livePreview != null) livePreview.refocus(focusX, focusY);
+    }
+
+    @JavascriptInterface
+    public void setPreviewFrame(String frameMode) {
+        if (livePreview != null) livePreview.setFrameMode(frameMode);
+    }
+
+    @JavascriptInterface
+    public String takePreviewJpeg() {
+        return livePreview == null ? "" : livePreview.takePreviewJpeg();
+    }
+
+    @JavascriptInterface
+    public void stopLivePreview() {
+        if (livePreview != null) livePreview.stop();
+    }
+
+    boolean stopLivePreviewFromBack() {
+        if (livePreview == null || !livePreview.isOpen()) return false;
+        livePreview.stop();
+        return true;
     }
 
     /**
