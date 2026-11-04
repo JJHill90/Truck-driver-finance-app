@@ -39,7 +39,7 @@ function extractFunction(src, name) {
 
 function loadHelpers() {
   const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
-  const names = ["isRecordsGet", "recordsGetUsesLiveBody", "mergeAttachedReceipt"];
+  const names = ["isRecordsGet", "recordsGetUsesLiveBody", "mergeAttachedReceipt", "attachedPeriodUpdate"];
   const code = `${names.map((name) => extractFunction(src, name)).join("\n")}\n${names
     .map((name) => `this.${name} = ${name};`)
     .join("\n")}`;
@@ -81,6 +81,41 @@ describe("add receipt shows the photo without a restart", () => {
     expect(next.expenses[0].receiptId).toBe("r-new");
     expect(next.expenses[0].noReceipt).toBe(false);
     expect(next.expenses[0].amount).toBe(12);
+    expect(next.receipts[0].linkedExpenseId).toBe("e1");
+    expect(next.receipts[0].purpose).toBe("expense");
+  });
+
+  it("files an invoice on the income side and lines up that month", () => {
+    const records = {
+      receipts: [{ id: "stub", filename: "manual-entry" }],
+      expenses: [{ id: "e1", amount: 9 }],
+      income: [{ id: "i1", type: "invoice", receiptId: "stub", amount: 440, date: "2026-11-04" }],
+    };
+    const next = api.mergeAttachedReceipt(
+      records,
+      { id: "i1", type: "invoice", date: "2026-11-04", amount: 440 },
+      { id: "r-new", filename: "04.11.26 AUD$440.00.jpg" },
+      "stub",
+      "income"
+    );
+    expect(next.receipts.map((row) => row.id)).toEqual(["r-new"]);
+    expect(next.receipts[0].purpose).toBe("income");
+    expect(next.receipts[0].hasImage).toBe(true);
+    expect(next.receipts[0].linkedIncomeId).toBe("i1");
+    expect(next.receipts[0].linkedExpenseId).toBeUndefined();
+    expect(next.income[0].receiptId).toBe("r-new");
+    expect(next.income[0].noReceipt).toBe(false);
+    expect(next.income[0].amount).toBe(440);
+    expect(next.income[0].type).toBe("invoice");
+    expect(next.expenses).toEqual([{ id: "e1", amount: 9 }]);
+    expect(api.attachedPeriodUpdate("income", "2026-11-04")).toEqual({
+      kind: "month",
+      value: "2026-11",
+    });
+    expect(api.attachedPeriodUpdate("expense", "2026-11-04", () => "2026-11-02")).toEqual({
+      kind: "week",
+      value: "2026-11-02",
+    });
   });
 
   it("paints the gallery from the attach response instead of waiting for a full reload", () => {

@@ -8725,15 +8725,25 @@
     });
   }
 
-  function mergeAttachedReceipt(records, entry, receipt, previousReceiptId) {
+  function mergeAttachedReceipt(records, entry, receipt, previousReceiptId, ledgerType) {
     const next = { ...(records || {}) };
+    // Income rows use type values such as "invoice" or "salary_wages", not "income".
+    const kind =
+      ledgerType === "income" || (receipt && receipt.purpose === "income") ? "income" : "expense";
     const saved = {
       ...(receipt || {}),
       hasImage: true,
-      purpose:
-        (receipt && receipt.purpose) ||
-        (entry && (entry.purpose === "income" || entry.type === "income") ? "income" : "expense"),
+      purpose: kind,
     };
+    if (entry && entry.id) {
+      if (kind === "income") {
+        saved.linkedIncomeId = entry.id;
+        delete saved.linkedExpenseId;
+      } else {
+        saved.linkedExpenseId = entry.id;
+        delete saved.linkedIncomeId;
+      }
+    }
     if (!saved.id) return next;
     const drop = new Set(
       [previousReceiptId && previousReceiptId !== saved.id ? previousReceiptId : null].filter(Boolean)
@@ -8742,13 +8752,40 @@
       (row) => row && row.id !== saved.id && !drop.has(row.id)
     );
     next.receipts = [saved, ...receipts];
-    const bucket = saved.purpose === "income" ? "income" : "expenses";
+    const bucket = kind === "income" ? "income" : "expenses";
     if (entry && entry.id && Array.isArray(next[bucket])) {
       next[bucket] = next[bucket].map((row) =>
         row && row.id === entry.id ? { ...row, receiptId: saved.id, noReceipt: false } : row
       );
     }
     return next;
+  }
+
+  /**
+   * Expense ledgers filter by week; income (invoices and revenue) filter by month.
+   * Move that filter onto the document date so the new photo's row is on screen.
+   */
+  function attachedPeriodUpdate(ledgerType, dateIso, weekStartMonday) {
+    const date = String(dateIso || "");
+    if (!date) return null;
+    if (ledgerType === "income") {
+      const month = date.match(/^(\d{4})-(\d{2})/);
+      return month ? { kind: "month", value: `${month[1]}-${month[2]}` } : null;
+    }
+    if (typeof weekStartMonday !== "function") return null;
+    const start = weekStartMonday(date);
+    return start ? { kind: "week", value: start } : null;
+  }
+
+  function alignAttachedLedgerPeriod(cfg, entry) {
+    const update = attachedPeriodUpdate(
+      cfg && cfg.type,
+      entry && entry.date,
+      HaulageWeeks && HaulageWeeks.weekStartMonday
+    );
+    if (!update || !cfg) return;
+    if (update.kind === "month") setMonthFilter(cfg, update.value);
+    else setWeekFilter(cfg, update.value);
   }
 
   function paintReceiptSurfaces() {
@@ -8781,7 +8818,14 @@
     if (typeof receiptImageCache !== "undefined" && receiptImageCache && /^data:image\//i.test(String(imageData || ""))) {
       receiptImageCache.set(receipt.id, imageData);
     }
-    state.records = mergeAttachedReceipt(state.records, entry, receipt, previousReceiptId);
+    state.records = mergeAttachedReceipt(
+      state.records,
+      entry,
+      receipt,
+      previousReceiptId,
+      cfg && cfg.type
+    );
+    alignAttachedLedgerPeriod(cfg, entry);
     paintReceiptSurfaces();
     if (typeof window.haulageRevealReceiptPhoto === "function") {
       window.haulageRevealReceiptPhoto(receipt.id);
@@ -8793,6 +8837,10 @@
       live.receipts.some((row) => row && row.id === receipt.id && (row.hasImage || row.imagePath));
     if (!liveHasIt) return;
     state.records = live;
+    const liveRows = cfg && cfg.type === "income" ? live.income : live.expenses;
+    const liveEntry =
+      (Array.isArray(liveRows) && liveRows.find((row) => row && entry && row.id === entry.id)) || entry;
+    alignAttachedLedgerPeriod(cfg, liveEntry);
     paintReceiptSurfaces();
     if (typeof window.haulageRevealReceiptPhoto === "function") {
       window.haulageRevealReceiptPhoto(receipt.id);
