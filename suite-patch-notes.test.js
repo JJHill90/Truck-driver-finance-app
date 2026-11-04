@@ -8,7 +8,7 @@ describe("suite patch notes", () => {
     expect(notes.length).toBeGreaterThan(1);
     expect(currentPatchNote().prNumber).toBe(HAULAGE_PR_NUMBER);
     expect(currentPatchNote().version).toBe(formatVersionLabel(HAULAGE_PR_NUMBER));
-    expect(currentPatchNote().version).toBe("Version 4.14");
+    expect(currentPatchNote().version).toBe("Version 4.15");
     for (let i = 1; i < notes.length; i += 1) {
       expect(notes[i - 1].prNumber).toBeGreaterThan(notes[i].prNumber);
       expect(notes[i].items.length).toBeGreaterThan(0);
@@ -21,7 +21,7 @@ describe("suite patch notes", () => {
     const html = renderPatchNotesPage();
     expect(html).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/updates"/);
     expect(html).toMatch(/href="\/updates" aria-current="page"/);
-    expect(html).toMatch(/<h2>Version 4\.14<\/h2>/);
+    expect(html).toMatch(/<h2>Version 4\.15<\/h2>/);
     expect(html).toMatch(/live scan picture focuses/);
     expect(html).toMatch(/<h2>Version 4\.13<\/h2>/);
     expect(html).toMatch(/does not report focus/);

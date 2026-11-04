@@ -33,8 +33,8 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(218);
-    expect(notes[0].label).toBe("Version 4.14");
+    expect(notes[0].prNumber).toBe(219);
+    expect(notes[0].label).toBe("Version 4.15");
     expect(notes[0].bullets).toHaveLength(1);
     expect(notes[0].bullets.join("\n")).toMatch(/live scan picture focuses/);
     expect(notes[0].bullets.join("\n")).toMatch(/tap on the slip refocuses/);
