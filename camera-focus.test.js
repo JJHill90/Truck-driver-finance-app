@@ -41,6 +41,7 @@ function loadFocus() {
   const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
   const names = [
     "clamp01",
+    "closeFocusDistance",
     "coverMappedRect",
     "cameraFocusPoint",
     "cameraFocusConstraints",
@@ -113,7 +114,25 @@ describe("receipt camera focus", () => {
     expect(api.cameraFocusConstraints({ focusMode: ["manual"] }, { x: 0.5, y: 0.5 }, "single-shot")).toBe(
       null
     );
-    expect(api.cameraFocusConstraints({}, null, "continuous")).toBe(null);
+    expect(api.cameraFocusConstraints({}, null, "continuous")).toEqual({
+      direct: {
+        focusMode: "continuous",
+        pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+      },
+      mode: "continuous",
+      point: { x: 0.5, y: 0.5 },
+    });
+    expect(
+      api.cameraFocusConstraints(
+        { focusMode: ["manual"], focusDistance: { min: 0, max: 10 } },
+        { x: 0.5, y: 0.5 },
+        "single-shot"
+      )
+    ).toEqual({
+      direct: { focusMode: "manual", focusDistance: 5 },
+      mode: "manual",
+      point: { x: 0.5, y: 0.5 },
+    });
     expect(api.cameraClarityConstraints({ exposureMode: ["manual"] })).toBe(null);
   });
 
@@ -130,5 +149,24 @@ describe("receipt camera focus", () => {
     expect(src).toMatch(/image\/jpeg", 0\.95/);
     expect(css).toMatch(/\.receipt-camera-focus-ring/);
     expect(css).toMatch(/pointer-events:\s*none/);
+    const capture = extractFunction(src, "captureAndUpload");
+    expect(capture).toMatch(/canvasFromCrop/);
+    expect(capture).toMatch(/hubScanCameraBridge/);
+    expect(capture).not.toMatch(/getBoundingClientRect/);
+    expect(capture).not.toMatch(/fallbackId/);
+    expect(capture).not.toMatch(/ideal: 3840/);
+    const main = fs.readFileSync(
+      path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/MainActivity.java"),
+      "utf8"
+    );
+    const nativeFocus = fs.readFileSync(
+      path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/ScanCameraFocus.java"),
+      "utf8"
+    );
+    expect(main).toMatch(/installScanCameraBridge/);
+    expect(main).toMatch(/RESOURCE_VIDEO_CAPTURE/);
+    expect(nativeFocus).toMatch(/CONTROL_AF_MODE_CONTINUOUS_PICTURE/);
+    expect(nativeFocus).toMatch(/CONTROL_AF_TRIGGER_START/);
+    expect(nativeFocus).not.toMatch(/\.deny\(/);
   });
 });
