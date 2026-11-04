@@ -42,17 +42,11 @@ function loadFocus() {
   const names = [
     "clamp01",
     "closeFocusDistance",
-    "normalizePoint",
-    "planFocusAttempts",
-    "previewFocusAttempts",
-    "shutterFocusAttempts",
-    "focusPointFromCrop",
-    "normalizedCropFromPixels",
-    "cropRectOnSource",
-    "aspectClose",
-    "chooseCaptureBitmap",
-    "cameraOpenConstraints",
-    "lensAcceptedFocus",
+    "coverMappedRect",
+    "cameraFocusPoint",
+    "cameraFocusConstraints",
+    "cameraClarityConstraints",
+    "cameraFocusSettleMs",
   ];
   const code = `${names.map((name) => extractFunction(src, name)).join("\n")}\n${names
     .map((name) => `this.${name} = ${name};`)
@@ -62,131 +56,117 @@ function loadFocus() {
   return sandbox;
 }
 
-describe("scan camera close focus", () => {
+describe("receipt camera focus", () => {
   const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "public/styles.css"), "utf8");
   const api = loadFocus();
-  const main = fs.readFileSync(
-    path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/MainActivity.java"),
-    "utf8"
-  );
-  const nativeFocus = fs.readFileSync(
-    path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/ScanCameraFocus.java"),
-    "utf8"
-  );
 
-  it("asks for continuous focus at the centre and a native resolution without scaling up", () => {
-    const constraints = api.cameraOpenConstraints();
-    expect(constraints.audio).toBe(false);
-    expect(constraints.video.facingMode.ideal).toBe("environment");
-    expect(constraints.video.width.ideal).toBeGreaterThanOrEqual(1920);
-    expect(constraints.video.height.ideal).toBe(3840);
-    expect(constraints.video.width.min).toBeUndefined();
-    expect(constraints.video.height.min).toBeUndefined();
-    expect(constraints.video.advanced.some((set) => set.resizeMode === "none")).toBe(true);
-    expect(constraints.video.advanced.some((set) => set.zoom === 1)).toBe(true);
-    const focus = constraints.video.advanced.find((set) => set.focusMode === "continuous");
-    expect(focus.pointsOfInterest[0]).toEqual({ x: 0.5, y: 0.5 });
+  const stage = { left: 0, top: 0, width: 390, height: 700 };
+  const centered = { left: 45, top: 138, width: 300, height: 424 };
 
-    const resolution = extractFunction(src, "raiseNativeResolution");
-    expect(resolution).toMatch(/resizeMode: "none"/);
-    expect(resolution).toMatch(/zoom: 1/);
-    expect(resolution).toMatch(/ideal: 3840/);
-    expect(resolution).not.toMatch(/\.max/);
+  it("aims a centred amber frame at the middle of the camera image", () => {
+    const point = api.cameraFocusPoint(1920, 2560, stage, centered);
+    expect(point.x).toBeGreaterThan(0.45);
+    expect(point.x).toBeLessThan(0.55);
+    expect(point.y).toBeGreaterThan(0.45);
+    expect(point.y).toBeLessThan(0.55);
   });
 
-  it("focuses a centered close crop from the camera buffer, not the stretched preview", () => {
-    const previewCss = { width: 390, height: 844 };
-    const video = { width: 2160, height: 3840 };
-    const chosen = api.chooseCaptureBitmap(null, video);
-    expect(chosen.from).toBe("video-buffer");
-    expect(chosen.width).toBe(2160);
-    expect(chosen.width).not.toBe(previewCss.width);
-
-    const crop = { sx: 648, sy: 1152, sw: 864, sh: 1536 };
-    const point = api.focusPointFromCrop(video.width, video.height, crop);
-    expect(point).toEqual({ x: 0.5, y: 0.5 });
-    const norm = api.normalizedCropFromPixels(video.width, video.height, crop);
-    const rect = api.cropRectOnSource(chosen.width, chosen.height, norm);
-    expect(rect).toEqual({ sx: 648, sy: 1152, sw: 864, sh: 1536 });
-    expect(rect.sw).toBeLessThanOrEqual(video.width);
-    expect(rect.sh).toBeLessThanOrEqual(video.height);
-    expect(rect.sw).toBeGreaterThan(previewCss.width);
-
-    const attempts = api.planFocusAttempts(point, {});
-    const shutter = api.shutterFocusAttempts(attempts);
-    expect(shutter).toHaveLength(1);
-    expect(shutter[0].label).toBe("single-shot");
-    expect(shutter[0].advanced[0].focusMode).toBe("single-shot");
-    expect(shutter[0].advanced[0].pointsOfInterest[0]).toEqual({ x: 0.5, y: 0.5 });
-    expect(api.previewFocusAttempts(attempts)[0].advanced[0].focusMode).toBe("continuous");
-
-    expect(api.chooseCaptureBitmap({ width: 2160, height: 3840 }, { width: 1080, height: 1920 }).from).toBe(
-      "still"
-    );
-    expect(api.chooseCaptureBitmap({ width: 640, height: 1138 }, { width: 2160, height: 3840 }).from).toBe(
-      "video-buffer"
-    );
-    expect(api.chooseCaptureBitmap({ width: 4000, height: 3000 }, { width: 1080, height: 1920 }).from).toBe(
-      "video-buffer"
-    );
+  it("moves the aim point when the frame sits to one side", () => {
+    const shifted = { left: 220, top: 80, width: 160, height: 200 };
+    const point = api.cameraFocusPoint(1920, 2560, stage, shifted);
+    const middle = api.cameraFocusPoint(1920, 2560, stage, centered);
+    expect(point.x).toBeGreaterThan(middle.x);
+    expect(point.y).toBeLessThan(middle.y);
   });
 
-  it("uses a close focus distance only when the lens can focus that near", () => {
-    expect(api.closeFocusDistance({ min: 0, max: 10 })).toBe(5);
-    expect(api.closeFocusDistance({ min: 0, max: 1.2 })).toBe(null);
-    expect(api.closeFocusDistance({ min: 6, max: 10 })).toBe(6);
-    expect(api.closeFocusDistance(null)).toBe(null);
-
-    const manual = api.planFocusAttempts(
-      { x: 0.5, y: 0.5 },
-      { focusMode: ["manual"], focusDistance: { min: 0, max: 8 } }
-    );
-    expect(api.shutterFocusAttempts(manual)[0].advanced[0]).toMatchObject({
-      focusMode: "manual",
-      focusDistance: 5,
+  it("asks for a single-shot lock at the tapped point and never resizes the sensor", () => {
+    const caps = {
+      focusMode: ["continuous", "single-shot"],
+      pointsOfInterest: true,
+      exposureMode: ["continuous", "manual"],
+      whiteBalanceMode: ["continuous"],
+    };
+    const plan = api.cameraFocusConstraints(caps, { x: 0.62, y: 0.4 }, "single-shot");
+    expect(plan.mode).toBe("single-shot");
+    expect(plan.direct).toEqual({
+      focusMode: "single-shot",
+      pointsOfInterest: [{ x: 0.62, y: 0.4 }],
     });
-
-    const continuousOnly = api.planFocusAttempts(
-      { x: 2, y: -1 },
-      { focusMode: ["continuous"], focusDistance: { min: 0, max: 10 } }
-    );
-    expect(continuousOnly.some((attempt) => attempt.label === "close-manual")).toBe(false);
-    expect(continuousOnly.find((attempt) => attempt.label === "continuous").advanced[0].pointsOfInterest[0]).toEqual({
-      x: 1,
-      y: 0,
+    expect(plan.direct.width).toBeUndefined();
+    expect(plan.direct.height).toBeUndefined();
+    expect(api.cameraClarityConstraints(caps)).toEqual({
+      exposureMode: "continuous",
+      whiteBalanceMode: "continuous",
     });
-
-    expect(api.lensAcceptedFocus({ getSettings: () => ({ focusMode: "continuous" }) })).toBe(true);
-    expect(api.lensAcceptedFocus({ getSettings: () => ({ focusMode: "manual", focusDistance: 5 }) })).toBe(true);
-    expect(api.lensAcceptedFocus({ getSettings: () => ({ focusMode: "manual" }) })).toBe(false);
-    expect(api.lensAcceptedFocus({ getSettings: () => ({ focusMode: "manual", focusDistance: 0 }) })).toBe(false);
-    expect(api.lensAcceptedFocus({ getSettings: () => ({}) })).toBe(false);
-    expect(api.lensAcceptedFocus(null)).toBe(false);
+    expect(api.cameraFocusSettleMs("single-shot")).toBe(550);
+    expect(api.cameraFocusSettleMs("continuous")).toBe(220);
   });
 
-  it("keeps the amber frame up when focus is soft and does not send the driver back to upload", () => {
-    const body = extractFunction(src, "captureAndUpload");
-    expect(body.indexOf("focusCenteredReceipt")).toBeGreaterThan(0);
-    expect(body.indexOf('phase === "shutter"') === -1 || body.includes('"shutter"')).toBe(true);
-    expect(body).toMatch(/"shutter"/);
-    expect(body.indexOf("focusCenteredReceipt")).toBeLessThan(body.indexOf("closeCamera"));
-    expect(body).toMatch(/Focusing/);
-    expect(body).toMatch(/drawCrop/);
-    expect(body).not.toMatch(/fallbackId/);
-    expect(body).not.toMatch(/getBoundingClientRect/);
-    expect(body).not.toMatch(/too soft|out of focus|blurry/);
-    expect(src).toMatch(/id="receipt-camera-frame"/);
-    expect(src).toMatch(/HubScanCamera/);
+  it("falls back to continuous, and skips a point the camera cannot use", () => {
+    expect(
+      api.cameraFocusConstraints({ focusMode: ["continuous"] }, { x: 2, y: -1 }, "single-shot")
+    ).toEqual({
+      direct: { focusMode: "continuous" },
+      mode: "continuous",
+      point: { x: 1, y: 0 },
+    });
+    expect(api.cameraFocusConstraints({ focusMode: ["manual"] }, { x: 0.5, y: 0.5 }, "single-shot")).toBe(
+      null
+    );
+    expect(api.cameraFocusConstraints({}, null, "continuous")).toEqual({
+      direct: {
+        focusMode: "continuous",
+        pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+      },
+      mode: "continuous",
+      point: { x: 0.5, y: 0.5 },
+    });
+    expect(
+      api.cameraFocusConstraints(
+        { focusMode: ["manual"], focusDistance: { min: 0, max: 10 } },
+        { x: 0.5, y: 0.5 },
+        "single-shot"
+      )
+    ).toEqual({
+      direct: { focusMode: "manual", focusDistance: 5 },
+      mode: "manual",
+      point: { x: 0.5, y: 0.5 },
+    });
+    expect(api.cameraClarityConstraints({ exposureMode: ["manual"] })).toBe(null);
   });
 
-  it("adds a Hub Camera2 close-focus hook without changing the permission grant", () => {
+  it("starts a focus hunt on open, on a tap, and before the shutter", () => {
+    expect(src).toMatch(/focusMode: \{ ideal: "continuous" \}/);
+    expect(src).toMatch(/width: \{ ideal: 1920, max: 2560 \}/);
+    expect(src).toMatch(/height: \{ ideal: 2560, max: 2560 \}/);
+    expect(src).not.toMatch(/ideal: 3840/);
+    expect(src).not.toMatch(/caps\.width\.max/);
+    expect(src).not.toMatch(/sharpenCameraTrack/);
+    expect(src).toMatch(/focusCamera\("single-shot"/);
+    expect(src).toMatch(/Tap the page if it looks soft/);
+    expect(src).toMatch(/receipt-camera-focus-ring/);
+    expect(src).toMatch(/image\/jpeg", 0\.95/);
+    expect(css).toMatch(/\.receipt-camera-focus-ring/);
+    expect(css).toMatch(/pointer-events:\s*none/);
+    const capture = extractFunction(src, "captureAndUpload");
+    expect(capture).toMatch(/canvasFromCrop/);
+    expect(capture).toMatch(/hubScanCameraBridge/);
+    expect(capture).not.toMatch(/getBoundingClientRect/);
+    expect(capture).not.toMatch(/fallbackId/);
+    expect(capture).not.toMatch(/ideal: 3840/);
+    const main = fs.readFileSync(
+      path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/MainActivity.java"),
+      "utf8"
+    );
+    const nativeFocus = fs.readFileSync(
+      path.join(__dirname, "mobile/android/app/src/main/java/com/haulagefinance/app/ScanCameraFocus.java"),
+      "utf8"
+    );
     expect(main).toMatch(/installScanCameraBridge/);
-    expect(main).toMatch(/request\.grant\(new String\[\] \{ PermissionRequest\.RESOURCE_VIDEO_CAPTURE \}\)/);
-    expect(main).toMatch(/does not grant or deny/);
+    expect(main).toMatch(/RESOURCE_VIDEO_CAPTURE/);
     expect(nativeFocus).toMatch(/CONTROL_AF_MODE_CONTINUOUS_PICTURE/);
     expect(nativeFocus).toMatch(/CONTROL_AF_TRIGGER_START/);
-    expect(nativeFocus).toMatch(/captureFocusedJpeg/);
-    expect(nativeFocus).not.toMatch(/requestPermissions/);
     expect(nativeFocus).not.toMatch(/\.deny\(/);
   });
 });

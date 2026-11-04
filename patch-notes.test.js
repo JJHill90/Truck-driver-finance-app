@@ -35,8 +35,13 @@ describe("Driver Hub patch notes", () => {
     const notes = patchNotes.publishedNotes();
     expect(notes[0].prNumber).toBe(217);
     expect(notes[0].label).toBe("Version 4.13");
-    expect(notes[0].bullets.join("\n")).toMatch(/centre of the amber frame/);
+    expect(notes[0].bullets).toHaveLength(1);
+    expect(notes[0].bullets.join("\n")).toMatch(/does not report focus/);
     expect(notes[0].bullets.join("\n")).toMatch(/camera's own pixels/);
+    const pageFocus = notes.find((note) => note.prNumber === 216);
+    expect(pageFocus && pageFocus.label).toBe("Version 4.12");
+    expect(pageFocus.bullets.join("\n")).toMatch(/focuses on the page inside the amber frame/);
+    expect(pageFocus.bullets.join("\n")).toMatch(/Tap the page if it looks soft/);
     const liveReload = notes.find((note) => note.prNumber === 215);
     expect(liveReload && liveReload.label).toBe("Version 4.11");
     expect(liveReload.bullets.join("\n")).toMatch(/loads a new version on its own/);

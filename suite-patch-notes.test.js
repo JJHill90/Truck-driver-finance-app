@@ -22,10 +22,11 @@ describe("suite patch notes", () => {
     expect(html).toMatch(/rel="canonical" href="https:\/\/gotaxationsuite\.com\/updates"/);
     expect(html).toMatch(/href="\/updates" aria-current="page"/);
     expect(html).toMatch(/<h2>Version 4\.13<\/h2>/);
-    expect(html).toMatch(/centre of the amber frame/);
+    expect(html).toMatch(/does not report focus/);
+    expect(html).toMatch(/<h2>Version 4\.12<\/h2>/);
+    expect(html).toMatch(/focuses on the page inside the amber frame/);
+    expect(html).toMatch(/Tap the page if it looks soft/);
     expect(html).toMatch(/<h2>Version 4\.11<\/h2>/);
-    expect(html).toMatch(/loads a new version on its own/);
-    expect(html).toMatch(/even when the file is already missing/);
     expect(html).toMatch(/same day and amount/);
     expect(html).toMatch(/<h2>Version 4\.10<\/h2>/);
     expect(html).toMatch(/keeps the photo or PDF/);
