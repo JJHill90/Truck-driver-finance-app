@@ -16,6 +16,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
@@ -46,6 +47,24 @@ public class MainActivity extends BridgeActivity {
             new ActivityResultContracts.RequestPermission(),
             this::onCameraPermissionResult
         );
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (scanCameraFocus != null && scanCameraFocus.stopLivePreviewFromBack()) {
+                    WebView page = scanWebView();
+                    if (page != null) {
+                        page.evaluateJavascript(
+                            "window.haulageNativePreview&&window.haulageNativePreview.cancel()",
+                            null
+                        );
+                    }
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+                setEnabled(true);
+            }
+        });
 
         Handler handler = new Handler(Looper.getMainLooper());
         handler.postDelayed(() -> keepSplash[0] = false, 700);
@@ -137,7 +156,10 @@ public class MainActivity extends BridgeActivity {
      */
     private void installScanCameraBridge(WebView webView) {
         if (webView == null) return;
-        if (scanCameraFocus == null) scanCameraFocus = new ScanCameraFocus(this);
+        if (scanCameraFocus == null) {
+            scanCameraFocus = new ScanCameraFocus(this);
+            scanCameraFocus.attachPreview(new ScanCameraPreview(this));
+        }
         webView.addJavascriptInterface(scanCameraFocus, "HubScanCamera");
     }
 
@@ -166,6 +188,10 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {
             return "";
         }
+    }
+
+    WebView scanWebView() {
+        return webView();
     }
 
     private WebView webView() {

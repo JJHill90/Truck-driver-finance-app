@@ -13821,6 +13821,15 @@
   }
 
   function forceCloseCamera() {
+    const bridge = nativePreviewBridge();
+    if (bridge && typeof bridge.stopLivePreview === "function") {
+      try {
+        bridge.stopLivePreview();
+      } catch {
+        /* the native viewfinder is already gone */
+      }
+    }
+    document.body.classList.remove("receipt-native-preview");
     stopStream();
     const video = document.getElementById("receipt-camera-video");
     if (video) video.srcObject = null;
@@ -13979,22 +13988,20 @@
     modal.querySelectorAll("[data-camera-frame]").forEach((btn) => {
       btn.addEventListener("click", () => {
         applyCameraFrame(btn.getAttribute("data-camera-frame"));
-        const status = document.getElementById("receipt-camera-status");
-        if (status) status.textContent = "Focusing…";
-        showFocusRingAtFrame();
-        void focusCamera("single-shot").then(() => {
-          if (cameraIsOpen()) applyCameraFrame(savedCameraFrame());
-        });
+        const bridge = nativePreviewBridge();
+        if (bridge && typeof bridge.setPreviewFrame === "function") {
+          try {
+            bridge.setPreviewFrame(btn.getAttribute("data-camera-frame"));
+          } catch {
+            /* the HTML frame still changed */
+          }
+        }
+        void refocusLiveView(currentFocusPoint());
       });
     });
     modal.querySelector(".receipt-camera-stage")?.addEventListener("pointerdown", (e) => {
       if (e.target.closest("button, a, input, select, textarea")) return;
-      showFocusRing(e.clientX, e.clientY);
-      const status = document.getElementById("receipt-camera-status");
-      if (status) status.textContent = "Focusing…";
-      void focusCamera("single-shot", focusPointFromClient(e.clientX, e.clientY)).then(() => {
-        if (cameraIsOpen()) applyCameraFrame(savedCameraFrame());
-      });
+      void refocusLiveView(focusPointFromClient(e.clientX, e.clientY), e.clientX, e.clientY);
     });
     return modal;
   }
@@ -14005,6 +14012,97 @@
     if (x < 0) return 0;
     if (x > 1) return 1;
     return x;
+  }
+
+  /**
+   * Constraints for the picture the driver is looking at. Size is the same
+   * landscape sensor preview the stream was opened with (3840×2160). A smaller
+   * ideal made the phone hand back a tiny picture that the screen stretched.
+   * Focus is continuous at the amber-frame centre, or at the point tapped.
+   * The view size is accepted so a caller can pass the phone pixels; it does
+   * not shrink the sensor preview.
+   */
+  function livePreviewConstraints(_viewPxWidth, _viewPxHeight, point) {
+    const spot = {
+      x: clamp01(point && point.x != null ? point.x : 0.5),
+      y: clamp01(point && point.y != null ? point.y : 0.46),
+    };
+    return {
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+      advanced: [
+        { focusMode: "continuous", pointsOfInterest: [spot] },
+        { resizeMode: "none" },
+      ],
+    };
+  }
+
+  function previewPixelSize() {
+    const dpr = Math.max(1, Number(window.devicePixelRatio) || 1);
+    const width = window.screen && window.screen.width ? window.screen.width : window.innerWidth;
+    const height = window.screen && window.screen.height ? window.screen.height : window.innerHeight;
+    return {
+      width: Math.round(width * dpr),
+      height: Math.round(height * dpr),
+    };
+  }
+
+  async function applyLivePreviewToTrack(track, point, viewPxWidth, viewPxHeight) {
+    if (!track || typeof track.applyConstraints !== "function") return false;
+    const constraints = livePreviewConstraints(viewPxWidth, viewPxHeight, point);
+    const attempts = [constraints, { advanced: constraints.advanced }, constraints.advanced[0]];
+    for (const attempt of attempts) {
+      try {
+        await track.applyConstraints(attempt);
+        return true;
+      } catch {
+        /* a smaller set still carries the focus point when the size is refused */
+      }
+    }
+    return false;
+  }
+
+  function nativePreviewBridge() {
+    try {
+      const bridge = window.HubScanCamera;
+      if (bridge && typeof bridge.startLivePreview === "function") return bridge;
+    } catch {
+      /* current Play build has no live preview method until the next APK */
+    }
+    return null;
+  }
+
+  async function refocusLiveView(point, clientX, clientY) {
+    if (clientX != null && clientY != null) showFocusRing(clientX, clientY);
+    else showFocusRingAtFrame();
+    const status = document.getElementById("receipt-camera-status");
+    if (status) status.textContent = "Focusing…";
+    const aim = point || currentFocusPoint();
+    const bridge = nativePreviewBridge();
+    if (bridge && typeof bridge.refocusPreview === "function") {
+      try {
+        bridge.refocusPreview(aim.x, aim.y);
+      } catch {
+        /* the web track can still refocus */
+      }
+    }
+    const track = stream && stream.getVideoTracks && stream.getVideoTracks()[0];
+    if (track) {
+      const focus = livePreviewConstraints(1, 2, aim).advanced[0];
+      try {
+        await track.applyConstraints({ advanced: [focus] });
+      } catch {
+        try {
+          await track.applyConstraints(focus);
+        } catch {
+          /* focusCamera still asks the live track */
+        }
+      }
+    }
+    await focusCamera("single-shot", aim);
+    if (cameraIsOpen() && !document.body.classList.contains("receipt-native-preview")) {
+      applyCameraFrame(savedCameraFrame());
+    }
   }
 
   /**
@@ -14351,6 +14449,7 @@
   }
 
   async function captureAndUpload() {
+    if (document.body.classList.contains("receipt-native-preview")) return;
     const video = document.getElementById("receipt-camera-video");
     const frame = document.getElementById("receipt-camera-frame");
     const shutter = document.getElementById("receipt-camera-shutter");
@@ -14668,9 +14767,10 @@
     showFocusRingAtFrame();
     const status = document.getElementById("receipt-camera-status");
     if (status) status.textContent = "Focusing…";
-    // Single-shot hunts now. Continuous alone often stays at infinity on a
-    // flat receipt until the picture changes, which is why a centred desk
-    // photo never locked.
+    const track = mediaStream && mediaStream.getVideoTracks && mediaStream.getVideoTracks()[0];
+    const px = previewPixelSize();
+    // Size and centre focus go on the open preview, not only on the saved still.
+    await applyLivePreviewToTrack(track, currentFocusPoint(), px.width, px.height);
     void focusCamera("single-shot").then(() => {
       if (cameraIsOpen()) applyCameraFrame(savedCameraFrame());
     });
@@ -14783,6 +14883,7 @@
     document.body.style.overflow = "hidden";
 
     stopStream();
+    if (await tryNativeLivePreview()) return;
     const outcome = await acquireCameraStream();
     if (outcome.action === "blocked") {
       showCameraBlocked(outcome.message);
@@ -14798,8 +14899,94 @@
       keepCameraAwaitingPrompt();
       return;
     }
+    if (nativePreviewBridge()) {
+      stopStream();
+      const video = document.getElementById("receipt-camera-video");
+      if (video) video.srcObject = null;
+      if (await tryNativeLivePreview()) return;
+      const again = await acquireCameraStream();
+      if (again.action === "ok") {
+        await attachCameraStream(stream);
+        return;
+      }
+      if (again.action === "blocked") {
+        showCameraBlocked(again.message);
+        return;
+      }
+      if (again.action === "prompt") {
+        keepCameraAwaitingPrompt();
+        return;
+      }
+      notify("Could not open camera — use Upload file instead");
+      return;
+    }
     await attachCameraStream(stream);
   }
+
+  async function tryNativeLivePreview() {
+    const bridge = nativePreviewBridge();
+    if (!bridge) return false;
+    const point = currentFocusPoint();
+    let started = "";
+    try {
+      started = String(bridge.startLivePreview(point.x, point.y, savedCameraFrame()) || "");
+    } catch {
+      started = "";
+    }
+    if (started !== "ok") return false;
+    document.body.classList.add("receipt-native-preview");
+    stopStream();
+    const video = document.getElementById("receipt-camera-video");
+    if (video) video.srcObject = null;
+    const shutter = document.getElementById("receipt-camera-shutter");
+    if (shutter) shutter.disabled = true;
+    showFocusRingAtFrame();
+    const status = document.getElementById("receipt-camera-status");
+    if (status && CAMERA_FRAMES[savedCameraFrame()]) status.textContent = CAMERA_FRAMES[savedCameraFrame()].status;
+    return true;
+  }
+
+  async function deliverNativePreview() {
+    const bridge = nativePreviewBridge();
+    let encoded = "";
+    try {
+      encoded = bridge && typeof bridge.takePreviewJpeg === "function" ? String(bridge.takePreviewJpeg() || "") : "";
+    } catch {
+      encoded = "";
+    }
+    if (!encoded) {
+      if (cameraIsOpen()) {
+        const status = document.getElementById("receipt-camera-status");
+        if (status) status.textContent = "Tap the receipt, then try the shutter again";
+      }
+      return;
+    }
+    const copy = purposeCopy();
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const file = new File([bytes], copy.filename(), { type: "image/jpeg", lastModified: Date.now() });
+    closeCamera();
+    const upload =
+      cameraPurpose === "income"
+        ? typeof uploadIncomeFile === "function"
+          ? uploadIncomeFile
+          : null
+        : typeof uploadReceiptFile === "function"
+          ? uploadReceiptFile
+          : null;
+    if (upload) await upload(file);
+    else notify("Could not start upload — refresh and try again");
+  }
+
+  window.haulageNativePreview = {
+    cancel() {
+      forceCloseCamera();
+    },
+    deliver() {
+      void deliverNativePreview();
+    },
+  };
 
   window.haulageCameraPermission = {
     cameraScanPermissionDecision: cameraScanPermissionDecision,
