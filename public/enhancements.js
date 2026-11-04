@@ -956,6 +956,22 @@
     return String(method || "GET").toUpperCase() === "GET" && /\/api\/haulage\/records(\?|$)/.test(String(url || ""));
   }
 
+  /**
+   * Add receipt must see the file that was just saved. The quiet window after
+   * a scan otherwise replays the previous /records body, so the gallery stays
+   * empty until the app is restarted.
+   */
+  function recordsGetUsesLiveBody(url, method, options, liveFlag) {
+    if (!isRecordsGet(url, method)) return false;
+    if (liveFlag) return true;
+    const headers = options && options.headers;
+    if (!headers) return false;
+    if (typeof headers.get === "function") {
+      return headers.get("X-Haulage-Live-Records") === "1" || headers.get("x-haulage-live-records") === "1";
+    }
+    return headers["X-Haulage-Live-Records"] === "1" || headers["x-haulage-live-records"] === "1";
+  }
+
   function quietRecordsResponse() {
     return new Response(
       lastRecordsBody ||
@@ -1158,7 +1174,11 @@
       const cached = cachedQuietForecastResponse(url);
       if (cached) return cached;
     }
-    if (refreshAllIsBlocked() && isRecordsGet(url, fetchMethod)) {
+    if (
+      refreshAllIsBlocked() &&
+      isRecordsGet(url, fetchMethod) &&
+      !recordsGetUsesLiveBody(url, fetchMethod, options, window.__haulageLiveRecords)
+    ) {
       return quietRecordsResponse();
     }
     // Inject cash / no-receipt flags from the manual expense form (app.js
@@ -7795,6 +7815,43 @@
     });
   }
 
+  function haulageRevealReceiptPhoto(receiptId) {
+    const id = String(receiptId || "");
+    if (!id) return null;
+    const receipt = findReceipt(id);
+    const date = receiptDate(receipt);
+    const purpose =
+      (receipt && receipt.purpose) ||
+      (receipt && receipt.linkedIncomeId ? "income" : "expense");
+    const keys = purpose === "income" ? ["income"] : ["expense", "car-expense"];
+    if (date) {
+      const fy = fyForDate(date);
+      const week = weekStartMonday(date);
+      for (const key of keys) {
+        if (fy) chosenFy[key] = fy;
+        if (week && key !== "income") {
+          chosenWeek[key] = week;
+          setStoredWeek(key, week);
+        }
+      }
+    }
+    for (const cfg of GALLERIES) applyFilter(cfg);
+    const cards = [...document.querySelectorAll(".receipt-card")].filter((card) => {
+      const cid = card.dataset.receiptCard || card.dataset.receiptId;
+      return cid === id && card.style.display !== "none";
+    });
+    const card = cards[0];
+    if (!card) return id;
+    card.classList.add("just-added");
+    try {
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch {
+      card.scrollIntoView();
+    }
+    return id;
+  }
+  window.haulageRevealReceiptPhoto = haulageRevealReceiptPhoto;
+
   function start() {
     let bound = false;
     for (const cfg of GALLERIES) {
@@ -7848,7 +7905,7 @@
  */
 (function () {
   "use strict";
-  /* global API, toast, refreshAll, applyFinancialYear, buildCategorySelectOptions */
+  /* global API, api, toast, refreshAll, applyFinancialYear, buildCategorySelectOptions, renderReceiptGallery, renderIncomeGallery, renderExpenseList, renderIncomeList */
 
   // Keep in sync with lib/expense-menu.js CAR_CLAIM_CATEGORY_IDS.
   const CAR_CLAIM_IDS = new Set([
@@ -8668,6 +8725,128 @@
     });
   }
 
+  function mergeAttachedReceipt(records, entry, receipt, previousReceiptId, ledgerType) {
+    const next = { ...(records || {}) };
+    // Income rows use type values such as "invoice" or "salary_wages", not "income".
+    const kind =
+      ledgerType === "income" || (receipt && receipt.purpose === "income") ? "income" : "expense";
+    const saved = {
+      ...(receipt || {}),
+      hasImage: true,
+      purpose: kind,
+    };
+    if (entry && entry.id) {
+      if (kind === "income") {
+        saved.linkedIncomeId = entry.id;
+        delete saved.linkedExpenseId;
+      } else {
+        saved.linkedExpenseId = entry.id;
+        delete saved.linkedIncomeId;
+      }
+    }
+    if (!saved.id) return next;
+    const drop = new Set(
+      [previousReceiptId && previousReceiptId !== saved.id ? previousReceiptId : null].filter(Boolean)
+    );
+    const receipts = (Array.isArray(next.receipts) ? next.receipts : []).filter(
+      (row) => row && row.id !== saved.id && !drop.has(row.id)
+    );
+    next.receipts = [saved, ...receipts];
+    const bucket = kind === "income" ? "income" : "expenses";
+    if (entry && entry.id && Array.isArray(next[bucket])) {
+      next[bucket] = next[bucket].map((row) =>
+        row && row.id === entry.id ? { ...row, receiptId: saved.id, noReceipt: false } : row
+      );
+    }
+    return next;
+  }
+
+  /**
+   * Expense ledgers filter by week; income (invoices and revenue) filter by month.
+   * Move that filter onto the document date so the new photo's row is on screen.
+   */
+  function attachedPeriodUpdate(ledgerType, dateIso, weekStartMonday) {
+    const date = String(dateIso || "");
+    if (!date) return null;
+    if (ledgerType === "income") {
+      const month = date.match(/^(\d{4})-(\d{2})/);
+      return month ? { kind: "month", value: `${month[1]}-${month[2]}` } : null;
+    }
+    if (typeof weekStartMonday !== "function") return null;
+    const start = weekStartMonday(date);
+    return start ? { kind: "week", value: start } : null;
+  }
+
+  function alignAttachedLedgerPeriod(cfg, entry) {
+    const update = attachedPeriodUpdate(
+      cfg && cfg.type,
+      entry && entry.date,
+      HaulageWeeks && HaulageWeeks.weekStartMonday
+    );
+    if (!update || !cfg) return;
+    if (update.kind === "month") setMonthFilter(cfg, update.value);
+    else setWeekFilter(cfg, update.value);
+  }
+
+  function paintReceiptSurfaces() {
+    if (typeof renderReceiptGallery === "function") renderReceiptGallery();
+    if (typeof renderIncomeGallery === "function") renderIncomeGallery();
+    if (typeof renderExpenseList === "function") renderExpenseList();
+    if (typeof renderIncomeList === "function") renderIncomeList();
+  }
+
+  async function loadLiveRecords() {
+    window.__haulageLiveRecords = true;
+    try {
+      if (typeof api !== "function") return null;
+      return await api("/records", {
+        cache: "no-store",
+        headers: { "X-Haulage-Live-Records": "1" },
+      });
+    } catch {
+      return null;
+    } finally {
+      window.__haulageLiveRecords = false;
+    }
+  }
+
+  async function showAttachedReceipt(cfg, previousReceiptId, data, prepared) {
+    const receipt = data && data.receipt;
+    const entry = data && data.entry;
+    if (!receipt || !receipt.id || typeof state === "undefined" || !state.records) return;
+    const imageData = prepared && (prepared.dataUrl || prepared.imageBase64);
+    if (typeof receiptImageCache !== "undefined" && receiptImageCache && /^data:image\//i.test(String(imageData || ""))) {
+      receiptImageCache.set(receipt.id, imageData);
+    }
+    state.records = mergeAttachedReceipt(
+      state.records,
+      entry,
+      receipt,
+      previousReceiptId,
+      cfg && cfg.type
+    );
+    alignAttachedLedgerPeriod(cfg, entry);
+    paintReceiptSurfaces();
+    if (typeof window.haulageRevealReceiptPhoto === "function") {
+      window.haulageRevealReceiptPhoto(receipt.id);
+    }
+    const live = await loadLiveRecords();
+    const liveHasIt =
+      live &&
+      Array.isArray(live.receipts) &&
+      live.receipts.some((row) => row && row.id === receipt.id && (row.hasImage || row.imagePath));
+    if (!liveHasIt) return;
+    state.records = live;
+    const liveRows = cfg && cfg.type === "income" ? live.income : live.expenses;
+    const liveEntry =
+      (Array.isArray(liveRows) && liveRows.find((row) => row && entry && row.id === entry.id)) || entry;
+    alignAttachedLedgerPeriod(cfg, liveEntry);
+    paintReceiptSurfaces();
+    if (typeof window.haulageRevealReceiptPhoto === "function") {
+      window.haulageRevealReceiptPhoto(receipt.id);
+    }
+  }
+
   async function attachReceiptFile(cfg, entryId, file) {
     if (!file) return;
     const prepare = globalThis.prepareImageForUpload;
@@ -8720,7 +8899,8 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not attach receipt.");
       if (typeof toast === "function") toast("Receipt attached");
-      if (typeof refreshAll === "function") await refreshAll();
+      const previous = findEntry(cfg.type, entryId);
+      await showAttachedReceipt(cfg, previous && previous.receiptId, data, prepared);
     } catch (err) {
       if (typeof toast === "function") toast(err.message || "Attach failed");
     }
