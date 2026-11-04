@@ -41,12 +41,13 @@ function loadFocus() {
   const src = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
   const names = [
     "clamp01",
-    "closeFocusDistance",
     "coverMappedRect",
     "cameraFocusPoint",
     "cameraFocusConstraints",
     "cameraClarityConstraints",
     "cameraFocusSettleMs",
+    "cameraFocusHold",
+    "previewWentSoft",
   ];
   const code = `${names.map((name) => extractFunction(src, name)).join("\n")}\n${names
     .map((name) => `this.${name} = ${name};`)
@@ -101,6 +102,14 @@ describe("receipt camera focus", () => {
     });
     expect(api.cameraFocusSettleMs("single-shot")).toBe(550);
     expect(api.cameraFocusSettleMs("continuous")).toBe(220);
+    expect(api.cameraFocusSettleMs(null)).toBe(0);
+    expect(api.cameraFocusHold({ width: 1920, height: 1080 }, { focusMode: "continuous" })).toEqual({
+      width: { exact: 1920 },
+      height: { exact: 1080 },
+      focusMode: "continuous",
+    });
+    expect(api.previewWentSoft({ width: 1920, height: 1080 }, { width: 640, height: 480 })).toBe(true);
+    expect(api.previewWentSoft({ width: 1920, height: 1080 }, { width: 1920, height: 1080 })).toBe(false);
   });
 
   it("falls back to continuous, and skips a point the camera cannot use", () => {
@@ -114,33 +123,23 @@ describe("receipt camera focus", () => {
     expect(api.cameraFocusConstraints({ focusMode: ["manual"] }, { x: 0.5, y: 0.5 }, "single-shot")).toBe(
       null
     );
-    expect(api.cameraFocusConstraints({}, null, "continuous")).toEqual({
-      direct: {
-        focusMode: "continuous",
-        pointsOfInterest: [{ x: 0.5, y: 0.5 }],
-      },
-      mode: "continuous",
-      point: { x: 0.5, y: 0.5 },
-    });
+    expect(api.cameraFocusConstraints({}, null, "continuous")).toBe(null);
     expect(
       api.cameraFocusConstraints(
         { focusMode: ["manual"], focusDistance: { min: 0, max: 10 } },
         { x: 0.5, y: 0.5 },
         "single-shot"
       )
-    ).toEqual({
-      direct: { focusMode: "manual", focusDistance: 5 },
-      mode: "manual",
-      point: { x: 0.5, y: 0.5 },
-    });
+    ).toBe(null);
     expect(api.cameraClarityConstraints({ exposureMode: ["manual"] })).toBe(null);
   });
 
   it("starts a focus hunt on open, on a tap, and before the shutter", () => {
-    expect(src).toMatch(/focusMode: \{ ideal: "continuous" \}/);
-    expect(src).toMatch(/width: \{ ideal: 1920, max: 2560 \}/);
-    expect(src).toMatch(/height: \{ ideal: 2560, max: 2560 \}/);
-    expect(src).not.toMatch(/ideal: 3840/);
+    expect(src).toMatch(/width: \{ ideal: 3840 \}/);
+    expect(src).toMatch(/height: \{ ideal: 2160 \}/);
+    expect(src).not.toMatch(/max: 2560/);
+    expect(src).not.toMatch(/focusMode: \{ ideal: "continuous" \}/);
+    expect(src).not.toMatch(/focusDistance/);
     expect(src).not.toMatch(/caps\.width\.max/);
     expect(src).not.toMatch(/sharpenCameraTrack/);
     expect(src).toMatch(/focusCamera\("single-shot"/);
