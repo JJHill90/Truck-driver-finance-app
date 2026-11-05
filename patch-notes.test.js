@@ -35,9 +35,10 @@ describe("Driver Hub patch notes", () => {
     const notes = patchNotes.publishedNotes();
     expect(notes[0].prNumber).toBe(221);
     expect(notes[0].label).toBe("Version 4.17");
-    expect(notes[0].bullets).toHaveLength(1);
+    expect(notes[0].bullets).toHaveLength(2);
     expect(notes[0].bullets.join("\n")).toMatch(/Profile expected income/);
     expect(notes[0].bullets.join("\n")).toMatch(/how close this year is/);
+    expect(notes[0].bullets.join("\n")).toMatch(/introduces you by name/);
     const livePhoto = notes.find((note) => note.prNumber === 220);
     expect(livePhoto && livePhoto.label).toBe("Version 4.16");
     expect(livePhoto.bullets.join("\n")).toMatch(/Add receipt puts the photo/);

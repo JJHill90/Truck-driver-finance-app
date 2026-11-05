@@ -16408,6 +16408,14 @@
       .replace(/>/g, "&gt;");
   }
 
+  function givenName(profile) {
+    const parts = String((profile && profile.name) || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    return parts[0] || "";
+  }
+
   function situationLabel(profile) {
     const entity = String((profile && (profile.entityType || profile.driverType)) || "")
       .trim()
@@ -16445,10 +16453,12 @@
     const overBy = hasTarget && actual > target ? Math.round((actual - target) * 100) / 100 : 0;
     const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
     const situation = situationLabel(profile);
+    const name = givenName(profile);
     return {
       situation,
       employer,
-      who: [situation, employer].filter(Boolean).join(" · "),
+      name,
+      who: [name, situation, employer].filter(Boolean).join(" · "),
       targetLabel: targetLabel(profile),
       target,
       actual,
@@ -16470,8 +16480,23 @@
     const type = typeEl && typeEl.value ? typeEl.value : saved.driverType || saved.entityType || "";
     const salaryTouched = salaryEl && salaryEl.dataset.touched === "1";
     const employerTouched = employerEl && employerEl.dataset.touched === "1";
+    const nameEl = document.querySelector('#profile-form input[name="name"]');
+    const liveText = (el, savedValue) => {
+      if (!el) return savedValue || "";
+      if (el.dataset.touched === "1") return el.value;
+      return el.value !== "" ? el.value : savedValue || "";
+    };
+    const liveCheck = (el, savedValue) => {
+      if (!el) return Boolean(savedValue);
+      if (el.dataset.touched === "1") return el.checked;
+      return el.checked ? true : Boolean(savedValue);
+    };
+    const licenceEl = document.getElementById("profile-licence-class");
+    const vehicleEl = document.getElementById("profile-work-combination");
+    const shareEl = document.getElementById("profile-partner-share");
     return {
       ...saved,
+      name: liveText(nameEl, saved.name),
       annualSalary: salaryTouched
         ? salaryEl.value
         : salaryEl && salaryEl.value !== ""
@@ -16484,7 +16509,118 @@
           : saved.employer,
       driverType: type,
       entityType: type,
+      licenceClass: licenceEl && licenceEl.value ? licenceEl.value : saved.licenceClass,
+      workCombination: vehicleEl && vehicleEl.value ? vehicleEl.value : saved.workCombination,
+      occupation: liveText(document.getElementById("profile-occupation"), saved.occupation),
+      abn: liveText(document.getElementById("profile-abn"), saved.abn),
+      partnershipName: liveText(document.getElementById("profile-partnership-name"), saved.partnershipName),
+      partnerSharePercent:
+        shareEl && (shareEl.dataset.touched === "1" || shareEl.value !== "")
+          ? shareEl.value
+          : saved.partnerSharePercent,
+      tfnSupplied: liveCheck(document.querySelector('#profile-form input[name="tfnSupplied"]'), saved.tfnSupplied),
+      gstRegistered: liveCheck(document.getElementById("profile-gst-registered"), saved.gstRegistered),
+      travelsForWork: liveCheck(document.getElementById("profile-travels-for-work"), saved.travelsForWork),
+      overnightAllowance: liveCheck(
+        document.getElementById("profile-overnight-allowance"),
+        saved.overnightAllowance
+      ),
     };
+  }
+
+  function profilePortrait(profile) {
+    const suite = document.body.classList.contains("gotax-suite");
+    const given = givenName(profile);
+    const situation = situationLabel(profile);
+    const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
+    const occupation = String((profile && profile.occupation) || "").trim();
+    const salary = Math.round((Number(profile && profile.annualSalary) || 0) * 100) / 100;
+    const paragraphs = [];
+    if (situation && employer) paragraphs.push(`${situation} at ${employer}.`);
+    else if (situation) paragraphs.push(`${situation}.`);
+    else if (employer) paragraphs.push(`Working with ${employer}.`);
+    if (suite && occupation) paragraphs.push(`Occupation is ${occupation}.`);
+    const facts = [];
+    if (!suite) {
+      const licence = { lr_mr: "LR/MR", hr: "HR", hc: "HC", mc: "MC" }[
+        String((profile && profile.licenceClass) || "").toLowerCase()
+      ];
+      const vehicle = {
+        rigid: "heavy rigid",
+        semi: "prime mover and semi",
+        b_double: "B-double",
+        b_triple: "B-triple",
+        road_train_t1: "Type 1 road train",
+        road_train_t2: "Type 2 road train",
+      }[String((profile && profile.workCombination) || "").toLowerCase()];
+      if (licence && vehicle) facts.push(`${licence} licence, ${vehicle}.`);
+      else if (licence) facts.push(`${licence} licence.`);
+      else if (vehicle) facts.push(`${vehicle.charAt(0).toUpperCase()}${vehicle.slice(1)}.`);
+    }
+    if (salary > 0) {
+      facts.push(`This year is measured against ${money(salary)} ${targetLabel(profile).toLowerCase()}.`);
+    }
+    if (facts.length) paragraphs.push(facts.join(" "));
+    if (suite && String((profile && (profile.entityType || profile.driverType)) || "") === "partnership") {
+      const share = Number(profile.partnerSharePercent);
+      const partnership = String(profile.partnershipName || "").trim();
+      if (Number.isFinite(share) && share > 0) {
+        paragraphs.push(
+          partnership ? `Your share is ${share}% of ${partnership}.` : `Your share is ${share}%.`
+        );
+      } else if (partnership) paragraphs.push(`Partnership is ${partnership}.`);
+    }
+    const extras = [];
+    if (suite && (profile.gstRegistered === true || profile.gstRegistered === "true" || profile.gstRegistered === "on")) {
+      extras.push("GST registered");
+    }
+    const abnDigits = String((profile && profile.abn) || "").replace(/\D/g, "");
+    const abn =
+      abnDigits.length === 11
+        ? `${abnDigits.slice(0, 2)} ${abnDigits.slice(2, 5)} ${abnDigits.slice(5, 8)} ${abnDigits.slice(8)}`
+        : String((profile && profile.abn) || "").trim();
+    if (suite && abn) extras.push(`ABN ${abn}`);
+    if (extras.length) paragraphs.push(`${extras.join(". ")}.`);
+    if (profile.travelsForWork === true || profile.travelsForWork === "true" || profile.travelsForWork === "on") {
+      const overnight =
+        profile.overnightAllowance === true ||
+        profile.overnightAllowance === "true" ||
+        profile.overnightAllowance === "on";
+      paragraphs.push(
+        overnight ? "Travel for work includes overnight stays." : "Travel for work is on."
+      );
+    }
+    if (profile.tfnSupplied === true || profile.tfnSupplied === "true" || profile.tfnSupplied === "on") {
+      paragraphs.push("TFN is marked as supplied.");
+    }
+    if (!paragraphs.length) {
+      paragraphs.push(
+        suite
+          ? "Add your name, registration and expected income. Dashboard and Forecast then follow your year."
+          : "Add your name, employer and salary. Dashboard and Forecast then follow your year."
+      );
+    }
+    return {
+      heading: given ? `${given}, this profile is yours.` : "This profile is yours.",
+      paragraphs,
+    };
+  }
+
+  function paintPortrait(profile) {
+    const form = document.getElementById("profile-form");
+    if (!form) return;
+    let host = document.getElementById("profile-portrait");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "profile-portrait";
+      host.className = "profile-portrait span-2";
+      host.setAttribute("aria-live", "polite");
+      form.insertBefore(host, form.firstChild);
+    }
+    const portrait = profilePortrait(profile);
+    host.innerHTML = `<h2>${esc(portrait.heading)}</h2>${portrait.paragraphs
+      .map((line) => `<p>${esc(line)}</p>`)
+      .join("")}`;
   }
 
   function actualIncome() {
@@ -16519,7 +16655,9 @@
   }
 
   function paint() {
-    const pace = paceFrom(formProfile(), actualIncome());
+    const profile = formProfile();
+    paintPortrait(profile);
+    const pace = paceFrom(profile, actualIncome());
     const dash = document.getElementById("stat-grid");
     if (dash) {
       let host = document.getElementById("profile-pace");
@@ -16703,8 +16841,7 @@
   function onProfileEdit(ev) {
     const t = ev.target;
     if (!t || !t.closest || !t.closest("#profile-form")) return;
-    if (t.id === "profile-annual-salary" || t.name === "annualSalary") t.dataset.touched = "1";
-    if (t.id === "profile-employer" || t.name === "employer") t.dataset.touched = "1";
+    if (t.dataset) t.dataset.touched = "1";
     dirty = true;
     paint();
     if (

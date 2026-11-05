@@ -1849,6 +1849,22 @@ tr.vending-machine-row {
 }
 .profile-pace .progress-bar span.is-ahead { background: var(--green); }
 #forecast-progress + .profile-pace { margin-top: 14px; }
+.profile-portrait {
+  margin: 0 0 8px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-2);
+}
+.profile-portrait h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-brand);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.profile-portrait p { margin: 0 0 6px; }
+.profile-portrait p:last-child { margin-bottom: 0; }
 
 /* Report */
 .report-section { margin-bottom: 20px; }
