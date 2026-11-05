@@ -16385,3 +16385,376 @@
     start();
   }
 })();
+
+/* --- Profile target: dashboard + forecast pace, live as the form changes -- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let saveTimer = null;
+  let lastPayload = "";
+  let ready = false;
+  let dirty = false;
+  let lastEntity = "";
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function situationLabel(profile) {
+    const entity = String((profile && (profile.entityType || profile.driverType)) || "")
+      .trim()
+      .toLowerCase();
+    const labels = {
+      sole_trader: "Sole trader",
+      partnership: "Partnership",
+      employee: "Employee (PAYG)",
+      owner_driver: "Owner-driver",
+      long_haul: "Linehaul driver",
+      short_haul: "Short-haul driver",
+      local: "Local driver",
+    };
+    if (labels[entity]) return labels[entity];
+    if (!entity) return "";
+    return entity.replace(/_/g, " ");
+  }
+
+  function targetLabel(profile) {
+    const entity = String((profile && (profile.entityType || profile.driverType)) || "")
+      .trim()
+      .toLowerCase();
+    if (entity === "sole_trader" || entity === "partnership" || entity === "owner_driver") {
+      return "Expected income";
+    }
+    return "Annual salary";
+  }
+
+  function paceFrom(profile, actualIncome) {
+    const target = Math.round((Number(profile && profile.annualSalary) || 0) * 100) / 100;
+    const actual = Math.round((Number(actualIncome) || 0) * 100) / 100;
+    const hasTarget = target > 0;
+    const percent = hasTarget ? Math.round((actual / target) * 10000) / 100 : null;
+    const remaining = hasTarget ? Math.round(Math.max(0, target - actual) * 100) / 100 : null;
+    const overBy = hasTarget && actual > target ? Math.round((actual - target) * 100) / 100 : 0;
+    const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
+    const situation = situationLabel(profile);
+    return {
+      situation,
+      employer,
+      who: [situation, employer].filter(Boolean).join(" · "),
+      targetLabel: targetLabel(profile),
+      target,
+      actual,
+      remaining,
+      overBy,
+      percent,
+      barPercent: hasTarget ? Math.min(100, Math.max(0, percent || 0)) : 0,
+      hasTarget,
+      ahead: overBy > 0,
+    };
+  }
+
+  function formProfile() {
+    const saved =
+      typeof state !== "undefined" && state.records && state.records.profile ? state.records.profile : {};
+    const salaryEl = document.getElementById("profile-annual-salary");
+    const employerEl = document.getElementById("profile-employer");
+    const typeEl = document.getElementById("driver-type");
+    const type = typeEl && typeEl.value ? typeEl.value : saved.driverType || saved.entityType || "";
+    const salaryTouched = salaryEl && salaryEl.dataset.touched === "1";
+    const employerTouched = employerEl && employerEl.dataset.touched === "1";
+    return {
+      ...saved,
+      annualSalary: salaryTouched
+        ? salaryEl.value
+        : salaryEl && salaryEl.value !== ""
+          ? salaryEl.value
+          : saved.annualSalary,
+      employer: employerTouched
+        ? employerEl.value
+        : employerEl && employerEl.value !== ""
+          ? employerEl.value
+          : saved.employer,
+      driverType: type,
+      entityType: type,
+    };
+  }
+
+  function actualIncome() {
+    try {
+      if (typeof state !== "undefined" && state.summary && state.summary.income) {
+        return state.summary.income.assessableTotal;
+      }
+    } catch {
+      /* ignore */
+    }
+    return 0;
+  }
+
+  function paceHtml(pace) {
+    const who = pace.who ? `<p class="muted small profile-pace-who">${esc(pace.who)}</p>` : "";
+    if (!pace.hasTarget) {
+      return `
+        <div class="profile-pace-top"><h2>Profile target</h2>${who}</div>
+        <p class="muted">Add ${document.body.classList.contains("gotax-suite") ? "expected income" : "an annual salary"} on Profile. Dashboard and Forecast then show how close this year is.</p>`;
+    }
+    const pct = pace.percent == null ? "" : `${pace.percent}%`;
+    const detail = pace.ahead
+      ? `${money(pace.overBy)} past the profile total`
+      : `${money(pace.remaining)} still to record this financial year`;
+    return `
+      <div class="profile-pace-top"><h2>Profile target</h2>${who}</div>
+      <p class="profile-pace-figure"><strong>${money(pace.actual)}</strong> recorded of <strong>${money(pace.target)}</strong> ${esc(pace.targetLabel.toLowerCase())}</p>
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pace.barPercent)}">
+        <span class="${pace.ahead ? "is-ahead" : ""}" style="width:${pace.barPercent}%"></span>
+      </div>
+      <p class="muted small">${esc(detail)}${pct ? ` · ${esc(pct)} of the profile total` : ""}</p>`;
+  }
+
+  function paint() {
+    const pace = paceFrom(formProfile(), actualIncome());
+    const dash = document.getElementById("stat-grid");
+    if (dash) {
+      let host = document.getElementById("profile-pace");
+      if (!host) {
+        host = document.createElement("section");
+        host.id = "profile-pace";
+        host.className = "profile-pace";
+        host.setAttribute("aria-live", "polite");
+        dash.insertAdjacentElement("beforebegin", host);
+      }
+      host.innerHTML = paceHtml(pace);
+    }
+    const progress = document.getElementById("forecast-progress");
+    if (progress) {
+      let host = document.getElementById("profile-pace-forecast");
+      if (!host) {
+        host = document.createElement("section");
+        host.id = "profile-pace-forecast";
+        host.className = "profile-pace";
+        host.setAttribute("aria-live", "polite");
+        progress.insertAdjacentElement("afterend", host);
+      }
+      host.innerHTML = paceHtml(pace);
+    }
+    const hint = document.getElementById("profile-pace-hint");
+    if (hint) {
+      hint.textContent = pace.hasTarget
+        ? `${money(pace.actual)} of ${money(pace.target)} is on the dashboard and Forecast.`
+        : "This amount is the profile total Dashboard and Forecast measure the year against.";
+    }
+  }
+
+  function ensureHint() {
+    if (document.getElementById("profile-pace-hint")) return;
+    const input = document.getElementById("profile-annual-salary");
+    const label = input && input.closest("label");
+    if (!label) return;
+    const p = document.createElement("p");
+    p.id = "profile-pace-hint";
+    p.className = "muted small span-2";
+    label.insertAdjacentElement("afterend", p);
+  }
+
+  function syncSuiteFlags(form) {
+    const gst = document.getElementById("profile-gst-registered");
+    if (gst) {
+      let hidden = form.querySelector('input[name="gstRegistered"][type="hidden"]');
+      if (!hidden) {
+        hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "gstRegistered";
+        form.appendChild(hidden);
+      }
+      hidden.value = gst.checked ? "true" : "false";
+    }
+    const travel = document.getElementById("profile-travels-for-work");
+    const nights = document.getElementById("profile-overnight-allowance");
+    if (travel) {
+      const setFlag = (name, on) => {
+        let hidden = form.querySelector(`input[name="${name}"][type="hidden"]`);
+        if (!hidden) {
+          hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = name;
+          form.appendChild(hidden);
+        }
+        hidden.value = on ? "true" : "false";
+      };
+      setFlag("travelsForWork", travel.checked);
+      setFlag("overnightAllowance", Boolean(travel.checked && nights && nights.checked));
+    }
+  }
+
+  async function reloadSuiteMenus(entity) {
+    if (!document.body.classList.contains("gotax-suite")) return;
+    if (!entity || entity === lastEntity) return;
+    try {
+      const res = await fetch(`${API}/standards?entityType=${encodeURIComponent(entity)}`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok || typeof state === "undefined" || !state.standards) return;
+      const data = await res.json();
+      state.standards = { ...state.standards, ...data };
+      const income = document.getElementById("income-type");
+      if (income && Array.isArray(data.incomeTypes)) {
+        const prev = income.value;
+        income.innerHTML = data.incomeTypes
+          .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
+          .join("");
+        if ([...income.options].some((opt) => opt.value === prev)) income.value = prev;
+      }
+      if (typeof globalThis.populateCategorySelects === "function") globalThis.populateCategorySelects();
+      lastEntity = entity;
+    } catch {
+      /* menus refresh on the next full load */
+    }
+  }
+
+  async function pushProfile() {
+    if (!dirty) return;
+    if (!ready) {
+      scheduleSave();
+      return;
+    }
+    if (document.body.classList.contains("auth-locked")) return;
+    const form = document.getElementById("profile-form");
+    if (!form) return;
+    syncSuiteFlags(form);
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.annualSalary = payload.annualSalary === "" ? 0 : Number(payload.annualSalary);
+    payload.tfnSupplied = fd.has("tfnSupplied");
+    if (document.body.classList.contains("gotax-suite")) {
+      const type = document.getElementById("driver-type");
+      if (type && type.value) {
+        payload.driverType = type.value;
+        payload.entityType = type.value;
+      }
+    }
+    const gst = document.getElementById("profile-gst-registered");
+    if (gst) payload.gstRegistered = gst.checked;
+    const body = JSON.stringify(payload);
+    if (body === lastPayload) {
+      dirty = false;
+      return;
+    }
+    lastPayload = body;
+    dirty = false;
+    try {
+      const res = await fetch(`${API}/profile`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (res.status === 401 || res.status === 403) return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        lastPayload = "";
+        dirty = true;
+        scheduleSave();
+        return;
+      }
+      if (typeof state !== "undefined" && state.records && data.profile) {
+        state.records.profile = data.profile;
+      }
+      const fy =
+        (typeof state !== "undefined" && state.financialYear) ||
+        (data.profile && data.profile.financialYear) ||
+        "";
+      const summaryRes = await fetch(`${API}/summary?financialYear=${encodeURIComponent(fy)}`, {
+        credentials: "same-origin",
+      });
+      if (summaryRes.ok && typeof state !== "undefined") {
+        state.summary = await summaryRes.json();
+        if (typeof globalThis.renderStats === "function") globalThis.renderStats();
+      }
+      if (typeof globalThis.loadForecast === "function") {
+        try {
+          await globalThis.loadForecast();
+        } catch {
+          /* Free plan keeps the client-side pace */
+        }
+      }
+      await reloadSuiteMenus(payload.driverType || payload.entityType);
+    } catch {
+      lastPayload = "";
+      dirty = true;
+      scheduleSave();
+    }
+    paint();
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      void pushProfile();
+    }, 700);
+  }
+
+  function onProfileEdit(ev) {
+    const t = ev.target;
+    if (!t || !t.closest || !t.closest("#profile-form")) return;
+    if (t.id === "profile-annual-salary" || t.name === "annualSalary") t.dataset.touched = "1";
+    if (t.id === "profile-employer" || t.name === "employer") t.dataset.touched = "1";
+    dirty = true;
+    paint();
+    if (
+      (t.id === "driver-type" || t.name === "driverType") &&
+      document.body.classList.contains("gotax-suite")
+    ) {
+      void reloadSuiteMenus(t.value);
+    }
+    scheduleSave();
+  }
+
+  function wrapForecast() {
+    const orig = globalThis.renderForecast;
+    if (typeof orig !== "function" || orig.__profilePace) return;
+    function wrapped() {
+      const result = orig.apply(this, arguments);
+      paint();
+      return result;
+    }
+    wrapped.__profilePace = true;
+    globalThis.renderForecast = wrapped;
+  }
+
+  function start() {
+    ensureHint();
+    wrapForecast();
+    paint();
+    const grid = document.getElementById("stat-grid");
+    if (grid) {
+      new MutationObserver(() => paint()).observe(grid, { childList: true });
+    }
+    document.addEventListener("input", onProfileEdit);
+    document.addEventListener("change", onProfileEdit);
+    setTimeout(() => {
+      ready = true;
+      if (!lastEntity) {
+        const saved =
+          typeof state !== "undefined" && state.records && state.records.profile
+            ? state.records.profile
+            : null;
+        lastEntity = String((saved && (saved.entityType || saved.driverType)) || "");
+      }
+      if (dirty) scheduleSave();
+      paint();
+    }, 1600);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();

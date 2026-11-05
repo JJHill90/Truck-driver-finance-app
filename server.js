@@ -63,6 +63,7 @@ const { attachLodgementBrief } = require("./lib/accountant-brief");
 
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
+const { profilePace } = require("./lib/profile-pace");
 const {
   extractTravelAllowance,
   applyTravelAllowanceToEntry,
@@ -3313,6 +3314,10 @@ api.get("/forecast", (req, res) => {
     productOf(req) === "suite"
       ? suite.summariseOvernightDays(records, records.profile, fy)
       : summariseOvernightDays(records, records.profile, fy);
+  forecast.profilePace = profilePace(
+    records.profile || {},
+    forecast.yearToDate && forecast.yearToDate.income
+  );
   res.json(forecast);
 });
 
