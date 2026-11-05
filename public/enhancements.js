@@ -11130,8 +11130,98 @@
     el.appendChild(section);
   }
 
+  function reportRoleLabel(id) {
+    const labels = {
+      sole_trader: "Sole trader",
+      partnership: "Partnership",
+      employee: "Employee (PAYG)",
+      owner_driver: "Owner-driver",
+      long_haul: "Linehaul driver",
+      short_haul: "Short-haul driver",
+      local: "Local driver",
+    };
+    const key = String(id || "").trim().toLowerCase();
+    return labels[key] || key.replace(/_/g, " ");
+  }
+
+  function syncReportProfile() {
+    const el = document.getElementById("report-content");
+    if (!el || typeof state === "undefined" || !state.report || !state.report.driver) return;
+    const report = state.report;
+    const driver = report.driver;
+    const brief = report.lodgementBrief || {};
+    const ident = brief.identity || {};
+    const profile = (state.records && state.records.profile) || {};
+    const suite = document.body.classList.contains("gotax-suite");
+    const entity = brief.entityType || driver.driverType || profile.entityType || profile.driverType || "";
+    const header = el.querySelector(".report-section");
+    if (!header) return;
+    let facts = header.querySelector(".report-profile-facts");
+    if (!facts) {
+      const driverP = [...header.querySelectorAll("p")].find((p) =>
+        /^\s*Driver:/i.test((p.textContent || "").trim())
+      );
+      facts = document.createElement("div");
+      facts.className = "report-profile-facts cap-list";
+      if (driverP) driverP.replaceWith(facts);
+      else header.appendChild(facts);
+    }
+    const rows = [];
+    const add = (label, value) => {
+      if (value == null || value === "") return;
+      rows.push(`<div class="cap-row"><span>${esc(label)}</span><span>${esc(value)}</span></div>`);
+    };
+    add("Name", ident.name || driver.name || profile.name);
+    add(suite ? "Registration" : "Driver type", driver.driverTypeLabel || reportRoleLabel(entity));
+    add(suite ? "Employer / trading name" : "Employer", ident.employer || driver.employer || profile.employer);
+    add("Occupation", ident.occupation || driver.occupation || profile.occupation);
+    add("ABN", ident.abn || driver.abn || profile.abn);
+    if (!suite) {
+      const licence = { lr_mr: "LR/MR", hr: "HR", hc: "HC", mc: "MC" }[
+        String(driver.licenceClass || profile.licenceClass || "").toLowerCase()
+      ];
+      const vehicle = {
+        rigid: "Heavy rigid",
+        semi: "Prime mover + semi",
+        b_double: "B-double",
+        b_triple: "B-triple",
+        road_train_t1: "Type 1 road train",
+        road_train_t2: "Type 2 road train",
+      }[String(driver.workCombination || profile.workCombination || "").toLowerCase()];
+      add("Licence class", licence);
+      add("Work vehicle", vehicle);
+    }
+    const total = Number(ident.annualSalary || driver.annualSalary || profile.annualSalary) || 0;
+    if (total > 0) {
+      const expected = ["sole_trader", "partnership", "owner_driver"].includes(String(entity));
+      add(expected ? "Expected income" : "Annual salary", money(total));
+    }
+    const band = report.summary && report.summary.profile && report.summary.profile.salaryBand;
+    if (!suite && band) add("Salary band", String(band).replace("band", "Band "));
+    if (suite && String(entity) === "partnership") {
+      const share = ident.partnerSharePercent != null ? ident.partnerSharePercent : profile.partnerSharePercent;
+      const partnership = ident.partnershipName || driver.partnershipName || profile.partnershipName;
+      add("Partnership", partnership);
+      if (share != null && share !== "") add("Your share", `${share}%`);
+    }
+    if (suite && (entity === "sole_trader" || entity === "partnership")) {
+      const gst = ident.gstRegistered != null ? ident.gstRegistered : driver.gstRegistered || profile.gstRegistered;
+      add("GST registered", gst ? "Yes" : "No");
+    }
+    if (suite) {
+      const travel = ident.travelsForWork != null ? ident.travelsForWork : profile.travelsForWork;
+      const overnight = ident.overnightAllowance != null ? ident.overnightAllowance : profile.overnightAllowance;
+      add("Travel for work", travel ? (overnight ? "Yes, including overnight stays" : "Yes") : "No");
+    }
+    const tfn = ident.tfnSupplied != null ? ident.tfnSupplied : driver.tfnSupplied || profile.tfnSupplied;
+    add("TFN supplied", tfn ? "Yes" : "No");
+    const html = rows.join("");
+    if (facts.innerHTML !== html) facts.innerHTML = html;
+  }
+
   function enhanceReport() {
     fixReportHeadings();
+    syncReportProfile();
     injectReportExpenseLedger();
     injectLodgementBrief();
   }
@@ -16804,22 +16894,25 @@
       if (typeof state !== "undefined" && state.records && data.profile) {
         state.records.profile = data.profile;
       }
-      const fy =
-        (typeof state !== "undefined" && state.financialYear) ||
-        (data.profile && data.profile.financialYear) ||
-        "";
-      const summaryRes = await fetch(`${API}/summary?financialYear=${encodeURIComponent(fy)}`, {
-        credentials: "same-origin",
-      });
-      if (summaryRes.ok && typeof state !== "undefined") {
-        state.summary = await summaryRes.json();
-        if (typeof globalThis.renderStats === "function") globalThis.renderStats();
-      }
-      if (typeof globalThis.loadForecast === "function") {
+      if (typeof globalThis.refreshEofyLive === "function") {
         try {
-          await globalThis.loadForecast();
+          await globalThis.refreshEofyLive();
         } catch {
-          /* Free plan keeps the client-side pace */
+          /* last good EOFY report stays on screen */
+        }
+      }
+      if (typeof globalThis.haulageRefreshOvernightDays === "function") {
+        try {
+          await globalThis.haulageRefreshOvernightDays();
+        } catch {
+          /* travel card keeps the last figures */
+        }
+      }
+      if (window.FuelHub && typeof window.FuelHub.refresh === "function") {
+        try {
+          await window.FuelHub.refresh();
+        } catch {
+          /* Fuel Hub may be closed */
         }
       }
       await reloadSuiteMenus(payload.driverType || payload.entityType);

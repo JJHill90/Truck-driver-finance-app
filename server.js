@@ -3235,7 +3235,7 @@ api.get("/report", (req, res) => {
   const report =
     productOf(req) === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
-      : decorateAccountantReport(buildAccountantReport(records, profile));
+      : decorateAccountantReport(buildAccountantReport(records, profile), profile);
   if (productOf(req) === "suite") {
     report.summary = suite.summariseYear(records, profile);
   } else {
@@ -3265,7 +3265,7 @@ api.get("/report.pdf", (req, res) => {
   const report =
     productOf(req) === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
-      : decorateAccountantReport(buildAccountantReport(records, profile));
+      : decorateAccountantReport(buildAccountantReport(records, profile), profile);
   if (productOf(req) === "suite") {
     report.summary = suite.summariseYear(records, profile);
   } else {
@@ -4550,7 +4550,7 @@ function buildSharePack(username, product, financialYear) {
   const report =
     product === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(scoped, profile))
-      : decorateAccountantReport(buildAccountantReport(scoped, profile));
+      : decorateAccountantReport(buildAccountantReport(scoped, profile), profile);
   if (product === "suite") {
     report.summary = suite.summariseYear(scoped, profile);
   } else {
