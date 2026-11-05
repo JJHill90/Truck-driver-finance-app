@@ -386,6 +386,25 @@ describe("suite occupation travel profile", () => {
     expect(names("cat").map((n) => n)).toContain("Caterpillar");
   });
 
+  it("lets a posted registration type replace the saved entity", () => {
+    const employee = suite.applySuiteProfile(
+      { driverType: "employee", annualSalary: 75000, employer: "Old Co" },
+      {}
+    );
+    expect(employee.entityType).toBe("employee");
+    const trader = suite.applySuiteProfile(
+      { driverType: "sole_trader", annualSalary: 88000, employer: "Acme Freight" },
+      employee
+    );
+    expect(trader.entityType).toBe("sole_trader");
+    expect(trader.driverType).toBe("sole_trader");
+    expect(trader.annualSalary).toBe(88000);
+    expect(trader.employer).toBe("Acme Freight");
+    const yearOnly = suite.applySuiteProfile({ financialYear: "2025-26" }, trader);
+    expect(yearOnly.entityType).toBe("sole_trader");
+    expect(yearOnly.financialYear).toBe("2025-26");
+  });
+
   it("saves travel flags on the suite profile", () => {
     const p = suite.applySuiteProfile(
       { occupation: "Financial auditor", travelsForWork: "on", overnightAllowance: "on" },

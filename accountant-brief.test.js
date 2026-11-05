@@ -149,6 +149,9 @@ describe("partnership brief", () => {
         partnershipName: "Hill & Co",
         abn: "12345678901",
         partnerSharePercent: 50,
+        annualSalary: 90000,
+        licenceClass: "hc",
+        workCombination: "b_double",
         tfnSupplied: true,
         financialYear: "2025-26",
       },
@@ -174,6 +177,9 @@ describe("partnership brief", () => {
     );
     expect(brief.returnKind).toBe("partnership_interest");
     expect(brief.identity.partnerSharePercent).toBe(50);
+    expect(brief.identity.annualSalary).toBe(90000);
+    expect(brief.identity.licenceClass).toBe("hc");
+    expect(brief.identity.workCombination).toBe("b_double");
     expect(brief.incomeLabels[0].returnItem).toBe("Item 13");
     expect(brief.entitySpecific.points.some((p) => /50%/.test(p))).toBe(true);
     expect(brief.questions.some((q) => /partnership tax return/i.test(q))).toBe(true);

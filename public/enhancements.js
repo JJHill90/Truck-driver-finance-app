@@ -11130,8 +11130,98 @@
     el.appendChild(section);
   }
 
+  function reportRoleLabel(id) {
+    const labels = {
+      sole_trader: "Sole trader",
+      partnership: "Partnership",
+      employee: "Employee (PAYG)",
+      owner_driver: "Owner-driver",
+      long_haul: "Linehaul driver",
+      short_haul: "Short-haul driver",
+      local: "Local driver",
+    };
+    const key = String(id || "").trim().toLowerCase();
+    return labels[key] || key.replace(/_/g, " ");
+  }
+
+  function syncReportProfile() {
+    const el = document.getElementById("report-content");
+    if (!el || typeof state === "undefined" || !state.report || !state.report.driver) return;
+    const report = state.report;
+    const driver = report.driver;
+    const brief = report.lodgementBrief || {};
+    const ident = brief.identity || {};
+    const profile = (state.records && state.records.profile) || {};
+    const suite = document.body.classList.contains("gotax-suite");
+    const entity = brief.entityType || driver.driverType || profile.entityType || profile.driverType || "";
+    const header = el.querySelector(".report-section");
+    if (!header) return;
+    let facts = header.querySelector(".report-profile-facts");
+    if (!facts) {
+      const driverP = [...header.querySelectorAll("p")].find((p) =>
+        /^\s*Driver:/i.test((p.textContent || "").trim())
+      );
+      facts = document.createElement("div");
+      facts.className = "report-profile-facts cap-list";
+      if (driverP) driverP.replaceWith(facts);
+      else header.appendChild(facts);
+    }
+    const rows = [];
+    const add = (label, value) => {
+      if (value == null || value === "") return;
+      rows.push(`<div class="cap-row"><span>${esc(label)}</span><span>${esc(value)}</span></div>`);
+    };
+    add("Name", ident.name || driver.name || profile.name);
+    add(suite ? "Registration" : "Driver type", driver.driverTypeLabel || reportRoleLabel(entity));
+    add(suite ? "Employer / trading name" : "Employer", ident.employer || driver.employer || profile.employer);
+    add("Occupation", ident.occupation || driver.occupation || profile.occupation);
+    add("ABN", ident.abn || driver.abn || profile.abn);
+    if (!suite) {
+      const licence = { lr_mr: "LR/MR", hr: "HR", hc: "HC", mc: "MC" }[
+        String(driver.licenceClass || profile.licenceClass || "").toLowerCase()
+      ];
+      const vehicle = {
+        rigid: "Heavy rigid",
+        semi: "Prime mover + semi",
+        b_double: "B-double",
+        b_triple: "B-triple",
+        road_train_t1: "Type 1 road train",
+        road_train_t2: "Type 2 road train",
+      }[String(driver.workCombination || profile.workCombination || "").toLowerCase()];
+      add("Licence class", licence);
+      add("Work vehicle", vehicle);
+    }
+    const total = Number(ident.annualSalary || driver.annualSalary || profile.annualSalary) || 0;
+    if (total > 0) {
+      const expected = ["sole_trader", "partnership", "owner_driver"].includes(String(entity));
+      add(expected ? "Expected income" : "Annual salary", money(total));
+    }
+    const band = report.summary && report.summary.profile && report.summary.profile.salaryBand;
+    if (!suite && band) add("Salary band", String(band).replace("band", "Band "));
+    if (suite && String(entity) === "partnership") {
+      const share = ident.partnerSharePercent != null ? ident.partnerSharePercent : profile.partnerSharePercent;
+      const partnership = ident.partnershipName || driver.partnershipName || profile.partnershipName;
+      add("Partnership", partnership);
+      if (share != null && share !== "") add("Your share", `${share}%`);
+    }
+    if (suite && (entity === "sole_trader" || entity === "partnership")) {
+      const gst = ident.gstRegistered != null ? ident.gstRegistered : driver.gstRegistered || profile.gstRegistered;
+      add("GST registered", gst ? "Yes" : "No");
+    }
+    if (suite) {
+      const travel = ident.travelsForWork != null ? ident.travelsForWork : profile.travelsForWork;
+      const overnight = ident.overnightAllowance != null ? ident.overnightAllowance : profile.overnightAllowance;
+      add("Travel for work", travel ? (overnight ? "Yes, including overnight stays" : "Yes") : "No");
+    }
+    const tfn = ident.tfnSupplied != null ? ident.tfnSupplied : driver.tfnSupplied || profile.tfnSupplied;
+    add("TFN supplied", tfn ? "Yes" : "No");
+    const html = rows.join("");
+    if (facts.innerHTML !== html) facts.innerHTML = html;
+  }
+
   function enhanceReport() {
     fixReportHeadings();
+    syncReportProfile();
     injectReportExpenseLedger();
     injectLodgementBrief();
   }
@@ -16377,6 +16467,519 @@
 
   function start() {
     document.querySelectorAll(".csv-import-panel").forEach(bindPanel);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
+
+/* --- Profile target: dashboard + forecast pace, live as the form changes -- */
+(function () {
+  "use strict";
+
+  const API = `${window.location.origin}/api/haulage`;
+  let saveTimer = null;
+  let lastPayload = "";
+  let ready = false;
+  let dirty = false;
+  let lastEntity = "";
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(Number(n) || 0);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function givenName(profile) {
+    const parts = String((profile && profile.name) || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    return parts[0] || "";
+  }
+
+  function situationLabel(profile) {
+    const entity = String((profile && (profile.entityType || profile.driverType)) || "")
+      .trim()
+      .toLowerCase();
+    const labels = {
+      sole_trader: "Sole trader",
+      partnership: "Partnership",
+      employee: "Employee (PAYG)",
+      owner_driver: "Owner-driver",
+      long_haul: "Linehaul driver",
+      short_haul: "Short-haul driver",
+      local: "Local driver",
+    };
+    if (labels[entity]) return labels[entity];
+    if (!entity) return "";
+    return entity.replace(/_/g, " ");
+  }
+
+  function targetLabel(profile) {
+    const entity = String((profile && (profile.entityType || profile.driverType)) || "")
+      .trim()
+      .toLowerCase();
+    if (entity === "sole_trader" || entity === "partnership" || entity === "owner_driver") {
+      return "Expected income";
+    }
+    return "Annual salary";
+  }
+
+  function paceFrom(profile, actualIncome) {
+    const target = Math.round((Number(profile && profile.annualSalary) || 0) * 100) / 100;
+    const actual = Math.round((Number(actualIncome) || 0) * 100) / 100;
+    const hasTarget = target > 0;
+    const percent = hasTarget ? Math.round((actual / target) * 10000) / 100 : null;
+    const remaining = hasTarget ? Math.round(Math.max(0, target - actual) * 100) / 100 : null;
+    const overBy = hasTarget && actual > target ? Math.round((actual - target) * 100) / 100 : 0;
+    const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
+    const situation = situationLabel(profile);
+    const name = givenName(profile);
+    return {
+      situation,
+      employer,
+      name,
+      who: [name, situation, employer].filter(Boolean).join(" · "),
+      targetLabel: targetLabel(profile),
+      target,
+      actual,
+      remaining,
+      overBy,
+      percent,
+      barPercent: hasTarget ? Math.min(100, Math.max(0, percent || 0)) : 0,
+      hasTarget,
+      ahead: overBy > 0,
+    };
+  }
+
+  function formProfile() {
+    const saved =
+      typeof state !== "undefined" && state.records && state.records.profile ? state.records.profile : {};
+    const salaryEl = document.getElementById("profile-annual-salary");
+    const employerEl = document.getElementById("profile-employer");
+    const typeEl = document.getElementById("driver-type");
+    const type = typeEl && typeEl.value ? typeEl.value : saved.driverType || saved.entityType || "";
+    const salaryTouched = salaryEl && salaryEl.dataset.touched === "1";
+    const employerTouched = employerEl && employerEl.dataset.touched === "1";
+    const nameEl = document.querySelector('#profile-form input[name="name"]');
+    const liveText = (el, savedValue) => {
+      if (!el) return savedValue || "";
+      if (el.dataset.touched === "1") return el.value;
+      return el.value !== "" ? el.value : savedValue || "";
+    };
+    const liveCheck = (el, savedValue) => {
+      if (!el) return Boolean(savedValue);
+      if (el.dataset.touched === "1") return el.checked;
+      return el.checked ? true : Boolean(savedValue);
+    };
+    const licenceEl = document.getElementById("profile-licence-class");
+    const vehicleEl = document.getElementById("profile-work-combination");
+    const shareEl = document.getElementById("profile-partner-share");
+    return {
+      ...saved,
+      name: liveText(nameEl, saved.name),
+      annualSalary: salaryTouched
+        ? salaryEl.value
+        : salaryEl && salaryEl.value !== ""
+          ? salaryEl.value
+          : saved.annualSalary,
+      employer: employerTouched
+        ? employerEl.value
+        : employerEl && employerEl.value !== ""
+          ? employerEl.value
+          : saved.employer,
+      driverType: type,
+      entityType: type,
+      licenceClass: licenceEl && licenceEl.value ? licenceEl.value : saved.licenceClass,
+      workCombination: vehicleEl && vehicleEl.value ? vehicleEl.value : saved.workCombination,
+      occupation: liveText(document.getElementById("profile-occupation"), saved.occupation),
+      abn: liveText(document.getElementById("profile-abn"), saved.abn),
+      partnershipName: liveText(document.getElementById("profile-partnership-name"), saved.partnershipName),
+      partnerSharePercent:
+        shareEl && (shareEl.dataset.touched === "1" || shareEl.value !== "")
+          ? shareEl.value
+          : saved.partnerSharePercent,
+      tfnSupplied: liveCheck(document.querySelector('#profile-form input[name="tfnSupplied"]'), saved.tfnSupplied),
+      gstRegistered: liveCheck(document.getElementById("profile-gst-registered"), saved.gstRegistered),
+      travelsForWork: liveCheck(document.getElementById("profile-travels-for-work"), saved.travelsForWork),
+      overnightAllowance: liveCheck(
+        document.getElementById("profile-overnight-allowance"),
+        saved.overnightAllowance
+      ),
+    };
+  }
+
+  function profilePortrait(profile) {
+    const suite = document.body.classList.contains("gotax-suite");
+    const given = givenName(profile);
+    const situation = situationLabel(profile);
+    const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
+    const occupation = String((profile && profile.occupation) || "").trim();
+    const salary = Math.round((Number(profile && profile.annualSalary) || 0) * 100) / 100;
+    const paragraphs = [];
+    if (situation && employer) paragraphs.push(`${situation} at ${employer}.`);
+    else if (situation) paragraphs.push(`${situation}.`);
+    else if (employer) paragraphs.push(`Working with ${employer}.`);
+    if (suite && occupation) paragraphs.push(`Occupation is ${occupation}.`);
+    const facts = [];
+    if (!suite) {
+      const licence = { lr_mr: "LR/MR", hr: "HR", hc: "HC", mc: "MC" }[
+        String((profile && profile.licenceClass) || "").toLowerCase()
+      ];
+      const vehicle = {
+        rigid: "heavy rigid",
+        semi: "prime mover and semi",
+        b_double: "B-double",
+        b_triple: "B-triple",
+        road_train_t1: "Type 1 road train",
+        road_train_t2: "Type 2 road train",
+      }[String((profile && profile.workCombination) || "").toLowerCase()];
+      if (licence && vehicle) facts.push(`${licence} licence, ${vehicle}.`);
+      else if (licence) facts.push(`${licence} licence.`);
+      else if (vehicle) facts.push(`${vehicle.charAt(0).toUpperCase()}${vehicle.slice(1)}.`);
+    }
+    if (salary > 0) {
+      facts.push(`This year is measured against ${money(salary)} ${targetLabel(profile).toLowerCase()}.`);
+    }
+    if (facts.length) paragraphs.push(facts.join(" "));
+    if (suite && String((profile && (profile.entityType || profile.driverType)) || "") === "partnership") {
+      const share = Number(profile.partnerSharePercent);
+      const partnership = String(profile.partnershipName || "").trim();
+      if (Number.isFinite(share) && share > 0) {
+        paragraphs.push(
+          partnership ? `Your share is ${share}% of ${partnership}.` : `Your share is ${share}%.`
+        );
+      } else if (partnership) paragraphs.push(`Partnership is ${partnership}.`);
+    }
+    const extras = [];
+    if (suite && (profile.gstRegistered === true || profile.gstRegistered === "true" || profile.gstRegistered === "on")) {
+      extras.push("GST registered");
+    }
+    const abnDigits = String((profile && profile.abn) || "").replace(/\D/g, "");
+    const abn =
+      abnDigits.length === 11
+        ? `${abnDigits.slice(0, 2)} ${abnDigits.slice(2, 5)} ${abnDigits.slice(5, 8)} ${abnDigits.slice(8)}`
+        : String((profile && profile.abn) || "").trim();
+    if (suite && abn) extras.push(`ABN ${abn}`);
+    if (extras.length) paragraphs.push(`${extras.join(". ")}.`);
+    if (profile.travelsForWork === true || profile.travelsForWork === "true" || profile.travelsForWork === "on") {
+      const overnight =
+        profile.overnightAllowance === true ||
+        profile.overnightAllowance === "true" ||
+        profile.overnightAllowance === "on";
+      paragraphs.push(
+        overnight ? "Travel for work includes overnight stays." : "Travel for work is on."
+      );
+    }
+    if (profile.tfnSupplied === true || profile.tfnSupplied === "true" || profile.tfnSupplied === "on") {
+      paragraphs.push("TFN is marked as supplied.");
+    }
+    if (!paragraphs.length) {
+      paragraphs.push(
+        suite
+          ? "Add your name, registration and expected income. Dashboard and Forecast then follow your year."
+          : "Add your name, employer and salary. Dashboard and Forecast then follow your year."
+      );
+    }
+    return {
+      heading: given ? `${given}, this profile is yours.` : "This profile is yours.",
+      paragraphs,
+    };
+  }
+
+  function paintPortrait(profile) {
+    const form = document.getElementById("profile-form");
+    if (!form) return;
+    let host = document.getElementById("profile-portrait");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "profile-portrait";
+      host.className = "profile-portrait span-2";
+      host.setAttribute("aria-live", "polite");
+      form.insertBefore(host, form.firstChild);
+    }
+    const portrait = profilePortrait(profile);
+    host.innerHTML = `<h2>${esc(portrait.heading)}</h2>${portrait.paragraphs
+      .map((line) => `<p>${esc(line)}</p>`)
+      .join("")}`;
+  }
+
+  function actualIncome() {
+    try {
+      if (typeof state !== "undefined" && state.summary && state.summary.income) {
+        return state.summary.income.assessableTotal;
+      }
+    } catch {
+      /* ignore */
+    }
+    return 0;
+  }
+
+  function paceHtml(pace) {
+    const who = pace.who ? `<p class="muted small profile-pace-who">${esc(pace.who)}</p>` : "";
+    if (!pace.hasTarget) {
+      return `
+        <div class="profile-pace-top"><h2>Profile target</h2>${who}</div>
+        <p class="muted">Add ${document.body.classList.contains("gotax-suite") ? "expected income" : "an annual salary"} on Profile. Dashboard and Forecast then show how close this year is.</p>`;
+    }
+    const pct = pace.percent == null ? "" : `${pace.percent}%`;
+    const detail = pace.ahead
+      ? `${money(pace.overBy)} past the profile total`
+      : `${money(pace.remaining)} still to record this financial year`;
+    return `
+      <div class="profile-pace-top"><h2>Profile target</h2>${who}</div>
+      <p class="profile-pace-figure"><strong>${money(pace.actual)}</strong> recorded of <strong>${money(pace.target)}</strong> ${esc(pace.targetLabel.toLowerCase())}</p>
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pace.barPercent)}">
+        <span class="${pace.ahead ? "is-ahead" : ""}" style="width:${pace.barPercent}%"></span>
+      </div>
+      <p class="muted small">${esc(detail)}${pct ? ` · ${esc(pct)} of the profile total` : ""}</p>`;
+  }
+
+  function paint() {
+    const profile = formProfile();
+    paintPortrait(profile);
+    const pace = paceFrom(profile, actualIncome());
+    const dash = document.getElementById("stat-grid");
+    if (dash) {
+      let host = document.getElementById("profile-pace");
+      if (!host) {
+        host = document.createElement("section");
+        host.id = "profile-pace";
+        host.className = "profile-pace";
+        host.setAttribute("aria-live", "polite");
+        dash.insertAdjacentElement("beforebegin", host);
+      }
+      host.innerHTML = paceHtml(pace);
+    }
+    const progress = document.getElementById("forecast-progress");
+    if (progress) {
+      let host = document.getElementById("profile-pace-forecast");
+      if (!host) {
+        host = document.createElement("section");
+        host.id = "profile-pace-forecast";
+        host.className = "profile-pace";
+        host.setAttribute("aria-live", "polite");
+        progress.insertAdjacentElement("afterend", host);
+      }
+      host.innerHTML = paceHtml(pace);
+    }
+    const hint = document.getElementById("profile-pace-hint");
+    if (hint) {
+      hint.textContent = pace.hasTarget
+        ? `${money(pace.actual)} of ${money(pace.target)} is on the dashboard and Forecast.`
+        : "This amount is the profile total Dashboard and Forecast measure the year against.";
+    }
+  }
+
+  function ensureHint() {
+    if (document.getElementById("profile-pace-hint")) return;
+    const input = document.getElementById("profile-annual-salary");
+    const label = input && input.closest("label");
+    if (!label) return;
+    const p = document.createElement("p");
+    p.id = "profile-pace-hint";
+    p.className = "muted small span-2";
+    label.insertAdjacentElement("afterend", p);
+  }
+
+  function syncSuiteFlags(form) {
+    const gst = document.getElementById("profile-gst-registered");
+    if (gst) {
+      let hidden = form.querySelector('input[name="gstRegistered"][type="hidden"]');
+      if (!hidden) {
+        hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "gstRegistered";
+        form.appendChild(hidden);
+      }
+      hidden.value = gst.checked ? "true" : "false";
+    }
+    const travel = document.getElementById("profile-travels-for-work");
+    const nights = document.getElementById("profile-overnight-allowance");
+    if (travel) {
+      const setFlag = (name, on) => {
+        let hidden = form.querySelector(`input[name="${name}"][type="hidden"]`);
+        if (!hidden) {
+          hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = name;
+          form.appendChild(hidden);
+        }
+        hidden.value = on ? "true" : "false";
+      };
+      setFlag("travelsForWork", travel.checked);
+      setFlag("overnightAllowance", Boolean(travel.checked && nights && nights.checked));
+    }
+  }
+
+  async function reloadSuiteMenus(entity) {
+    if (!document.body.classList.contains("gotax-suite")) return;
+    if (!entity || entity === lastEntity) return;
+    try {
+      const res = await fetch(`${API}/standards?entityType=${encodeURIComponent(entity)}`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok || typeof state === "undefined" || !state.standards) return;
+      const data = await res.json();
+      state.standards = { ...state.standards, ...data };
+      const income = document.getElementById("income-type");
+      if (income && Array.isArray(data.incomeTypes)) {
+        const prev = income.value;
+        income.innerHTML = data.incomeTypes
+          .map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`)
+          .join("");
+        if ([...income.options].some((opt) => opt.value === prev)) income.value = prev;
+      }
+      if (typeof globalThis.populateCategorySelects === "function") globalThis.populateCategorySelects();
+      lastEntity = entity;
+    } catch {
+      /* menus refresh on the next full load */
+    }
+  }
+
+  async function pushProfile() {
+    if (!dirty) return;
+    if (!ready) {
+      scheduleSave();
+      return;
+    }
+    if (document.body.classList.contains("auth-locked")) return;
+    const form = document.getElementById("profile-form");
+    if (!form) return;
+    syncSuiteFlags(form);
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.annualSalary = payload.annualSalary === "" ? 0 : Number(payload.annualSalary);
+    payload.tfnSupplied = fd.has("tfnSupplied");
+    if (document.body.classList.contains("gotax-suite")) {
+      const type = document.getElementById("driver-type");
+      if (type && type.value) {
+        payload.driverType = type.value;
+        payload.entityType = type.value;
+      }
+    }
+    const gst = document.getElementById("profile-gst-registered");
+    if (gst) payload.gstRegistered = gst.checked;
+    const body = JSON.stringify(payload);
+    if (body === lastPayload) {
+      dirty = false;
+      return;
+    }
+    lastPayload = body;
+    dirty = false;
+    try {
+      const res = await fetch(`${API}/profile`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (res.status === 401 || res.status === 403) return;
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        lastPayload = "";
+        dirty = true;
+        scheduleSave();
+        return;
+      }
+      if (typeof state !== "undefined" && state.records && data.profile) {
+        state.records.profile = data.profile;
+      }
+      if (typeof globalThis.refreshEofyLive === "function") {
+        try {
+          await globalThis.refreshEofyLive();
+        } catch {
+          /* last good EOFY report stays on screen */
+        }
+      }
+      if (typeof globalThis.haulageRefreshOvernightDays === "function") {
+        try {
+          await globalThis.haulageRefreshOvernightDays();
+        } catch {
+          /* travel card keeps the last figures */
+        }
+      }
+      if (window.FuelHub && typeof window.FuelHub.refresh === "function") {
+        try {
+          await window.FuelHub.refresh();
+        } catch {
+          /* Fuel Hub may be closed */
+        }
+      }
+      await reloadSuiteMenus(payload.driverType || payload.entityType);
+    } catch {
+      lastPayload = "";
+      dirty = true;
+      scheduleSave();
+    }
+    paint();
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      void pushProfile();
+    }, 700);
+  }
+
+  function onProfileEdit(ev) {
+    const t = ev.target;
+    if (!t || !t.closest || !t.closest("#profile-form")) return;
+    if (t.dataset) t.dataset.touched = "1";
+    dirty = true;
+    paint();
+    if (
+      (t.id === "driver-type" || t.name === "driverType") &&
+      document.body.classList.contains("gotax-suite")
+    ) {
+      void reloadSuiteMenus(t.value);
+    }
+    scheduleSave();
+  }
+
+  function wrapForecast() {
+    const orig = globalThis.renderForecast;
+    if (typeof orig !== "function" || orig.__profilePace) return;
+    function wrapped() {
+      const result = orig.apply(this, arguments);
+      paint();
+      return result;
+    }
+    wrapped.__profilePace = true;
+    globalThis.renderForecast = wrapped;
+  }
+
+  function start() {
+    ensureHint();
+    wrapForecast();
+    paint();
+    const grid = document.getElementById("stat-grid");
+    if (grid) {
+      new MutationObserver(() => paint()).observe(grid, { childList: true });
+    }
+    document.addEventListener("input", onProfileEdit);
+    document.addEventListener("change", onProfileEdit);
+    setTimeout(() => {
+      ready = true;
+      if (!lastEntity) {
+        const saved =
+          typeof state !== "undefined" && state.records && state.records.profile
+            ? state.records.profile
+            : null;
+        lastEntity = String((saved && (saved.entityType || saved.driverType)) || "");
+      }
+      if (dirty) scheduleSave();
+      paint();
+    }, 1600);
   }
 
   if (document.readyState === "loading") {

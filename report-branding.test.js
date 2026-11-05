@@ -14,4 +14,30 @@ describe("report branding — Linehaul Driver", () => {
     expect(report.driver.driverTypeLabel).toBe("Linehaul driver");
     expect(driverTypeLabel("long_haul")).toBe("Linehaul driver");
   });
+
+  it("copies the saved profile onto the EOFY driver block", () => {
+    const report = decorateAccountantReport(
+      {
+        title: "Line Haulage Driver – Performance & Tax Summary",
+        driver: { driverType: "local" },
+        summary: { financialYear: "2025-26" },
+      },
+      {
+        name: "Alex Harris",
+        employer: "Lindsay Transport",
+        driverType: "local",
+        annualSalary: 72000,
+        licenceClass: "hr",
+        workCombination: "rigid",
+        tfnSupplied: true,
+      }
+    );
+    expect(report.driver.name).toBe("Alex Harris");
+    expect(report.driver.employer).toBe("Lindsay Transport");
+    expect(report.driver.driverTypeLabel).toBe("Local driver");
+    expect(report.driver.annualSalary).toBe(72000);
+    expect(report.driver.licenceClass).toBe("hr");
+    expect(report.driver.workCombination).toBe("rigid");
+    expect(report.driver.tfnSupplied).toBe(true);
+  });
 });

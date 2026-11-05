@@ -63,6 +63,7 @@ const { attachLodgementBrief } = require("./lib/accountant-brief");
 
 ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
+const { profilePace } = require("./lib/profile-pace");
 const {
   extractTravelAllowance,
   applyTravelAllowanceToEntry,
@@ -3234,7 +3235,7 @@ api.get("/report", (req, res) => {
   const report =
     productOf(req) === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
-      : decorateAccountantReport(buildAccountantReport(records, profile));
+      : decorateAccountantReport(buildAccountantReport(records, profile), profile);
   if (productOf(req) === "suite") {
     report.summary = suite.summariseYear(records, profile);
   } else {
@@ -3264,7 +3265,7 @@ api.get("/report.pdf", (req, res) => {
   const report =
     productOf(req) === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(records, profile))
-      : decorateAccountantReport(buildAccountantReport(records, profile));
+      : decorateAccountantReport(buildAccountantReport(records, profile), profile);
   if (productOf(req) === "suite") {
     report.summary = suite.summariseYear(records, profile);
   } else {
@@ -3313,6 +3314,10 @@ api.get("/forecast", (req, res) => {
     productOf(req) === "suite"
       ? suite.summariseOvernightDays(records, records.profile, fy)
       : summariseOvernightDays(records, records.profile, fy);
+  forecast.profilePace = profilePace(
+    records.profile || {},
+    forecast.yearToDate && forecast.yearToDate.income
+  );
   res.json(forecast);
 });
 
@@ -4545,7 +4550,7 @@ function buildSharePack(username, product, financialYear) {
   const report =
     product === "suite"
       ? suite.decorateAccountantReport(suite.buildAccountantReport(scoped, profile))
-      : decorateAccountantReport(buildAccountantReport(scoped, profile));
+      : decorateAccountantReport(buildAccountantReport(scoped, profile), profile);
   if (product === "suite") {
     report.summary = suite.summariseYear(scoped, profile);
   } else {

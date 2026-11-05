@@ -1823,6 +1823,48 @@ tr.vending-machine-row {
 .forecast-progress { margin-top: 12px; }
 .progress-bar { background: var(--bg-2); border: 1px solid var(--border); border-radius: 999px; height: 12px; overflow: hidden; margin: 6px 0; }
 .progress-bar span { display: block; height: 100%; background: var(--accent); }
+.profile-pace {
+  margin: 0 0 16px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.profile-pace-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.profile-pace h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.profile-pace-who {
+  margin: 0;
+  text-align: right;
+}
+.profile-pace-figure {
+  margin: 8px 0 2px;
+}
+.profile-pace .progress-bar span.is-ahead { background: var(--green); }
+#forecast-progress + .profile-pace { margin-top: 14px; }
+.profile-portrait {
+  margin: 0 0 8px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-2);
+}
+.profile-portrait h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-brand);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.profile-portrait p { margin: 0 0 6px; }
+.profile-portrait p:last-child { margin-bottom: 0; }
 
 /* Report */
 .report-section { margin-bottom: 20px; }
