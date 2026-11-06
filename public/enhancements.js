@@ -16618,23 +16618,30 @@
     };
   }
 
-  function profilePortrait(profile) {
+  function savedProfile() {
+    return typeof state !== "undefined" && state.records && state.records.profile ? state.records.profile : {};
+  }
+
+  function fieldConfirmations(profile) {
     const suite = document.body.classList.contains("gotax-suite");
-    const given = givenName(profile);
-    const situation = situationLabel(profile);
-    const employer = String((profile && (profile.employer || profile.tradingName)) || "").trim();
-    const occupation = String((profile && profile.occupation) || "").trim();
+    const on = (value) => value === true || value === "true" || value === "on" || value === 1 || value === "1";
+    const lines = [];
+    const add = (key, choice) => {
+      const text = String(choice || "").trim();
+      if (!text) return;
+      lines.push({ key, text: `${text} is active on your profile.` });
+    };
+    add("name", profile && profile.name);
+    add("driverType", situationLabel(profile));
+    add("employer", profile && (profile.employer || profile.tradingName));
+    if (suite) add("occupation", profile && profile.occupation);
     const salary = Math.round((Number(profile && profile.annualSalary) || 0) * 100) / 100;
-    const paragraphs = [];
-    if (situation && employer) paragraphs.push(`${situation} at ${employer}.`);
-    else if (situation) paragraphs.push(`${situation}.`);
-    else if (employer) paragraphs.push(`Working with ${employer}.`);
-    if (suite && occupation) paragraphs.push(`Occupation is ${occupation}.`);
-    const facts = [];
+    if (salary > 0) add("annualSalary", `${money(salary)} ${targetLabel(profile).toLowerCase()}`);
     if (!suite) {
       const licence = { lr_mr: "LR/MR", hr: "HR", hc: "HC", mc: "MC" }[
         String((profile && profile.licenceClass) || "").toLowerCase()
       ];
+      if (licence) add("licenceClass", `${licence} licence`);
       const vehicle = {
         rigid: "heavy rigid",
         semi: "prime mover and semi",
@@ -16643,74 +16650,69 @@
         road_train_t1: "Type 1 road train",
         road_train_t2: "Type 2 road train",
       }[String((profile && profile.workCombination) || "").toLowerCase()];
-      if (licence && vehicle) facts.push(`${licence} licence, ${vehicle}.`);
-      else if (licence) facts.push(`${licence} licence.`);
-      else if (vehicle) facts.push(`${vehicle.charAt(0).toUpperCase()}${vehicle.slice(1)}.`);
+      if (vehicle) add("workCombination", `${vehicle.charAt(0).toUpperCase()}${vehicle.slice(1)}`);
     }
-    if (salary > 0) {
-      facts.push(`This year is measured against ${money(salary)} ${targetLabel(profile).toLowerCase()}.`);
+    if (suite) {
+      const digits = String((profile && profile.abn) || "").replace(/\D/g, "");
+      const abn =
+        digits.length === 11
+          ? `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`
+          : String((profile && profile.abn) || "").trim();
+      if (abn) add("abn", `ABN ${abn}`);
+      if (String((profile && (profile.entityType || profile.driverType)) || "") === "partnership") {
+        add("partnershipName", profile.partnershipName);
+        const share = Number(profile.partnerSharePercent);
+        if (Number.isFinite(share) && share > 0) add("partnerShare", `${share}% partnership share`);
+      }
+      if (on(profile && profile.gstRegistered)) add("gstRegistered", "GST registered");
+      if (on(profile && profile.travelsForWork)) add("travelsForWork", "Travel for work");
+      if (on(profile && profile.travelsForWork) && on(profile && profile.overnightAllowance)) {
+        add("overnightAllowance", "Overnight travel allowance");
+      }
     }
-    if (facts.length) paragraphs.push(facts.join(" "));
-    if (suite && String((profile && (profile.entityType || profile.driverType)) || "") === "partnership") {
-      const share = Number(profile.partnerSharePercent);
-      const partnership = String(profile.partnershipName || "").trim();
-      if (Number.isFinite(share) && share > 0) {
-        paragraphs.push(
-          partnership ? `Your share is ${share}% of ${partnership}.` : `Your share is ${share}%.`
-        );
-      } else if (partnership) paragraphs.push(`Partnership is ${partnership}.`);
-    }
-    const extras = [];
-    if (suite && (profile.gstRegistered === true || profile.gstRegistered === "true" || profile.gstRegistered === "on")) {
-      extras.push("GST registered");
-    }
-    const abnDigits = String((profile && profile.abn) || "").replace(/\D/g, "");
-    const abn =
-      abnDigits.length === 11
-        ? `${abnDigits.slice(0, 2)} ${abnDigits.slice(2, 5)} ${abnDigits.slice(5, 8)} ${abnDigits.slice(8)}`
-        : String((profile && profile.abn) || "").trim();
-    if (suite && abn) extras.push(`ABN ${abn}`);
-    if (extras.length) paragraphs.push(`${extras.join(". ")}.`);
-    if (profile.travelsForWork === true || profile.travelsForWork === "true" || profile.travelsForWork === "on") {
-      const overnight =
-        profile.overnightAllowance === true ||
-        profile.overnightAllowance === "true" ||
-        profile.overnightAllowance === "on";
-      paragraphs.push(
-        overnight ? "Travel for work includes overnight stays." : "Travel for work is on."
-      );
-    }
-    if (profile.tfnSupplied === true || profile.tfnSupplied === "true" || profile.tfnSupplied === "on") {
-      paragraphs.push("TFN is marked as supplied.");
-    }
-    if (!paragraphs.length) {
-      paragraphs.push(
-        suite
-          ? "Add your name, registration and expected income. Dashboard and Forecast then follow your year."
-          : "Add your name, employer and salary. Dashboard and Forecast then follow your year."
-      );
-    }
-    return {
-      heading: given ? `${given}, this profile is yours.` : "This profile is yours.",
-      paragraphs,
-    };
+    const fy = String((profile && profile.financialYear) || "").trim();
+    if (fy) add("financialYear", `Financial year ${fy}`);
+    if (on(profile && profile.tfnSupplied)) add("tfnSupplied", "TFN supplied");
+    return lines;
   }
 
-  function paintPortrait(profile) {
+  function controlFor(form, key) {
+    const map = {
+      name: 'input[name="name"]',
+      driverType: "#driver-type",
+      employer: "#profile-employer",
+      occupation: "#profile-occupation",
+      annualSalary: "#profile-annual-salary",
+      abn: "#profile-abn",
+      partnershipName: "#profile-partnership-name",
+      partnerShare: "#profile-partner-share",
+      licenceClass: "#profile-licence-class",
+      workCombination: "#profile-work-combination",
+      financialYear: "#profile-financial-year",
+      gstRegistered: "#profile-gst-registered",
+      travelsForWork: "#profile-travels-for-work",
+      overnightAllowance: "#profile-overnight-allowance",
+      tfnSupplied: 'input[name="tfnSupplied"]',
+    };
+    return form.querySelector(map[key] || "x-none");
+  }
+
+  function paintFieldActive(profile) {
+    document.getElementById("profile-portrait")?.remove();
     const form = document.getElementById("profile-form");
     if (!form) return;
-    let host = document.getElementById("profile-portrait");
-    if (!host) {
-      host = document.createElement("div");
-      host.id = "profile-portrait";
-      host.className = "profile-portrait span-2";
-      host.setAttribute("aria-live", "polite");
-      form.insertBefore(host, form.firstChild);
+    form.querySelectorAll(".profile-field-active").forEach((note) => note.remove());
+    for (const line of fieldConfirmations(profile || {})) {
+      const control = controlFor(form, line.key);
+      const label = control && control.closest("label");
+      if (!label) continue;
+      const note = document.createElement("span");
+      note.className = "profile-field-active";
+      note.textContent = line.text;
+      const hint = [...label.children].find((child) => child.classList && child.classList.contains("muted"));
+      if (hint) label.insertBefore(note, hint);
+      else label.appendChild(note);
     }
-    const portrait = profilePortrait(profile);
-    host.innerHTML = `<h2>${esc(portrait.heading)}</h2>${portrait.paragraphs
-      .map((line) => `<p>${esc(line)}</p>`)
-      .join("")}`;
   }
 
   function actualIncome() {
@@ -16745,8 +16747,8 @@
   }
 
   function paint() {
+    paintFieldActive(savedProfile());
     const profile = formProfile();
-    paintPortrait(profile);
     const pace = paceFrom(profile, actualIncome());
     const dash = document.getElementById("stat-grid");
     if (dash) {
@@ -16968,6 +16970,9 @@
     }
     document.addEventListener("input", onProfileEdit);
     document.addEventListener("change", onProfileEdit);
+    document.getElementById("profile-form")?.addEventListener("submit", () => {
+      [500, 1400].forEach((ms) => setTimeout(() => paint(), ms));
+    });
     setTimeout(() => {
       ready = true;
       if (!lastEntity) {
