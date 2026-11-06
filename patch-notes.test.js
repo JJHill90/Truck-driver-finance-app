@@ -33,10 +33,13 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(222);
-    expect(notes[0].label).toBe("Version 4.18");
+    expect(notes[0].prNumber).toBe(223);
+    expect(notes[0].label).toBe("Version 4.19");
     expect(notes[0].bullets).toHaveLength(1);
-    expect(notes[0].bullets.join("\n")).toMatch(/green text under each field/);
+    expect(notes[0].bullets.join("\n")).toMatch(/individual tax return labels/);
+    const fieldActive = notes.find((note) => note.prNumber === 222);
+    expect(fieldActive.label).toBe("Version 4.18");
+    expect(fieldActive.bullets.join("\n")).toMatch(/green text under each field/);
     const profilePace = notes.find((note) => note.prNumber === 221);
     expect(profilePace && profilePace.label).toBe("Version 4.17");
     expect(profilePace.bullets.join("\n")).toMatch(/EOFY report/);

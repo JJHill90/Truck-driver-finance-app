@@ -10932,8 +10932,10 @@
     Support: "Support",
   };
   const REPORT_MAP = {
-    "Income & remittances": "Income & Remittances",
-    "Expense deductions (ATO schedules)": "Expense Deductions (ATO schedules)",
+    "Income & remittances": "Income (individual return items)",
+    "Income & Remittances": "Income (individual return items)",
+    "Expense deductions (ATO schedules)": "Deductions (individual return labels)",
+    "Expense Deductions (ATO schedules)": "Deductions (individual return labels)",
     "Tax estimate": "Tax Estimate",
   };
 
@@ -10981,6 +10983,29 @@
       const next = REPORT_MAP[h.textContent.trim()];
       if (next && h.textContent !== next) h.textContent = next;
     });
+    const notes = {
+      "Income (individual return items)":
+        "These names are the individual return items. Business amounts are gross; item 15 on the return is the net. Working paper only — this app does not lodge a return.",
+      "Deductions (individual return labels)":
+        "Each row uses one return label: D1 car, D2 travel (overnight meals, accommodation and incidentals), D3 clothing, D4 self-education, D5 other work-related, D9 gifts, D10 tax affairs, D12 personal super, D15 other deductions, or a business-schedule line.",
+    };
+    el.querySelectorAll("h3").forEach((h) => {
+      const note = notes[h.textContent.trim()];
+      if (!note) return;
+      const next = h.nextElementSibling;
+      if (next && next.classList.contains("ato-return-note")) return;
+      const p = document.createElement("p");
+      p.className = "muted ato-return-note";
+      p.textContent = note;
+      h.insertAdjacentElement("afterend", p);
+    });
+    const tables = el.querySelectorAll(":scope > .report-section table");
+    const incomeHead = tables[0] && tables[0].querySelector("thead th");
+    if (incomeHead && incomeHead.textContent.trim() === "Type") incomeHead.textContent = "Return item";
+    const scheduleHead = tables[1] && tables[1].querySelectorAll("thead th")[1];
+    if (scheduleHead && scheduleHead.textContent.trim() === "Schedule") {
+      scheduleHead.textContent = "Return label";
+    }
   }
 
   /** Append FY expense detail with vending-machine row colour after report render. */
@@ -16992,4 +17017,118 @@
   } else {
     start();
   }
+})();
+
+/** Forecast shows the same individual-return lines as the EOFY report. */
+(function forecastAtoReturn() {
+  let latest = null;
+
+  function money(n) {
+    return new Intl.NumberFormat("en-AU", {
+      style: "currency",
+      currency: "AUD",
+    }).format(Number(n) || 0);
+  }
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function paint() {
+    const scenes = document.getElementById("forecast-scenarios");
+    const anchor = scenes && scenes.closest(".panel");
+    if (!anchor || !anchor.parentNode) return;
+    let box = document.getElementById("forecast-ato-return");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "forecast-ato-return";
+      box.className = "panel";
+      anchor.insertAdjacentElement("afterend", box);
+    }
+    const data = latest;
+    if (!data || ((!data.income || !data.income.length) && (!data.deductions || !data.deductions.length))) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
+    }
+    box.hidden = false;
+    const incomeRows = (data.income || [])
+      .map(
+        (row) =>
+          `<div class="ato-return-line"><div>${esc(row.label)}</div><div class="ato-return-amt">Gross ${money(row.gross)} · Assessable ${money(row.assessable)}</div></div>`
+      )
+      .join("");
+    const deductionRows = (data.deductions || [])
+      .map(
+        (row) =>
+          `<div class="ato-return-line"><div>${esc(row.label)}</div><div class="ato-return-amt">${row.count || 0} ${Number(row.count) === 1 ? "item" : "items"} · Deductible ${money(row.deductible)}</div></div>`
+      )
+      .join("");
+    box.innerHTML = `
+      <div class="panel-header"><h2>ATO return lines</h2></div>
+      <p class="muted">${esc(data.note || "Working paper only. These labels match the EOFY report.")}</p>
+      <h3>Income</h3>
+      ${incomeRows || '<p class="muted">No income recorded this year.</p>'}
+      <h3>Deductions</h3>
+      ${deductionRows || '<p class="muted">No deductions recorded this year.</p>'}`;
+  }
+
+  function remember(payload) {
+    if (!payload || !payload.atoReturn) return;
+    latest = payload.atoReturn;
+    paint();
+  }
+
+  function wrapFetch() {
+    const orig = globalThis.fetch;
+    if (typeof orig !== "function" || orig.__atoReturn) return;
+    function wrapped(input, init) {
+      return orig.call(this, input, init).then((res) => {
+        try {
+          const url = typeof input === "string" ? input : (input && input.url) || "";
+          if (
+            res.ok &&
+            String((init && init.method) || "GET").toUpperCase() === "GET" &&
+            /\/api\/haulage\/forecast(\?|$)/.test(url) &&
+            !/fuelhub/.test(url)
+          ) {
+            res
+              .clone()
+              .json()
+              .then(remember)
+              .catch(() => {});
+          }
+        } catch {
+          /* leave the forecast response untouched */
+        }
+        return res;
+      });
+    }
+    wrapped.__atoReturn = true;
+    globalThis.fetch = wrapped;
+  }
+
+  function wrapRender() {
+    const orig = globalThis.renderForecast;
+    if (typeof orig !== "function" || orig.__atoReturn) return;
+    function wrapped() {
+      const result = orig.apply(this, arguments);
+      paint();
+      return result;
+    }
+    wrapped.__atoReturn = true;
+    globalThis.renderForecast = wrapped;
+  }
+
+  function start() {
+    wrapFetch();
+    wrapRender();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();

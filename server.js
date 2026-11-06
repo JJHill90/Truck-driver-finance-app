@@ -65,6 +65,13 @@ ensureMealsRegistered();
 const { buildForecast } = require("./lib/forecast");
 const { profilePace } = require("./lib/profile-pace");
 const {
+  mapExpenseSchedule,
+  applyAtoReturnLabels,
+  rollupAtoReturn,
+  stampReport,
+  entityFromProfile,
+} = require("./lib/ato-return-labels");
+const {
   extractTravelAllowance,
   applyTravelAllowanceToEntry,
 } = require("./lib/travel-allowance-extract");
@@ -517,11 +524,19 @@ function flushAllCachedRecordsToDisk() {
 }
 
 function expenseAnalysis(req, entry) {
-  if (productOf(req) === "suite") {
-    const profile = (getRecords(req) && getRecords(req).profile) || {};
-    return suite.calcExpenseDeduction(entry, profile);
+  const product = productOf(req);
+  const profile = (getRecords(req) && getRecords(req).profile) || {};
+  const analysis =
+    product === "suite" ? suite.calcExpenseDeduction(entry, profile) : calcExpenseDeduction(entry);
+  if (analysis) {
+    const mapped = mapExpenseSchedule(entry && entry.category, analysis.atoSchedule, {
+      product,
+      entity: entityFromProfile(profile, product),
+    });
+    analysis.atoCode = mapped.code;
+    analysis.atoSchedule = mapped.label;
   }
-  return calcExpenseDeduction(entry);
+  return analysis;
 }
 
 function scopedSuiteRecords(records) {
@@ -3241,13 +3256,7 @@ api.get("/report", (req, res) => {
   } else {
     applyHistoricalRates(report.summary, records, fy);
   }
-  // Keep the ATO schedule mapping in sync with the year-corrected deductions.
-  report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
-    schedule: b.atoSchedule,
-    category: b.label,
-    deductibleAmount: b.deductibleTotal,
-    transactionCount: b.count,
-  }));
+  stampReport(report, profile, productOf(req));
   attachLodgementBrief(report, records, profile, {
     product: productOf(req),
     entitlements: resolveReqEntitlements(req),
@@ -3271,12 +3280,7 @@ api.get("/report.pdf", (req, res) => {
   } else {
     applyHistoricalRates(report.summary, records, fy);
   }
-  report.atoScheduleMapping = report.summary.expenses.breakdown.map((b) => ({
-    schedule: b.atoSchedule,
-    category: b.label,
-    deductibleAmount: b.deductibleTotal,
-    transactionCount: b.count,
-  }));
+  stampReport(report, profile, productOf(req));
   attachLodgementBrief(report, records, profile, {
     product: productOf(req),
     entitlements: resolveReqEntitlements(req),
@@ -3317,6 +3321,15 @@ api.get("/forecast", (req, res) => {
   forecast.profilePace = profilePace(
     records.profile || {},
     forecast.yearToDate && forecast.yearToDate.income
+  );
+  const paceProfile = profileFor(records, fy);
+  const paceSummary = summariseFor(req, records, paceProfile);
+  const paceProduct = productOf(req);
+  forecast.atoReturn = rollupAtoReturn(
+    applyAtoReturnLabels(paceSummary, {
+      product: paceProduct,
+      entity: entityFromProfile(paceProfile, paceProduct),
+    })
   );
   res.json(forecast);
 });
@@ -4556,6 +4569,7 @@ function buildSharePack(username, product, financialYear) {
   } else {
     applyHistoricalRates(report.summary, scoped, fy);
   }
+  stampReport(report, profile, product);
   const owner = auth.getUserRecord(username);
   const ownerEnt = entitlements.resolveEntitlements(owner, scoped, new Date(), { product });
   attachLodgementBrief(report, scoped, profile, { product, entitlements: ownerEnt });
