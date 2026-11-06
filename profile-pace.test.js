@@ -122,6 +122,63 @@ describe("profile pace", () => {
     expect(profilePortrait({}, { suite: true }).paragraphs[0]).toMatch(/registration and expected income/);
   });
 
+  it("confirms each saved Suite field on its own", () => {
+    const { profileFieldConfirmations } = require("./lib/profile-pace");
+    const lines = profileFieldConfirmations(
+      {
+        name: "Joshua",
+        entityType: "employee",
+        driverType: "employee",
+        employer: "Quiktrak Asia Pacific",
+        occupation: "Inventory auditor",
+        annualSalary: 100000,
+        abn: "50551674682",
+        gstRegistered: true,
+        travelsForWork: true,
+        tfnSupplied: true,
+        financialYear: "2025-26",
+      },
+      { suite: true }
+    );
+    expect(lines.map((line) => line.text)).toEqual([
+      "Joshua is active on your profile.",
+      "Employee (PAYG) is active on your profile.",
+      "Quiktrak Asia Pacific is active on your profile.",
+      "Inventory auditor is active on your profile.",
+      "$100,000.00 annual salary is active on your profile.",
+      "ABN 50 551 674 682 is active on your profile.",
+      "GST registered is active on your profile.",
+      "Travel for work is active on your profile.",
+      "Financial year 2025-26 is active on your profile.",
+      "TFN supplied is active on your profile.",
+    ]);
+  });
+
+  it("confirms a saved driver licence and vehicle, and skips unticked choices", () => {
+    const { profileFieldConfirmations } = require("./lib/profile-pace");
+    const lines = profileFieldConfirmations(
+      {
+        name: "Alex Harris",
+        driverType: "long_haul",
+        employer: "Lindsay Transport",
+        annualSalary: 110000,
+        licenceClass: "mc",
+        workCombination: "b_double",
+        gstRegistered: true,
+        occupation: "Inventory auditor",
+      },
+      { suite: false }
+    );
+    const text = lines.map((line) => line.text).join("\n");
+    expect(text).toMatch(/Alex Harris is active on your profile/);
+    expect(text).toMatch(/Linehaul driver is active on your profile/);
+    expect(text).toMatch(/MC licence is active on your profile/);
+    expect(text).toMatch(/B-double is active on your profile/);
+    expect(text).not.toMatch(/GST/);
+    expect(text).not.toMatch(/Inventory auditor/);
+    expect(text).not.toMatch(/TFN/);
+  });
+
   it("stays quiet until a profile total is set", () => {
     const pace = profilePace({ entityType: "employee", employer: "Lindsay" }, 400);
     expect(pace.hasTarget).toBe(false);
