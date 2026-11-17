@@ -24,6 +24,10 @@ const {
   applyIncomePrimaryToOcr,
 } = require("./lib/income-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
+const { applyTaxInvoiceToOcr } = require("./lib/income-invoice");
+const { applyDescription } = require("./lib/scan-description");
+const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
+const { estimateFuelTaxCredit } = require("./lib/fuel-tax-credit");
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
@@ -3716,7 +3720,11 @@ api.post("/csv/preview", optionalCsvMultipart, (req, res) => {
   }
   const { text, filename } = extractCsvText(req);
   const records = getRecords(req);
-  const preview = csvImport.previewCsv(text, { records, filename });
+  const preview = csvImport.previewCsv(text, {
+    records,
+    filename,
+    product: productOf(req),
+  });
   if (!preview.ok) {
     res.status(preview.status || 400).json({
       error: preview.error,
@@ -3890,8 +3898,9 @@ api.post("/income/:id/restore", (req, res) => {
 
 function enrichScannedOcr(req, records, ocrResult, purpose) {
   const scanPurpose = purpose === "income" ? "income" : "expense";
+  const product = productOf(req);
   applyAbnEntityPairing(ocrResult, scanPurpose);
-  enrichOcrFromVendors(ocrResult, records.vendors || [], scanPurpose);
+  enrichOcrFromVendors(ocrResult, records.vendors || [], scanPurpose, product);
   if (scanPurpose !== "income") {
     if (req.user) {
       const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
@@ -3935,26 +3944,64 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
 
   applyResolvedDocumentDate(ocrResult, scanPurpose, payPeriod);
 
+  const selectedFy =
+    (records.profile && records.profile.financialYear) ||
+    getFinancialYearForDate(new Date().toISOString().slice(0, 10));
+
   if (scanPurpose === "income") {
+    const entityType =
+      product === "suite"
+        ? suite.normalizeEntityType(records.profile && (records.profile.entityType || records.profile.driverType))
+        : "";
+    applyTaxInvoiceToOcr(ocrResult, { product, entityType, selectedFy });
     sanitizeIncomeFields(ocrResult);
     if (typeof ocrResult.rawText === "string") ocrResult.rawText = stripChequeTokens(ocrResult.rawText);
     if (typeof ocrResult.rawTextPreview === "string") {
       ocrResult.rawTextPreview = stripChequeTokens(ocrResult.rawTextPreview);
     }
-    ocrResult.description = buildIncomeDescription(ocrResult);
-    if (ocrResult.suggestedIncomeType) {
+    if (ocrResult.documentKind === "tax_invoice") {
+      if (!ocrResult.description) ocrResult.description = buildIncomeDescription(ocrResult);
+    } else {
+      ocrResult.description = buildIncomeDescription(ocrResult);
+    }
+    applyDescription(ocrResult);
+    if (product === "suite" && ocrResult.suggestedIncomeType) {
+      ocrResult.suggestedIncomeType = suite.normalizeIncomeTypeId(
+        ocrResult.suggestedIncomeType,
+        entityType
+      );
+      if (ocrResult.documentKind === "tax_invoice" && ocrResult.suggestedIncomeType === "salary_wages") {
+        ocrResult.suggestedIncomeType = entityType === "sole_trader" ? "business_income" : "other_income";
+      }
+    } else if (ocrResult.suggestedIncomeType) {
       ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
     }
-    if (ocrResult.type) ocrResult.type = normalizeIncomeTypeId(ocrResult.type);
+    if (ocrResult.type) {
+      ocrResult.type =
+        product === "suite"
+          ? suite.normalizeIncomeTypeId(ocrResult.type, entityType)
+          : normalizeIncomeTypeId(ocrResult.type);
+    }
     ocrResult.travelAllowance = extractTravelAllowance(ocrResult, {
       date: ocrResult.date,
-      financialYear:
-        (records.profile && records.profile.financialYear) ||
-        getFinancialYearForDate(ocrResult.date || new Date().toISOString().slice(0, 10)),
+      financialYear: selectedFy,
     });
-  } else if (ocrResult.suggestedCategory) {
-    ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+  } else {
+    applyDescription(ocrResult);
+    if (ocrResult.suggestedCategory) {
+      ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
+    }
+    if (product !== "suite") {
+      const credit = estimateFuelTaxCredit({
+        date: ocrResult.date,
+        text: `${ocrResult.vendor || ""}\n${ocrResult.rawText || ocrResult.description || ""}`,
+      });
+      if (credit && /fuel|diesel|adblue/i.test(String(ocrResult.suggestedCategory || ""))) {
+        ocrResult.fuelTaxCredit = credit;
+      }
+    }
   }
+  stampFyWarning(ocrResult, selectedFy);
 
   let detectedTotals = mergeDetectedTotals(ocrResult, componentBreakdown, scanPurpose);
   if (scanPurpose === "expense") {
@@ -4073,9 +4120,25 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       return;
     }
     const ocrPurpose = purpose === "income" ? "income" : "expense";
-    const ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
-      purpose: ocrPurpose,
-    });
+    const ocrResult = await Promise.race([
+      extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
+        purpose: ocrPurpose,
+      }),
+      new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              documentType: ocrPurpose === "income" ? "income" : "expense",
+              amount: null,
+              confidence: "low",
+              ocrSource: "timeout",
+              notes: "The scan took too long and was stopped. Enter the totals from the document, then approve.",
+              rawText: "",
+            }),
+          40000
+        )
+      ),
+    ]);
 
     // Text-layer extract already ran inside extractReceiptData. Only parse
     // again when that pass left no rawText (avoids a second pdf-parse stall).
@@ -4301,10 +4364,38 @@ api.post("/receipts/:id/confirm", (req, res) => {
     return;
   }
 
+  const selectedFy =
+    (records.profile && records.profile.financialYear) || getCurrentFinancialYear();
+  const fyCheck = assessDocumentFy(payload.date, selectedFy);
+  if (fyCheck.outside && payload.acknowledgeOutsideFy !== true && payload.acknowledgeOutsideFy !== "true") {
+    res.status(409).json({
+      error: fyCheck.warning,
+      code: "DATE_OUTSIDE_FY",
+      documentFinancialYear: fyCheck.documentFy,
+      selectedFinancialYear: fyCheck.selectedFy,
+    });
+    return;
+  }
+
   if (purpose === "income") {
     sanitizeIncomeFields(payload);
     normalizePayloadDate(payload);
-    if (payload.type) payload.type = normalizeIncomeTypeId(payload.type);
+    if (!payload.type) {
+      res.status(400).json({
+        error: "Choose an income type before saving this document.",
+        code: "INCOME_TYPE_REQUIRED",
+      });
+      return;
+    }
+    if (payload.type) {
+      payload.type =
+        productOf(req) === "suite"
+          ? suite.normalizeIncomeTypeId(
+              payload.type,
+              suite.normalizeEntityType(records.profile && (records.profile.entityType || records.profile.driverType))
+            )
+          : normalizeIncomeTypeId(payload.type);
+    }
     if (!payload.description) payload.description = buildIncomeDescription(payload);
 
     // Idempotent confirm: already linked to active income, or restore soft-deleted.
@@ -4402,7 +4493,20 @@ api.post("/receipts/:id/confirm", (req, res) => {
   delete expensePayload.workUseFromCarProfile;
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, expensePayload);
   if (blockDuplicateLedger(res, records, "expense", expensePayload, receipt && receipt.id)) return;
+  if (productOf(req) !== "suite") {
+    const credit =
+      expensePayload.fuelTaxCredit ||
+      estimateFuelTaxCredit({
+        date: expensePayload.date,
+        litres: expensePayload.dieselLitres,
+        text: `${expensePayload.vendor || ""}\n${expensePayload.description || ""}\n${
+          (receipt && receipt.ocrResult && receipt.ocrResult.rawText) || ""
+        }`,
+      });
+    if (credit && expensePayload.category === "fuel") expensePayload.fuelTaxCredit = credit;
+  }
   const entry = storage.addExpense(records, expensePayload);
+  if (expensePayload.fuelTaxCredit) entry.fuelTaxCredit = expensePayload.fuelTaxCredit;
   rememberVendor(records, {
     name: expensePayload.vendor || entry.vendor,
     abn: expensePayload.vendorAbn || entry.vendorAbn,

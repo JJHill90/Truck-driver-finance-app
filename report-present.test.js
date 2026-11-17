@@ -11,8 +11,9 @@ const { applyHistoricalRates } = require("./lib/historical-rates");
 
 describe("report presentation — categories, totals, LAFHA days", () => {
   it("uses Taxation Hub menu labels for expense and income types", () => {
-    expect(presentExpenseLabel("compulsory_assessment")).toBe("Medical equipment");
-    expect(presentExpenseLabel("meals")).toBe("Food/Meals (Daily)");
+    expect(presentExpenseLabel("compulsory_assessment")).toBe("Compulsory medical / vision assessment");
+    expect(presentExpenseLabel("meals")).toBe("Overnight travel meals");
+    expect(presentExpenseLabel("fuel")).toBe("Truck fuel & AdBlue");
     expect(presentExpenseLabel("meals_breakfast")).toBe("Breakfast");
     expect(presentExpenseLabel("office_admin")).toMatch(/Logbook|Work Diary/i);
     expect(presentIncomeTypeLabel("allowance_travel")).toBe(
@@ -97,7 +98,7 @@ describe("report presentation — categories, totals, LAFHA days", () => {
     expect(travel).toBeTruthy();
     expect(travel.label).toBe("Living Away from Home / Travel allowance");
 
-    const medical = report.summary.expenses.breakdown.find((b) => /Medical equipment/i.test(b.label));
+    const medical = report.summary.expenses.breakdown.find((b) => /Compulsory medical/i.test(b.label));
     expect(medical).toBeTruthy();
     const breakfast = report.summary.expenses.breakdown.find((b) => b.label === "Breakfast");
     expect(breakfast).toBeTruthy();
