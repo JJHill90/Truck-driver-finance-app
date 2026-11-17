@@ -9,8 +9,13 @@ const { descriptionFromDocument } = require("./lib/scan-description");
 const { previewCsv } = require("./lib/csv-import");
 const { listMenuCategories } = require("./lib/expense-menu");
 const suiteAto = require("./lib/suite/ato");
-const { assessDocumentFy } = require("./lib/fy-date-guard");
+const { assessDocumentFy, outsideFySaveAllowed } = require("./lib/fy-date-guard");
 const { estimateFuelTaxCredit, extractDieselLitres } = require("./lib/fuel-tax-credit");
+const { incomeTypeForInvoice } = require("./lib/income-invoice");
+const { listMenuIncomeTypes: listSuiteIncomeTypes } = require("./lib/suite/menus");
+const { listMenuIncomeTypes: listHubIncomeTypes } = require("./lib/income-menu");
+const fs = require("fs");
+const path = require("path");
 const { preserveDriverType } = require("./lib/hub-profile");
 const { truckDriverMealsForYear, travelRatesForYear } = require("./lib/historical-rates");
 const { summariseOvernightDays } = require("./lib/overnight-days");
@@ -113,6 +118,9 @@ describe("tax invoices are not payslips", () => {
     expect(parsed.gstAmount).toBe(220);
     expect(parsed.grossTotal).toBe(2420);
     expect(parsed.suggestedIncomeType).toBe("business_income");
+    expect(incomeTypeForInvoice("suite", "employee")).toBe("business_income");
+    expect(incomeTypeForInvoice("suite", "partnership")).toBe("services_income");
+    expect(incomeTypeForInvoice("haulage", "employee")).toBe("remittance_owner");
     expect(parsed.suggestedIncomeType).not.toBe("salary_wages");
     expect(parsed.description).toMatch(/Courier services/i);
     expect(parsed.dateOutsideSelectedFy).toBe(false);
@@ -142,6 +150,13 @@ describe("tax invoices are not payslips", () => {
     expect(parsed.dateOutsideSelectedFy).toBe(true);
     expect(assessDocumentFy("2026-11-01", "2025-26").outside).toBe(true);
     expect(assessDocumentFy("2026-11-01", "2026-27").outside).toBe(false);
+    expect(outsideFySaveAllowed({ outside: true, acknowledged: false })).toBe(false);
+    expect(outsideFySaveAllowed({ outside: true, acknowledged: true })).toBe(true);
+    expect(outsideFySaveAllowed({ outside: false, acknowledged: false })).toBe(true);
+    const client = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
+    expect(client).toMatch(/data-fy-ack/);
+    expect(client).toMatch(/acknowledgeOutsideFy = outsideFyChecked\(\)/);
+    expect(client).not.toMatch(/fyWarning\) payload\.acknowledgeOutsideFy = true/);
   });
 });
 
@@ -188,9 +203,18 @@ describe("descriptions and diesel fuel tax credit", () => {
     expect(extractDieselLitres(HUB_DIESEL)).toBe(412);
     const credit = estimateFuelTaxCredit({ text: HUB_DIESEL, date: "2026-11-06" });
     expect(credit.litres).toBe(412);
+    expect(credit.use).toBe("on_road");
     expect(credit.centsPerLitre).toBe(21.3);
     expect(credit.amount).toBeCloseTo(87.76, 2);
     expect(credit.basLabel).toBe("7D");
+    const offRoad = credit.options.find((row) => row.id === "off_road");
+    const onRoad = credit.options.find((row) => row.id === "on_road");
+    expect(onRoad.centsPerLitre).toBe(21.3);
+    expect(offRoad.centsPerLitre).toBe(53.7);
+    expect(offRoad.amount).toBeCloseTo(221.24, 2);
+    const chosen = estimateFuelTaxCredit({ text: HUB_DIESEL, date: "2026-11-06", use: "off_road" });
+    expect(chosen.use).toBe("off_road");
+    expect(chosen.amount).toBeCloseTo(221.24, 2);
     expect(estimateFuelTaxCredit({ text: HUB_MEAL, date: "2026-11-10" })).toBeNull();
   });
 });
@@ -256,6 +280,21 @@ describe("TD 2026/4 meal caps come from config", () => {
     expect(summary.note).toMatch(/TD 2026\/4/);
     expect(summary.note).toMatch(/32\.25/);
     expect(summary.mealCaps.dinner.cap).toBe(63.45);
+  });
+});
+
+describe("Suite employees can select business income; Hub cannot", () => {
+  it("puts business sales on the Suite employee menu and leaves it off Hub", () => {
+    const employee = listSuiteIncomeTypes("employee").map((row) => row.id);
+    const trader = listSuiteIncomeTypes("sole_trader").map((row) => row.id);
+    const partnership = listSuiteIncomeTypes("partnership").map((row) => row.id);
+    expect(employee).toContain("business_income");
+    expect(trader).toContain("business_income");
+    expect(partnership).not.toContain("business_income");
+    expect(partnership).toContain("services_income");
+    expect(listHubIncomeTypes().map((row) => row.id)).not.toContain("business_income");
+    const label = listSuiteIncomeTypes("employee").find((row) => row.id === "business_income").label;
+    expect(label).toMatch(/Business sales/i);
   });
 });
 

@@ -12,7 +12,7 @@ describe("Go Taxation Suite entity types", () => {
     const emp = suite.listMenuIncomeTypes("employee").map((t) => t.id);
     const st = suite.listMenuIncomeTypes("sole_trader").map((t) => t.id);
     expect(emp).toContain("salary_wages");
-    expect(emp).not.toContain("business_income");
+    expect(emp).toContain("business_income");
     expect(st).toContain("business_income");
     expect(st).toContain("salary_wages");
   });

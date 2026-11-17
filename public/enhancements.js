@@ -1487,12 +1487,8 @@
             };
             if (ocr.fuelTaxCredit && !document.body.classList.contains("gotax-suite")) {
               const box = document.getElementById(purpose === "income" ? "income-scan-result" : "scan-result");
-              if (box && !box.querySelector("[data-ftc]")) {
-                const note = document.createElement("p");
-                note.className = "tag warn";
-                note.setAttribute("data-ftc", "1");
-                note.textContent = ocr.fuelTaxCredit.note;
-                box.appendChild(note);
+              if (box && !box.querySelector("[data-ftc]") && typeof window.haulageRenderFuelTaxCredit === "function") {
+                window.haulageRenderFuelTaxCredit(box, ocr.fuelTaxCredit);
               }
             }
             // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
@@ -17100,6 +17096,106 @@
   "use strict";
   /* global readScanConfirmPayload, pendingReceiptConfirm, readIncomeScanConfirmPayload, renderReport */
 
+  function outsideFyChecked() {
+    const input = document.querySelector(
+      "#scan-result [data-fy-ack] input, #income-scan-result [data-fy-ack] input, #enh-awaiting-modal [data-fy-ack] input, #enh-await-fy-ok"
+    );
+    return Boolean(input && input.checked);
+  }
+
+  function applyOutsideFyAck(payload, pending) {
+    const warning = pending && pending.ocrResult && pending.ocrResult.fyWarning;
+    if (!warning) return;
+    payload.acknowledgeOutsideFy = outsideFyChecked();
+  }
+
+  function applySelectedFuelTaxUse(credit) {
+    const picked = document.querySelector('input[name="enh-ftc-use"]:checked');
+    const use = picked && picked.value ? picked.value : credit.use || "on_road";
+    const opt = (credit.options || []).find((row) => row.id === use);
+    if (!opt) return { use, credit };
+    return {
+      use,
+      credit: {
+        ...credit,
+        use: opt.id,
+        centsPerLitre: opt.centsPerLitre,
+        amount: opt.amount,
+        note: `${opt.label}: ${credit.litres} L × ${opt.centsPerLitre}c = $${Number(opt.amount).toFixed(2)}. BAS label 7D estimate. Not a lodged claim.`,
+      },
+    };
+  }
+
+  function mountOutsideFyAck() {
+    const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
+    const warning = pending && pending.ocrResult && pending.ocrResult.fyWarning;
+    if (!warning) return;
+    ["scan-result", "income-scan-result"].forEach((id) => {
+      const box = document.getElementById(id);
+      if (!box || !box.querySelector(".scan-confirm") || box.querySelector("[data-fy-ack]")) return;
+      const actions = box.querySelector(".scan-confirm-actions");
+      const label = document.createElement("label");
+      label.className = "checkbox enh-fy-ack";
+      label.setAttribute("data-fy-ack", "1");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      const text = document.createElement("span");
+      text.textContent = `${warning} Tick this box to save it anyway.`;
+      label.appendChild(input);
+      label.appendChild(text);
+      if (actions && actions.parentElement) actions.parentElement.insertBefore(label, actions);
+      else box.appendChild(label);
+    });
+  }
+
+  function blockUnacknowledgedOutsideFy(event) {
+    const btn = event.target && event.target.closest && event.target.closest(
+      "#scan-confirm-yes, #scan-confirm-apply, #income-confirm-yes"
+    );
+    if (!btn) return;
+    const root = btn.closest("#scan-result, #income-scan-result, .scan-confirm");
+    const input = root && root.querySelector("[data-fy-ack] input");
+    if (!input || input.checked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window.toast === "function") {
+      window.toast("Tick the box to save a date outside the selected financial year");
+    }
+    input.focus();
+  }
+
+  window.haulageRenderFuelTaxCredit = function haulageRenderFuelTaxCredit(box, credit) {
+    if (!box || !credit || box.querySelector("[data-ftc]")) return;
+    const field = document.createElement("fieldset");
+    field.className = "enh-ftc";
+    field.setAttribute("data-ftc", "1");
+    const legend = document.createElement("legend");
+    legend.textContent = `Fuel tax credit (BAS 7D) from ${credit.litres} L`;
+    field.appendChild(legend);
+    const options = credit.options && credit.options.length
+      ? credit.options
+      : [{ id: credit.use || "on_road", label: "Heavy vehicle on public roads", centsPerLitre: credit.centsPerLitre, amount: credit.amount }];
+    options.forEach((opt) => {
+      const label = document.createElement("label");
+      label.className = "checkbox";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "enh-ftc-use";
+      input.value = opt.id;
+      if (opt.id === (credit.use || "on_road")) input.checked = true;
+      const text = document.createElement("span");
+      text.textContent = `${opt.label} — ${opt.centsPerLitre}c/L = $${Number(opt.amount).toFixed(2)}`;
+      label.appendChild(input);
+      label.appendChild(text);
+      field.appendChild(label);
+    });
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Rates are the ATO fuel tax credit table for the purchase date. Not a lodged claim.";
+    field.appendChild(note);
+    box.appendChild(field);
+  };
+
   function pinCategory(select, id) {
     if (!select || !id) return;
     if (![...select.options].some((opt) => opt.value === id)) {
@@ -17118,6 +17214,7 @@
     function wrapped(showDetails) {
       const payload = orig(showDetails);
       const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
+      applyOutsideFyAck(payload, pending);
       const suggested = pending && pending.ocrResult && pending.ocrResult.suggestedCategory;
       if (!suggested) return payload;
       const select = document.getElementById("scan-confirm-category");
@@ -17126,10 +17223,11 @@
       if (!showDetails || !chosen) payload.category = suggested;
       else payload.category = chosen;
       if (pending.ocrResult && pending.ocrResult.fuelTaxCredit) {
-        payload.fuelTaxCredit = pending.ocrResult.fuelTaxCredit;
-        payload.dieselLitres = pending.ocrResult.fuelTaxCredit.litres;
+        const fuelPick = applySelectedFuelTaxUse(pending.ocrResult.fuelTaxCredit);
+        payload.fuelTaxCredit = fuelPick.credit;
+        payload.fuelTaxCreditUse = fuelPick.use;
+        payload.dieselLitres = fuelPick.credit.litres;
       }
-      if (pending.ocrResult && pending.ocrResult.fyWarning) payload.acknowledgeOutsideFy = true;
       return payload;
     }
     wrapped.__shownCategory = true;
@@ -17147,7 +17245,7 @@
       if (select && o.suggestedIncomeType) pinCategory(select, o.suggestedIncomeType);
       if (select && select.value) payload.type = select.value;
       else if (!payload.type && o.suggestedIncomeType) payload.type = o.suggestedIncomeType;
-      if (o.fyWarning) payload.acknowledgeOutsideFy = true;
+      applyOutsideFyAck(payload, pending);
       return payload;
     }
     wrapped.__typeRequired = true;
@@ -17199,6 +17297,16 @@
     installSaveShownCategory();
     installIncomeTypeRequired();
     hideHubCarTab();
+    if (!document.documentElement.dataset.fyAckBound) {
+      document.documentElement.dataset.fyAckBound = "1";
+      document.addEventListener("click", blockUnacknowledgedOutsideFy, true);
+      const watch = new MutationObserver(() => mountOutsideFyAck());
+      ["scan-result", "income-scan-result"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) watch.observe(el, { childList: true, subtree: true });
+      });
+    }
+    mountOutsideFyAck();
     if (typeof renderReport === "function" && !renderReport.__eofyIndicators) {
       const orig = renderReport;
       function wrapped() {

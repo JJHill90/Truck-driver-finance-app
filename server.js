@@ -24,7 +24,7 @@ const {
   applyIncomePrimaryToOcr,
 } = require("./lib/income-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
-const { applyTaxInvoiceToOcr } = require("./lib/income-invoice");
+const { applyTaxInvoiceToOcr, incomeTypeForInvoice } = require("./lib/income-invoice");
 const { applyDescription } = require("./lib/scan-description");
 const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
 const { estimateFuelTaxCredit } = require("./lib/fuel-tax-credit");
@@ -3971,7 +3971,7 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
         entityType
       );
       if (ocrResult.documentKind === "tax_invoice" && ocrResult.suggestedIncomeType === "salary_wages") {
-        ocrResult.suggestedIncomeType = entityType === "sole_trader" ? "business_income" : "other_income";
+        ocrResult.suggestedIncomeType = incomeTypeForInvoice("suite", entityType);
       }
     } else if (ocrResult.suggestedIncomeType) {
       ocrResult.suggestedIncomeType = normalizeIncomeTypeId(ocrResult.suggestedIncomeType);
@@ -3995,6 +3995,7 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
       const credit = estimateFuelTaxCredit({
         date: ocrResult.date,
         text: `${ocrResult.vendor || ""}\n${ocrResult.rawText || ocrResult.description || ""}`,
+        use: "on_road",
       });
       if (credit && /fuel|diesel|adblue/i.test(String(ocrResult.suggestedCategory || ""))) {
         ocrResult.fuelTaxCredit = credit;
@@ -4494,15 +4495,20 @@ api.post("/receipts/:id/confirm", (req, res) => {
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, expensePayload);
   if (blockDuplicateLedger(res, records, "expense", expensePayload, receipt && receipt.id)) return;
   if (productOf(req) !== "suite") {
-    const credit =
-      expensePayload.fuelTaxCredit ||
-      estimateFuelTaxCredit({
-        date: expensePayload.date,
-        litres: expensePayload.dieselLitres,
-        text: `${expensePayload.vendor || ""}\n${expensePayload.description || ""}\n${
-          (receipt && receipt.ocrResult && receipt.ocrResult.rawText) || ""
-        }`,
-      });
+    const chosenUse =
+      expensePayload.fuelTaxCreditUse ||
+      (expensePayload.fuelTaxCredit && expensePayload.fuelTaxCredit.use) ||
+      "on_road";
+    const credit = estimateFuelTaxCredit({
+      date: expensePayload.date,
+      litres:
+        expensePayload.dieselLitres ||
+        (expensePayload.fuelTaxCredit && expensePayload.fuelTaxCredit.litres),
+      text: `${expensePayload.vendor || ""}\n${expensePayload.description || ""}\n${
+        (receipt && receipt.ocrResult && receipt.ocrResult.rawText) || ""
+      }`,
+      use: chosenUse,
+    });
     if (credit && expensePayload.category === "fuel") expensePayload.fuelTaxCredit = credit;
   }
   const entry = storage.addExpense(records, expensePayload);
