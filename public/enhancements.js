@@ -1170,6 +1170,14 @@
     const fetchMethod = String(
       options.method || (args[0] && typeof args[0] === "object" && args[0].method) || "GET"
     ).toUpperCase();
+    const isLedgerWrite =
+      fetchMethod === "POST" &&
+      url &&
+      /\/(?:receipts\/[^/]+\/confirm|expenses|income)(?:\?|$)/.test(String(url));
+    if (isLedgerWrite) {
+      window.__haulageBlockRefreshAll = 0;
+      window.__haulageSkipNextRefreshAll = false;
+    }
     if (isQuietHeavyForecastGet(url, fetchMethod)) {
       const cached = cachedQuietForecastResponse(url);
       if (cached) return cached;
@@ -1337,7 +1345,16 @@
             else prevSignal.addEventListener("abort", () => controller.abort(), { once: true });
           }
           fetchOpts.signal = controller.signal;
-          const timeoutMs = looksPdf ? PDF_SCAN_TIMEOUT_MS : 90000;
+          if (ocrProgress.abortController) {
+            try {
+              ocrProgress.abortController.abort();
+            } catch {
+              /* previous scan */
+            }
+          }
+          ocrProgress.startedAt = null;
+          latest = null;
+          const timeoutMs = looksPdf ? Math.min(PDF_SCAN_TIMEOUT_MS, 40000) : 40000;
           scanTimeoutId = setTimeout(() => {
             try {
               controller.abort();
@@ -1457,6 +1474,7 @@
               vendorAbn: ocr.vendorAbn || null,
               vendor: ocr.vendor || ocr.entity || null,
               vendorNeedsInput: Boolean(ocr.vendorNeedsInput),
+              fuelTaxCredit: ocr.fuelTaxCredit || null,
               vendorUnidentifiedMessage:
                 ocr.vendorUnidentifiedMessage ||
                 "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?",
@@ -1467,6 +1485,12 @@
                 /pdf/i.test(mimeType) || /\.pdf$/i.test(String((data.receipt && data.receipt.filename) || "")),
               token: `${Date.now()}-${Math.random()}`,
             };
+            if (ocr.fuelTaxCredit && !document.body.classList.contains("gotax-suite")) {
+              const box = document.getElementById(purpose === "income" ? "income-scan-result" : "scan-result");
+              if (box && !box.querySelector("[data-ftc]") && typeof window.haulageRenderFuelTaxCredit === "function") {
+                window.haulageRenderFuelTaxCredit(box, ocr.fuelTaxCredit);
+              }
+            }
             // After a successful upload, refresh entitlements so the halfway Pro prompt can fire once.
             quietUiAfterScanSave();
             if (typeof window.haulageRefreshBilling === "function") {
@@ -1514,6 +1538,18 @@
       // Soft gate for paid features. GET /forecast is browse-safe so opening
       // Forecast or EOFY (which refreshes forecast) does not pop the modal.
       const res = await origFetch.apply(this, args);
+      if (res && res.ok && isLedgerWrite) {
+        window.__haulageBlockRefreshAll = 0;
+        window.__haulageSkipNextRefreshAll = false;
+        const scanAmount = document.getElementById("scan-confirm-amount");
+        if (scanAmount) scanAmount.value = "";
+        const manual = document.getElementById("manual-receipt-form");
+        if (manual && manual.elements && manual.elements.amount) manual.elements.amount.value = "";
+        const expenseForm = document.getElementById("expense-form");
+        if (expenseForm && expenseForm.elements && expenseForm.elements.amount) {
+          expenseForm.elements.amount.value = "";
+        }
+      }
       if (isLedgerSavePost(url, fetchMethod)) {
         const settled = await settleDuplicateSave(url, options, res);
         if (settled !== res) return settled;
@@ -1876,6 +1912,12 @@
 
   function promptMissingVendor(box) {
     if (!box || latest?.purpose !== "expense") return;
+    const shownVendor = (
+      (box.querySelector("#scan-confirm-vendor") || {}).value ||
+      latest.vendor ||
+      ""
+    ).trim();
+    if (shownVendor && !looksLikeJunkVendorClient(shownVendor)) return;
     if (!latest.vendorNeedsInput && !looksLikeJunkVendorClient(latest.vendor)) return;
     if (box.__enhVendorPrompted === latest.token) return;
     box.__enhVendorPrompted = latest.token;
@@ -5437,7 +5479,8 @@
             <select id="admin-profile-driver-type">
               <option value="local" ${profile.driverType === "local" ? "selected" : ""}>Local driver</option>
               <option value="short_haul" ${profile.driverType === "short_haul" ? "selected" : ""}>Short-haul driver</option>
-              <option value="long_haul" ${profile.driverType === "long_haul" || !profile.driverType ? "selected" : ""}>Linehaul driver</option>
+              <option value="" ${!profile.driverType ? "selected" : ""}>Unchanged</option>
+              <option value="long_haul" ${profile.driverType === "long_haul" ? "selected" : ""}>Linehaul driver</option>
               <option value="owner_driver" ${profile.driverType === "owner_driver" ? "selected" : ""}>Owner-driver / contractor</option>
             </select>
           </label>
@@ -6031,41 +6074,13 @@
     el.style.color = isError ? "var(--red)" : "";
   }
 
-  const BACKUP_AUTO_DL_KEY = "haulage-backup-autodownload-id";
   let adminBackupPollTimer = null;
 
-  function maybeAutoDownloadDailyBackup(rows) {
-    if (!Array.isArray(rows) || !rows.length) return;
-    const latest = rows[0];
-    if (!latest || !latest.id) return;
-    let seen = "";
-    try {
-      seen = localStorage.getItem(BACKUP_AUTO_DL_KEY) || "";
-    } catch {
-      seen = "";
-    }
-    if (seen === latest.id) return;
-    const created = new Date(latest.createdAt);
-    if (Number.isNaN(created.getTime())) return;
-    // Only auto-pull today's archive (so opening the panel after 5pm syncs it).
-    if (created.toDateString() !== new Date().toDateString()) return;
-    const ageMs = Date.now() - created.getTime();
-    if (ageMs < 0 || ageMs > 36 * 60 * 60 * 1000) return;
-    try {
-      localStorage.setItem(BACKUP_AUTO_DL_KEY, latest.id);
-    } catch {
-      /* ignore */
-    }
-    const href = `${API}/admin/backups/${encodeURIComponent(latest.id)}/download`;
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = latest.filename || `${latest.id}.tar.gz`;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setAdminBackupMessage(`Daily backup downloaded: ${latest.id}`);
-    if (window.toast) window.toast("Daily backup downloaded to this device");
+  function maybeAutoDownloadDailyBackup() {
+    // Backups stay on the server (and optional off-site storage). Never pull a
+    // haulage-backup archive into the browser — that downloaded a multi-hundred
+    // MB file during an admin save and locked the tab.
+    return;
   }
 
   function renderAdminBackups(payload) {
@@ -8288,9 +8303,10 @@
     const fy = currentFy();
     const weeks = collectLedgerWeeks(fy, cfg.categoryScope);
     const todayStart = weekStartMonday(toIsoLocal(new Date()));
+    const suiteLedger = document.body && document.body.classList.contains("gotax-suite");
     let chosen = getWeekFilter(cfg);
     if (chosen == null) {
-      chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
+      chosen = suiteLedger ? "all" : weeks.some((w) => w.start === todayStart) ? todayStart : "all";
       setWeekFilter(cfg, chosen);
     }
     if (chosen !== "all" && !weeks.some((w) => w.start === chosen)) {
@@ -9946,6 +9962,16 @@
   }
 
   function checkRollover() {
+    if (document.body && document.body.classList.contains("gotax-suite")) {
+      try {
+        if (!localStorage.getItem("haulage-ledger-week-expense")) {
+          localStorage.setItem("haulage-ledger-week-expense", "all");
+        }
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     const thisMon = currentWeekStart();
     if (!thisMon) return;
     const prev = getActiveWeekStart();
@@ -11382,8 +11408,11 @@
   function patchCategoryLabel() {
     if (typeof categoryLabel !== "function") return;
     const orig = categoryLabel;
-    globalThis.categoryLabel = function patchedCategoryLabel(id) {
+    globalThis.categoryLabel =   function patchedCategoryLabel(id) {
       try {
+        const cats = (state && state.standards && state.standards.categories) || [];
+        const general = cats.find((c) => c && c.id === id);
+        if (general && general.label) return general.label;
         const car =
           state &&
           state.standards &&
@@ -11532,7 +11561,10 @@
       setHint(select.value);
       syncWorkVehicleFromProfile();
     });
-    document.getElementById("driver-type")?.addEventListener("change", syncWorkVehicleFromProfile);
+    document.getElementById("driver-type")?.addEventListener("change", (ev) => {
+      if (ev && ev.isTrusted) ev.target.dataset.userSet = "1";
+      syncWorkVehicleFromProfile();
+    });
     document.getElementById("profile-work-combination")?.addEventListener("change", () => {
       const el = document.getElementById("profile-work-combination");
       if (el) el.dataset.userSet = "1";
@@ -13281,6 +13313,7 @@
     if (comboSelect) comboSelect.dataset.userSet = "";
     if (typeSelect && role.driverType) {
       typeSelect.value = role.driverType;
+      typeSelect.dataset.userSet = "1";
     }
     if (salaryInput && role.annualSalary != null) {
       salaryInput.value = String(role.annualSalary);
@@ -13633,10 +13666,32 @@
     const modal = document.createElement("div");
     modal.id = "enh-awaiting-modal";
     modal.className = "enh-dup-modal";
+    const incomeTypes =
+      (typeof state !== "undefined" && state.standards && state.standards.incomeTypes) || [];
+    const suggestedType = o.suggestedIncomeType || o.type || "";
+    const incomeTypeField = incomeTypes.length
+      ? `<label>Income type
+          <select id="enh-await-type" required>
+            <option value="">Choose income type…</option>
+            ${incomeTypes
+              .map(
+                (t) =>
+                  `<option value="${esc(t.id)}"${t.id === suggestedType ? " selected" : ""}>${esc(t.label)}</option>`
+              )
+              .join("")}
+          </select>
+        </label>`
+      : `<label>Income type<input type="text" id="enh-await-type" value="${esc(suggestedType)}" required /></label>`;
+    const fyNote = o.fyWarning
+      ? `<p class="tag warn">${esc(o.fyWarning)}</p>
+         <label class="checkbox"><input type="checkbox" id="enh-await-fy-ok" /> Save this date even though it is outside the selected financial year</label>`
+      : "";
+    const descValue = o.description || (Array.isArray(o.lineItems) && o.lineItems[0]) || "";
     const incomeFields =
       purpose === "income"
         ? `
           <label>Entity / company<input type="text" id="enh-await-entity" value="${esc(entity)}" /></label>
+          ${incomeTypeField}
           <label>Gross Pay ($)<input type="number" id="enh-await-gross" step="0.01" min="0" value="${esc(
             o.grossTotal ?? amount
           )}" /></label>
@@ -13664,8 +13719,9 @@
             purpose === "income" ? o.netPay ?? amount : amount
           )}" required /></label>
           <label class="span-2">Description<input type="text" id="enh-await-desc" value="${esc(
-            o.description || ""
+            descValue
           )}" /></label>
+          ${fyNote}
         </div>
         <div class="enh-dup-actions">
           <button type="button" class="btn secondary" data-enh-await-cancel>Cancel</button>
@@ -13687,6 +13743,16 @@
           return;
         }
         const grossVal = Number(document.getElementById("enh-await-gross")?.value) || amt;
+        const chosenType = document.getElementById("enh-await-type")?.value || "";
+        if (purpose === "income" && !chosenType) {
+          notify("Choose an income type before saving");
+          document.getElementById("enh-await-type")?.focus();
+          return;
+        }
+        if (o.fyWarning && !document.getElementById("enh-await-fy-ok")?.checked) {
+          notify("This date is outside the selected financial year — tick the box to save it anyway");
+          return;
+        }
         const payload =
           purpose === "income"
             ? {
@@ -13698,7 +13764,8 @@
                 taxableIncome: grossVal,
                 gstAmount: Number(document.getElementById("enh-await-gst")?.value) || 0,
                 netPay: amt,
-                type: o.suggestedIncomeType || o.type || "salary_wages",
+                type: chosenType,
+                acknowledgeOutsideFy: Boolean(o.fyWarning),
                 description: document.getElementById("enh-await-desc")?.value || o.description || "",
                 travelAllowanceAmount: (() => {
                   const taAmt = o.travelAllowance && Number(o.travelAllowance.amount);
@@ -13917,9 +13984,31 @@
     });
   }
 
+  function renderDashboardAwaiting() {
+    const host = document.getElementById("view-dashboard");
+    if (!host) return;
+    let banner = document.getElementById("enh-dashboard-awaiting");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "enh-dashboard-awaiting";
+      banner.className = "enh-awaiting-banner";
+      banner.setAttribute("role", "status");
+      host.insertBefore(banner, host.firstChild);
+    }
+    const count = listAwaiting("income").length + listAwaiting("expense").length;
+    if (!count) {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+      return;
+    }
+    banner.classList.remove("hidden");
+    banner.innerHTML = `<p><strong>${count} item${count === 1 ? "" : "s"} awaiting approval.</strong> Scanned photos stay in the gallery until you approve them onto the ledger.</p>`;
+  }
+
   function refreshUi() {
     renderBanner("income");
     renderBanner("expense");
+    renderDashboardAwaiting();
     decorateGalleryCards("income");
     decorateGalleryCards("expense");
   }
@@ -16862,6 +16951,14 @@
     const payload = Object.fromEntries(fd.entries());
     payload.annualSalary = payload.annualSalary === "" ? 0 : Number(payload.annualSalary);
     payload.tfnSupplied = fd.has("tfnSupplied");
+    const driverTypeEl = document.getElementById("driver-type");
+    if (driverTypeEl && driverTypeEl.dataset.userSet !== "1") {
+      const savedType =
+        (typeof state !== "undefined" && state.records && state.records.profile && state.records.profile.driverType) ||
+        "";
+      if (savedType) payload.driverType = savedType;
+      else delete payload.driverType;
+    }
     if (document.body.classList.contains("gotax-suite")) {
       const type = document.getElementById("driver-type");
       if (type && type.value) {
@@ -16992,4 +17089,237 @@
   } else {
     start();
   }
+})();
+
+/* Save the category shown on the scan card. Suite EOFY indicators. Hub fuel-tax-credit note. Hide the car tab on Hub. */
+(function () {
+  "use strict";
+  /* global readScanConfirmPayload, pendingReceiptConfirm, readIncomeScanConfirmPayload, renderReport */
+
+  function outsideFyChecked() {
+    const input = document.querySelector(
+      "#scan-result [data-fy-ack] input, #income-scan-result [data-fy-ack] input, #enh-awaiting-modal [data-fy-ack] input, #enh-await-fy-ok"
+    );
+    return Boolean(input && input.checked);
+  }
+
+  function applyOutsideFyAck(payload, pending) {
+    const warning = pending && pending.ocrResult && pending.ocrResult.fyWarning;
+    if (!warning) return;
+    payload.acknowledgeOutsideFy = outsideFyChecked();
+  }
+
+  function applySelectedFuelTaxUse(credit) {
+    const picked = document.querySelector('input[name="enh-ftc-use"]:checked');
+    const use = picked && picked.value ? picked.value : credit.use || "on_road";
+    const opt = (credit.options || []).find((row) => row.id === use);
+    if (!opt) return { use, credit };
+    return {
+      use,
+      credit: {
+        ...credit,
+        use: opt.id,
+        centsPerLitre: opt.centsPerLitre,
+        amount: opt.amount,
+        note: `${opt.label}: ${credit.litres} L × ${opt.centsPerLitre}c = $${Number(opt.amount).toFixed(2)}. BAS label 7D estimate. Not a lodged claim.`,
+      },
+    };
+  }
+
+  function mountOutsideFyAck() {
+    const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
+    const warning = pending && pending.ocrResult && pending.ocrResult.fyWarning;
+    if (!warning) return;
+    ["scan-result", "income-scan-result"].forEach((id) => {
+      const box = document.getElementById(id);
+      if (!box || !box.querySelector(".scan-confirm") || box.querySelector("[data-fy-ack]")) return;
+      const actions = box.querySelector(".scan-confirm-actions");
+      const label = document.createElement("label");
+      label.className = "checkbox enh-fy-ack";
+      label.setAttribute("data-fy-ack", "1");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      const text = document.createElement("span");
+      text.textContent = `${warning} Tick this box to save it anyway.`;
+      label.appendChild(input);
+      label.appendChild(text);
+      if (actions && actions.parentElement) actions.parentElement.insertBefore(label, actions);
+      else box.appendChild(label);
+    });
+  }
+
+  function blockUnacknowledgedOutsideFy(event) {
+    const btn = event.target && event.target.closest && event.target.closest(
+      "#scan-confirm-yes, #scan-confirm-apply, #income-confirm-yes"
+    );
+    if (!btn) return;
+    const root = btn.closest("#scan-result, #income-scan-result, .scan-confirm");
+    const input = root && root.querySelector("[data-fy-ack] input");
+    if (!input || input.checked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof window.toast === "function") {
+      window.toast("Tick the box to save a date outside the selected financial year");
+    }
+    input.focus();
+  }
+
+  window.haulageRenderFuelTaxCredit = function haulageRenderFuelTaxCredit(box, credit) {
+    if (!box || !credit || box.querySelector("[data-ftc]")) return;
+    const field = document.createElement("fieldset");
+    field.className = "enh-ftc";
+    field.setAttribute("data-ftc", "1");
+    const legend = document.createElement("legend");
+    legend.textContent = `Fuel tax credit (BAS 7D) from ${credit.litres} L`;
+    field.appendChild(legend);
+    const options = credit.options && credit.options.length
+      ? credit.options
+      : [{ id: credit.use || "on_road", label: "Heavy vehicle on public roads", centsPerLitre: credit.centsPerLitre, amount: credit.amount }];
+    options.forEach((opt) => {
+      const label = document.createElement("label");
+      label.className = "checkbox";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "enh-ftc-use";
+      input.value = opt.id;
+      if (opt.id === (credit.use || "on_road")) input.checked = true;
+      const text = document.createElement("span");
+      text.textContent = `${opt.label} — ${opt.centsPerLitre}c/L = $${Number(opt.amount).toFixed(2)}`;
+      label.appendChild(input);
+      label.appendChild(text);
+      field.appendChild(label);
+    });
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Rates are the ATO fuel tax credit table for the purchase date. Not a lodged claim.";
+    field.appendChild(note);
+    box.appendChild(field);
+  };
+
+  function pinCategory(select, id) {
+    if (!select || !id) return;
+    if (![...select.options].some((opt) => opt.value === id)) {
+      const label = typeof globalThis.categoryLabel === "function" ? globalThis.categoryLabel(id) : id;
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = label;
+      select.appendChild(opt);
+    }
+    select.value = id;
+  }
+
+  function installSaveShownCategory() {
+    if (typeof readScanConfirmPayload !== "function" || readScanConfirmPayload.__shownCategory) return;
+    const orig = readScanConfirmPayload;
+    function wrapped(showDetails) {
+      const payload = orig(showDetails);
+      const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
+      applyOutsideFyAck(payload, pending);
+      const suggested = pending && pending.ocrResult && pending.ocrResult.suggestedCategory;
+      if (!suggested) return payload;
+      const select = document.getElementById("scan-confirm-category");
+      if (showDetails && select) pinCategory(select, select.value || suggested);
+      const chosen = select && select.value;
+      if (!showDetails || !chosen) payload.category = suggested;
+      else payload.category = chosen;
+      if (pending.ocrResult && pending.ocrResult.fuelTaxCredit) {
+        const fuelPick = applySelectedFuelTaxUse(pending.ocrResult.fuelTaxCredit);
+        payload.fuelTaxCredit = fuelPick.credit;
+        payload.fuelTaxCreditUse = fuelPick.use;
+        payload.dieselLitres = fuelPick.credit.litres;
+      }
+      return payload;
+    }
+    wrapped.__shownCategory = true;
+    globalThis.readScanConfirmPayload = wrapped;
+  }
+
+  function installIncomeTypeRequired() {
+    if (typeof readIncomeScanConfirmPayload !== "function" || readIncomeScanConfirmPayload.__typeRequired) return;
+    const orig = readIncomeScanConfirmPayload;
+    function wrapped() {
+      const payload = orig();
+      const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
+      const o = (pending && pending.ocrResult) || {};
+      const select = document.getElementById("income-confirm-type");
+      if (select && o.suggestedIncomeType) pinCategory(select, o.suggestedIncomeType);
+      if (select && select.value) payload.type = select.value;
+      else if (!payload.type && o.suggestedIncomeType) payload.type = o.suggestedIncomeType;
+      applyOutsideFyAck(payload, pending);
+      return payload;
+    }
+    wrapped.__typeRequired = true;
+    globalThis.readIncomeScanConfirmPayload = wrapped;
+  }
+
+  function appendEofyIndicators() {
+    if (!document.body.classList.contains("gotax-suite")) return;
+    const report = typeof state !== "undefined" && state.report && state.report.summary;
+    const el = document.getElementById("report-content");
+    if (!report || !el || el.querySelector("[data-eofy-indicators]")) return;
+    const gst = report.gstTurnover;
+    const tax = report.taxEstimate || {};
+    const iawo = report.instantAssetWriteOffFlag;
+    if (!gst && !tax.brackets && !iawo) return;
+    const host = document.createElement("div");
+    host.className = "report-section";
+    host.setAttribute("data-eofy-indicators", "1");
+    const bracketRows = (tax.brackets || [])
+      .map((b) => `<div class="cap-row"><span>${b.label}</span><span>${Math.round(b.rate * 1000) / 10}%</span></div>`)
+      .join("");
+    host.innerHTML = `
+      <h3>GST, brackets and instant asset write-off</h3>
+      ${
+        gst
+          ? `<p><strong>GST $75,000 turnover:</strong> $${Number(gst.recorded || 0).toFixed(2)} recorded (${Number(gst.percent || 0).toFixed(0)}% of $${Number(gst.threshold).toLocaleString("en-AU")}). ${gst.overThreshold ? "Over the registration threshold." : `$${Number(gst.remaining || 0).toFixed(2)} still under it.`}</p>`
+          : ""
+      }
+      ${
+        tax.marginalRateLabel
+          ? `<p><strong>Marginal rate:</strong> ${tax.marginalRateLabel} on ${tax.bracketLabel || "the current bracket"}.</p><div class="cap-list">${bracketRows}</div>`
+          : ""
+      }
+      ${iawo ? `<p><strong>Instant asset write-off:</strong> ${iawo.note}</p>` : ""}
+      <p class="muted">${(report.substantiation && report.substantiation.message) || ""}</p>`;
+    el.appendChild(host);
+  }
+
+  function hideHubCarTab() {
+    if (document.body.classList.contains("gotax-suite")) return;
+    document.querySelectorAll('[data-view="car-expenses"]').forEach((btn) => {
+      btn.hidden = true;
+    });
+    const view = document.getElementById("view-car-expenses");
+    if (view) view.hidden = true;
+  }
+
+  function start() {
+    installSaveShownCategory();
+    installIncomeTypeRequired();
+    hideHubCarTab();
+    if (!document.documentElement.dataset.fyAckBound) {
+      document.documentElement.dataset.fyAckBound = "1";
+      document.addEventListener("click", blockUnacknowledgedOutsideFy, true);
+      const watch = new MutationObserver(() => mountOutsideFyAck());
+      ["scan-result", "income-scan-result"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) watch.observe(el, { childList: true, subtree: true });
+      });
+    }
+    mountOutsideFyAck();
+    if (typeof renderReport === "function" && !renderReport.__eofyIndicators) {
+      const orig = renderReport;
+      function wrapped() {
+        const result = orig.apply(this, arguments);
+        appendEofyIndicators();
+        return result;
+      }
+      wrapped.__eofyIndicators = true;
+      globalThis.renderReport = wrapped;
+    }
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+  setTimeout(start, 800);
 })();
