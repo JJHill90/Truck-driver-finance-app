@@ -144,7 +144,7 @@ describe("gallery uses PDF thumbs", () => {
     expect(src).toMatch(/__haulagePdfThumb/);
     expect(src).toMatch(/__suiteThumbFallback/);
     expect(src).toMatch(/function restorePdfIcon/);
-    expect(hub).toMatch(/enhancements\.js\?v=223/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=223/);
+    expect(hub).toMatch(/enhancements\.js\?v=224/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=224/);
   });
 });

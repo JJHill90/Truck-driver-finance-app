@@ -8,7 +8,7 @@ describe("suite patch notes", () => {
     expect(notes.length).toBeGreaterThan(1);
     expect(currentPatchNote().prNumber).toBe(HAULAGE_PR_NUMBER);
     expect(currentPatchNote().version).toBe(formatVersionLabel(HAULAGE_PR_NUMBER));
-    expect(currentPatchNote().version).toBe("Version 4.19");
+    expect(currentPatchNote().version).toBe("Version 4.20");
     for (let i = 1; i < notes.length; i += 1) {
       expect(notes[i - 1].prNumber).toBeGreaterThan(notes[i].prNumber);
       expect(notes[i].items.length).toBeGreaterThan(0);
