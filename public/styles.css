@@ -1610,6 +1610,16 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 
 
 /* Tables */
+#forecast-ato-return h3 { margin: 14px 0 6px; }
+#forecast-ato-return .ato-return-line {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+#forecast-ato-return .ato-return-amt {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
 table.data { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 table.data th, table.data td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
 table.data th { color: var(--text-dim); font-weight: 600; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
