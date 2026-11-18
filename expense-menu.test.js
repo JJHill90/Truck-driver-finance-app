@@ -19,20 +19,24 @@ describe("expense menu", () => {
     ensureMealsRegistered();
   });
 
-  it("hides the whole Vehicle & fuel group from general expense menus", () => {
+  it("shows Hub truck categories and hides car cents/km plus medical equipment", () => {
     const ids = listMenuCategories().map((c) => c.id);
     for (const id of HIDDEN_FROM_MENU) {
       expect(ids).not.toContain(id);
     }
     expect(ids).not.toContain("vehicle_car");
-    expect(ids).not.toContain("registration_insurance");
-    expect(ids).not.toContain("fuel");
-    expect(ids).not.toContain("tyres");
-    expect(ids).not.toContain("repairs_maintenance");
-    expect(ids).not.toContain("parking_tolls");
-    expect(ids).not.toContain("vehicle_truck");
-    expect(listMenuCategoryGroups()).not.toContain("Vehicle & fuel");
-    expect(listMenuCategories().some((c) => c.group === "Vehicle & fuel")).toBe(false);
+    expect(ids).not.toContain("compulsory_assessment");
+    expect(ids).toContain("fuel");
+    expect(ids).toContain("tyres");
+    expect(ids).toContain("repairs_maintenance");
+    expect(ids).toContain("parking_tolls");
+    expect(ids).toContain("registration_insurance");
+    const byId = Object.fromEntries(listMenuCategories().map((c) => [c.id, c.label]));
+    expect(byId.fuel).toBe("Truck fuel & AdBlue");
+    expect(byId.fuel).not.toMatch(/work car/i);
+    expect(byId.parking_tolls).toBe("Tolls & road user charges");
+    expect(byId.repairs_maintenance).toBe("Repairs & maintenance");
+    expect(listMenuCategoryGroups()).toContain("Vehicle & fuel");
   });
 
   it("exposes ATO car-related categories for Car Expenses/Claims", () => {
@@ -58,6 +62,7 @@ describe("expense menu", () => {
     expect(menuIds).toContain("meals");
     expect(menuIds).toContain("laundry");
     expect(menuIds).not.toContain("vehicle_car");
+    expect(menuIds).toContain("fuel");
     expect(carIds).toContain("vehicle_car");
   });
 
@@ -68,7 +73,7 @@ describe("expense menu", () => {
     expect(ids).toContain("meals_lunch");
     expect(ids).toContain("meals_dinner");
     const meals = listMenuCategories().find((c) => c.id === "meals");
-    expect(meals.label).toBe("Food/Meals (Daily)");
+    expect(meals.label).toBe("Overnight travel meals");
     const expected =
       TRUCK_DRIVER_MEALS.breakfast.cap +
       TRUCK_DRIVER_MEALS.lunch.cap +
@@ -77,15 +82,9 @@ describe("expense menu", () => {
     expect(COMBINED_MEALS_CAP).toBeCloseTo(expected, 2);
   });
 
-  it("puts Medical equipment under a Medical group", () => {
-    const medical = listMenuCategories().find((c) => c.id === "compulsory_assessment");
-    expect(medical).toBeTruthy();
-    expect(medical.label).toBe("Medical equipment");
-    expect(medical.group).toBe(MEDICAL_GROUP);
-    expect(listMenuCategoryGroups()).toContain("Medical");
-    expect(listMenuCategoryGroups().indexOf("Medical")).toBeGreaterThan(
-      listMenuCategoryGroups().indexOf("Professional & fees")
-    );
+  it("does not put Suite medical equipment on the Hub menu", () => {
+    expect(listMenuCategories().some((c) => c.id === "compulsory_assessment")).toBe(false);
+    expect(listMenuCategoryGroups()).not.toContain(MEDICAL_GROUP);
     const byId = Object.fromEntries(listMenuCategories().map((c) => [c.id, c.label]));
     expect(byId.cleaning_supplies).toBe(LABEL_OVERRIDES.cleaning_supplies);
     expect(byId.office_admin).toBe(LABEL_OVERRIDES.office_admin);

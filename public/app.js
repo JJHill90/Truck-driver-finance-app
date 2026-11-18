@@ -71,8 +71,16 @@ async function api(path, opts = {}) {
       ...opts,
     });
   } catch (err) {
+    if (err && err.name === "AbortError") throw err;
     if (window.location.protocol === "file:") {
       throw new Error("Open the app at http://localhost:3000/haulage/ — not as a local file.");
+    }
+    const host = String(window.location.hostname || "");
+    const local = host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+    if (!local) {
+      throw new Error(
+        "Network error — check your connection and try again. If the site was idle, wait a moment and retry (the server may be waking up)."
+      );
     }
     throw new Error(
       `Network error — start the server (npm start) and use http://localhost:${window.location.port || 3000}/haulage/`
