@@ -1336,25 +1336,27 @@
           (typeof FormData !== "undefined" && fetchOpts.body instanceof FormData);
         let scanTimeoutId = null;
         let scanProgressStopped = false;
-        {
-          const controller = new AbortController();
-          ocrProgress.abortController = controller;
-          const prevSignal = fetchOpts.signal;
-          if (prevSignal) {
-            if (prevSignal.aborted) controller.abort();
-            else prevSignal.addEventListener("abort", () => controller.abort(), { once: true });
+        const previousAbort = ocrProgress.abortController;
+        const controller = new AbortController();
+        if (previousAbort && previousAbort !== controller) {
+          try {
+            previousAbort.abort();
+          } catch {
+            /* previous scan */
           }
-          fetchOpts.signal = controller.signal;
-          if (ocrProgress.abortController) {
-            try {
-              ocrProgress.abortController.abort();
-            } catch {
-              /* previous scan */
-            }
-          }
-          ocrProgress.startedAt = null;
-          latest = null;
-          const timeoutMs = looksPdf ? Math.min(PDF_SCAN_TIMEOUT_MS, 40000) : 40000;
+        }
+        ocrProgress.abortController = controller;
+        const prevSignal = fetchOpts.signal;
+        if (prevSignal && prevSignal !== controller.signal) {
+          if (prevSignal.aborted) controller.abort();
+          else prevSignal.addEventListener("abort", () => controller.abort(), { once: true });
+        }
+        fetchOpts.signal = controller.signal;
+        ocrProgress.startedAt = null;
+        latest = null;
+        const timeoutMs = looksPdf ? Math.min(PDF_SCAN_TIMEOUT_MS, 40000) : 40000;
+
+        try {
           scanTimeoutId = setTimeout(() => {
             try {
               controller.abort();
@@ -1362,14 +1364,11 @@
               /* ignore */
             }
           }, timeoutMs);
-        }
 
-        startOcrProgress(purpose, initialPhase);
-        // Let the first paint + spinner start before the upload work.
-        await yieldToUi();
-        paintOcrProgress();
-
-        try {
+          startOcrProgress(purpose, initialPhase);
+          // Let the first paint + spinner start before the upload work.
+          await yieldToUi();
+          paintOcrProgress();
           let res = await origFetch.call(this, url, fetchOpts);
           let status = res.status;
           let data = null;
