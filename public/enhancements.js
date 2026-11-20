@@ -795,7 +795,11 @@
       const s = window.state && window.state.summary;
       if (window.state && !isUsableSummary(s)) return;
       try {
-        return orig.apply(this, arguments);
+        const result = orig.apply(this, arguments);
+        if (typeof window.__haulageRenderDashboardAwaiting === "function") {
+          window.__haulageRenderDashboardAwaiting();
+        }
+        return result;
       } catch (err) {
         if (typeof console !== "undefined") console.warn("renderStats skipped:", err);
       }
@@ -1003,17 +1007,25 @@
     );
   }
 
-  /** Modal: possible duplicate detected — Continue or Cancel. */
+  let dupPromptPromise = null;
+  let dupAckKey = "";
+
+  function duplicatePromptKey(data) {
+    const o = (data && data.ocrResult) || {};
+    const matches = (data && data.matches) || [];
+    const amount = o.amount ?? o.grossTotal ?? (matches[0] && matches[0].amount) ?? "";
+    const date = o.date || (matches[0] && matches[0].date) || "";
+    return `${date}|${amount}|${matches.map((m) => m.id).join(",")}`;
+  }
+
+  /** Modal: possible duplicate detected — Continue or Cancel. At most once per scan. */
   function promptDuplicateContinue(data) {
-    return new Promise((resolve) => {
+    const key = duplicatePromptKey(data);
+    if (key && key === dupAckKey) return Promise.resolve(true);
+    if (dupPromptPromise) return dupPromptPromise;
+    dupPromptPromise = new Promise((resolve) => {
       const existing = document.getElementById("enh-dup-modal");
-      if (existing) {
-        // A newer scan replaced this prompt — unblock any waiter.
-        if (typeof existing.__dupResolve === "function") {
-          existing.__dupResolve(false);
-        }
-        existing.remove();
-      }
+      if (existing) existing.remove();
 
       const matches = (data && data.matches) || [];
       const o = (data && data.ocrResult) || {};
@@ -1048,23 +1060,27 @@
         if (modal.__dupResolve !== resolve) return;
         modal.__dupResolve = null;
         modal.remove();
+        if (value && key) dupAckKey = key;
         resolve(value);
       };
       modal.querySelectorAll("[data-dup-cancel]").forEach((el) => {
         el.addEventListener("click", () => finish(false));
       });
       modal.querySelector("[data-dup-continue]")?.addEventListener("click", () => finish(true));
+    }).finally(() => {
+      dupPromptPromise = null;
     });
+    return dupPromptPromise;
   }
 
   function isLedgerSavePost(url, method) {
     if (String(method || "GET").toUpperCase() !== "POST") return false;
     const path = String(url || "").split("?")[0];
     return (
-      /\/api\/haulage\/expenses$/.test(path) ||
-      /\/api\/haulage\/income$/.test(path) ||
-      /\/api\/haulage\/receipts\/manual$/.test(path) ||
-      /\/api\/haulage\/receipts\/[^/]+\/confirm$/.test(path)
+      /\/api\/(?:haulage|suite)\/expenses$/.test(path) ||
+      /\/api\/(?:haulage|suite)\/income$/.test(path) ||
+      /\/api\/(?:haulage|suite)\/receipts\/manual$/.test(path) ||
+      /\/api\/(?:haulage|suite)\/receipts\/[^/]+\/confirm$/.test(path)
     );
   }
 
@@ -1941,6 +1957,13 @@
     return false;
   }
 
+  function vendorNeedsWarning(name) {
+    const s = String(name || "").trim();
+    if (!s) return true;
+    if (document.body && document.body.classList.contains("gotax-suite")) return false;
+    return looksLikeJunkVendorClient(s);
+  }
+
   function promptMissingVendor(box) {
     if (!box || latest?.purpose !== "expense") return;
     const shownVendor = (
@@ -1948,12 +1971,12 @@
       latest.vendor ||
       ""
     ).trim();
-    if (shownVendor && !looksLikeJunkVendorClient(shownVendor)) {
-      latest.vendor = shownVendor;
+    if (!vendorNeedsWarning(shownVendor)) {
+      latest.vendor = shownVendor || latest.vendor;
       latest.vendorNeedsInput = false;
       return;
     }
-    if (!latest.vendorNeedsInput && !looksLikeJunkVendorClient(latest.vendor)) return;
+    if (!latest.vendorNeedsInput && !vendorNeedsWarning(latest.vendor)) return;
     if (box.__enhVendorPrompted === latest.token) return;
     box.__enhVendorPrompted = latest.token;
 
@@ -2032,6 +2055,9 @@
       }
     }
     syncExpenseAbnFields(box);
+    if (typeof window.haulageAskFuelTaxCredit === "function") {
+      window.haulageAskFuelTaxCredit(box);
+    }
     if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
       window.haulageApplyProfilePresets({ forceWorkUse: false });
     }
@@ -2053,7 +2079,7 @@
       (ev) => {
         const vendorEl = box.querySelector("#scan-confirm-vendor");
         const value = vendorEl ? String(vendorEl.value || "").trim() : String(latest.vendor || "").trim();
-        if (!value || looksLikeJunkVendorClient(value)) {
+        if (vendorNeedsWarning(value)) {
           ev.preventDefault();
           ev.stopImmediatePropagation();
           const msg =
@@ -8558,6 +8584,40 @@
 
     updateLedgerTotal(cfg, table, fy, period, periodKind, sum);
     updateEmptyNote(cfg, panel, fy, period, periodKind, shown, total);
+    if (cfg.type === "expense") paintMealAllowanceNotes(list);
+  }
+
+  function paintMealAllowanceNotes(list) {
+    if (!list || (document.body && document.body.classList.contains("gotax-suite"))) return;
+    const allowances = typeof state !== "undefined" && state.summary && state.summary.allowances;
+    const meals = allowances && allowances.truckDriverMealsDaily;
+    if (!meals) return;
+    const determination = allowances.determination || "TD 2026/4";
+    const keyFor = {
+      meals_breakfast: "breakfast",
+      meals_lunch: "lunch",
+      meals_dinner: "dinner",
+      meals: "dinner",
+    };
+    list.querySelectorAll("tr[data-expense-id]").forEach((tr) => {
+      const key = keyFor[tr.getAttribute("data-category") || ""];
+      const cap = key && meals[key] && Number(meals[key].cap);
+      let note = tr.querySelector(".enh-meal-allowance");
+      if (!(cap > 0)) {
+        if (note) note.remove();
+        return;
+      }
+      const amount = Number(tr.getAttribute("data-amount")) || 0;
+      const within = amount <= cap;
+      const text = `${determination} ${key} reasonable amount $${cap.toFixed(2)} — ${within ? "within" : "over"} the allowance`;
+      if (!note) {
+        note = document.createElement("div");
+        note.className = "muted enh-meal-allowance";
+        const cell = tr.querySelector("td:nth-child(3)") || tr.lastElementChild;
+        if (cell) cell.appendChild(note);
+      }
+      if (note.textContent !== text) note.textContent = text;
+    });
   }
 
   function periodTotalLabel(fy, period, periodKind) {
@@ -11878,7 +11938,11 @@
     mailto,
     error,
   }) {
-    const inbox = supportEmail || "support@godriverhub.com";
+    const inbox =
+      supportEmail ||
+      (document.body && document.body.classList.contains("gotax-suite")
+        ? "support@gotaxationsuite.com"
+        : "support@godriverhub.com");
     const wrap = document.createElement("div");
     wrap.className = "support-confirm-notice";
 
@@ -11950,7 +12014,11 @@
 
       const emailed = Boolean(data.emailed);
       const confirmationSent = Boolean(data.confirmationSent);
-      const supportEmail = data.supportEmail || "support@godriverhub.com";
+      const supportEmail =
+        data.supportEmail ||
+        (document.body && document.body.classList.contains("gotax-suite")
+          ? "support@gotaxationsuite.com"
+          : "support@godriverhub.com");
 
       // The request is already saved on the server. Never show FormSubmit
       // activation (or a failed inbox) as an error — offer mailto as a copy.
@@ -12887,7 +12955,8 @@
   }
 
   function shouldReturnToCarExpenses(ctx) {
-    if (!ctx || ctx.suite) return false;
+    // Hub stays on Expenses. Suite returns to Car Expenses only when that view was already open.
+    if (!ctx || !ctx.suite) return false;
     if (!ctx.startedOnCar) return false;
     return CAR_CLAIM_IDS.has(ctx.category);
   }
@@ -12917,7 +12986,7 @@
     async function wrapped(entry, _message) {
       const suite = Boolean(document.body && document.body.classList.contains("gotax-suite"));
       const carView = document.getElementById("view-car-expenses");
-      const startedOnCar = Boolean(carView && !carView.classList.contains("hidden"));
+      const startedOnCar = Boolean(carView && carView.classList.contains("active"));
       revealSavedExpense(entry);
       await prev.apply(this, arguments);
       if (
@@ -14159,6 +14228,7 @@
     banner.classList.remove("hidden");
     banner.innerHTML = `<p><strong>${count} item${count === 1 ? "" : "s"} awaiting approval.</strong> Scanned photos stay in the gallery until you approve them onto the ledger.</p>`;
   }
+  window.__haulageRenderDashboardAwaiting = renderDashboardAwaiting;
 
   function refreshUi() {
     renderBanner("income");
@@ -16670,7 +16740,11 @@
         } catch {
           /* ignore quota / private mode */
         }
-        setTimeout(() => window.location.reload(), 600);
+        window.__haulageBlockRefreshAll = 0;
+        window.__haulageSkipNextRefreshAll = false;
+        if (typeof window.refreshAll === "function") {
+          await window.refreshAll();
+        }
       }
     } catch (err) {
       setStatus(panel, (err && err.message) || "Import failed.", true);
@@ -17433,6 +17507,53 @@
     input.focus();
   }
 
+  window.haulageAskFuelTaxCredit = function haulageAskFuelTaxCredit(box) {
+    if (!box || document.body.classList.contains("gotax-suite")) return;
+    if (box.querySelector("[data-ftc-ask]")) return;
+    const cat = document.getElementById("scan-confirm-category");
+    const category = (cat && cat.value) || "";
+    const blob = `${category} ${box.textContent || ""}`;
+    if (category !== "fuel" && !/\bdiesel\b/i.test(blob)) return;
+    const field = document.createElement("fieldset");
+    field.className = "enh-ftc";
+    field.setAttribute("data-ftc-ask", "1");
+    const legend = document.createElement("legend");
+    legend.textContent = "Fuel tax credit (BAS 7D)";
+    field.appendChild(legend);
+    const litresLabel = document.createElement("label");
+    litresLabel.textContent = "Diesel litres";
+    const litres = document.createElement("input");
+    litres.type = "number";
+    litres.id = "enh-ftc-litres";
+    litres.min = "0";
+    litres.step = "0.01";
+    litres.placeholder = "Litres of diesel";
+    litresLabel.appendChild(litres);
+    field.appendChild(litresLabel);
+    [
+      ["on_road", "On public roads"],
+      ["off_road", "Off-road or auxiliary (higher rate)"],
+    ].forEach(([id, text], index) => {
+      const label = document.createElement("label");
+      label.className = "checkbox";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "enh-ftc-use";
+      input.value = id;
+      if (index === 0) input.checked = true;
+      const span = document.createElement("span");
+      span.textContent = text;
+      label.appendChild(input);
+      label.appendChild(span);
+      field.appendChild(label);
+    });
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Enter the diesel litres. The ATO rate for that date is applied when you approve. BAS label 7D. Not a lodged claim.";
+    field.appendChild(note);
+    box.appendChild(field);
+  };
+
   window.haulageRenderFuelTaxCredit = function haulageRenderFuelTaxCredit(box, credit) {
     if (!box || !credit || box.querySelector("[data-ftc]")) return;
     const field = document.createElement("fieldset");
@@ -17497,6 +17618,11 @@
         payload.fuelTaxCreditUse = fuelPick.use;
         payload.dieselLitres = fuelPick.credit.litres;
       }
+      const litresEl = document.getElementById("enh-ftc-litres");
+      const litres = litresEl ? Number(litresEl.value) : NaN;
+      if (Number.isFinite(litres) && litres > 0) payload.dieselLitres = litres;
+      const useEl = document.querySelector('input[name="enh-ftc-use"]:checked');
+      if (useEl && useEl.value) payload.fuelTaxCreditUse = useEl.value;
       return payload;
     }
     wrapped.__shownCategory = true;
@@ -17519,6 +17645,19 @@
     }
     wrapped.__typeRequired = true;
     globalThis.readIncomeScanConfirmPayload = wrapped;
+  }
+
+  function appendHubGstTracker() {
+    if (document.body.classList.contains("gotax-suite")) return;
+    const report = typeof state !== "undefined" && state.report;
+    const gst = report && report.hubGstRegistration;
+    const el = document.getElementById("report-content");
+    if (!gst || !el || el.querySelector("[data-hub-gst]")) return;
+    const host = document.createElement("div");
+    host.className = "report-section";
+    host.setAttribute("data-hub-gst", "1");
+    host.innerHTML = `<h3>GST registration tracker</h3><p><strong>$${Number(gst.recorded || 0).toFixed(2)}</strong> of business income recorded (${Number(gst.percent || 0).toFixed(0)}% of $${Number(gst.threshold).toLocaleString("en-AU")}). ${gst.overThreshold ? "Over the registration threshold." : `$${Number(gst.remaining || 0).toFixed(2)} still under it.`} Salary, wages and allowances are not counted.</p><p class="muted">${gst.note || ""}</p>`;
+    el.appendChild(host);
   }
 
   function appendEofyIndicators() {
@@ -17581,6 +17720,7 @@
       function wrapped() {
         const result = orig.apply(this, arguments);
         appendEofyIndicators();
+        appendHubGstTracker();
         return result;
       }
       wrapped.__eofyIndicators = true;

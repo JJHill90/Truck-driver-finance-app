@@ -1660,7 +1660,7 @@ function renderExpenseList() {
           const isDraft = e.id === "__draft__" || e.draft;
           const inPeriod = e.date >= range.start && e.date <= range.end;
           const detail = [e.vendor, e.description].filter(Boolean).join(" · ") || "—";
-          return `<tr class="${isDraft ? "draft-row" : ""} ${inPeriod ? "in-period" : "out-of-period"}" data-expense-id="${e.id}">
+          return `<tr class="${isDraft ? "draft-row" : ""} ${inPeriod ? "in-period" : "out-of-period"}" data-expense-id="${e.id}" data-category="${escapeHtml(e.category || "")}" data-amount="${Number(e.amount) || 0}">
             <td>${fmtDate(e.date)}</td>
             <td>${escapeHtml(categoryLabel(e.category))}</td>
             <td>${escapeHtml(detail)}${isDraft ? ' <span class="tag">unsaved</span>' : ""}${

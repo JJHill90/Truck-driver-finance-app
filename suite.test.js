@@ -152,7 +152,8 @@ describe("suite tax engine", () => {
     expect(report.title).toMatch(/Employee \(PAYG\)/);
     expect(report.title).not.toMatch(/Linehaul|truck|driver/i);
     expect(report.driver.driverTypeLabel).toMatch(/Employee/);
-    expect(report.disclaimer).toMatch(/not occupation-specific truck-driver/i);
+    expect(report.disclaimer).not.toMatch(/truck-driver/i);
+    expect(report.disclaimer).toMatch(/general PAYG, sole trader and partnership rules/);
   });
 });
 
