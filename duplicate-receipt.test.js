@@ -54,7 +54,7 @@ describe("findDuplicateMatches", () => {
       42.5
     );
     expect(matches.some((m) => m.source === "expense" && m.id === "e1")).toBe(true);
-    expect(matches.some((m) => m.source === "receipt" && m.id === "r1")).toBe(true);
+    expect(matches.some((m) => m.source === "receipt" && m.id === "r1")).toBe(false);
     expect(matches.some((m) => m.id === "e2")).toBe(false);
   });
 
@@ -96,7 +96,7 @@ describe("findDuplicateMatches", () => {
       42.5
     );
     expect(matches.some((m) => m.source === "expense" && m.id === "e1")).toBe(true);
-    expect(matches.some((m) => m.source === "receipt" && m.id === "r1")).toBe(true);
+    expect(matches.some((m) => m.source === "receipt" && m.id === "r1")).toBe(false);
     expect(matches.some((m) => m.id === "e2")).toBe(false);
   });
 
@@ -124,7 +124,7 @@ describe("findDuplicateMatches", () => {
       42.5
     );
     expect(matches.some((m) => m.id === "e1")).toBe(false);
-    expect(matches.some((m) => m.id === "r1")).toBe(true);
+    expect(matches.some((m) => m.id === "r1")).toBe(false);
   });
 
   it("does not treat the receipt being approved as its own duplicate", () => {
@@ -141,12 +141,13 @@ describe("findDuplicateMatches", () => {
 
   it("matches a labeled filename when the stored scan date differs", () => {
     const labeled = {
-      expenses: [],
+      expenses: [{ id: "e9", date: "2026-01-01", vendor: "Other", amount: 5 }],
       income: [],
       receipts: [
         {
           id: "r2",
           purpose: "expense",
+          linkedExpenseId: "e9",
           filename: "23.07.26 AUD$42.50.jpg",
           ocrResult: { date: "2026-01-01", vendor: "TAX INVOICE", amount: 1.5 },
         },

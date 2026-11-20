@@ -28,6 +28,7 @@ const { applyTaxInvoiceToOcr, incomeTypeForInvoice } = require("./lib/income-inv
 const { applyDescription } = require("./lib/scan-description");
 const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
 const { estimateFuelTaxCredit } = require("./lib/fuel-tax-credit");
+const { buildHubGstTracker } = require("./lib/hub-gst-tracker");
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
@@ -2979,7 +2980,9 @@ api.get("/records", (req, res) => {
   const records = withActiveLedger(full);
   const activeIncome = records.income || [];
   const activeExpenses = records.expenses || [];
-  const receipts = (records.receipts || []).map((r) => {
+  const receipts = (records.receipts || [])
+    .filter((r) => r && !r.deletedAt)
+    .map((r) => {
     const base = {
       ...r,
       hasImage: Boolean(r.imagePath),
@@ -3259,6 +3262,7 @@ api.get("/report", (req, res) => {
     report.summary = suite.summariseYear(records, profile);
   } else {
     applyHistoricalRates(report.summary, records, fy);
+    report.hubGstRegistration = buildHubGstTracker(records, fy);
   }
   stampReport(report, profile, productOf(req));
   attachLodgementBrief(report, records, profile, {
@@ -5032,7 +5036,7 @@ api.post("/support/contact", async (req, res) => {
   const ent = username ? resolveReqEntitlements(req) : null;
   const priority = Boolean(ent && ent.canPrioritySupport);
   const saved = support.saveContactMessage({ name, email, phone, message, username, priority });
-  const inbox = support.supportInbox();
+  const inbox = support.supportInbox(productOf(req));
   let mailResult = { sent: false, confirmationSent: false, to: inbox };
   try {
     mailResult = await mail.sendSupportEmail({
