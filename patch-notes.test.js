@@ -33,9 +33,10 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(225);
-    expect(notes[0].label).toBe("Version 4.21");
-    expect(notes[0].bullets.join("\n")).toMatch(/individual tax return labels/);
+    expect(notes[0].prNumber).toBe(226);
+    expect(notes[0].label).toBe("Version 4.22");
+    expect(notes[0].bullets.join("\n")).toMatch(/Saving remittance/);
+    expect(notes[0].bullets.join("\n")).toMatch(/BAS G1/);
     const scanFix = notes.find((note) => note.prNumber === 224);
     expect(scanFix && scanFix.label).toBe("Version 4.20");
     expect(scanFix.bullets.join("\n")).toMatch(/Scanning a receipt/);

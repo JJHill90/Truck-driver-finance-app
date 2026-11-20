@@ -321,10 +321,17 @@
     } else if (el) {
       el.classList.add("hidden");
     }
+    const pickId = ocrProgress.purpose === "income" ? "pick-income" : "pick-receipt";
+    const pick = document.getElementById(pickId);
+    if (pick && /saving|scanning|re-scanning|waiting/i.test(pick.textContent || "")) {
+      pick.disabled = false;
+      pick.textContent = "Upload file";
+    }
     ocrProgress.startedAt = 0;
     ocrProgress.passStartedAt = 0;
     ocrProgress.phase = "reading";
   }
+  window.__haulageStopOcrProgress = stopOcrProgress;
 
   /**
    * Firefox freezes when app.js JSON.stringify's a multi-MB PDF data-URL.
@@ -434,8 +441,18 @@
   }
 
   function haulageApiRoot() {
-    return `${window.location.origin}/api/haulage`;
+    const base = isGotaxSuitePage() ? "/api/suite" : "/api/haulage";
+    return `${window.location.origin}${base}`;
   }
+
+  /** Suite pages must not request the Hub mount. */
+  function rewriteSuiteApiUrl(url) {
+    if (!isGotaxSuitePage() || url == null) return url;
+    const s = String(url);
+    if (!/\/api\/haulage(?=\/|\?|$)/.test(s)) return s;
+    return s.replace(/\/api\/haulage(?=\/|\?|$)/g, "/api/suite");
+  }
+  window.__haulageRewriteSuiteApiUrl = rewriteSuiteApiUrl;
 
   function isGotaxSuitePage() {
     try {
@@ -1162,6 +1179,10 @@
   }
 
   window.fetch = async function (...args) {
+    if (typeof args[0] === "string") {
+      const rewritten = rewriteSuiteApiUrl(args[0]);
+      if (rewritten !== args[0]) args[0] = rewritten;
+    }
     let url = typeof args[0] === "string" ? args[0] : args[0] && args[0].url;
     let options = withSuiteProductHeader(args[1] || {});
     if (args[0] !== url || args[1] !== options) {
@@ -1814,9 +1835,18 @@
     }
   }
 
+  function assignTextIfChanged(node, text) {
+    if (!node) return false;
+    if (node.textContent === text) return false;
+    node.textContent = text;
+    return true;
+  }
+
   /**
    * Declutter income scan confirm: keep Gross Pay, GST, Net Pay + LAFHA days.
    * Hide Taxable / Period clutter (and detected-total Taxable chips).
+   * Writes are idempotent — rewriting the same label retriggered the observer
+   * and froze the tab on "Saving remittance / payslip…".
    */
   function declutterIncomeConfirm(box) {
     if (!box || latest?.purpose !== "income") return;
@@ -1829,29 +1859,32 @@
         row.remove();
         return;
       }
-      if (/^gross total$/i.test(t)) span.textContent = "Gross Pay";
-      if (/^net pay$/i.test(t)) span.textContent = "Net Pay";
-      if (/^gst$/i.test(t)) span.textContent = "GST";
+      if (/^gross total$/i.test(t)) assignTextIfChanged(span, "Gross Pay");
+      if (/^net pay$/i.test(t)) assignTextIfChanged(span, "Net Pay");
+      if (/^gst$/i.test(t)) assignTextIfChanged(span, "GST");
     });
 
     const relabel = (inputId, text) => {
       const input = box.querySelector(`#${inputId}`);
       const label = input && input.closest("label");
       if (!label || !input) return;
+      if (label.dataset.enhLabel === text) return;
       const nodes = Array.from(label.childNodes);
       for (const n of nodes) {
         if (n.nodeType === Node.TEXT_NODE && String(n.textContent || "").trim()) {
-          n.textContent = text;
+          assignTextIfChanged(n, text);
+          label.dataset.enhLabel = text;
           return;
         }
       }
       label.insertBefore(document.createTextNode(text), input);
+      label.dataset.enhLabel = text;
     };
 
     const hideInput = (inputId) => {
       const input = box.querySelector(`#${inputId}`);
       const label = input && input.closest("label");
-      if (label) label.style.display = "none";
+      if (label && label.style.display !== "none") label.style.display = "none";
     };
 
     hideInput("income-confirm-taxable");
@@ -1880,12 +1913,10 @@
         if (li) li.remove();
       }
       if (/^gross/i.test(label.trim())) {
-        const span = btn.querySelector("span");
-        if (span) span.textContent = "Gross Pay";
+        assignTextIfChanged(btn.querySelector("span"), "Gross Pay");
       }
       if (/^net/i.test(label.trim())) {
-        const span = btn.querySelector("span");
-        if (span) span.textContent = "Net Pay";
+        assignTextIfChanged(btn.querySelector("span"), "Net Pay");
       }
     });
   }
@@ -1894,6 +1925,7 @@
   function looksLikeJunkVendorClient(name) {
     const s = String(name || "").trim();
     if (!s) return true;
+    if (/^(bp|eg)$/i.test(s)) return false;
     if (/^(tax\s*invoice|invoice|receipt|abn\b|gst\b|total\b)/i.test(s)) return true;
     if (s.length <= 2) return true;
     const tokens = s.split(/\s+/).filter(Boolean);
@@ -1916,7 +1948,11 @@
       latest.vendor ||
       ""
     ).trim();
-    if (shownVendor && !looksLikeJunkVendorClient(shownVendor)) return;
+    if (shownVendor && !looksLikeJunkVendorClient(shownVendor)) {
+      latest.vendor = shownVendor;
+      latest.vendorNeedsInput = false;
+      return;
+    }
     if (!latest.vendorNeedsInput && !looksLikeJunkVendorClient(latest.vendor)) return;
     if (box.__enhVendorPrompted === latest.token) return;
     box.__enhVendorPrompted = latest.token;
@@ -1980,7 +2016,9 @@
 
   function enhanceBox(box) {
     if (!latest || !box) return;
+    if (box.__enhToken === latest.token) return;
     if (!box.querySelector(".scan-confirm")) return;
+    box.__enhToken = latest.token;
     ensureIncomeAbnField(box);
     ensureIncomeTravelFields(box);
     declutterIncomeConfirm(box);
@@ -1997,8 +2035,6 @@
     if (latest.purpose === "expense" && typeof window.haulageApplyProfilePresets === "function") {
       window.haulageApplyProfilePresets({ forceWorkUse: false });
     }
-    if (box.__enhToken === latest.token) return;
-    box.__enhToken = latest.token;
     const existing = box.querySelector("#enh-panel");
     if (existing) existing.remove();
     box.appendChild(buildPanel(latest));
@@ -2216,8 +2252,16 @@
   function observe(boxId, purpose) {
     const box = document.getElementById(boxId);
     if (!box) return;
+    let scheduled = false;
     const mo = new MutationObserver(() => {
-      if (latest && latest.purpose === purpose) enhanceBox(box);
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (!latest || latest.purpose !== purpose) return;
+        if (box.__enhToken === latest.token) return;
+        enhanceBox(box);
+      });
     });
     mo.observe(box, { childList: true, subtree: true });
   }
@@ -2723,12 +2767,22 @@
       type: document.getElementById("income-confirm-type")?.value || "salary_wages",
       description: document.getElementById("income-confirm-description")?.value || "",
     };
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {
+        /* already finished */
+      }
+    }, 20000);
+    stopOcrProgress({ silent: true });
     try {
       let res = await origFetch(`${haulageApiRoot()}/receipts/${encodeURIComponent(receiptId)}/confirm`, {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       let data = await res.json().catch(() => ({}));
       if (data && data.possibleDuplicate && !payload.forceDuplicate) {
@@ -2754,9 +2808,22 @@
           <p class="tag green">${fmt(amount)} added to income list</p>`;
       }
       if (typeof window.toast === "function") window.toast("Saved");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      window.__haulageBlockRefreshAll = 0;
+      window.__haulageSkipNextRefreshAll = false;
       if (typeof window.refreshAll === "function") await window.refreshAll();
     } catch (err) {
-      if (typeof window.toast === "function") window.toast(err.message || "Could not save totals");
+      const timedOut = err && err.name === "AbortError";
+      const message = timedOut
+        ? "Saving took too long. The document is still under Needs approval — open it from the gallery to finish."
+        : (err && err.message) || "Could not save totals";
+      if (box && !box.querySelector(".saving-error")) {
+        box.insertAdjacentHTML("beforeend", `<p class="muted saving-error">${esc(message)}</p>`);
+      }
+      if (typeof window.toast === "function") window.toast(message);
+    } finally {
+      clearTimeout(timer);
+      stopOcrProgress({ silent: true });
     }
   }
 
@@ -7509,7 +7576,8 @@
     const isCar = Boolean(cat && CAR_CLAIM_IDS.has(cat));
     // Receipts with no linked expense stay on the general gallery.
     if (scope === "car") return isCar;
-    if (scope === "general") return !isCar;
+    // General Expenses shows every saved receipt, including fuel and car claims.
+    if (scope === "general") return true;
     return true;
   }
 
@@ -8080,7 +8148,8 @@
     const cat = entry && entry.category;
     const isCar = Boolean(cat && CAR_CLAIM_IDS.has(cat));
     if (scope === "car") return isCar;
-    if (scope === "general") return !isCar;
+    // General Expenses shows every saved row, including fuel and car claims.
+    if (scope === "general") return true;
     return true;
   }
 
@@ -8297,6 +8366,26 @@
     return [...map.values()].sort((a, b) => b.start.localeCompare(a.start));
   }
 
+  function savedExpenseRows(fy, categoryScope) {
+    const rows = (typeof state !== "undefined" && state.records && state.records.expenses) || [];
+    return rows.filter((entry) => {
+      if (!entry || entry.deletedAt) return false;
+      if (fy && fyForDate(entry.date) !== fy) return false;
+      return entryMatchesCategoryScope(entry, categoryScope);
+    });
+  }
+
+  function fyHasSavedEntries(fy, categoryScope) {
+    return savedExpenseRows(fy, categoryScope).length > 0;
+  }
+
+  function weekHasSavedEntries(fy, weekStart, categoryScope) {
+    if (!weekStart) return false;
+    return savedExpenseRows(fy, categoryScope).some(
+      (entry) => weekStartMonday(entry.date) === weekStart
+    );
+  }
+
   function syncWeekOptions(cfg, select) {
     if (!select) return "all";
     const fy = currentFy();
@@ -8311,6 +8400,13 @@
     if (chosen !== "all" && !weeks.some((w) => w.start === chosen)) {
       chosen = weeks.some((w) => w.start === todayStart) ? todayStart : "all";
       setWeekFilter(cfg, chosen);
+    }
+    // An empty week must not hide saved rows from another week in this FY.
+    if (chosen !== "all" && !weekHasSavedEntries(fy, chosen, cfg.categoryScope)) {
+      if (fyHasSavedEntries(fy, cfg.categoryScope)) {
+        chosen = "all";
+        setWeekFilter(cfg, chosen);
+      }
     }
 
     const opts = [`<option value="all">All weeks</option>`].concat(
@@ -12790,13 +12886,48 @@
     globalThis.setView = carExpensesSetView;
   }
 
+  function shouldReturnToCarExpenses(ctx) {
+    if (!ctx || ctx.suite) return false;
+    if (!ctx.startedOnCar) return false;
+    return CAR_CLAIM_IDS.has(ctx.category);
+  }
+
+  function revealSavedExpense(entry) {
+    window.__haulageBlockRefreshAll = 0;
+    window.__haulageSkipNextRefreshAll = false;
+    if (!entry || !entry.date) return;
+    try {
+      const key = "haulage-ledger-week-expense";
+      const chosen = localStorage.getItem(key);
+      if (!chosen || chosen === "all") return;
+      const start =
+        globalThis.HaulageWeeks && typeof globalThis.HaulageWeeks.weekStartMonday === "function"
+          ? globalThis.HaulageWeeks.weekStartMonday(entry.date)
+          : null;
+      if (start && start !== chosen) localStorage.setItem(key, "all");
+    } catch {
+      /* ignore */
+    }
+  }
+
   function wrapAfterExpenseSaved() {
     if (typeof globalThis.afterExpenseSaved !== "function") return;
     if (globalThis.afterExpenseSaved.__haulageCarExpensesWrapped) return;
     const prev = globalThis.afterExpenseSaved;
     async function wrapped(entry, _message) {
+      const suite = Boolean(document.body && document.body.classList.contains("gotax-suite"));
+      const carView = document.getElementById("view-car-expenses");
+      const startedOnCar = Boolean(carView && !carView.classList.contains("hidden"));
+      revealSavedExpense(entry);
       await prev.apply(this, arguments);
-      if (entry && CAR_CLAIM_IDS.has(entry.category) && typeof globalThis.setView === "function") {
+      if (
+        shouldReturnToCarExpenses({
+          suite,
+          startedOnCar,
+          category: entry && entry.category,
+        }) &&
+        typeof globalThis.setView === "function"
+      ) {
         globalThis.setView("car-expenses");
       }
     }
