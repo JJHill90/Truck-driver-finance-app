@@ -4497,7 +4497,10 @@ api.post("/receipts/:id/confirm", (req, res) => {
 
   const expensePayload = normalizePayloadDate({ ...payload, receiptId: receipt?.id || null });
   if (expensePayload.category) {
-    expensePayload.category = normalizeExpenseCategoryId(expensePayload.category);
+    expensePayload.category =
+      productOf(req) === "suite"
+        ? suite.normalizeExpenseCategoryId(expensePayload.category)
+        : normalizeExpenseCategoryId(expensePayload.category);
   }
   if (req.user) {
     const account = auth.getUserRecord(req.user) || auth.getUser(req.user);
@@ -4821,6 +4824,7 @@ function buildReqBasPack(req) {
   return suite.basPack.buildBasPack(records, records.profile, {
     financialYear: fy,
     quarter: req.query.quarter,
+    product: productOf(req) === "suite" ? "suite" : "haulage",
   });
 }
 
@@ -5104,6 +5108,9 @@ api.post("/support/chat", (req, res) => {
   res.json(result);
 });
 
+// Suite uses /api/suite so a Suite page never has to call the Hub mount.
+// Same router; product.js treats /api/suite as the Suite even without the cookie.
+app.use("/api/suite", api);
 app.use("/api/haulage", api);
 
 // --- Go Taxation Suite (general PAYG / sole trader / partnership) ----------

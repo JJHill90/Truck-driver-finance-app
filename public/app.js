@@ -1,5 +1,13 @@
-const API = `${window.location.origin}/api/haulage`;
+function pageApiRoot() {
+  const path = typeof window !== "undefined" && window.location ? window.location.pathname : "";
+  const suite = /\/suite(\/|$)/i.test(String(path || ""));
+  return `${window.location.origin}${suite ? "/api/suite" : "/api/haulage"}`;
+}
+const API = pageApiRoot();
 const SCAN_TIMEOUT_MS = 90000;
+const CONFIRM_SAVE_TIMEOUT_MS = 20000;
+const CONFIRM_SAVE_TIMEOUT_MESSAGE =
+  "Saving took too long. The document is still under Needs approval — open it from the gallery to finish.";
 const PERIOD_STORAGE_KEY = "haulage-expense-total-period";
 
 const state = {
@@ -90,7 +98,12 @@ async function api(path, opts = {}) {
   if (res.status === 413) {
     throw new Error("Photo too large — try a smaller image or use manual entry.");
   }
-  if (!res.ok) throw new Error(data.error || data.detail || "Request failed");
+  if (!res.ok) {
+    const err = new Error(data.error || data.detail || "Request failed");
+    err.code = data.code || null;
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -625,34 +638,27 @@ function readScanConfirmPayload(showDetails) {
   const formPayload = readManualFormPayload();
   const pending = pendingReceiptConfirm;
   const o = pending?.ocrResult || {};
-  const amount = Number(
-    document.getElementById("scan-confirm-amount")?.value || formPayload?.amount
-  );
+  const card = (id) => {
+    const el = document.getElementById(id);
+    if (!el || el.value == null) return "";
+    return String(el.value).trim();
+  };
+  const vendorFromCard = card("scan-confirm-vendor");
+  const amount = Number(card("scan-confirm-amount") || formPayload?.amount);
 
   if (showDetails) {
     return {
       amount,
-      date: document.getElementById("scan-confirm-date")?.value || formPayload?.date || o.date || localToday(),
+      date: card("scan-confirm-date") || formPayload?.date || o.date || localToday(),
       category:
-        document.getElementById("scan-confirm-category")?.value ||
+        card("scan-confirm-category") ||
         formPayload?.category ||
         o.suggestedCategory ||
         "other_work",
-      vendor:
-        document.getElementById("scan-confirm-vendor")?.value ||
-        formPayload?.vendor ||
-        o.vendor ||
-        "",
-      vendorAbn:
-        document.getElementById("scan-confirm-abn")?.value ||
-        formPayload?.vendorAbn ||
-        o.vendorAbn ||
-        "",
+      vendor: vendorFromCard || formPayload?.vendor || o.vendor || "",
+      vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
       description:
-        document.getElementById("scan-confirm-description")?.value ||
-        formPayload?.description ||
-        o.description ||
-        "",
+        card("scan-confirm-description") || formPayload?.description || o.description || "",
       workUsePercent: Number(
         document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
       ),
@@ -662,13 +668,16 @@ function readScanConfirmPayload(showDetails) {
 
   return {
     amount,
-    date: formPayload?.date || o.date || localToday(),
-    category: formPayload?.category || o.suggestedCategory || "other_work",
-    vendor: formPayload?.vendor || o.vendor || "",
-    vendorAbn: formPayload?.vendorAbn || o.vendorAbn || "",
-    description: formPayload?.description || o.description || "",
-    workUsePercent: Number(formPayload?.workUsePercent ?? 100),
-    reimbursed: Boolean(formPayload?.reimbursed),
+    date: card("scan-confirm-date") || formPayload?.date || o.date || localToday(),
+    category:
+      card("scan-confirm-category") || formPayload?.category || o.suggestedCategory || "other_work",
+    vendor: vendorFromCard || formPayload?.vendor || o.vendor || "",
+    vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
+    description: card("scan-confirm-description") || formPayload?.description || o.description || "",
+    workUsePercent: Number(
+      document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
+    ),
+    reimbursed: Boolean(document.getElementById("scan-confirm-reimbursed")?.checked),
   };
 }
 
@@ -727,6 +736,13 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
 
   box?.querySelectorAll(".scan-confirm-actions").forEach((el) => el.classList.add("hidden"));
   box?.insertAdjacentHTML("beforeend", `<p class="muted saving-note">Saving approved totals…</p>`);
+  if (typeof window.__haulageStopOcrProgress === "function") {
+    try {
+      window.__haulageStopOcrProgress({ silent: true });
+    } catch {
+      /* overlay */
+    }
+  }
 
   try {
     if (!isIncomeScan) {
@@ -734,15 +750,21 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
     } else {
       prefillIncomeForm(pending.ocrResult, payload);
     }
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const result = await api(`/receipts/${pending.receiptId}/confirm`, {
-      method: "POST",
-      body: JSON.stringify({
-        confirmed: true,
-        purpose: isIncomeScan ? "income" : "expense",
-        ...payload,
-      }),
-    });
+    const result = await apiWithTimeout(
+      `/receipts/${pending.receiptId}/confirm`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          confirmed: true,
+          purpose: isIncomeScan ? "income" : "expense",
+          ...payload,
+        }),
+      },
+      CONFIRM_SAVE_TIMEOUT_MS,
+      CONFIRM_SAVE_TIMEOUT_MESSAGE
+    );
 
     pendingReceiptConfirm = null;
     if (isIncomeScan) {
@@ -789,17 +811,27 @@ async function finalizeScannedTotals({ confirmed, showDetails }) {
     box?.querySelector(".saving-note")?.remove();
     box?.querySelectorAll(".scan-confirm-actions").forEach((el) => el.classList.remove("hidden"));
     toast(err.message || "Could not save totals");
+  } finally {
+    if (typeof window.__haulageStopOcrProgress === "function") {
+      try {
+        window.__haulageStopOcrProgress({ silent: true });
+      } catch {
+        /* overlay */
+      }
+    }
   }
 }
 
-async function apiWithTimeout(path, opts = {}, timeoutMs = SCAN_TIMEOUT_MS) {
+async function apiWithTimeout(path, opts = {}, timeoutMs = SCAN_TIMEOUT_MS, timeoutMessage) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await api(path, { ...opts, signal: controller.signal });
   } catch (err) {
     if (err.name === "AbortError") {
-      throw new Error("Scan timed out — photo may be saved; complete details manually.");
+      throw new Error(
+        timeoutMessage || "Scan timed out — photo may be saved; complete details manually."
+      );
     }
     throw err;
   } finally {
@@ -1685,6 +1717,8 @@ function highlightExpenseInList(expenseId) {
 
 async function afterExpenseSaved(entry, message) {
   toast(message || "Expense saved");
+  window.__haulageBlockRefreshAll = 0;
+  window.__haulageSkipNextRefreshAll = false;
   await alignFinancialYearToEntry(entry);
   await refreshAll();
   setView("expenses");
@@ -1765,12 +1799,23 @@ function highlightIncomeInList(incomeId) {
 
 async function afterIncomeSaved(entry, message) {
   toast(message || "Income saved");
-  await alignFinancialYearToEntry(entry);
-  await refreshAll();
   setView("income");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.__haulageBlockRefreshAll = 0;
+  window.__haulageSkipNextRefreshAll = false;
+  try {
+    await alignFinancialYearToEntry(entry);
+    await refreshAll();
+  } catch (err) {
+    toast(err.message || "Saved, but the list did not refresh. Reload to see it.");
+  }
   if (entry?.id) highlightIncomeInList(entry.id);
   renderIncomeList();
-  await refreshEofyLive();
+  try {
+    await refreshEofyLive();
+  } catch {
+    /* the row is already saved */
+  }
 }
 
 function clearIncomeFormFields() {
