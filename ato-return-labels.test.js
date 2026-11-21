@@ -114,13 +114,13 @@ describe("individual return labels", () => {
     const byCat = Object.fromEntries(report.summary.expenses.breakdown.map((b) => [b.category, b.atoSchedule]));
     expect(byCat.meals_breakfast).toBe("D2 Work-related travel expenses");
     expect(byCat.overtime_meals).toBe("D5 Other work-related expenses");
-    expect(byCat.parking_tolls).toBe("D1 Work-related car expenses");
+    expect(byCat.parking_tolls).toBe("D2 Work-related travel expenses");
     const incomeLabels = report.summary.income.breakdown.map((b) => b.label);
     expect(incomeLabels).toContain("Item 1 Salary or wages");
     expect(incomeLabels).toContain("Item 2 Allowances, earnings, tips, directors fees etc.");
     expect(incomeLabels).toContain("Not included — reimbursement");
     expect(report.atoScheduleMapping.map((row) => row.schedule)).toEqual(
-      expect.arrayContaining(["D2 Work-related travel expenses", "D1 Work-related car expenses"])
+      expect.arrayContaining(["D2 Work-related travel expenses"])
     );
     const summary = summariseYear(records, records.profile);
     const forecast = rollupAtoReturn(applyAtoReturnLabels(summary, { product: "haulage", entity: "employee" }));

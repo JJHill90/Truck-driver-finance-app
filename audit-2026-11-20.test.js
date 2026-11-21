@@ -242,6 +242,6 @@ describe("20 Nov audit — Suite approve uses its own route and stays on Expense
     });
     expect(suite).toBe(false);
     expect(hubExpenses).toBe(false);
-    expect(hubCar).toBe(true);
+    expect(hubCar).toBe(false);
   });
 });
