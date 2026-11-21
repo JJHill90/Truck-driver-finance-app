@@ -139,11 +139,11 @@ describe("20 Nov audit — Hub BAS leaves salary and allowances out of G1 and 1A
     return pack.boxes.find((row) => row.atoBox === id).amount;
   }
 
-  it("keeps Suite G1 on every income row", () => {
+  it("leaves Suite salary and allowances out of G1 and 1A as well", () => {
     const pack = buildBasPack(records, profile, { financialYear: "2026-27", product: "suite" });
-    expect(box(pack, "G1")).toBe(9730);
-    expect(box(pack, "1A")).toBe(884.54);
-    expect(pack.quarterly[1].sales).toBe(9730);
+    expect(box(pack, "G1")).toBe(6600);
+    expect(box(pack, "1A")).toBe(600);
+    expect(pack.quarterly[1].sales).toBe(6600);
   });
 
   it("drops Hub salary and allowances from the full year and from Q2", () => {

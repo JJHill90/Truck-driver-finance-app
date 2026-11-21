@@ -2175,7 +2175,16 @@
         const g = Number(grossEl.value);
         if (Number.isFinite(g)) {
           payload.grossTotal = g;
-          payload.taxableIncome = g;
+          const gst = Number(payload.gstAmount) || 0;
+          const business = /^(remittance_owner|business_income|services_income)$/.test(
+            String(payload.type || "")
+          );
+          const suitePage = document.body && document.body.classList.contains("gotax-suite");
+          if (!suitePage && business && gst > 0 && g > gst) {
+            payload.taxableIncome = Math.round((g - gst) * 100) / 100;
+          } else {
+            payload.taxableIncome = g;
+          }
         }
       }
       if (
@@ -3501,7 +3510,6 @@
           return;
         }
         openTaxationHub(me.user);
-        if (me.user.isAdmin) await loadAdminUsers();
         if (!reviewAlreadyShown()) {
           const alertData = await apiGet("/alerts");
           renderAlerts(alertData.alerts, alertData.user);
@@ -3670,14 +3678,13 @@
       clearBillingPanel();
     }
     const adminPanel = byId("admin-panel");
-    if (adminPanel) {
-      if (user && user.isAdmin) {
-        adminPanel.classList.remove("hidden");
-        placeAdminPanel();
-      } else {
-        adminPanel.classList.add("hidden");
-      }
+    if (adminPanel && !(user && user.isAdmin)) {
+      adminPanel.classList.add("hidden");
+      adminListRequested = false;
+      const list = byId("admin-user-list");
+      if (list) list.innerHTML = "";
     }
+    ensureAdminOpenButton(Boolean(user && user.isAdmin));
   }
 
   /** Profile presets used by expense forms / scan confirm (not income; not car claims). */
@@ -6329,7 +6336,42 @@
     }
   }
 
+  let adminListRequested = false;
+
+  function ensureAdminOpenButton(show) {
+    const home = byId("admin-panel-home");
+    if (!home) return;
+    let btn = byId("admin-open");
+    if (!show) {
+      if (btn) btn.remove();
+      return;
+    }
+    if (btn) return;
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "admin-open";
+    btn.className = "btn secondary";
+    btn.textContent = "Open primary mod";
+    btn.addEventListener("click", () => {
+      void openAdminPanel();
+    });
+    home.insertBefore(btn, home.firstChild);
+  }
+
+  function openAdminPanel() {
+    adminListRequested = true;
+    const panel = byId("admin-panel");
+    if (panel) {
+      panel.classList.remove("hidden");
+      placeAdminPanel();
+    }
+    const btn = byId("admin-open");
+    if (btn) btn.classList.add("hidden");
+    return loadAdminUsers();
+  }
+
   async function loadAdminUsers() {
+    if (!adminListRequested) return;
     const panel = byId("admin-panel");
     if (!panel || panel.classList.contains("hidden")) return;
     const data = await apiGet("/admin/users");
@@ -6723,7 +6765,6 @@
         const selectedApp = getSelectedHubApp();
         if (selectedApp === "taxationhub" || me.user.needsFirstRunTour) {
           openTaxationHub(me.user);
-          if (me.user.isAdmin) await loadAdminUsers();
           // Only fetch/show the review banner the first time this session — once on
           // opening Taxation Hub — so it does not keep reappearing as uploads change.
           if (!reviewAlreadyShown()) {
@@ -16734,6 +16775,8 @@
         } and ${data.imported?.income || 0} income line${data.imported?.income === 1 ? "" : "s"}.`
       );
       if (n > 0) {
+        const activeView = document.querySelector(".view.active");
+        const stayOn = activeView && activeView.id ? activeView.id.replace(/^view-/, "") : "";
         try {
           localStorage.setItem("haulage-ledger-week-expense", "all");
           localStorage.setItem("haulage-gallery-week-expense", "all");
@@ -16745,6 +16788,7 @@
         if (typeof window.refreshAll === "function") {
           await window.refreshAll();
         }
+        if (stayOn && typeof window.setView === "function") window.setView(stayOn);
       }
     } catch (err) {
       setStatus(panel, (err && err.message) || "Import failed.", true);
