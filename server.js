@@ -29,6 +29,7 @@ const { applyDescription } = require("./lib/scan-description");
 const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
 const { estimateFuelTaxCredit } = require("./lib/fuel-tax-credit");
 const { buildHubGstTracker } = require("./lib/hub-gst-tracker");
+const { applyHubBusinessIncomeGst } = require("./lib/hub-income-gst");
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
 const { applyAbnEntityPairing } = require("./lib/abn-entity");
 const { updateExpense, updateIncome } = require("./lib/ledger-edit");
@@ -3805,6 +3806,7 @@ api.post("/income", (req, res) => {
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
+  else applyHubBusinessIncomeGst(body, records.profile || {});
   if (blockDuplicateLedger(res, records, "income", body)) return;
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
@@ -4415,6 +4417,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
           : normalizeIncomeTypeId(payload.type);
     }
     if (!payload.description) payload.description = buildIncomeDescription(payload);
+    if (productOf(req) !== "suite") applyHubBusinessIncomeGst(payload, records.profile || {});
 
     // Idempotent confirm: already linked to active income, or restore soft-deleted.
     let existing =
