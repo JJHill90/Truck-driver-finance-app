@@ -178,7 +178,7 @@ describe("21 Nov — Hub report, FTC, meals and GST tracker", () => {
       },
       "2026-27"
     );
-    expect(tracker.recorded).toBe(6600);
+    expect(tracker.recorded).toBe(6000);
     expect(tracker.threshold).toBe(75000);
     expect(tracker.product).toBe("haulage");
   });

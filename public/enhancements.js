@@ -678,8 +678,16 @@
       data.compliance && typeof data.compliance === "object"
         ? {
             status: data.compliance.status || null,
+            statusLabel: data.compliance.statusLabel || null,
             summary:
               typeof data.compliance.summary === "string" ? data.compliance.summary.slice(0, 240) : "",
+            checks: Array.isArray(data.compliance.checks)
+              ? data.compliance.checks.slice(0, 6).map((c) => ({
+                  status: c.status,
+                  name: c.name,
+                  message: typeof c.message === "string" ? c.message.slice(0, 180) : "",
+                }))
+              : [],
           }
         : data.compliance;
     return {
@@ -700,6 +708,8 @@
         documentType: ocr.documentType,
         documentKind: ocr.documentKind,
         date: ocr.date || null,
+        issueDate: ocr.issueDate || ocr.date || null,
+        dueDate: ocr.dueDate || null,
         vendor: ocr.vendor || "",
         entity: ocr.entity || ocr.vendor || "",
         amount: ocr.amount ?? null,
@@ -1735,8 +1745,15 @@
              </li>`
         )
         .join("");
+      const statusFriendly = {
+        within_policy: "Within ATO policy",
+        needs_review: "Needs review",
+        review: "Needs review",
+        breach: "Outside the allowance",
+        within: "Within ATO policy",
+      };
       complianceHtml = `<div class="enh-section enh-compliance enh-status-${esc(comp.status)}">
-          <h4>ATO compliance — ${esc(comp.statusLabel || comp.status)}</h4>
+          <h4>ATO compliance — ${esc(comp.statusLabel || statusFriendly[comp.status] || "Checked")}</h4>
           ${checks ? `<ul class="enh-checks">${checks}</ul>` : '<p class="muted">No compliance flags.</p>'}
           <p class="enh-disclaimer">Indicative check against ATO transport-industry standards — not tax advice.</p>
         </div>`;
@@ -2037,9 +2054,39 @@
     promptMissingVendor(box);
   }
 
+  function paintScanMealNote(box) {
+    if (!box || document.body.classList.contains("gotax-suite") || box.querySelector("[data-meal-note]")) return;
+    const cat = document.getElementById("scan-confirm-category");
+    const category = (cat && cat.value) || (latest && latest.suggestedCategory) || "";
+    const keyFor = {
+      meals_breakfast: "breakfast",
+      meals_lunch: "lunch",
+      meals_dinner: "dinner",
+      meals: "dinner",
+    };
+    const key = keyFor[category];
+    if (!key) return;
+    const allowances = typeof state !== "undefined" && state.summary && state.summary.allowances;
+    const meal = allowances && allowances.truckDriverMealsDaily && allowances.truckDriverMealsDaily[key];
+    const cap = meal && (meal.cap != null ? Number(meal.cap) : Number(meal));
+    if (!(cap > 0)) return;
+    const amountEl = document.getElementById("scan-confirm-amount");
+    const amount = Number((amountEl && amountEl.value) || (latest && latest.amount) || 0);
+    const within = !amount || amount <= cap;
+    const note = document.createElement("p");
+    note.setAttribute("data-meal-note", "1");
+    note.textContent = `${(allowances && allowances.determination) || "TD 2026/4"} ${key} reasonable amount $${cap.toFixed(2)} — ${within ? "within" : "over"} the allowance`;
+    const host = box.querySelector(".enh-compliance") || box.querySelector(".scan-confirm");
+    if (host) host.appendChild(note);
+  }
+
   function enhanceBox(box) {
     if (!latest || !box) return;
-    if (box.__enhToken === latest.token) return;
+    if (box.__enhToken === latest.token) {
+      if (typeof window.haulageAskFuelTaxCredit === "function") window.haulageAskFuelTaxCredit(box);
+      paintScanMealNote(box);
+      return;
+    }
     if (!box.querySelector(".scan-confirm")) return;
     box.__enhToken = latest.token;
     ensureIncomeAbnField(box);
@@ -2064,6 +2111,7 @@
     const existing = box.querySelector("#enh-panel");
     if (existing) existing.remove();
     box.appendChild(buildPanel(latest));
+    paintScanMealNote(box);
     gateExpenseConfirmVendor(box);
   }
 
@@ -2133,8 +2181,19 @@
         payload.entity = String(payerEl.value).trim();
         payload.vendor = payload.entity;
       }
+      const confirmDate = document.getElementById("income-confirm-date");
       const dateEl = form && form.elements.date;
-      if (isScanFieldDirty(dateEl) && dateEl.value) payload.date = dateEl.value;
+      if (confirmDate && confirmDate.value && dateEl && !isScanFieldDirty(dateEl)) {
+        dateEl.value = confirmDate.value;
+      }
+      if (isScanFieldDirty(confirmDate) && confirmDate.value) payload.date = confirmDate.value;
+      else if (isScanFieldDirty(dateEl) && dateEl.value) payload.date = dateEl.value;
+      else if (confirmDate && confirmDate.value) {
+        payload.date = confirmDate.value;
+        if (dateEl) dateEl.value = confirmDate.value;
+      }
+      const confirmKind = document.getElementById("income-confirm-kind");
+      if (confirmKind && confirmKind.value) payload.documentKind = confirmKind.value;
       const typeEl = form && form.elements.type;
       if (isScanFieldDirty(typeEl) && typeEl.value) payload.type = typeEl.value;
       const formGross = form && form.elements.grossTotal;
@@ -6687,7 +6746,10 @@
       }
       const fySel = byId("fy-select");
       const fy = fySel && fySel.value ? fySel.value : "";
-      const url = `${API}/report.pdf${fy ? `?financialYear=${encodeURIComponent(fy)}` : ""}`;
+      const pdfRoot = document.body.classList.contains("gotax-suite")
+        ? `${window.location.origin}/api/suite`
+        : API;
+      const url = `${pdfRoot}/report.pdf${fy ? `?financialYear=${encodeURIComponent(fy)}` : ""}`;
       if (window.toast) window.toast("Preparing EOFY PDF…");
       try {
         const res = await fetch(url, { credentials: "same-origin" });
@@ -6704,7 +6766,8 @@
         const blob = await res.blob();
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `haulage-eofy-${fy || "report"}.pdf`;
+        const suitePdf = document.body.classList.contains("gotax-suite");
+        a.download = `${suitePdf ? "suite" : "haulage"}-eofy-${fy || "report"}.pdf`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -9471,10 +9534,11 @@
   }
 
   function expenseFieldDefs() {
-    return [
+    const fields = [
       { key: "date", label: "Date", kind: "date", required: true },
       { key: "category", label: "Category", kind: "category", required: true },
       { key: "amount", label: "Amount (AUD)", kind: "money", required: true, step: "0.01", min: "0" },
+      { key: "gstAmount", label: "GST (AUD)", kind: "money", step: "0.01", min: "0" },
       { key: "vendor", label: "Vendor / business", kind: "text" },
       { key: "vendorAbn", label: "ABN", kind: "text", inputmode: "numeric" },
       { key: "description", label: "Description", kind: "text", wide: true },
@@ -9489,6 +9553,24 @@
       { key: "vendingMachine", label: "Vending machine", kind: "checkbox" },
       { key: "notes", label: "Notes", kind: "textarea", wide: true },
     ];
+    if (!document.body.classList.contains("gotax-suite")) {
+      fields.push(
+        {
+          key: "dieselLitres",
+          label: "Diesel litres (fuel tax credit)",
+          kind: "number",
+          min: "0",
+          step: "0.01",
+        },
+        {
+          key: "fuelTaxCreditUse",
+          label: "On-road or off-road (on_road / off_road)",
+          kind: "text",
+          placeholder: "on_road",
+        }
+      );
+    }
+    return fields;
   }
 
   function incomeFieldDefs() {
@@ -9534,6 +9616,10 @@
     if (field.key === "workUsePercent") return entry.workUsePercent ?? 100;
     if (field.key === "overnightDays") return entry.overnightDays ?? "";
     if (field.key === "travelAllowanceAmount") return entry.travelAllowanceAmount ?? "";
+    if (field.key === "dieselLitres") return entry.dieselLitres ?? (entry.fuelTaxCredit && entry.fuelTaxCredit.litres) ?? "";
+    if (field.key === "fuelTaxCreditUse") {
+      return entry.fuelTaxCreditUse || (entry.fuelTaxCredit && entry.fuelTaxCredit.use) || "";
+    }
     if (field.kind === "checkbox") return Boolean(entry[field.key]);
     return entry[field.key] ?? "";
   }
@@ -10925,6 +11011,30 @@
     return Boolean(data && (data.travelKind === "ordinary_employee" || data.product === "gotax"));
   }
 
+  function countedSources(entries, ordinary) {
+    const counts = { payslip: 0, meal_receipt: 0, csv_allowance: 0 };
+    for (const entry of entries || []) {
+      const kind =
+        entry.kind ||
+        (entry.source === "overnight_meal_receipt"
+          ? "meal_receipt"
+          : entry.source === "csv_allowance" || entry.source === "csv_import"
+            ? "csv_allowance"
+            : "payslip");
+      counts[kind] = (counts[kind] || 0) + 1;
+    }
+    const bits = [];
+    if (counts.payslip) bits.push(`${counts.payslip} payslip${counts.payslip === 1 ? "" : "s"}`);
+    if (counts.meal_receipt) {
+      bits.push(`${counts.meal_receipt} meal receipt${counts.meal_receipt === 1 ? "" : "s"}`);
+    }
+    if (counts.csv_allowance) {
+      bits.push(`${counts.csv_allowance} CSV allowance row${counts.csv_allowance === 1 ? "" : "s"}`);
+    }
+    const what = ordinary ? "work travel" : "Travel/LAFHA";
+    return `${bits.join(" and ") || "0 items"} with ${what}`;
+  }
+
   function boxHtml(data) {
     const ordinary = isOrdinaryTravel(data);
     const claimed = Number(data.daysClaimed) || 0;
@@ -10991,14 +11101,12 @@
           <div class="overnight-stat"><strong>~${projected}</strong> ${esc(projectedLabel)}</div>
         </div>
         <p class="overnight-hint">${
-          data.entryCount
-            ? `${data.entryCount} payslip${data.entryCount === 1 ? "" : "s"} with ${ordinary ? "work travel" : "Travel/LAFHA"} · ${money(data.amountPaid)} paid`
-            : emptyHint
+          data.entryCount ? `${countedSources(entries, ordinary)} · ${money(data.amountPaid)} paid` : emptyHint
         }</p>
         ${
           entryRows
             ? `<details class="overnight-entries">
-                <summary>Payslips counted (${entries.length}) — ${ordinary ? "edit nights" : "edit LAFHA days"} if OCR missed a slip</summary>
+                <summary>Counted (${entries.length}) — ${ordinary ? "edit nights" : "edit each source"} if a day was missed</summary>
                 <ul class="overnight-entry-list">${entryRows}</ul>
               </details>`
             : `<p class="overnight-hint muted">${esc(noneHint)}</p>`
@@ -13394,7 +13502,7 @@
       overlay.className = "enh-delete-receipt";
       overlay.innerHTML = `
         <div class="enh-delete-receipt-card" role="dialog" aria-modal="true" aria-labelledby="enh-delete-receipt-title">
-          <h3 id="enh-delete-receipt-title">Delete this photo or PDF?</h3>
+          <h3 id="enh-delete-receipt-title">Delete photo only?</h3>
           <p>${String(label)
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -13402,7 +13510,7 @@
           <p class="muted">The file is removed. The amount stays in the ledger. This still works when the photo is already missing.</p>
           <div class="enh-delete-receipt-actions">
             <button type="button" class="btn secondary" data-enh-delete-cancel>Cancel</button>
-            <button type="button" class="btn danger" data-enh-delete-confirm>Delete</button>
+            <button type="button" class="btn danger" data-enh-delete-confirm>Delete photo only</button>
           </div>
         </div>`;
       deletePrompt = { overlay, resolve };
@@ -17077,15 +17185,24 @@
     }
   }
 
-  function actualIncome() {
+  function incomeSplit() {
     try {
-      if (typeof state !== "undefined" && state.summary && state.summary.income) {
-        return state.summary.income.assessableTotal;
+      const inc = typeof state !== "undefined" && state.summary && state.summary.income;
+      if (!inc) return { salary: 0, business: 0 };
+      if (inc.salaryAssessable != null || inc.businessAssessable != null) {
+        return {
+          salary: Number(inc.salaryAssessable) || 0,
+          business: Number(inc.businessAssessable) || 0,
+        };
       }
+      return { salary: Number(inc.assessableTotal) || 0, business: 0 };
     } catch {
-      /* ignore */
+      return { salary: 0, business: 0 };
     }
-    return 0;
+  }
+
+  function actualIncome() {
+    return incomeSplit().salary;
   }
 
   function paceHtml(pace) {
@@ -17105,13 +17222,20 @@
       <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pace.barPercent)}">
         <span class="${pace.ahead ? "is-ahead" : ""}" style="width:${pace.barPercent}%"></span>
       </div>
-      <p class="muted small">${esc(detail)}${pct ? ` · ${esc(pct)} of the profile total` : ""}</p>`;
+      <p class="muted small">${esc(detail)}${pct ? ` · ${esc(pct)} of the profile total` : ""}</p>
+      ${
+        Number(pace.businessIncome) > 0
+          ? `<p class="muted small">Business income ${money(pace.businessIncome)} is separate and is not part of this salary target.</p>`
+          : ""
+      }`;
   }
 
   function paint() {
     paintFieldActive(savedProfile());
     const profile = formProfile();
-    const pace = paceFrom(profile, actualIncome());
+    const split = incomeSplit();
+    const pace = paceFrom(profile, split.salary);
+    pace.businessIncome = split.business;
     const dash = document.getElementById("stat-grid");
     if (dash) {
       let host = document.getElementById("profile-pace");
@@ -17555,9 +17679,14 @@
     if (!box || document.body.classList.contains("gotax-suite")) return;
     if (box.querySelector("[data-ftc-ask]")) return;
     const cat = document.getElementById("scan-confirm-category");
-    const category = (cat && cat.value) || "";
+    if (cat && !cat.dataset.ftcWatch) {
+      cat.dataset.ftcWatch = "1";
+      cat.addEventListener("change", () => window.haulageAskFuelTaxCredit(box));
+    }
+    const suggested = (typeof latest !== "undefined" && latest && latest.suggestedCategory) || "";
+    const category = (cat && cat.value) || suggested || "";
     const blob = `${category} ${box.textContent || ""}`;
-    if (category !== "fuel" && !/\bdiesel\b/i.test(blob)) return;
+    if (category !== "fuel" && !/\b(diesel|adblue|fuel)\b/i.test(blob)) return;
     const field = document.createElement("fieldset");
     field.className = "enh-ftc";
     field.setAttribute("data-ftc-ask", "1");
@@ -17572,6 +17701,13 @@
     litres.min = "0";
     litres.step = "0.01";
     litres.placeholder = "Litres of diesel";
+    const previewLitres =
+      latest && latest.fuelTaxCredit && Number(latest.fuelTaxCredit.litres) > 0
+        ? String(latest.fuelTaxCredit.litres)
+        : "";
+    const fromText = String(box.textContent || "").match(/(\d+(?:\.\d+)?)\s*(?:l|litres)\b/i);
+    if (previewLitres) litres.value = previewLitres;
+    else if (fromText) litres.value = fromText[1];
     litresLabel.appendChild(litres);
     field.appendChild(litresLabel);
     [
@@ -17650,23 +17786,24 @@
       const pending = typeof pendingReceiptConfirm !== "undefined" ? pendingReceiptConfirm : null;
       applyOutsideFyAck(payload, pending);
       const suggested = pending && pending.ocrResult && pending.ocrResult.suggestedCategory;
-      if (!suggested) return payload;
       const select = document.getElementById("scan-confirm-category");
-      if (showDetails && select) pinCategory(select, select.value || suggested);
-      const chosen = select && select.value;
-      if (!showDetails || !chosen) payload.category = suggested;
-      else payload.category = chosen;
-      if (pending.ocrResult && pending.ocrResult.fuelTaxCredit) {
-        const fuelPick = applySelectedFuelTaxUse(pending.ocrResult.fuelTaxCredit);
-        payload.fuelTaxCredit = fuelPick.credit;
-        payload.fuelTaxCreditUse = fuelPick.use;
-        payload.dieselLitres = fuelPick.credit.litres;
+      if (suggested) {
+        if (showDetails && select) pinCategory(select, select.value || suggested);
+        const chosen = select && select.value;
+        if (!showDetails || !chosen) payload.category = suggested;
+        else payload.category = chosen;
       }
       const litresEl = document.getElementById("enh-ftc-litres");
-      const litres = litresEl ? Number(litresEl.value) : NaN;
-      if (Number.isFinite(litres) && litres > 0) payload.dieselLitres = litres;
+      const litres = litresEl && litresEl.value !== "" ? Number(litresEl.value) : NaN;
       const useEl = document.querySelector('input[name="enh-ftc-use"]:checked');
-      if (useEl && useEl.value) payload.fuelTaxCreditUse = useEl.value;
+      if (Number.isFinite(litres) && litres > 0) {
+        payload.dieselLitres = litres;
+        if (useEl && useEl.value) payload.fuelTaxCreditUse = useEl.value;
+      } else {
+        delete payload.fuelTaxCredit;
+        delete payload.dieselLitres;
+        delete payload.fuelTaxCreditUse;
+      }
       return payload;
     }
     wrapped.__shownCategory = true;
@@ -17700,7 +17837,10 @@
     const host = document.createElement("div");
     host.className = "report-section";
     host.setAttribute("data-hub-gst", "1");
-    host.innerHTML = `<h3>GST registration tracker</h3><p><strong>$${Number(gst.recorded || 0).toFixed(2)}</strong> of business income recorded (${Number(gst.percent || 0).toFixed(0)}% of $${Number(gst.threshold).toLocaleString("en-AU")}). ${gst.overThreshold ? "Over the registration threshold." : `$${Number(gst.remaining || 0).toFixed(2)} still under it.`} Salary, wages and allowances are not counted.</p><p class="muted">${gst.note || ""}</p>`;
+    const aud = (n) =>
+      "$" +
+      Number(n || 0).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    host.innerHTML = `<h3>GST registration tracker</h3><p><strong>${aud(gst.recorded)}</strong> of business income recorded ex-GST (${Number(gst.percent || 0).toFixed(0)}% of ${aud(gst.threshold)}). ${gst.overThreshold ? "Over the registration threshold." : `${aud(gst.remaining)} still under it.`} Salary, wages and allowances are not counted.</p><p class="muted">${gst.note || ""}</p>`;
     el.appendChild(host);
   }
 
@@ -17723,7 +17863,7 @@
       <h3>GST, brackets and instant asset write-off</h3>
       ${
         gst
-          ? `<p><strong>GST $75,000 turnover:</strong> $${Number(gst.recorded || 0).toFixed(2)} recorded (${Number(gst.percent || 0).toFixed(0)}% of $${Number(gst.threshold).toLocaleString("en-AU")}). ${gst.overThreshold ? "Over the registration threshold." : `$${Number(gst.remaining || 0).toFixed(2)} still under it.`}</p>`
+          ? `<p><strong>GST $75,000 turnover:</strong> $${Number(gst.recorded || 0).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} recorded ex-GST (${Number(gst.percent || 0).toFixed(0)}% of $${Number(gst.threshold).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). ${gst.overThreshold ? "Over the registration threshold." : `$${Number(gst.remaining || 0).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} still under it.`}</p>`
           : ""
       }
       ${

@@ -583,6 +583,7 @@ function showScanConfirmDetails(box) {
       <label>Vendor<input type="text" id="scan-confirm-vendor" value="${escapeHtml(o.vendor || "")}" placeholder="BP Truck Stop" /></label>
       <label>ABN (optional)<input type="text" id="scan-confirm-abn" value="${escapeHtml(o.vendorAbn || "")}" placeholder="12 345 678 901" /></label>
       <label>Description<input type="text" id="scan-confirm-description" value="${escapeHtml(o.description || "")}" placeholder="Diesel / meal / accommodation" /></label>
+      <label>GST ($)<input type="number" id="scan-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
       <label>Work use %<input type="number" id="scan-confirm-work" value="100" min="0" max="100" /></label>
       <label class="checkbox"><input type="checkbox" id="scan-confirm-reimbursed" /> Reimbursed by employer</label>
     </div>
@@ -659,6 +660,7 @@ function readScanConfirmPayload(showDetails) {
       vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
       description:
         card("scan-confirm-description") || formPayload?.description || o.description || "",
+      gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
       workUsePercent: Number(
         document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
       ),
@@ -674,6 +676,7 @@ function readScanConfirmPayload(showDetails) {
     vendor: vendorFromCard || formPayload?.vendor || o.vendor || "",
     vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
     description: card("scan-confirm-description") || formPayload?.description || o.description || "",
+    gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
     workUsePercent: Number(
       document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
     ),
@@ -1027,7 +1030,7 @@ async function deleteScannedPhoto(receiptId, { closeViewer = false } = {}) {
   if (!receipt) return false;
   const label = receipt.filename || "this scanned photo";
   const ok = window.confirm(
-    `Delete ${label}?\n\nThe photo/file will be removed. Linked expense or income ledger entries stay — only the scanned file is deleted.`
+    `Delete photo only: ${label}?\n\nThe photo/file will be removed. Linked expense or income ledger entries stay — only the scanned file is deleted.`
   );
   if (!ok) return false;
 
@@ -1080,7 +1083,7 @@ function receiptGalleryCardHtml(r, title) {
         </div>
       </button>
       <div class="receipt-card-actions">
-        <button type="button" class="btn danger small" data-del-receipt="${r.id}">Delete</button>
+        <button type="button" class="btn danger small" data-del-receipt="${r.id}">Delete photo only</button>
       </div>
     </div>`;
 }
@@ -1137,7 +1140,7 @@ function setView(name) {
   if (name === "expenses" && state.standards) {
     populateSelects();
   }
-  if (name === "report") {
+  if (name === "report" || name === "dashboard") {
     void refreshEofyLive();
   }
   if (name === "forecast") loadForecast();
@@ -1663,7 +1666,9 @@ function renderExpenseList() {
           return `<tr class="${isDraft ? "draft-row" : ""} ${inPeriod ? "in-period" : "out-of-period"}" data-expense-id="${e.id}" data-category="${escapeHtml(e.category || "")}" data-amount="${Number(e.amount) || 0}">
             <td>${fmtDate(e.date)}</td>
             <td>${escapeHtml(categoryLabel(e.category))}</td>
-            <td>${escapeHtml(detail)}${isDraft ? ' <span class="tag">unsaved</span>' : ""}${
+            <td>${escapeHtml(detail)}${
+              !isDraft && Number(e.gstAmount) > 0 ? ` · GST ${fmt(e.gstAmount)}` : ""
+            }${isDraft ? ' <span class="tag">unsaved</span>' : ""}${
               !isDraft && !inPeriod ? ' <span class="tag">outside period</span>' : ""
             }</td>
             <td class="amount">${fmt(e.amount)}</td>
@@ -1778,9 +1783,16 @@ function renderIncomeList() {
   `;
   el.querySelectorAll("[data-del-income]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      window.__haulageBlockRefreshAll = 0;
+      window.__haulageSkipNextRefreshAll = false;
       await api(`/income/${btn.dataset.delIncome}`, { method: "DELETE" });
       toast("Income deleted");
       await refreshAll();
+      try {
+        await refreshEofyLive();
+      } catch {
+        /* the row is already deleted */
+      }
     });
   });
   el.querySelectorAll("[data-view-receipt]").forEach((btn) => {
@@ -1867,7 +1879,11 @@ function setIncomeFormApprovalState(pending) {
 function prefillIncomeForm(ocr, overrides = {}) {
   const form = document.getElementById("income-form");
   if (!form || !ocr) return;
-  if (ocr.date || overrides.date) form.elements.date.value = overrides.date || ocr.date;
+  const saveDate = overrides.date || ocr.issueDate || ocr.date || "";
+  if (saveDate && form.elements.date) {
+    form.elements.date.value = saveDate;
+    if (form.elements.date.dataset) delete form.elements.date.dataset.scanUserEdited;
+  }
   if (ocr.suggestedIncomeType) {
     const typeSel = document.getElementById("income-type");
     if (typeSel) typeSel.value = ocr.suggestedIncomeType;
@@ -1888,8 +1904,17 @@ function prefillIncomeForm(ocr, overrides = {}) {
   if (overrides.description || ocr.description) {
     form.elements.description.value = overrides.description || ocr.description;
   }
-  document.getElementById("income-document-kind").value =
-    overrides.documentKind || ocr.documentKind || "";
+  const kindEl = document.getElementById("income-document-kind");
+  const kind = overrides.documentKind || ocr.documentKind || "";
+  if (kindEl) {
+    if (kind && ![...kindEl.options].some((opt) => opt.value === kind)) {
+      const opt = document.createElement("option");
+      opt.value = kind;
+      opt.textContent = kind.replace(/_/g, " ");
+      kindEl.appendChild(opt);
+    }
+    kindEl.value = kind;
+  }
   document.getElementById("income-summary-notes").value =
     overrides.summaryNotes || ocr.summaryNotes || "";
   document.getElementById("income-net-pay").value = net != null ? String(net) : "";
@@ -1930,7 +1955,11 @@ function readIncomeScanConfirmPayload() {
       form?.elements.description?.value ||
       o.description ||
       "",
-    documentKind: form?.elements.documentKind?.value || o.documentKind || "payslip",
+    documentKind:
+      document.getElementById("income-confirm-kind")?.value ||
+      form?.elements.documentKind?.value ||
+      o.documentKind ||
+      "payslip",
     grossTotal,
     taxableIncome,
     gstAmount,
@@ -1981,7 +2010,22 @@ function renderIncomeTotalConfirm(box) {
       <ul class="detected-totals">${totalsList}</ul>
       <div class="form-grid scan-confirm-form">
         <label>Entity / company<input type="text" id="income-confirm-entity" value="${escapeHtml(entity)}" /></label>
-        <label>Date<input type="date" id="income-confirm-date" value="${escapeHtml(o.date || localToday())}" /></label>
+        <label>${o.documentKind === "tax_invoice" || o.documentKind === "invoice" ? "Issue date" : "Date"}<input type="date" id="income-confirm-date" value="${escapeHtml(o.issueDate || o.date || localToday())}" /></label>
+        ${
+          o.dueDate && o.dueDate !== (o.issueDate || o.date)
+            ? `<p class="muted small">Due date ${escapeHtml(o.dueDate)} is not the date that will be saved.</p>`
+            : ""
+        }
+        <label>Document kind
+          <select id="income-confirm-kind">
+            <option value="">—</option>
+            <option value="payslip" ${o.documentKind === "payslip" ? "selected" : ""}>Payslip</option>
+            <option value="remittance" ${o.documentKind === "remittance" ? "selected" : ""}>Remittance</option>
+            <option value="payment_summary" ${o.documentKind === "payment_summary" ? "selected" : ""}>Payment summary</option>
+            <option value="invoice" ${o.documentKind === "invoice" ? "selected" : ""}>Invoice</option>
+            <option value="tax_invoice" ${o.documentKind === "tax_invoice" ? "selected" : ""}>Tax invoice</option>
+          </select>
+        </label>
         <label>Type
           <select id="income-confirm-type">
             ${(state.standards?.incomeTypes || [])
@@ -2008,6 +2052,18 @@ function renderIncomeTotalConfirm(box) {
       </div>
     </div>
   `;
+
+  const savedDate = o.issueDate || o.date || "";
+  const formDate = document.getElementById("income-form")?.elements?.date;
+  const confirmDate = document.getElementById("income-confirm-date");
+  if (savedDate && confirmDate) confirmDate.value = savedDate;
+  if (savedDate && formDate) {
+    formDate.value = savedDate;
+    if (formDate.dataset) delete formDate.dataset.scanUserEdited;
+  }
+  const kindSelect = document.getElementById("income-document-kind");
+  const confirmKind = document.getElementById("income-confirm-kind");
+  if (kindSelect && confirmKind && confirmKind.value) kindSelect.value = confirmKind.value;
 
   box.querySelectorAll("[data-total-idx]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2398,7 +2454,11 @@ function renderForecast() {
   document.getElementById("forecast-progress").innerHTML = `
     <p>${f.yearProgress.daysElapsed} of ${f.yearProgress.daysTotal} days (${f.yearProgress.percentComplete}%)</p>
     <div class="progress-bar"><span style="width:${f.yearProgress.percentComplete}%"></span></div>
-    <p class="muted">YTD income ${fmt(f.yearToDate.income)} · YTD deductions ${fmt(f.yearToDate.deductions)}</p>
+    <p class="muted">${
+      f.yearToDate.salaryIncome != null || Number(f.yearToDate.businessIncome) > 0
+        ? `YTD salary ${fmt(f.yearToDate.salaryIncome != null ? f.yearToDate.salaryIncome : f.yearToDate.income)} · YTD business income ${fmt(f.yearToDate.businessIncome || 0)} · YTD deductions ${fmt(f.yearToDate.deductions)}`
+        : `YTD income ${fmt(f.yearToDate.income)} · YTD deductions ${fmt(f.yearToDate.deductions)}`
+    }</p>
   `;
   document.getElementById("forecast-stats").innerHTML = `
     <div class="stat-card income"><div class="label">Projected income</div><div class="value">${fmt(income)}</div><div class="sub">${periodLabel}</div></div>

@@ -27,7 +27,7 @@ const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichmen
 const { applyTaxInvoiceToOcr, incomeTypeForInvoice } = require("./lib/income-invoice");
 const { applyDescription } = require("./lib/scan-description");
 const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
-const { estimateFuelTaxCredit } = require("./lib/fuel-tax-credit");
+const { estimateFuelTaxCredit, creditFromStoredInputs } = require("./lib/fuel-tax-credit");
 const { buildHubGstTracker } = require("./lib/hub-gst-tracker");
 const { applyHubBusinessIncomeGst } = require("./lib/hub-income-gst");
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
@@ -107,7 +107,7 @@ const {
 } = require("./lib/historical-rates");
 const { writeJsonAtomic } = require("./lib/atomic-write");
 const { createAuthSupportRateLimiters } = require("./lib/rate-limit");
-const { buildReportPdf } = require("./lib/report-pdf");
+const { buildReportPdf, eofyPdfBasename } = require("./lib/report-pdf");
 const { buildAccountantPack } = require("./lib/accountant-pack");
 const { buildAccountantPackPdf } = require("./lib/accountant-pack-pdf");
 const {
@@ -3297,7 +3297,7 @@ api.get("/report.pdf", (req, res) => {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${productOf(req) === "suite" ? "gotax" : "haulage"}-eofy-${fy}.pdf"`
+    `attachment; filename="${eofyPdfBasename(productOf(req), fy)}"`
   );
   const doc = buildReportPdf(report, records, fy);
   doc.pipe(res);
@@ -3635,6 +3635,26 @@ api.put("/expenses/:id", (req, res) => {
   const entry = updateExpense(records, req.params.id, body);
   if (productOf(req) === "suite" && entry && (body.hours != null || body.homeOfficeHours != null)) {
     entry.hours = Number(body.hours || body.homeOfficeHours || 0);
+  }
+  if (productOf(req) !== "suite" && entry && (body.dieselLitres != null || body.fuelTaxCreditUse)) {
+    const litres = Number(body.dieselLitres != null ? body.dieselLitres : entry.dieselLitres);
+    const category = body.category || entry.category;
+    if (category === "fuel" && litres > 0) {
+      const credit = creditFromStoredInputs({
+        category,
+        dieselLitres: litres,
+        date: entry.date,
+        use: body.fuelTaxCreditUse || (entry.fuelTaxCredit && entry.fuelTaxCredit.use) || "on_road",
+      });
+      if (credit) {
+        entry.dieselLitres = litres;
+        entry.fuelTaxCreditUse = credit.use;
+        entry.fuelTaxCredit = credit;
+      }
+    } else if (!(litres > 0)) {
+      delete entry.fuelTaxCredit;
+      entry.dieselLitres = body.dieselLitres != null ? body.dieselLitres : entry.dieselLitres;
+    }
   }
   if (!entry) {
     res.status(404).json({ error: "Expense not found." });
@@ -4518,21 +4538,19 @@ api.post("/receipts/:id/confirm", (req, res) => {
   if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, expensePayload);
   if (blockDuplicateLedger(res, records, "expense", expensePayload, receipt && receipt.id)) return;
   if (productOf(req) !== "suite") {
-    const chosenUse =
-      expensePayload.fuelTaxCreditUse ||
-      (expensePayload.fuelTaxCredit && expensePayload.fuelTaxCredit.use) ||
-      "on_road";
-    const credit = estimateFuelTaxCredit({
+    const credit = creditFromStoredInputs({
+      category: expensePayload.category,
+      dieselLitres: expensePayload.dieselLitres,
       date: expensePayload.date,
-      litres:
-        expensePayload.dieselLitres ||
-        (expensePayload.fuelTaxCredit && expensePayload.fuelTaxCredit.litres),
-      text: `${expensePayload.vendor || ""}\n${expensePayload.description || ""}\n${
-        (receipt && receipt.ocrResult && receipt.ocrResult.rawText) || ""
-      }`,
-      use: chosenUse,
+      use: expensePayload.fuelTaxCreditUse,
     });
-    if (credit && expensePayload.category === "fuel") expensePayload.fuelTaxCredit = credit;
+    if (credit) {
+      expensePayload.fuelTaxCredit = credit;
+      expensePayload.dieselLitres = credit.litres;
+      expensePayload.fuelTaxCreditUse = credit.use;
+    } else {
+      delete expensePayload.fuelTaxCredit;
+    }
   }
   const entry = storage.addExpense(records, expensePayload);
   if (expensePayload.fuelTaxCredit) entry.fuelTaxCredit = expensePayload.fuelTaxCredit;
