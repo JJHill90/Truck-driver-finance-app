@@ -11,7 +11,7 @@ describe("dashboard assessableTotal guard", () => {
     expect(src).toMatch(/function patchRenderStats/);
     expect(src).toMatch(/function patchRefreshEofyLive/);
     expect(src).toMatch(/Do not stub \/summary/);
-    expect(src).toMatch(/haulage\\\/\(report\|forecast\)/);
+    expect(src).toContain("(?:haulage|suite)\\/forecast");
     expect(src).not.toMatch(/summary\|report\|forecast/);
   });
 
@@ -23,7 +23,7 @@ describe("dashboard assessableTotal guard", () => {
   });
 
   it("cache-busts enhancements so Play WebViews load the guard", () => {
-    expect(hub).toMatch(/enhancements\.js\?v=229/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=229/);
+    expect(hub).toMatch(/enhancements\.js\?v=230/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=230/);
   });
 });

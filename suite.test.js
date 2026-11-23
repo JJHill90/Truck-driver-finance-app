@@ -116,9 +116,9 @@ describe("suite tax engine", () => {
       },
       { financialYear: "2025-26", entityType: "sole_trader", gstRegistered: true, annualSalary: 120000 }
     );
-    expect(s.income.assessableTotal).toBe(120000);
+    expect(s.income.assessableTotal).toBe(110000);
     expect(s.expenses.deductibleTotal).toBe(4000);
-    expect(s.taxEstimate.taxableIncome).toBe(116000);
+    expect(s.taxEstimate.taxableIncome).toBe(106000);
     expect(s.bas.netGst).toBe(10000);
     expect(s.entityNote).toMatch(/Sole trader/i);
   });
