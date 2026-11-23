@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="haulage-build" content="229" />
+    <meta name="haulage-build" content="230" />
     <link rel="icon" type="image/svg+xml" href="./truck.svg" />
     <title>Driver Hub — Taxation Hub &amp; Fuel Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=229" />
+    <link rel="stylesheet" href="./styles.css?v=230" />
   </head>
   <body class="auth-locked">
     <!-- Driver Hub gate: login, then choose Taxation Hub or Fuel Hub -->
@@ -110,7 +110,7 @@
           ·
           Assistance tool — not tax advice and not an official ATO lodgement.
         </p>
-        <p class="app-version-footer title-version" data-app-version>Version 4.25</p>
+        <p class="app-version-footer title-version" data-app-version>Version 4.26</p>
       </div>
     </div>
 
@@ -136,7 +136,7 @@
             <button class="nav-btn" data-view="support">Support</button>
           </nav>
           <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">
-            Version 4.25
+            Version 4.26
           </p>
         </div>
       </aside>
@@ -329,9 +329,10 @@
         <section id="view-income" class="view">
           <div class="grid-2">
             <div class="panel">
-              <div class="panel-header"><h2>Scan payslip / remittance</h2></div>
+              <div class="panel-header"><h2>Scan an invoice or payslip</h2></div>
+              <p class="muted">This is the income uploader. Invoices scanned here stay on Income. Expense receipts use the Expenses page.</p>
               <div id="income-upload-zone" class="upload-zone">
-                <p>Drag &amp; drop a payslip or remittance (image / PDF), or use the camera with a live scan frame</p>
+                <p>Drag &amp; drop an invoice, payslip or remittance (image / PDF), or use the camera</p>
                 <div class="upload-zone-actions">
                   <button type="button" class="btn primary" id="pick-income-camera">Scan with camera</button>
                   <button type="button" class="btn secondary" id="pick-income">Upload file</button>
@@ -350,6 +351,7 @@
                 <label>Date<input type="date" name="date" required /></label>
                 <label>Type<select id="income-type" name="type"></select></label>
                 <label class="span-2">Payer / entity<input type="text" name="payer" placeholder="Employer or company" /></label>
+                <label>ABN<input type="text" id="income-abn" name="vendorAbn" placeholder="11 222 333 444" /></label>
                 <label>Gross Pay ($)<input type="number" name="grossTotal" step="0.01" min="0" /></label>
                 <label>GST ($)<input type="number" name="gstAmount" step="0.01" min="0" value="0" /></label>
                 <label>Net Pay ($)<input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" required /></label>
@@ -949,7 +951,7 @@
           <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
             <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
           </nav>
-          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 4.25</p>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 4.26</p>
         </div>
       </aside>
       <div class="main">
@@ -989,8 +991,8 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./live-reload.js?v=229"></script>
-    <script src="./enhancements.js?v=229"></script>
+    <script src="./live-reload.js?v=230"></script>
+    <script src="./enhancements.js?v=230"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./fuelhub.js?v=fuel-assess-1"></script>
     <script src="./companion.js?v=companion-2"></script>

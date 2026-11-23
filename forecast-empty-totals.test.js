@@ -26,7 +26,7 @@ describe("forecast projected totals guard", () => {
   });
 
   it("cache-busts enhancements so Play WebViews load the forecast guard", () => {
-    expect(hub).toMatch(/enhancements\.js\?v=229/);
-    expect(suiteHtml).toMatch(/enhancements\.js\?v=229/);
+    expect(hub).toMatch(/enhancements\.js\?v=230/);
+    expect(suiteHtml).toMatch(/enhancements\.js\?v=230/);
   });
 });

@@ -479,6 +479,25 @@ function readManualFormPayload() {
   };
 }
 
+function fuelCreditAskHtml(o) {
+  if (document.body.classList.contains("gotax-suite")) return "";
+  const blob = `${o.suggestedCategory || ""} ${o.vendor || ""} ${o.description || ""} ${o.notes || ""}`;
+  const litres = o.dieselLitres || (o.fuelTaxCredit && o.fuelTaxCredit.litres) || "";
+  const fuelish =
+    o.suggestedCategory === "fuel" || /\b(diesel|adblue|fuel)\b/i.test(blob) || Number(litres) > 0;
+  if (!fuelish) return "";
+  return `
+    <fieldset class="enh-ftc" data-ftc-ask="1">
+      <legend>Fuel tax credit (BAS 7D)</legend>
+      <label>Diesel litres
+        <input type="number" id="enh-ftc-litres" min="0" step="0.01" value="${escapeHtml(String(litres || ""))}" placeholder="412.00" />
+      </label>
+      <label class="checkbox"><input type="radio" name="enh-ftc-use" value="on_road" checked /> On public roads</label>
+      <label class="checkbox"><input type="radio" name="enh-ftc-use" value="off_road" /> Off-road or auxiliary (higher rate)</label>
+      <p class="muted">BAS 7D uses these litres and the on-road or off-road choice.</p>
+    </fieldset>`;
+}
+
 function renderReceiptTotalConfirm(box) {
   const pending = pendingReceiptConfirm;
   if (!pending) return;
@@ -529,6 +548,9 @@ function renderReceiptTotalConfirm(box) {
       <label class="scan-confirm-amount-label">Total amount ($)
         <input type="number" id="scan-confirm-amount" step="0.01" min="0" value="${primary}" required />
       </label>
+      <label>ABN<input type="text" id="scan-confirm-abn" value="${escapeHtml(o.vendorAbn || "")}" placeholder="40 004 201 307" /></label>
+      <label>GST ($)<input type="number" id="scan-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
+      ${fuelCreditAskHtml(o)}
       <div class="scan-confirm-actions" id="scan-confirm-actions">
         <button type="button" class="btn primary" id="scan-confirm-yes">Yes — approve &amp; save</button>
         <button type="button" class="btn secondary" id="scan-confirm-edit">Edit details first</button>
@@ -581,9 +603,7 @@ function showScanConfirmDetails(box) {
         </select>
       </label>
       <label>Vendor<input type="text" id="scan-confirm-vendor" value="${escapeHtml(o.vendor || "")}" placeholder="BP Truck Stop" /></label>
-      <label>ABN (optional)<input type="text" id="scan-confirm-abn" value="${escapeHtml(o.vendorAbn || "")}" placeholder="12 345 678 901" /></label>
       <label>Description<input type="text" id="scan-confirm-description" value="${escapeHtml(o.description || "")}" placeholder="Diesel / meal / accommodation" /></label>
-      <label>GST ($)<input type="number" id="scan-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
       <label>Work use %<input type="number" id="scan-confirm-work" value="100" min="0" max="100" /></label>
       <label class="checkbox"><input type="checkbox" id="scan-confirm-reimbursed" /> Reimbursed by employer</label>
     </div>
@@ -661,6 +681,9 @@ function readScanConfirmPayload(showDetails) {
       description:
         card("scan-confirm-description") || formPayload?.description || o.description || "",
       gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
+      dieselLitres: card("enh-ftc-litres"),
+      fuelTaxCreditUse:
+        (document.querySelector && document.querySelector('input[name="enh-ftc-use"]:checked')?.value) || "",
       workUsePercent: Number(
         document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
       ),
@@ -677,6 +700,9 @@ function readScanConfirmPayload(showDetails) {
     vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
     description: card("scan-confirm-description") || formPayload?.description || o.description || "",
     gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
+    dieselLitres: card("enh-ftc-litres"),
+    fuelTaxCreditUse:
+      (document.querySelector && document.querySelector('input[name="enh-ftc-use"]:checked')?.value) || "",
     workUsePercent: Number(
       document.getElementById("scan-confirm-work")?.value ?? formPayload?.workUsePercent ?? 100
     ),
@@ -1127,6 +1153,12 @@ function setView(name) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
   document.getElementById(`view-${name}`)?.classList.add("active");
+  document.querySelectorAll(".view").forEach((view) => {
+    const on = view.classList.contains("active");
+    view.querySelectorAll('input[type="file"]').forEach((input) => {
+      input.disabled = !on;
+    });
+  });
   document.querySelector(`.nav-btn[data-view="${name}"]`)?.classList.add("active");
   const titles = {
     dashboard: "Dashboard",
@@ -1721,9 +1753,22 @@ function highlightExpenseInList(expenseId) {
 }
 
 async function afterExpenseSaved(entry, message) {
+  if (entry && state.records) {
+    state.records.expenses = state.records.expenses || [];
+    if (!state.records.expenses.some((row) => row && row.id === entry.id)) {
+      state.records.expenses.unshift(entry);
+    }
+    const receipt = (state.records.receipts || []).find((row) => row && row.id === entry.receiptId);
+    if (receipt) {
+      receipt.linkedExpenseId = entry.id;
+      receipt.awaitingConfirm = false;
+      receipt.missingLinkedLedger = false;
+    }
+  }
   toast(message || "Expense saved");
   window.__haulageBlockRefreshAll = 0;
   window.__haulageSkipNextRefreshAll = false;
+  window.__haulageQuietUntil = 0;
   await alignFinancialYearToEntry(entry);
   await refreshAll();
   setView("expenses");
@@ -1732,6 +1777,9 @@ async function afterExpenseSaved(entry, message) {
   renderExpenseList();
   // EOFY deductions stay live even while remaining on Expenses
   await refreshEofyLive();
+  if (typeof window.haulageRefreshAlerts === "function") {
+    await window.haulageRefreshAlerts();
+  }
 }
 
 function renderIncomeList() {
@@ -1815,6 +1863,7 @@ async function afterIncomeSaved(entry, message) {
   await new Promise((resolve) => setTimeout(resolve, 0));
   window.__haulageBlockRefreshAll = 0;
   window.__haulageSkipNextRefreshAll = false;
+  window.__haulageQuietUntil = 0;
   try {
     await alignFinancialYearToEntry(entry);
     await refreshAll();
@@ -1827,6 +1876,13 @@ async function afterIncomeSaved(entry, message) {
     await refreshEofyLive();
   } catch {
     /* the row is already saved */
+  }
+  if (typeof window.haulageRefreshAlerts === "function") {
+    try {
+      await window.haulageRefreshAlerts();
+    } catch {
+      /* banner can wait */
+    }
   }
 }
 
@@ -1904,6 +1960,9 @@ function prefillIncomeForm(ocr, overrides = {}) {
   if (overrides.description || ocr.description) {
     form.elements.description.value = overrides.description || ocr.description;
   }
+  const abnEl = document.getElementById("income-abn");
+  const abn = overrides.vendorAbn || overrides.abn || ocr.vendorAbn || ocr.abn || "";
+  if (abnEl) abnEl.value = abn;
   const kindEl = document.getElementById("income-document-kind");
   const kind = overrides.documentKind || ocr.documentKind || "";
   if (kindEl) {
@@ -1950,6 +2009,12 @@ function readIncomeScanConfirmPayload() {
     type: document.getElementById("income-confirm-type")?.value || form?.elements.type?.value || o.suggestedIncomeType || "salary_wages",
     vendor: entity,
     entity,
+    vendorAbn:
+      document.getElementById("income-confirm-abn")?.value ||
+      form?.elements.vendorAbn?.value ||
+      o.vendorAbn ||
+      o.abn ||
+      "",
     description:
       document.getElementById("income-confirm-description")?.value ||
       form?.elements.description?.value ||
@@ -2010,6 +2075,7 @@ function renderIncomeTotalConfirm(box) {
       <ul class="detected-totals">${totalsList}</ul>
       <div class="form-grid scan-confirm-form">
         <label>Entity / company<input type="text" id="income-confirm-entity" value="${escapeHtml(entity)}" /></label>
+        <label>ABN<input type="text" id="income-confirm-abn" value="${escapeHtml(o.vendorAbn || o.abn || "")}" placeholder="11 222 333 444" /></label>
         <label>${o.documentKind === "tax_invoice" || o.documentKind === "invoice" ? "Issue date" : "Date"}<input type="date" id="income-confirm-date" value="${escapeHtml(o.issueDate || o.date || localToday())}" /></label>
         ${
           o.dueDate && o.dueDate !== (o.issueDate || o.date)

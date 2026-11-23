@@ -723,6 +723,7 @@
         suggestedIncomeType: ocr.suggestedIncomeType || null,
         suggestedCategory: ocr.suggestedCategory || null,
         vendorAbn: ocr.vendorAbn || null,
+        dieselLitres: ocr.dieselLitres || null,
         travelAllowance: ocr.travelAllowance || null,
         notes: notes || "",
       },
@@ -943,7 +944,7 @@
     // Do not stub /summary or /forecast with { ok: true, quiet: true } —
     // that crashes renderStats (assessableTotal) and renderForecast
     // (projected.income / scenarios) and leaves the cards empty.
-    return /\/api\/haulage\/(report|forecast)(\?|$)/.test(String(url || ""));
+    return /\/api\/(?:haulage|suite)\/forecast(\?|$)/.test(String(url || ""));
   }
 
   function isSummaryGet(url, method) {
@@ -1755,7 +1756,11 @@
       complianceHtml = `<div class="enh-section enh-compliance enh-status-${esc(comp.status)}">
           <h4>ATO compliance — ${esc(comp.statusLabel || statusFriendly[comp.status] || "Checked")}</h4>
           ${checks ? `<ul class="enh-checks">${checks}</ul>` : '<p class="muted">No compliance flags.</p>'}
-          <p class="enh-disclaimer">Indicative check against ATO transport-industry standards — not tax advice.</p>
+          <p class="enh-disclaimer">${
+            document.body.classList.contains("gotax-suite")
+              ? "Indicative check against general ATO individual and small-business standards — not tax advice."
+              : "Indicative check against ATO transport-industry standards — not tax advice."
+          }</p>
         </div>`;
     }
 
@@ -4923,7 +4928,11 @@
             <div><span>Assessable income</span><br>${esc(moneyAud(totals.assessableIncome))}</div>
             <div><span>Deductions</span><br>${esc(moneyAud(totals.deductibleExpenses))}</div>
             <div><span>Taxable income</span><br>${esc(moneyAud(totals.taxableIncome))}</div>
-            <div><span>PAYG withheld</span><br>${esc(moneyAud(totals.paygWithheld))}</div>
+            ${
+              reg.id === "employee"
+                ? `<div><span>PAYG withheld</span><br>${esc(moneyAud(totals.paygWithheld))}</div>`
+                : ""
+            }
             <div><span>Estimated tax</span><br>${esc(moneyAud(totals.estimatedTax))}</div>
             <div><span>Balance</span><br>${esc(payable)}</div>
           </div>
@@ -6835,6 +6844,14 @@
             renderAlerts(alertData.alerts, alertData.user);
             markReviewShown();
           }
+          window.haulageRefreshAlerts = async function haulageRefreshAlerts() {
+            try {
+              const alertData = await apiGet("/alerts");
+              renderAlerts(alertData.alerts, alertData.user);
+            } catch {
+              /* the banner can stay until the next login */
+            }
+          };
         } else if (selectedApp === "fuelhub") {
           openFuelHub();
         } else {
@@ -13946,22 +13963,9 @@
 
   function isMissingLink(r, purpose) {
     if (!r || !(r.hasImage || r.imagePath)) return false;
-    // Honour server flag when present — including false, so a stale banner
-    // clears after restore / refresh even if local income/expense arrays lag.
+    // Only the server flag. Inferring from a lagging expense list flashes
+    // "Not in ledger" on a photo that was just approved.
     if (r.missingLinkedLedger === true) return !purpose || purposeOf(r) === purpose;
-    if (r.missingLinkedLedger === false) return false;
-    if (r.linkedIncomeId) {
-      const found = activeIncome().some(
-        (i) => i && (i.id === r.linkedIncomeId || i.receiptId === r.id)
-      );
-      if (!found) return !purpose || purpose === "income";
-    }
-    if (r.linkedExpenseId) {
-      const found = activeExpenses().some(
-        (e) => e && (e.id === r.linkedExpenseId || e.receiptId === r.id)
-      );
-      if (!found) return !purpose || purpose === "expense";
-    }
     return false;
   }
 
@@ -16897,6 +16901,10 @@
           await window.refreshAll();
         }
         if (stayOn && typeof window.setView === "function") window.setView(stayOn);
+        const review = panel.querySelector("[data-csv-review]");
+        if (review) review.innerHTML = "";
+        const details = panel.closest("details");
+        if (details) details.open = false;
       }
     } catch (err) {
       setStatus(panel, (err && err.message) || "Import failed.", true);
@@ -16999,7 +17007,17 @@
       .trim()
       .toLowerCase();
     if (entity === "sole_trader" || entity === "partnership" || entity === "owner_driver") {
-      return "Expected income";
+      return "Income target";
+    }
+    try {
+      const business =
+        typeof state !== "undefined" &&
+        state.summary &&
+        state.summary.income &&
+        Number(state.summary.income.businessAssessable) > 0;
+      if (business && !document.body.classList.contains("gotax-suite")) return "Income target";
+    } catch {
+      /* ignore */
     }
     return "Annual salary";
   }

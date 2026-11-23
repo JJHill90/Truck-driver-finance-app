@@ -24,10 +24,10 @@ const {
   applyIncomePrimaryToOcr,
 } = require("./lib/income-total");
 const { enrichOcrFromVendors, rememberVendor } = require("./lib/vendor-enrichment");
-const { applyTaxInvoiceToOcr, incomeTypeForInvoice } = require("./lib/income-invoice");
+const { applyTaxInvoiceToOcr, incomeTypeForInvoice, gstAmountFromText } = require("./lib/income-invoice");
 const { applyDescription } = require("./lib/scan-description");
 const { stampFyWarning, assessDocumentFy } = require("./lib/fy-date-guard");
-const { estimateFuelTaxCredit, creditFromStoredInputs } = require("./lib/fuel-tax-credit");
+const { creditFromStoredInputs, extractDieselLitres } = require("./lib/fuel-tax-credit");
 const { buildHubGstTracker } = require("./lib/hub-gst-tracker");
 const { applyHubBusinessIncomeGst } = require("./lib/hub-income-gst");
 const { applyExpensePresets, applyOcrCategoryPreset } = require("./lib/user-presets");
@@ -3825,8 +3825,10 @@ api.post("/income", (req, res) => {
   const records = getRecords(req);
   const body = normalizePayloadDate(sanitizeIncomeFields({ ...(req.body || {}) }));
   if (body.type) body.type = normalizeIncomeTypeId(body.type);
-  if (productOf(req) === "suite") suite.extraEntity.stampActiveEntity(records, body);
-  else applyHubBusinessIncomeGst(body, records.profile || {});
+  if (productOf(req) === "suite") {
+    suite.extraEntity.stampActiveEntity(records, body);
+    suite.applySuiteBusinessIncomeGst(body);
+  } else applyHubBusinessIncomeGst(body, records.profile || {});
   if (blockDuplicateLedger(res, records, "income", body)) return;
   const entry = storage.addIncome(records, body);
   attachTravelAllowanceToIncome(entry, body, null);
@@ -4027,18 +4029,18 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
     });
   } else {
     applyDescription(ocrResult);
+    const gstFromSlip = gstAmountFromText(`${ocrResult.rawText || ""}\n${ocrResult.description || ""}`);
+    if (gstFromSlip && (!(Number(ocrResult.gstAmount) > 0) || Number(ocrResult.gstAmount) === 10)) {
+      ocrResult.gstAmount = gstFromSlip;
+    }
     if (ocrResult.suggestedCategory) {
       ocrResult.suggestedCategory = normalizeExpenseCategoryId(ocrResult.suggestedCategory);
     }
     if (product !== "suite") {
-      const credit = estimateFuelTaxCredit({
-        date: ocrResult.date,
-        text: `${ocrResult.vendor || ""}\n${ocrResult.rawText || ocrResult.description || ""}`,
-        use: "on_road",
-      });
-      if (credit && /fuel|diesel|adblue/i.test(String(ocrResult.suggestedCategory || ""))) {
-        ocrResult.fuelTaxCredit = credit;
-      }
+      const scanText = `${ocrResult.vendor || ""}\n${ocrResult.description || ""}\n${ocrResult.rawText || ""}`;
+      const litres = extractDieselLitres(scanText);
+      if (litres) ocrResult.dieselLitres = litres;
+      if (!ocrResult.suggestedCategory && /\bdiesel\b/i.test(scanText)) ocrResult.suggestedCategory = "fuel";
     }
   }
   stampFyWarning(ocrResult, selectedFy);
@@ -4438,6 +4440,7 @@ api.post("/receipts/:id/confirm", (req, res) => {
     }
     if (!payload.description) payload.description = buildIncomeDescription(payload);
     if (productOf(req) !== "suite") applyHubBusinessIncomeGst(payload, records.profile || {});
+    else suite.applySuiteBusinessIncomeGst(payload);
 
     // Idempotent confirm: already linked to active income, or restore soft-deleted.
     let existing =

@@ -8,7 +8,7 @@ describe("profile pace", () => {
     );
     expect(pace.situation).toBe("Sole trader");
     expect(pace.who).toBe("Sole trader · Acme Freight");
-    expect(pace.targetLabel).toBe("Expected income");
+    expect(pace.targetLabel).toBe("Income target");
     expect(pace.target).toBe(85000);
     expect(pace.actual).toBe(20000);
     expect(pace.remaining).toBe(65000);
@@ -26,7 +26,7 @@ describe("profile pace", () => {
       "Linehaul driver"
     );
     expect(profilePace({ driverType: "owner_driver", annualSalary: 130000 }, 0).targetLabel).toBe(
-      "Expected income"
+      "Income target"
     );
   });
 
@@ -92,7 +92,7 @@ describe("profile pace", () => {
     expect(portrait.paragraphs).toContain("Sole trader at Acme Freight.");
     expect(portrait.paragraphs).toContain("Occupation is Financial auditor.");
     expect(portrait.paragraphs).toContain(
-      "This year is measured against $88,000.00 expected income."
+      "This year is measured against $88,000.00 income target."
     );
     expect(portrait.paragraphs).toContain("GST registered. ABN 51 824 753 556.");
     expect(portrait.paragraphs).toContain("Travel for work includes overnight stays.");
@@ -112,7 +112,7 @@ describe("profile pace", () => {
       { suite: true }
     );
     expect(portrait.paragraphs).toContain("Your share is 40% of North Haul.");
-    expect(portrait.paragraphs.join(" ")).toMatch(/expected income/);
+    expect(portrait.paragraphs.join(" ")).toMatch(/income target/);
   });
 
   it("invites a blank profile to be filled in", () => {
