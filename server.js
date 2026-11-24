@@ -100,6 +100,8 @@ const {
 const pdfThumbnail = require("./lib/pdf-thumbnail");
 const receiptImageServe = require("./lib/receipt-image-serve");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
+const { lookupAbn, applyAbrToOcr } = require("./lib/abr-lookup");
+const { recordScan, scanStats } = require("./lib/scan-telemetry");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
   applyHistoricalRates,
@@ -1952,6 +1954,11 @@ function userRecordsSummary(username, req) {
     },
   };
 }
+
+api.get("/admin/scan-stats", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json(scanStats());
+});
 
 api.get("/admin/users", (req, res) => {
   if (!requireAdmin(req, res)) return;
@@ -4135,6 +4142,7 @@ async function runDeferredPdfRaster(req, receiptId, purpose) {
 }
 
 // --- Receipts ------------------------------------------------------------
+const scanInflight = new Set();
 api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
   try {
     if (!req.user) {
@@ -4162,25 +4170,58 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       return;
     }
     const ocrPurpose = purpose === "income" ? "income" : "expense";
-    const ocrResult = await Promise.race([
-      extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
+    const scanKey = `${productOf(req)}:${req.user}`;
+    if (scanInflight.has(scanKey)) {
+      res.status(409).json({
+        error: "A scan is already running. Wait for it to finish.",
+        code: "SCAN_IN_PROGRESS",
+      });
+      return;
+    }
+    if (String(imageBase64).length > 12_000_000) {
+      res.status(413).json({ error: "Photo too large — try a smaller image or use manual entry." });
+      return;
+    }
+    scanInflight.add(scanKey);
+    const scanAbort = new AbortController();
+    const scanStarted = Date.now();
+    const scanTimer = setTimeout(() => scanAbort.abort(), 50000);
+    const onClose = () => {
+      if (!res.writableEnded) scanAbort.abort();
+    };
+    req.on("close", onClose);
+    let ocrResult;
+    try {
+      ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
         purpose: ocrPurpose,
-      }),
-      new Promise((resolve) =>
-        setTimeout(
-          () =>
-            resolve({
-              documentType: ocrPurpose === "income" ? "income" : "expense",
-              amount: null,
-              confidence: "low",
-              ocrSource: "timeout",
-              notes: "The scan took too long and was stopped. Enter the totals from the document, then approve.",
-              rawText: "",
-            }),
-          40000
-        )
-      ),
-    ]);
+        signal: scanAbort.signal,
+        tesseractImage: upload.tesseractImage || "",
+        tesseractMime: upload.tesseractMime || mimeType,
+      });
+    } catch (err) {
+      ocrResult = {
+        documentType: ocrPurpose === "income" ? "income" : "expense",
+        amount: null,
+        confidence: "low",
+        ocrSource: "unreadable",
+        notes: "Couldn't read this receipt, try again or enter manually",
+        ocrError: scanAbort.signal.aborted ? "timeout" : "failed",
+        rawText: "",
+      };
+    } finally {
+      clearTimeout(scanTimer);
+      req.off("close", onClose);
+      scanInflight.delete(scanKey);
+      const bytes = Math.round((String(imageBase64).length * 3) / 4);
+      recordScan({
+        product: productOf(req),
+        ok: Boolean(ocrResult && ocrResult.amount) && ocrResult.ocrSource !== "unreadable",
+        errorType: (ocrResult && ocrResult.ocrError) || "",
+        durationMs: Date.now() - scanStarted,
+        bytes,
+        mime: mimeType,
+      });
+    }
 
     // Text-layer extract already ran inside extractReceiptData. Only parse
     // again when that pass left no rawText (avoids a second pdf-parse stall).
@@ -4213,6 +4254,12 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     }
 
     const enriched = enrichScannedOcr(req, records, ocrResult, ocrPurpose);
+    try {
+      const abr = await lookupAbn(enriched.ocrResult && enriched.ocrResult.vendorAbn);
+      if (abr) applyAbrToOcr(enriched.ocrResult, abr);
+    } catch (err) {
+      console.warn("ABR lookup skipped:", err.message);
+    }
     const {
       detectedTotals,
       componentBreakdown,

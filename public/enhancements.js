@@ -72,6 +72,14 @@
         hint: "If you continue, the document is read again so it can be saved.",
       };
     }
+    if (phase === "retrying") {
+      return {
+        title: "OCR in progress",
+        phase: "Connection was slow — trying again…",
+        button: income ? "Retrying remittance / payslip…" : "Retrying receipt…",
+        hint: "The server may be waking up. The same photo is sent again.",
+      };
+    }
     if (phase === "rereading") {
       return {
         title: "OCR in progress",
@@ -724,6 +732,13 @@
         suggestedCategory: ocr.suggestedCategory || null,
         vendorAbn: ocr.vendorAbn || null,
         dieselLitres: ocr.dieselLitres || null,
+        fuelType: ocr.fuelType || "",
+        paymentMethod: ocr.paymentMethod || "",
+        receiptNumber: ocr.receiptNumber || "",
+        fieldConfidence: ocr.fieldConfidence || null,
+        offerAsIncome: Boolean(ocr.offerAsIncome),
+        ocrError: ocr.ocrError || "",
+        ocrSource: ocr.ocrSource || "",
         travelAllowance: ocr.travelAllowance || null,
         notes: notes || "",
       },
@@ -1152,6 +1167,10 @@
     return Boolean(url && /\/api\/haulage(?:\/|$|\?)/.test(String(url)));
   }
 
+  function isAppApiUrl(url) {
+    return Boolean(url && /\/api\/(?:haulage|suite)(?:\/|$|\?)/.test(String(url)));
+  }
+
   /** GET /forecast fires when Forecast or EOFY opens — do not auto-modal. */
   function isBrowseSafePaymentGate(method, url) {
     const m = String(method || "GET").toUpperCase();
@@ -1190,19 +1209,22 @@
   }
 
   async function haulageFetchWithRetry(run) {
-    try {
-      return await run();
-    } catch (err) {
-      if (err && err.name === "AbortError") throw err;
-      // One retry covers brief blips and hosted cold-starts (e.g. Render idle).
-      await sleep(1500);
+    const waits = [0, 800, 1600];
+    let lastErr = null;
+    for (let attempt = 0; attempt < waits.length; attempt += 1) {
+      if (waits[attempt]) {
+        if (typeof setOcrProgressPhase === "function") setOcrProgressPhase("retrying");
+        await sleep(waits[attempt]);
+      }
       try {
         return await run();
-      } catch (err2) {
-        if (err2 && err2.name === "AbortError") throw err2;
-        return networkErrorResponse();
+      } catch (err) {
+        if (err && err.name === "AbortError") throw err;
+        lastErr = err;
       }
     }
+    if (lastErr && lastErr.name === "AbortError") throw lastErr;
+    return networkErrorResponse();
   }
 
   window.fetch = async function (...args) {
@@ -1402,7 +1424,7 @@
         fetchOpts.signal = controller.signal;
         ocrProgress.startedAt = null;
         latest = null;
-        const timeoutMs = looksPdf ? Math.min(PDF_SCAN_TIMEOUT_MS, 40000) : 40000;
+        const timeoutMs = looksPdf ? Math.min(PDF_SCAN_TIMEOUT_MS, 55000) : 55000;
 
         try {
           scanTimeoutId = setTimeout(() => {
@@ -1661,7 +1683,7 @@
       return res;
     };
 
-    if (isHaulageApiUrl(url)) {
+    if (isAppApiUrl(url)) {
       return haulageFetchWithRetry(() => runScanOrPassthrough.call(this));
     }
     return runScanOrPassthrough.call(this);

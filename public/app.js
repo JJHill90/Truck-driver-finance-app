@@ -116,7 +116,23 @@ function readFileAsDataUrl(file) {
   });
 }
 
-function compressImage(file, maxDim = 1024, quality = 0.72, mime = "image/jpeg") {
+function bitmapToJpegFile(bitmap, name) {
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(new File([blob], name, { type: "image/jpeg" }));
+    }, "image/jpeg", 0.85);
+  });
+}
+
+function preprocessForTesseract(file) {
+  return compressImage(file, 1400, 0.8, "image/jpeg", { contrast: true });
+}
+
+function compressImage(file, maxDim = 2000, quality = 0.85, mime = "image/jpeg", options = {}) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -137,6 +153,25 @@ function compressImage(file, maxDim = 1024, quality = 0.72, mime = "image/jpeg")
         ctx.fillRect(0, 0, width, height);
       }
       ctx.drawImage(img, 0, 0, width, height);
+      if (options.contrast) {
+        const frame = ctx.getImageData(0, 0, width, height);
+        const d = frame.data;
+        let min = 255;
+        let max = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const y = Math.round(d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11);
+          d[i] = d[i + 1] = d[i + 2] = y;
+          if (y < min) min = y;
+          if (y > max) max = y;
+        }
+        const span = Math.max(1, max - min);
+        for (let i = 0; i < d.length; i += 4) {
+          const stretched = Math.max(0, Math.min(255, ((d[i] - min) * 255) / span));
+          const bw = stretched > 170 ? 255 : stretched < 80 ? 0 : stretched;
+          d[i] = d[i + 1] = d[i + 2] = bw;
+        }
+        ctx.putImageData(frame, 0, 0);
+      }
       resolve(canvas.toDataURL(mime, mime === "image/jpeg" ? quality : undefined));
     };
     img.onerror = () => {
@@ -170,32 +205,44 @@ async function prepareImageForUpload(file) {
   }
 
   const isPng = file.type === "image/png" || ext === "png";
+  const heic = /heic|heif/i.test(file.type) || ext === "heic" || ext === "heif";
   const outputMime = isPng ? "image/png" : "image/jpeg";
-  const raw = await readFileAsDataUrl(file);
-  const mimeType = file.type || outputMime;
+  let source = file;
+  if (heic) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      source = await bitmapToJpegFile(bitmap, file.name.replace(/\.\w+$/, "") + ".jpg");
+      bitmap.close && bitmap.close();
+    } catch {
+      throw new Error("This HEIC photo could not be converted. Save it as JPEG and try again.");
+    }
+  }
+  const raw = await readFileAsDataUrl(source);
+  const mimeType = heic ? "image/jpeg" : file.type || outputMime;
 
-  // Keep original file when small enough — critical for PNG receipt screenshots/OCR
-  if (raw.length <= 3_500_000) {
-    return { dataUrl: raw, mimeType, kind: "image" };
+  // Draw every photo through a canvas so phone EXIF orientation is applied,
+  // including pictures that are already small.
+  let oriented = null;
+  try {
+    oriented = await compressImage(source, 2000, isPng ? 1 : 0.85, outputMime);
+  } catch {
+    oriented = null;
+  }
+  const tesseractDataUrl = await preprocessForTesseract(source).catch(() => "");
+  if (oriented && oriented.length <= 3_500_000) {
+    return {
+      dataUrl: oriented,
+      tesseractDataUrl,
+      mimeType: outputMime,
+      kind: "image",
+    };
   }
 
-  const steps = isPng
-    ? [
-        [2200, 1],
-        [1800, 1],
-        [1600, 1],
-        [1400, 1],
-        [1200, 1],
-        [1024, 1],
-      ]
-    : [
-        [1400, 0.8],
-        [1200, 0.72],
-        [1024, 0.65],
-        [900, 0.55],
-        [768, 0.45],
-        [640, 0.38],
-      ];
+  const steps = [
+    [2000, isPng ? 1 : 0.85],
+    [1800, isPng ? 1 : 0.85],
+    [1600, isPng ? 1 : 0.82],
+  ];
 
   for (const [dim, q] of steps) {
     try {
@@ -231,6 +278,8 @@ function showReceiptPreview(prepared, filename) {
 }
 
 async function uploadReceiptFile(file) {
+  if (window.__haulageScanBusy) return;
+  window.__haulageScanBusy = true;
   pickBtn.disabled = true;
   pickBtn.textContent = "Preparing…";
   const box = document.getElementById("scan-result");
@@ -247,6 +296,8 @@ async function uploadReceiptFile(file) {
       method: "POST",
       body: JSON.stringify({
         imageBase64: prepared.dataUrl,
+        tesseractImage: prepared.tesseractDataUrl || "",
+        tesseractMime: "image/jpeg",
         mimeType: prepared.mimeType,
         filename: file.name,
       }),
@@ -287,6 +338,7 @@ async function uploadReceiptFile(file) {
     `;
     toast(err.message);
   } finally {
+    window.__haulageScanBusy = false;
     pickBtn.disabled = false;
     pickBtn.textContent = "Upload file";
     fileInput.value = "";
@@ -479,6 +531,15 @@ function readManualFormPayload() {
   };
 }
 
+function confidenceHtml(o) {
+  const fields = o.fieldConfidence || {};
+  const low = Object.entries(fields).filter(([, level]) => level === "low");
+  if (!low.length) return "";
+  return `<p class="tag warn">Check these fields — the scan was not sure: ${low
+    .map(([name]) => name)
+    .join(", ")}.</p>`;
+}
+
 function fuelCreditAskHtml(o) {
   if (document.body.classList.contains("gotax-suite")) return "";
   const blob = `${o.suggestedCategory || ""} ${o.vendor || ""} ${o.description || ""} ${o.notes || ""}`;
@@ -551,6 +612,8 @@ function renderReceiptTotalConfirm(box) {
       <label>ABN<input type="text" id="scan-confirm-abn" value="${escapeHtml(o.vendorAbn || "")}" placeholder="40 004 201 307" /></label>
       <label>GST ($)<input type="number" id="scan-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
       ${fuelCreditAskHtml(o)}
+      ${confidenceHtml(o)}
+      ${o.offerAsIncome ? `<p class="tag warn">This looks like an invoice. Use the Income page to save it as income, or continue only if it is an expense.</p>` : ""}
       <div class="scan-confirm-actions" id="scan-confirm-actions">
         <button type="button" class="btn primary" id="scan-confirm-yes">Yes — approve &amp; save</button>
         <button type="button" class="btn secondary" id="scan-confirm-edit">Edit details first</button>
@@ -2179,6 +2242,8 @@ function showIncomePreview(prepared, filename) {
 }
 
 async function uploadIncomeFile(file) {
+  if (window.__haulageScanBusy) return;
+  window.__haulageScanBusy = true;
   const pickBtn = document.getElementById("pick-income");
   const fileInput = document.getElementById("income-file");
   const box = document.getElementById("income-scan-result");
@@ -2198,6 +2263,8 @@ async function uploadIncomeFile(file) {
       method: "POST",
       body: JSON.stringify({
         imageBase64: prepared.dataUrl,
+        tesseractImage: prepared.tesseractDataUrl || "",
+        tesseractMime: "image/jpeg",
         mimeType: prepared.mimeType,
         filename: file.name,
         purpose: "income",
@@ -2240,6 +2307,7 @@ async function uploadIncomeFile(file) {
     }
     toast(err.message);
   } finally {
+    window.__haulageScanBusy = false;
     if (pickBtn) {
       pickBtn.disabled = false;
       pickBtn.textContent = "Upload file";
