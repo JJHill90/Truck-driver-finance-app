@@ -3,6 +3,7 @@ coverage
 
 # Tesseract.js language models downloaded at runtime into the CWD
 *.traineddata
+!vendor/tesseract/eng.traineddata
 
 # Runtime data store & uploaded receipts (dev artifacts)
 data

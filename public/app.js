@@ -167,8 +167,7 @@ function compressImage(file, maxDim = 2000, quality = 0.85, mime = "image/jpeg",
         const span = Math.max(1, max - min);
         for (let i = 0; i < d.length; i += 4) {
           const stretched = Math.max(0, Math.min(255, ((d[i] - min) * 255) / span));
-          const bw = stretched > 170 ? 255 : stretched < 80 ? 0 : stretched;
-          d[i] = d[i + 1] = d[i + 2] = bw;
+          d[i] = d[i + 1] = d[i + 2] = stretched;
         }
         ctx.putImageData(frame, 0, 0);
       }
@@ -401,7 +400,7 @@ function getDetectedTotalsClient(ocr) {
 function clearManualReceiptFields() {
   const form = document.getElementById("manual-receipt-form");
   if (!form) return;
-  const date = form.elements.date?.value || localToday();
+  const date = form.elements.date?.value || "";
   form.reset();
   resetCategorySelect("manual-receipt-category");
   form.elements.date.value = date;
@@ -519,7 +518,7 @@ function readManualFormPayload() {
   const confirmAmount = document.getElementById("scan-confirm-amount");
   const amount = Number(confirmAmount?.value || form.elements.amount?.value);
   return {
-    date: form.elements.date?.value || localToday(),
+    date: form.elements.date?.value || "",
     category: form.elements.category?.value || "other_work",
     vendor: resolved.vendor || form.elements.vendor?.value || "",
     vendorAbn: resolved.vendorAbn || form.elements.vendorAbn?.value || "",
@@ -658,15 +657,15 @@ function showScanConfirmDetails(box) {
     <h4>Edit details before saving</h4>
     <p class="muted">Changes also update the manual form on the right.</p>
     <div class="form-grid scan-confirm-form">
-      <label>Date<input type="date" id="scan-confirm-date" value="${escapeHtml(o.date || localToday())}" required /></label>
+      <label>Date<input type="date" id="scan-confirm-date" value="${escapeHtml(o.date || "")}" required /></label>
       <label>Category
         <select id="scan-confirm-category" class="category-select">
           <option value="">Choose category…</option>
           ${categoryOptions}
         </select>
       </label>
-      <label>Vendor<input type="text" id="scan-confirm-vendor" value="${escapeHtml(o.vendor || "")}" placeholder="BP Truck Stop" /></label>
-      <label>Description<input type="text" id="scan-confirm-description" value="${escapeHtml(o.description || "")}" placeholder="Diesel / meal / accommodation" /></label>
+      <label>Vendor<input type="text" id="scan-confirm-vendor" value="${escapeHtml(o.vendor || "")}" placeholder="${document.body.classList.contains("gotax-suite") ? "Officeworks" : "BP Truck Stop"}" /></label>
+      <label>Description<input type="text" id="scan-confirm-description" value="${escapeHtml(o.description || "")}" placeholder="${document.body.classList.contains("gotax-suite") ? "Stationery / software / tools" : "Diesel / meal / accommodation"}" /></label>
       <label>Work use %<input type="number" id="scan-confirm-work" value="100" min="0" max="100" /></label>
       <label class="checkbox"><input type="checkbox" id="scan-confirm-reimbursed" /> Reimbursed by employer</label>
     </div>
@@ -733,7 +732,7 @@ function readScanConfirmPayload(showDetails) {
   if (showDetails) {
     return {
       amount,
-      date: card("scan-confirm-date") || formPayload?.date || o.date || localToday(),
+      date: card("scan-confirm-date") || formPayload?.date || o.date || "",
       category:
         card("scan-confirm-category") ||
         formPayload?.category ||
@@ -756,7 +755,7 @@ function readScanConfirmPayload(showDetails) {
 
   return {
     amount,
-    date: card("scan-confirm-date") || formPayload?.date || o.date || localToday(),
+    date: card("scan-confirm-date") || formPayload?.date || o.date || "",
     category:
       card("scan-confirm-category") || formPayload?.category || o.suggestedCategory || "other_work",
     vendor: vendorFromCard || formPayload?.vendor || o.vendor || "",
@@ -2379,7 +2378,7 @@ document.getElementById("expense-form").addEventListener("submit", async (e) => 
   const { entry, analysis } = await api("/expenses", { method: "POST", body: JSON.stringify(payload) });
   e.target.reset();
   resetCategorySelect("expense-category");
-  e.target.querySelector('[name="date"]').value = localToday();
+  e.target.querySelector('[name="date"]').value = "";
   e.target.querySelector('[name="workUsePercent"]').value = 100;
   document.getElementById("expense-preview").classList.add("hidden");
   await afterExpenseSaved(entry, `Expense saved — ${fmt(analysis.deductibleAmount)} deductible`);

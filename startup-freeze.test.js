@@ -6,7 +6,7 @@ const inject = src.slice(src.indexOf("function injectLodgementBrief"), src.index
 
 describe("startup freeze: lodgement brief observer", () => {
   it("does not remove-and-reinsert the brief on every report mutation", () => {
-    expect(inject).toMatch(/if \(existing\) return/);
+    expect(inject).toMatch(/if \(existing && existing\.dataset\.stamp === stamp\) return/);
     expect(inject).not.toMatch(/querySelector\("\.report-lodgement-brief"\)\?\.remove\(\)/);
   });
 
