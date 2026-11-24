@@ -101,6 +101,7 @@ const pdfThumbnail = require("./lib/pdf-thumbnail");
 const receiptImageServe = require("./lib/receipt-image-serve");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { lookupAbn, applyAbrToOcr } = require("./lib/abr-lookup");
+const { jpegFromHeic, isHeic } = require("./lib/heic-image");
 const { recordScan, scanStats } = require("./lib/scan-telemetry");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
@@ -1955,9 +1956,27 @@ function userRecordsSummary(username, req) {
   };
 }
 
-api.get("/admin/scan-stats", (req, res) => {
+api.get("/admin/scan-stats", async (req, res) => {
   if (!requireAdmin(req, res)) return;
-  res.json(scanStats());
+  let tesseract = "unavailable";
+  let tesseractError = "";
+  try {
+    await warmLocalOcrWorker();
+    tesseract = "ready";
+  } catch (err) {
+    tesseract = "error";
+    tesseractError = String((err && err.message) || err).slice(0, 160);
+  }
+  res.json({
+    ...scanStats(),
+    engines: {
+      vision: Boolean(process.env.OPENAI_API_KEY),
+      tesseract,
+      tesseractError,
+      heic: true,
+      abr: Boolean(process.env.ABR_GUID),
+    },
+  });
 });
 
 api.get("/admin/users", (req, res) => {
@@ -3964,8 +3983,22 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
       ? suite.analyzeScan(ocrResult, scanPurpose, records.profile)
       : analyzeScan(ocrResult, scanPurpose, records.profile);
   ocrResult.componentBreakdown = componentBreakdown;
-  ocrResult.compliance = compliance;
-  ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+  const unreadable =
+    ocrResult.ocrSource === "unreadable" ||
+    /Couldn't read this receipt/i.test(String(ocrResult.notes || ocrResult.ocrError || ""));
+  if (unreadable) {
+    ocrResult.ocrSource = "unreadable";
+    ocrResult.notes = "Couldn't read this receipt, try again or enter manually";
+    ocrResult.compliance = {
+      status: "unreadable",
+      statusLabel: "Couldn't read this receipt",
+      summary: ocrResult.notes,
+      checks: [],
+    };
+  } else {
+    ocrResult.compliance = compliance;
+    ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");
+  }
 
   if (scanPurpose === "income") {
     const withheld = extractTaxWithheld(ocrResult, componentBreakdown);
@@ -4156,7 +4189,8 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     if (!assertCanUpload(req, res)) return;
     const records = getRecords(req);
     const upload = normalizeScanUpload(req);
-    const { imageBase64, mimeType, filename, purpose } = upload;
+    let { imageBase64, mimeType } = upload;
+    const { filename, purpose } = upload;
     if (!imageBase64) {
       res.status(400).json({ error: "Missing image data." });
       return;
@@ -4178,6 +4212,21 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       });
       return;
     }
+    if (isHeic(mimeType, filename)) {
+      try {
+        const raw = imageBase64.includes(",") ? imageBase64.split(",").pop() : imageBase64;
+        const jpeg = await jpegFromHeic(Buffer.from(raw, "base64"));
+        imageBase64 = `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+        mimeType = "image/jpeg";
+      } catch (err) {
+        console.warn("HEIC convert failed:", err && err.message);
+        res.status(400).json({
+          error: "This HEIC photo could not be converted. Save it as JPEG and try again.",
+          code: "HEIC_CONVERT",
+        });
+        return;
+      }
+    }
     if (String(imageBase64).length > 12_000_000) {
       res.status(413).json({ error: "Photo too large — try a smaller image or use manual entry." });
       return;
@@ -4186,10 +4235,12 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     const scanAbort = new AbortController();
     const scanStarted = Date.now();
     const scanTimer = setTimeout(() => scanAbort.abort(), 50000);
-    const onClose = () => {
+    const onClientGone = () => {
       if (!res.writableEnded) scanAbort.abort();
     };
-    req.on("close", onClose);
+    // req "close" also fires once the body has been read, which aborted every
+    // scan before Tesseract ran. Abort only if the client drops the response.
+    res.on("close", onClientGone);
     let ocrResult;
     try {
       ocrResult = await extractReceiptData(openaiForReq(req), imageBase64, mimeType, filename, {
@@ -4197,6 +4248,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
         signal: scanAbort.signal,
         tesseractImage: upload.tesseractImage || "",
         tesseractMime: upload.tesseractMime || mimeType,
+        product: productOf(req),
       });
     } catch (err) {
       ocrResult = {
@@ -4210,7 +4262,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
       };
     } finally {
       clearTimeout(scanTimer);
-      req.off("close", onClose);
+      res.off("close", onClientGone);
       scanInflight.delete(scanKey);
       const bytes = Math.round((String(imageBase64).length * 3) / 4);
       recordScan({
@@ -4486,8 +4538,23 @@ api.post("/receipts/:id/confirm", (req, res) => {
           : normalizeIncomeTypeId(payload.type);
     }
     if (!payload.description) payload.description = buildIncomeDescription(payload);
-    if (productOf(req) !== "suite") applyHubBusinessIncomeGst(payload, records.profile || {});
-    else suite.applySuiteBusinessIncomeGst(payload);
+    if (productOf(req) !== "suite") {
+      if (
+        (payload.documentKind === "tax_invoice" || payload.documentKind === "invoice") &&
+        (!payload.type || payload.type === "salary_wages")
+      ) {
+        payload.type = "remittance_owner";
+      }
+      applyHubBusinessIncomeGst(payload, records.profile || {});
+    } else {
+      if (
+        (payload.documentKind === "tax_invoice" || payload.documentKind === "invoice") &&
+        (!payload.type || payload.type === "salary_wages")
+      ) {
+        payload.type = "business_income";
+      }
+      suite.applySuiteBusinessIncomeGst(payload);
+    }
 
     // Idempotent confirm: already linked to active income, or restore soft-deleted.
     let existing =

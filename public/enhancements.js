@@ -1759,7 +1759,12 @@
 
     let complianceHtml = "";
     const comp = data.compliance;
-    if (comp) {
+    if (comp && (comp.status === "unreadable" || data.ocrSource === "unreadable")) {
+      complianceHtml = `<div class="enh-section enh-compliance enh-status-breach">
+          <h4>Couldn't read this receipt</h4>
+          <p>Try again or enter the amount, date and vendor manually.</p>
+        </div>`;
+    } else if (comp) {
       const checks = (comp.checks || [])
         .map(
           (c) =>
@@ -2045,15 +2050,7 @@
     }
     banner.innerHTML = `<strong>Vendor not recognised.</strong> ${esc(msg)}`;
 
-    const typed = window.prompt(msg, vendor && vendor.value ? vendor.value : "");
-    if (typed != null && String(typed).trim()) {
-      const name = String(typed).trim();
-      if (vendor) vendor.value = name;
-      latest.vendor = name;
-      latest.vendorNeedsInput = false;
-      banner.innerHTML = `<strong>Vendor:</strong> ${esc(name)}`;
-      if (typeof globalThis.toast === "function") globalThis.toast(`Vendor set to ${name}`);
-    } else if (vendor) {
+    if (vendor) {
       vendor.focus();
       vendor.placeholder = "Type vendor / shop name";
       vendor.classList.add("input-needs-attention");
@@ -2160,14 +2157,6 @@
           const msg =
             latest.vendorUnidentifiedMessage ||
             "Vendor name cannot be identified — can you add the name of the vendor/shop this receipt is from?";
-          const typed = window.prompt(msg, value || "");
-          if (typed != null && String(typed).trim() && !looksLikeJunkVendorClient(typed)) {
-            if (vendorEl) vendorEl.value = String(typed).trim();
-            latest.vendor = String(typed).trim();
-            latest.vendorNeedsInput = false;
-            yes.click();
-            return;
-          }
           if (vendorEl) {
             vendorEl.focus();
             vendorEl.classList.add("input-needs-attention");
@@ -2817,7 +2806,7 @@
     box.classList.remove("hidden");
     box.innerHTML = `
       <div class="scan-confirm">
-        <h3>Approve remittance / payslip?</h3>
+        <h3>${o.documentKind === "tax_invoice" || o.documentKind === "invoice" ? "Approve tax invoice?" : "Approve remittance / payslip?"}</h3>
         <p class="muted"><strong>${esc(filename || "Document")}</strong> scanned for income summary</p>
         <div class="income-mini-summary">
           <div class="income-mini-title">${esc(entity || "Entity / company")}</div>
@@ -2826,10 +2815,13 @@
         </div>
         <div class="form-grid scan-confirm-form">
           <label>Entity / company<input type="text" id="income-confirm-entity" value="${esc(entity)}" /></label>
-          <label>Date<input type="date" id="income-confirm-date" value="${esc(o.date || todayIsoLocal())}" /></label>
+          <label>Date<input type="date" id="income-confirm-date" value="${esc(o.issueDate || o.date || "")}" /></label>
           <label>Type<select id="income-confirm-type">${incomeTypeOptionsHtml(o.suggestedIncomeType)}</select></label>
           <label>Gross ($)<input type="number" id="income-confirm-gross" step="0.01" min="0" value="${o.grossTotal ?? primary ?? ""}" /></label>
+          <label>Taxable ($)<input type="number" id="income-confirm-taxable" step="0.01" min="0" value="${o.taxableIncome ?? ""}" /></label>
+          <label>GST ($)<input type="number" id="income-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
           <label class="scan-confirm-amount-label">Amount / net ($)
+            <input type="number" id="income-net-pay" name="netPay" step="0.01" min="0" value="${o.netPay ?? primary ?? ""}" />
             <input type="number" id="income-confirm-amount" step="0.01" min="0" value="${primary || ""}" required />
           </label>
           <label>Description<input type="text" id="income-confirm-description" value="${esc(o.description || "")}" /></label>
@@ -2875,13 +2867,20 @@
     }
     const entity = document.getElementById("income-confirm-entity")?.value || "";
     const gross = Number(document.getElementById("income-confirm-gross")?.value || amount);
+    const gst = Number(document.getElementById("income-confirm-gst")?.value || 0);
+    const taxableField = Number(document.getElementById("income-confirm-taxable")?.value);
     const payload = {
       confirmed: true,
       purpose: "income",
       amount,
-      netPay: amount,
+      netPay: Number(document.getElementById("income-net-pay")?.value || amount),
       grossTotal: Number.isFinite(gross) ? gross : amount,
-      taxableIncome: Number.isFinite(gross) ? gross : amount,
+      gstAmount: Number.isFinite(gst) ? gst : 0,
+      taxableIncome: Number.isFinite(taxableField)
+        ? taxableField
+        : Number.isFinite(gross)
+          ? Math.round((gross - (Number.isFinite(gst) ? gst : 0)) * 100) / 100
+          : amount,
       entity,
       vendor: entity,
       date: document.getElementById("income-confirm-date")?.value || todayIsoLocal(),
@@ -5028,6 +5027,7 @@
           const pack = await apiGet(`/accountant-pack${packQueryString()}`);
           if (pack.error) throw new Error(pack.error);
           renderAccountantBriefing(pack);
+          packBtn.dataset.loaded = "1";
         } catch (err) {
           if (window.toast) window.toast(err.message || "Could not load taxpayer briefing");
         }
@@ -11439,9 +11439,20 @@
       existing?.remove();
       return;
     }
-    // Same guard as the expense ledger: removing+reinserting retriggers the
-    // report MutationObserver and freezes startup for Pro+ / admin sessions.
-    if (existing) return;
+    const posNow = brief.taxPosition || {};
+    const stamp = [posNow.assessable, posNow.deductions, posNow.estimatedTax, posNow.taxPayable, brief.generatedAt]
+      .map((v) => String(v ?? ""))
+      .join("|");
+    const packEl = document.getElementById("accountant-pack-result");
+    if (packEl && packEl.dataset.stamp && packEl.dataset.stamp !== stamp) {
+      packEl.dataset.stamp = stamp;
+      packEl.innerHTML = "";
+      const reload = document.getElementById("accountant-pack-load");
+      if (reload && reload.dataset.loaded === "1") reload.click();
+    } else if (packEl && !packEl.dataset.stamp) {
+      packEl.dataset.stamp = stamp;
+    }
+    if (existing && existing.dataset.stamp === stamp) return;
     const ident = brief.identity || {};
     const pos = brief.taxPosition || {};
     const payerRows = (brief.payers || [])
@@ -11521,7 +11532,9 @@
       ${asks ? `<h3>Ask the taxpayer</h3><ul class="lodgement-points">${asks}</ul>` : ""}
       <p class="muted">${esc(brief.disclaimer || "")}</p>
     `;
-    el.appendChild(section);
+    section.dataset.stamp = stamp;
+    if (existing) existing.replaceWith(section);
+    else el.appendChild(section);
   }
 
   function reportRoleLabel(id) {
@@ -11930,7 +11943,10 @@
       syncWorkVehicleFromProfile();
     });
     document.getElementById("driver-type")?.addEventListener("change", (ev) => {
-      if (ev && ev.isTrusted) ev.target.dataset.userSet = "1";
+      if (ev && ev.isTrusted) {
+        ev.target.dataset.userSet = "1";
+        ev.target.dataset.touched = "1";
+      }
       syncWorkVehicleFromProfile();
     });
     document.getElementById("profile-work-combination")?.addEventListener("change", () => {
@@ -14246,6 +14262,13 @@
     const bannerId = purpose === "income" ? "enh-income-awaiting" : "enh-expense-awaiting";
     const banner = ensureBanner(viewId, bannerId);
     if (!banner) return;
+
+    const openCard =
+      purpose === "income" ? document.getElementById("income-scan-result") : document.getElementById("scan-result");
+    if (openCard && !openCard.classList.contains("hidden") && openCard.querySelector(".scan-confirm")) {
+      banner.classList.add("hidden");
+      return;
+    }
 
     const awaiting = listAwaiting(purpose);
     const missing = listMissing(purpose);
@@ -17077,7 +17100,10 @@
     const salaryEl = document.getElementById("profile-annual-salary");
     const employerEl = document.getElementById("profile-employer");
     const typeEl = document.getElementById("driver-type");
-    const type = typeEl && typeEl.value ? typeEl.value : saved.driverType || saved.entityType || "";
+    const type =
+      typeEl && (typeEl.dataset.touched === "1" || typeEl.dataset.userSet === "1") && typeEl.value
+        ? typeEl.value
+        : saved.driverType || saved.entityType || "";
     const salaryTouched = salaryEl && salaryEl.dataset.touched === "1";
     const employerTouched = employerEl && employerEl.dataset.touched === "1";
     const nameEl = document.querySelector('#profile-form input[name="name"]');

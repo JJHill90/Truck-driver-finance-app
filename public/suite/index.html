@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="haulage-build" content="231" />
+    <meta name="haulage-build" content="232" />
     <link rel="icon" type="image/svg+xml" href="/suite/suite-mark.svg" />
     <link rel="apple-touch-icon" href="/suite/icon-512.png" />
     <title>Go Taxation Suite</title>
@@ -13,7 +13,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=Saira+Condensed:wght@600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=231" />
+    <link rel="stylesheet" href="./styles.css?v=232" />
     <link rel="stylesheet" href="./suite.css?v=companion-1" />
     <script>
       document.cookie = "gotax_product=1; path=/; SameSite=Lax; Max-Age=31536000";
@@ -138,7 +138,7 @@
           ·
           Assistance tool — not tax advice and not an official ATO lodgement.
         </p>
-        <p class="app-version-footer title-version" data-app-version>Version 4.27</p>
+        <p class="app-version-footer title-version" data-app-version>Version 4.28</p>
       </div>
     </div>
 
@@ -164,7 +164,7 @@
             <button class="nav-btn" data-view="support">Support</button>
           </nav>
           <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">
-            Version 4.27
+            Version 4.28
           </p>
         </div>
       </aside>
@@ -255,13 +255,14 @@
                     <select id="manual-receipt-category" name="category" class="category-select"></select>
                   </label>
                   <label>Vendor
-                    <input type="text" id="manual-vendor-input" name="vendor" list="vendor-list" placeholder="BP Truck Stop" />
+                    <input type="text" id="manual-vendor-input" name="vendor" list="vendor-list" placeholder="Officeworks" />
                   </label>
                   <label>ABN (optional)
                     <input type="text" id="manual-vendor-abn" name="vendorAbn" placeholder="12 345 678 901" />
                   </label>
-                  <label class="span-2">Description<input type="text" name="description" placeholder="Diesel / meal / accommodation" /></label>
+                  <label class="span-2">Description<input type="text" name="description" placeholder="Stationery / software / tools" /></label>
                   <label>Amount ($)<input type="number" name="amount" step="0.01" min="0" placeholder="0.00" /></label>
+                  <label>GST ($)<input type="number" name="gstAmount" step="0.01" min="0" placeholder="0.00" /></label>
                   <label>Work use %<input type="number" name="workUsePercent" min="0" max="100" value="100" /></label>
                   <label class="checkbox span-2"><input type="checkbox" name="reimbursed" /> Reimbursed by employer</label>
                   <div class="span-2 checkbox-row">
@@ -1090,7 +1091,7 @@
           <nav class="sidebar-nav sidebar-nav-bottom" aria-label="Driver Hub">
             <button type="button" class="nav-btn" id="fuelhub-nav-driverhub">Driver Hub Apps</button>
           </nav>
-          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 4.27</p>
+          <p class="app-version-footer sidebar-version" data-app-version aria-label="App version">Version 4.28</p>
         </div>
       </aside>
       <div class="main">
@@ -1130,8 +1131,8 @@
     <div id="toast" class="toast hidden"></div>
 
     <script src="./app.js"></script>
-    <script src="./live-reload.js?v=231"></script>
-    <script src="./enhancements.js?v=231"></script>
+    <script src="./live-reload.js?v=232"></script>
+    <script src="./enhancements.js?v=232"></script>
     <script src="./car-expenses.js?v=car-ato-2"></script>
     <script src="./suite.js?v=pro-plus-2"></script>
     <script src="./companion.js?v=companion-2"></script>
