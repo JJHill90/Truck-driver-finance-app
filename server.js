@@ -101,7 +101,7 @@ const pdfThumbnail = require("./lib/pdf-thumbnail");
 const receiptImageServe = require("./lib/receipt-image-serve");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { lookupAbn, applyAbrToOcr } = require("./lib/abr-lookup");
-const { jpegFromHeic, isHeic } = require("./lib/heic-image");
+const { jpegFromHeic, isHeic, probeHeicConverter } = require("./lib/heic-image");
 const { recordScan, scanStats } = require("./lib/scan-telemetry");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
@@ -1967,13 +1967,15 @@ api.get("/admin/scan-stats", async (req, res) => {
     tesseract = "error";
     tesseractError = String((err && err.message) || err).slice(0, 160);
   }
+  const heic = await probeHeicConverter();
   res.json({
     ...scanStats(),
     engines: {
       vision: Boolean(process.env.OPENAI_API_KEY),
       tesseract,
       tesseractError,
-      heic: true,
+      heic: heic.heic,
+      heicError: heic.heicError,
       abr: Boolean(process.env.ABR_GUID),
     },
   });
@@ -3978,10 +3980,14 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
     }
   }
 
-  const { componentBreakdown, breakdownKind, compliance, payPeriod } =
+  const analyzed =
     productOf(req) === "suite"
       ? suite.analyzeScan(ocrResult, scanPurpose, records.profile)
       : analyzeScan(ocrResult, scanPurpose, records.profile);
+  const componentBreakdown = analyzed.componentBreakdown;
+  const breakdownKind = analyzed.breakdownKind;
+  const payPeriod = analyzed.payPeriod;
+  let compliance = analyzed.compliance;
   ocrResult.componentBreakdown = componentBreakdown;
   const unreadable =
     ocrResult.ocrSource === "unreadable" ||
@@ -3989,12 +3995,13 @@ function enrichScannedOcr(req, records, ocrResult, purpose) {
   if (unreadable) {
     ocrResult.ocrSource = "unreadable";
     ocrResult.notes = "Couldn't read this receipt, try again or enter manually";
-    ocrResult.compliance = {
+    compliance = {
       status: "unreadable",
       statusLabel: "Couldn't read this receipt",
       summary: ocrResult.notes,
       checks: [],
     };
+    ocrResult.compliance = compliance;
   } else {
     ocrResult.compliance = compliance;
     ocrResult.notes = [compliance.summary, ocrResult.notes].filter(Boolean).join(" — ");

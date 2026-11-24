@@ -78,7 +78,43 @@ Official public hosts (after Render custom-domain + DNS; use HTTPS, not `http://
 | `npm start`      | Start the Express server + UI on port `3000`.                |
 | `npm run dev`    | Same, with `node --watch` auto-restart on file changes.      |
 | `npm run lint`   | Run ESLint over server/lib code.                             |
-| `npm test`       | Run backend unit tests (Vitest) for the tax/analysis logic.  |
+| `npm test`       | Run backend unit tests (Vitest), including the scanner gate. |
+| `npm run test:scanner` | Scanner gate only: real server, multipart upload, Tesseract. |
+| `npm run smoke:scan` | After deploy, read scan-stats and fail if Tesseract or HEIC is down. |
+
+## Scanner changes
+
+A pull request to `main` must pass the **Scanner gate** GitHub Action
+(`.github/workflows/scanner-gate.yml`). That job is a required status check.
+It starts the real server and POSTs committed fixtures through
+`POST /api/haulage/receipts/scan` and `POST /api/suite/receipts/scan` as
+multipart, the same upload the browser uses. Nothing mocks Tesseract, the
+abort timer, or HEIC conversion.
+
+The fixtures live in `test/fixtures/`: a clean PNG fuel receipt, a faded JPEG
+with EXIF orientation 6, a HEIC of that receipt, a 2-page PDF tax invoice, and
+a blank PNG. With no `OPENAI_API_KEY` the gate has to pass on local Tesseract.
+If the `OPENAI_API_KEY` Actions secret is set, the same assertions run again
+with cloud OCR. The English model is in `vendor/tesseract/` and the workflow
+caches `data/tesseract-cache`.
+
+Do not merge a scanner change that fails this gate. A blank image must come
+back as an explicit read error, never as “no ATO compliance flags”.
+
+After a deploy, check both hosts without writing ledger data:
+
+```bash
+SCAN_SMOKE_BASE_URL=https://godriverhub.com \
+SCAN_SMOKE_USERNAME=... \
+SCAN_SMOKE_PASSWORD=... \
+npm run smoke:scan
+```
+
+Use a Suite base URL for the Suite host (`https://gotaxationsuite.com`).
+Put the admin or test username and password only in `SCAN_SMOKE_USERNAME` and
+`SCAN_SMOKE_PASSWORD`. The script GETs `/api/haulage/admin/scan-stats` and
+`/api/suite/admin/scan-stats` and fails unless Tesseract is `ready` and HEIC
+conversion is `ready`.
 
 ## Project structure
 

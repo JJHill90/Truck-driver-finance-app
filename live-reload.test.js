@@ -47,12 +47,12 @@ describe("live reload", () => {
   });
 
   it("ships the same build number in the app pages and the version constant", () => {
-    expect(HAULAGE_PR_NUMBER).toBe(232);
+    expect(HAULAGE_PR_NUMBER).toBe(233);
     for (const file of ["public/index.html", "public/suite/index.html"]) {
       const html = fs.readFileSync(path.join(__dirname, file), "utf8");
-      expect(html).toMatch(/name="haulage-build" content="232"/);
-      expect(html).toMatch(/live-reload\.js\?v=232/);
-      expect(html.indexOf("live-reload.js?v=232")).toBeLessThan(html.indexOf("enhancements.js?v=232"));
+      expect(html).toMatch(/name="haulage-build" content="233"/);
+      expect(html).toMatch(/live-reload\.js\?v=233/);
+      expect(html.indexOf("live-reload.js?v=233")).toBeLessThan(html.indexOf("enhancements.js?v=233"));
     }
     const client = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
     expect(client).toMatch(/HaulageLiveReload/);

@@ -12,6 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:scanner": "vitest run scanner-gate.test.js",
+    "smoke:scan": "node scripts/scan-stats-smoke.js",
     "cpanel-site": "node scripts/build-cpanel-site.js",
     "mobile:sync": "npm --prefix mobile run sync",
     "mobile:android": "npm --prefix mobile run open:android"
