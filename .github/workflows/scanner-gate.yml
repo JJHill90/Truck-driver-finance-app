@@ -1,0 +1,61 @@
+name: Scanner gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Required check for pull requests into main. A change that aborts or empties
+# a real receipt scan fails this job. Mark "Scanner gate / tesseract" as a
+# required status check in branch protection so it cannot be skipped.
+
+jobs:
+  tesseract:
+    name: tesseract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: data/tesseract-cache
+          key: tesseract-eng-${{ hashFiles('vendor/tesseract/eng.traineddata') }}
+      - run: npm ci
+      - name: Scan the committed fixtures with local Tesseract
+        env:
+          OPENAI_API_KEY: ""
+          ABR_GUID: ""
+          NODE_ENV: test
+        run: npm run test:scanner
+
+  vision:
+    name: vision
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: data/tesseract-cache
+          key: tesseract-eng-${{ hashFiles('vendor/tesseract/eng.traineddata') }}
+      - run: npm ci
+      - name: Repeat the gate when a vision key is configured
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ABR_GUID: ""
+          NODE_ENV: test
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "No OPENAI_API_KEY secret. The Tesseract gate is the required check."
+            exit 0
+          fi
+          npm run test:scanner
