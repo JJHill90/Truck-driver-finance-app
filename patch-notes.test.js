@@ -33,9 +33,11 @@ describe("Driver Hub patch notes", () => {
     expect(HAULAGE_PR_NUMBER).toBeGreaterThanOrEqual(208);
     expect(label).toBe("Version 4.04");
     const notes = patchNotes.publishedNotes();
-    expect(notes[0].prNumber).toBe(233);
-    expect(notes[0].label).toBe("Version 4.29");
-    expect(notes[0].bullets.join("\n")).toMatch(/empty read/);
+    expect(notes[0].prNumber).toBe(234);
+    expect(notes[0].label).toBe("Version 4.30");
+    expect(notes[0].bullets.join("\n")).toMatch(/HEIC/);
+    const gateNote = notes.find((note) => note.prNumber === 233);
+    expect(gateNote.bullets.join("\n")).toMatch(/empty read/);
     const readFix = notes.find((note) => note.prNumber === 232);
     expect(readFix.bullets.join("\n")).toMatch(/HEIC/);
     expect(readFix.bullets.join("\n")).toMatch(/GST tracker/);

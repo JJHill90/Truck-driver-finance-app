@@ -590,7 +590,7 @@
       setScanFieldValue("income-confirm-gst", o.gstAmount ?? o.gst);
       setScanFieldValue("income-confirm-amount", primary || o.netPay || o.grossTotal);
       setScanFieldValue("income-confirm-description", o.description);
-      if (o.date) setScanFieldValue("income-confirm-date", o.date);
+      setScanFieldValue("income-confirm-date", o.issueDate || o.date || "");
       const form = document.getElementById("income-form");
       if (form) {
         setFormFieldValue(form, "payer", o.entity || o.vendor);
@@ -599,7 +599,8 @@
         setFormFieldValue(form, "netPay", primary || o.netPay || o.grossTotal);
         setFormFieldValue(form, "amount", primary || o.netPay || o.grossTotal);
         setFormFieldValue(form, "description", o.description);
-        if (o.date) setFormFieldValue(form, "date", o.date);
+        setFormFieldValue(form, "date", o.issueDate || o.date || "");
+        setFormFieldValue(form, "gstAmount", o.gstAmount ?? o.gst ?? "");
       }
       const title = document.querySelector("#income-scan-result .income-mini-title");
       const entityEl = document.getElementById("income-confirm-entity");
@@ -615,7 +616,9 @@
       setScanFieldValue("scan-confirm-description", o.description);
       setScanFieldValue("scan-confirm-abn", o.vendorAbn);
       if (o.suggestedCategory) setScanFieldValue("scan-confirm-category", o.suggestedCategory);
-      if (o.date) setScanFieldValue("scan-confirm-date", o.date);
+      setScanFieldValue("scan-confirm-date", o.date || "");
+      const manualGst = document.querySelector('#manual-receipt-form [name="gstAmount"]');
+      if (manualGst) manualGst.value = o.gstAmount ?? o.gst ?? "";
     }
     if (data && data.componentBreakdown) {
       latest = {
@@ -2883,7 +2886,7 @@
           : amount,
       entity,
       vendor: entity,
-      date: document.getElementById("income-confirm-date")?.value || todayIsoLocal(),
+      date: document.getElementById("income-confirm-date")?.value || "",
       type: document.getElementById("income-confirm-type")?.value || "salary_wages",
       description: document.getElementById("income-confirm-description")?.value || "",
     };

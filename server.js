@@ -1972,6 +1972,9 @@ api.get("/admin/scan-stats", async (req, res) => {
     ...scanStats(),
     engines: {
       vision: Boolean(process.env.OPENAI_API_KEY),
+      visionEnv: "OPENAI_API_KEY",
+      visionNote:
+        "Set OPENAI_API_KEY on this Render service to read faded thermal photos with the vision model. Without it, only local Tesseract runs.",
       tesseract,
       tesseractError,
       heic: heic.heic,
@@ -5562,6 +5565,12 @@ function bootListen() {
     warmLocalOcrWorker()
       .then(() => console.log("OCR: Tesseract worker ready (eng cached on data disk)"))
       .catch((err) => console.warn("OCR: Tesseract warm failed:", err.message));
+    probeHeicConverter()
+      .then((heic) => {
+        if (heic.heic === "ready") console.log("OCR: HEIC conversion ready");
+        else console.warn("OCR: HEIC conversion unavailable:", heic.heicError || heic.heic);
+      })
+      .catch((err) => console.warn("OCR: HEIC probe failed:", err.message));
     backup.startBackupScheduler({
       flushFn: flushAllCachedRecordsToDisk,
       onComplete: notifyBackupComplete,

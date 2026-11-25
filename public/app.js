@@ -213,7 +213,12 @@ async function prepareImageForUpload(file) {
       source = await bitmapToJpegFile(bitmap, file.name.replace(/\.\w+$/, "") + ".jpg");
       bitmap.close && bitmap.close();
     } catch {
-      throw new Error("This HEIC photo could not be converted. Save it as JPEG and try again.");
+      const dataUrl = await readFileAsDataUrl(file);
+      return {
+        dataUrl,
+        mimeType: file.type || "image/heic",
+        kind: "image",
+      };
     }
   }
   const raw = await readFileAsDataUrl(source);
@@ -400,10 +405,10 @@ function getDetectedTotalsClient(ocr) {
 function clearManualReceiptFields() {
   const form = document.getElementById("manual-receipt-form");
   if (!form) return;
-  const date = form.elements.date?.value || "";
   form.reset();
   resetCategorySelect("manual-receipt-category");
-  form.elements.date.value = date;
+  if (form.elements.date) form.elements.date.value = "";
+  if (form.elements.gstAmount) form.elements.gstAmount.value = "";
   form.elements.workUsePercent.value = 100;
   if (form.elements.vendorAbn) form.elements.vendorAbn.value = "";
   document.getElementById("manual-receipt-preview")?.classList.add("hidden");
@@ -658,6 +663,7 @@ function showScanConfirmDetails(box) {
     <p class="muted">Changes also update the manual form on the right.</p>
     <div class="form-grid scan-confirm-form">
       <label>Date<input type="date" id="scan-confirm-date" value="${escapeHtml(o.date || "")}" required /></label>
+      ${o.date ? "" : '<p class="tag warn">Date was not read. Enter the date from the receipt.</p>'}
       <label>Category
         <select id="scan-confirm-category" class="category-select">
           <option value="">Choose category…</option>
@@ -1952,7 +1958,7 @@ function clearIncomeFormFields() {
   const form = document.getElementById("income-form");
   if (!form) return;
   form.reset();
-  form.querySelector('[name="date"]').value = localToday();
+  if (form.elements.date) form.elements.date.value = "";
   document.getElementById("income-document-kind").value = "";
   document.getElementById("income-summary-notes").value = "";
   document.getElementById("income-net-pay").value = "";
@@ -1998,7 +2004,7 @@ function prefillIncomeForm(ocr, overrides = {}) {
   const form = document.getElementById("income-form");
   if (!form || !ocr) return;
   const saveDate = overrides.date || ocr.issueDate || ocr.date || "";
-  if (saveDate && form.elements.date) {
+  if (form.elements.date) {
     form.elements.date.value = saveDate;
     if (form.elements.date.dataset) delete form.elements.date.dataset.scanUserEdited;
   }
@@ -2067,7 +2073,7 @@ function readIncomeScanConfirmPayload() {
     "";
   return {
     amount,
-    date: document.getElementById("income-confirm-date")?.value || form?.elements.date?.value || o.date || localToday(),
+    date: document.getElementById("income-confirm-date")?.value || form?.elements.date?.value || o.date || "",
     type: document.getElementById("income-confirm-type")?.value || form?.elements.type?.value || o.suggestedIncomeType || "salary_wages",
     vendor: entity,
     entity,
@@ -2138,7 +2144,8 @@ function renderIncomeTotalConfirm(box) {
       <div class="form-grid scan-confirm-form">
         <label>Entity / company<input type="text" id="income-confirm-entity" value="${escapeHtml(entity)}" /></label>
         <label>ABN<input type="text" id="income-confirm-abn" value="${escapeHtml(o.vendorAbn || o.abn || "")}" placeholder="11 222 333 444" /></label>
-        <label>${o.documentKind === "tax_invoice" || o.documentKind === "invoice" ? "Issue date" : "Date"}<input type="date" id="income-confirm-date" value="${escapeHtml(o.issueDate || o.date || localToday())}" /></label>
+        <label>${o.documentKind === "tax_invoice" || o.documentKind === "invoice" ? "Issue date" : "Date"}<input type="date" id="income-confirm-date" value="${escapeHtml(o.issueDate || o.date || "")}" /></label>
+        ${o.issueDate || o.date ? "" : '<p class="tag warn">Date was not read. Enter the date from the document.</p>'}
         ${
           o.dueDate && o.dueDate !== (o.issueDate || o.date)
             ? `<p class="muted small">Due date ${escapeHtml(o.dueDate)} is not the date that will be saved.</p>`
@@ -2696,7 +2703,11 @@ if (incomeUploadZone) {
 function prefillManualReceiptForm(ocr, opts = {}) {
   const form = document.getElementById("manual-receipt-form");
   if (!form || !ocr) return;
-  if (ocr.date) form.elements.date.value = ocr.date;
+  if (form.elements.date) form.elements.date.value = ocr.date || "";
+  if (form.elements.gstAmount) {
+    const gst = ocr.gstAmount ?? ocr.gst;
+    form.elements.gstAmount.value = gst != null && gst !== "" ? gst : "";
+  }
   if (ocr.suggestedCategory) {
     setCategorySelectValue("manual-receipt-category", ocr.suggestedCategory);
   }
@@ -2792,7 +2803,7 @@ document.getElementById("manual-receipt-form")?.addEventListener("submit", async
 
   form.reset();
   resetCategorySelect("manual-receipt-category");
-  form.elements.date.value = localToday();
+  if (form.elements.date) form.elements.date.value = "";
   form.elements.workUsePercent.value = 100;
   document.getElementById("manual-receipt-preview").classList.add("hidden");
   document.getElementById("scan-result").classList.add("hidden");
