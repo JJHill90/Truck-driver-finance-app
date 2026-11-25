@@ -16,6 +16,9 @@ delete process.env.ABR_GUID;
 
 const auth = require("./lib/auth");
 const suite = require("./lib/suite");
+const { repairOcrKeywords, cleanPartyName } = require("./lib/ocr-keywords");
+const { buildExpenseSummaryFromText } = require("./lib/local-receipt-ocr");
+const { parseTaxInvoice } = require("./lib/income-invoice");
 
 const strongPass = "RoadSafe!99x";
 const fixtures = path.join(__dirname, "test", "fixtures");
@@ -111,6 +114,15 @@ describe("scanner gate — real HTTP upload", () => {
       expectFuel(await scan(base, cookie, "receipt-clean.png", "image/png", "expense"));
       expectFuel(await scan(base, cookie, "receipt-faded-exif6.jpg", "image/jpeg", "expense"));
       expectFuel(await scan(base, cookie, "receipt.heic", "image/heic", "expense"));
+      const faded = await scan(base, cookie, "receipt-faded-thermal.jpg", "image/jpeg", "expense");
+      const fadedOcr = faded.ocrResult || {};
+      expect(fadedOcr.vendor || "").toMatch(/CEDAR RIDGE/i);
+      expect(fadedOcr.date).toBe("2026-11-08");
+      expect(Number(fadedOcr.amount)).toBeCloseTo(96.8, 2);
+      expect(Number(fadedOcr.gstAmount ?? fadedOcr.gst)).toBeCloseTo(8.8, 2);
+      expect(Number(fadedOcr.dieselLitres)).toBeCloseTo(48.5, 1);
+      expect(String(fadedOcr.paymentMethod || "")).toMatch(/visa/i);
+      expect(String(fadedOcr.notes || "")).not.toMatch(/Couldn't read/);
 
       const pdf = await scan(base, cookie, "tax-invoice-2page.pdf", "application/pdf", "income");
       const o = pdf.ocrResult || {};
@@ -125,7 +137,8 @@ describe("scanner gate — real HTTP upload", () => {
       expect(o.dueDate).toBe("2026-11-15");
       expect(Number(o.gstAmount)).toBe(75);
       expect(Number(o.taxableIncome)).toBe(750);
-      expect(Number(o.amount)).toBe(825);
+      expect(Number(o.grossTotal)).toBe(825);
+      expect(Number(o.netPay || o.amount)).toBe(750);
       expect(String(o.vendorAbn || "")).toMatch(/53\s*004\s*085\s*616/);
       expect(o.invoiceNumber || "").toMatch(/1842/);
       expect(notes).not.toMatch(/payslip/i);
@@ -145,4 +158,72 @@ describe("scanner gate — real HTTP upload", () => {
       expect(body.compliance && body.compliance.status).not.toBe("within_policy");
     }
   }, 60000);
+
+  it("reads invoice GST, the invoice date and the income type, and does not treat a shop docket as income", async () => {
+    for (const base of ["/api/haulage", "/api/suite"]) {
+      const cookie = await session(base);
+      const file = base.includes("suite") ? "invoice-suite-2420.pdf" : "invoice-hub-7260.pdf";
+      const body = await scan(base, cookie, file, "application/pdf", "income");
+      const o = body.ocrResult || {};
+      expect(o.suggestedIncomeType).not.toBe("salary_wages");
+      expect(o.suggestedIncomeType).toBe(base.includes("suite") ? "business_income" : "remittance_owner");
+      expect(o.date).toBe("2026-11-01");
+      expect(o.dueDate).toBe("2026-11-15");
+      expect(String(o.vendorAbn || "")).toMatch(/53\s*004\s*085\s*616/);
+      if (base.includes("suite")) {
+        expect(Number(o.gstAmount)).toBe(220);
+        expect(Number(o.grossTotal || o.amount)).toBe(2420);
+        expect(Number(o.netPay || o.taxableIncome)).toBe(2200);
+      } else {
+        expect(Number(o.gstAmount)).toBe(660);
+        expect(Number(o.grossTotal || o.amount)).toBe(7260);
+        expect(Number(o.netPay || o.taxableIncome)).toBe(6600);
+        expect(o.payer || o.entity || "").toBe("Harbour Street Consulting");
+        expect(o.issuer || "").toBe("Western Rim Transport");
+        expect(o.description || "").not.toMatch(/\bel$/);
+      }
+      const shop = await scan(base, cookie, "officeworks-receipt.pdf", "application/pdf", "expense");
+      expect(shop.ocrResult && shop.ocrResult.offerAsIncome).not.toBe(true);
+      const customer = await scan(base, cookie, "invoice-hub-7260.pdf", "application/pdf", "expense");
+      expect(customer.ocrResult && customer.ocrResult.offerAsIncome).toBe(true);
+    }
+  }, 120000);
+});
+
+describe("scanner gate — printed text", () => {
+  it("repairs TOTAL and GST keywords and trims stray name fragments", () => {
+    const text = repairOcrKeywords("1oTAL $86.40\n53 INCLUDED $7.85\nVISA ****6104\nReceipt No 18421");
+    expect(text).toMatch(/TOTAL/);
+    expect(text).toMatch(/GST INCLUDED/);
+    const summary = buildExpenseSummaryFromText(text + "\nDIESEL 12.5 L\nPacific Tyre Co Pty Ltd");
+    expect(summary.amount).toBeCloseTo(86.4, 2);
+    expect(summary.gstAmount).toBeCloseTo(7.85, 2);
+    expect(summary.vendor).toMatch(/Pacific Tyre/);
+    expect(summary.paymentMethod).toBe("visa");
+    expect(summary.receiptNumber).toMatch(/18421/);
+    expect(summary.dieselLitres).toBeCloseTo(12.5, 1);
+    expect(cleanPartyName("Harbour Street Consulting a")).toBe("Harbour Street Consulting");
+    expect(cleanPartyName("Western Rim Transport el")).toBe("Western Rim Transport");
+    expect(cleanPartyName("Pacific Tyre Co")).toBe("Pacific Tyre Co");
+  });
+
+  it("does not keep a $1 GST figure when the GST line also prints the real amount", () => {
+    const parsed = parseTaxInvoice(
+      `TAX INVOICE
+Invoice number: INV-9
+Invoice date: 01/11/2026
+Due date: 15/11/2026
+Bill to: Logan Freight
+ABN 53 004 085 616
+GST $1.00
+Total GST 10% $220.00
+Total 2420.00`,
+      { product: "suite", entityType: "sole_trader" }
+    );
+    expect(parsed.gstAmount).toBe(220);
+    expect(parsed.netPay).toBe(2200);
+    expect(parsed.date).toBe("2026-11-01");
+    expect(parsed.suggestedIncomeType).toBe("business_income");
+    expect(parsed.gstUnsure).toBe(false);
+  });
 });

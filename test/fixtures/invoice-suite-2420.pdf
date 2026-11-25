@@ -1,0 +1,61 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [3 0 R 4 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 442 >>
+stream
+BT /F1 12 Tf 50 760 Td 14 TL
+(-- 1 of 2 --) Tj T*
+(TAX INVOICE) Tj T*
+(From: Joshua Test Trading) Tj T*
+(ABN 53 004 085 616) Tj T*
+(Invoice number: INV-2420) Tj T*
+(Due date: 15/11/2026) Tj T*
+(Invoice date: 01/11/2026) Tj T*
+(Bill to: Logan Freight Pty Ltd) Tj T*
+(Professional services) Tj T*
+(Subtotal 2200.00) Tj T*
+(Includes GST of $1) Tj T*
+(GST 10% $220.00) Tj T*
+(Total 2420.00) Tj T*
+(VISA ****6104) Tj T*
+(Receipt No 88421) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Length 73 >>
+stream
+BT /F1 12 Tf 50 760 Td 14 TL
+(-- 2 of 2 --) Tj T*
+(Bank details) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000373 00000 n 
+0000000866 00000 n 
+0000000989 00000 n 
+trailer << /Size 8 /Root 1 0 R >>
+startxref
+1059
+%%EOF

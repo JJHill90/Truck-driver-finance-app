@@ -115,7 +115,8 @@ describe("scanner harness", () => {
     expect(app).toMatch(/\[2000,/);
     expect(app).toMatch(/0\.85/);
     expect(app).not.toMatch(/0\.38/);
-    expect(app).toMatch(/HEIC photo could not be converted/);
+    expect(app).toMatch(/image\/heic/);
+    expect(app).not.toMatch(/HEIC photo could not be converted/);
     const client = fs.readFileSync(path.join(__dirname, "public/enhancements.js"), "utf8");
     expect(client).toContain("(?:haulage|suite)");
   });

@@ -101,6 +101,16 @@ caches `data/tesseract-cache`.
 Do not merge a scanner change that fails this gate. A blank image must come
 back as an explicit read error, never as “no ATO compliance flags”.
 
+Faded thermal photos are read by local Tesseract (greyscale, contrast, a
+threshold pass, and several page-segmentation modes). Set `OPENAI_API_KEY` on
+**both** Render services (`haulage-finance` and `go-taxation-suite`) to also
+send the photo to the vision model. `GET /api/haulage/admin/scan-stats` and
+`GET /api/suite/admin/scan-stats` report `engines.vision` and `engines.visionEnv`
+(`OPENAI_API_KEY`). The key stays on the server. HEIC health is a real
+conversion of `test/fixtures/receipt.heic` at startup; `engines.heic` is
+`ready` only when that JPEG comes out. If sharp cannot decode a photo,
+`heic-convert` is the fallback.
+
 After a deploy, check both hosts without writing ledger data:
 
 ```bash
