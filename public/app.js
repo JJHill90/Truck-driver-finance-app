@@ -309,6 +309,10 @@ async function uploadReceiptFile(file) {
 
     box.classList.remove("hidden");
     const o = result.ocrResult || {};
+    if (/heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name || "")) {
+      const img = document.querySelector("#receipt-preview img");
+      if (img && result.receipt && result.receipt.id) img.src = `${API}/receipts/${result.receipt.id}/file`;
+    }
     const totals = result.detectedTotals || getDetectedTotalsClient(o);
 
     pendingReceiptConfirm = {
@@ -615,6 +619,11 @@ function renderReceiptTotalConfirm(box) {
       </label>
       <label>ABN<input type="text" id="scan-confirm-abn" value="${escapeHtml(o.vendorAbn || "")}" placeholder="40 004 201 307" /></label>
       <label>GST ($)<input type="number" id="scan-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
+      <label>Payment<input type="text" id="scan-confirm-pay" value="${escapeHtml(o.paymentMethod || "")}" placeholder="Visa / EFTPOS / cash" /></label>
+      <label>Receipt no.<input type="text" id="scan-confirm-receipt" value="${escapeHtml(o.receiptNumber || "")}" /></label>
+      <label>Fuel type<input type="text" id="scan-confirm-fuel" value="${escapeHtml(o.fuelType || "")}" /></label>
+      <label>Litres<input type="number" id="scan-confirm-litres" step="0.01" min="0" value="${o.dieselLitres ?? ""}" /></label>
+      <label class="checkbox"><input type="checkbox" id="scan-confirm-gst-reg" ${o.gstRegistered ? "checked" : ""} /> GST registered</label>
       ${fuelCreditAskHtml(o)}
       ${confidenceHtml(o)}
       ${o.offerAsIncome ? `<p class="tag warn">This looks like an invoice. Use the Income page to save it as income, or continue only if it is an expense.</p>` : ""}
@@ -749,7 +758,11 @@ function readScanConfirmPayload(showDetails) {
       description:
         card("scan-confirm-description") || formPayload?.description || o.description || "",
       gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
-      dieselLitres: card("enh-ftc-litres"),
+      paymentMethod: card("scan-confirm-pay") || o.paymentMethod || "",
+      receiptNumber: card("scan-confirm-receipt") || o.receiptNumber || "",
+      fuelType: card("scan-confirm-fuel") || o.fuelType || "",
+      dieselLitres: card("scan-confirm-litres") || card("enh-ftc-litres"),
+      gstRegistered: Boolean(document.getElementById("scan-confirm-gst-reg")?.checked),
       fuelTaxCreditUse:
         (document.querySelector && document.querySelector('input[name="enh-ftc-use"]:checked')?.value) || "",
       workUsePercent: Number(
@@ -768,7 +781,11 @@ function readScanConfirmPayload(showDetails) {
     vendorAbn: card("scan-confirm-abn") || formPayload?.vendorAbn || o.vendorAbn || "",
     description: card("scan-confirm-description") || formPayload?.description || o.description || "",
     gstAmount: Number(card("scan-confirm-gst") || o.gstAmount || o.gst || 0),
-    dieselLitres: card("enh-ftc-litres"),
+    paymentMethod: card("scan-confirm-pay") || o.paymentMethod || "",
+    receiptNumber: card("scan-confirm-receipt") || o.receiptNumber || "",
+    fuelType: card("scan-confirm-fuel") || o.fuelType || "",
+    dieselLitres: card("scan-confirm-litres") || card("enh-ftc-litres"),
+    gstRegistered: Boolean(document.getElementById("scan-confirm-gst-reg")?.checked),
     fuelTaxCreditUse:
       (document.querySelector && document.querySelector('input[name="enh-ftc-use"]:checked')?.value) || "",
     workUsePercent: Number(
@@ -1361,9 +1378,13 @@ function populateSelects() {
   if (!state.standards) return;
   populateCategorySelects();
 
-  document.getElementById("income-type").innerHTML = state.standards.incomeTypes
+  const incomeType = document.getElementById("income-type");
+  const keepType = incomeType && incomeType.value;
+  incomeType.innerHTML = state.standards.incomeTypes
     .map((t) => `<option value="${t.id}">${t.label}</option>`)
     .join("");
+  const pendingType = pendingReceiptConfirm?.ocrResult && incomeTypeForScan(pendingReceiptConfirm.ocrResult);
+  selectIncomeType(incomeType, pendingType || keepType);
 
   document.getElementById("driver-type").innerHTML = Object.entries(state.standards.driverTypes)
     .map(([id, d]) => `<option value="${id}">${d.label}</option>`)
@@ -2008,10 +2029,10 @@ function prefillIncomeForm(ocr, overrides = {}) {
     form.elements.date.value = saveDate;
     if (form.elements.date.dataset) delete form.elements.date.dataset.scanUserEdited;
   }
-  if (ocr.suggestedIncomeType) {
-    const typeSel = document.getElementById("income-type");
-    if (typeSel) typeSel.value = ocr.suggestedIncomeType;
-  }
+  selectIncomeType(document.getElementById("income-type"), incomeTypeForScan(ocr));
+  const payerInput = document.querySelector('#income-form [name="payer"]');
+  const payerName = overrides.entity || overrides.vendor || ocr.entity || ocr.vendor || ocr.payer || "";
+  if (payerInput && payerName) payerInput.value = payerName;
   const entity = overrides.entity || overrides.vendor || ocr.entity || ocr.vendor || ocr.payer || "";
   if (entity) form.elements.payer.value = entity;
   const gross = overrides.grossTotal ?? ocr.grossTotal ?? ocr.amount;
@@ -2074,7 +2095,11 @@ function readIncomeScanConfirmPayload() {
   return {
     amount,
     date: document.getElementById("income-confirm-date")?.value || form?.elements.date?.value || o.date || "",
-    type: document.getElementById("income-confirm-type")?.value || form?.elements.type?.value || o.suggestedIncomeType || "salary_wages",
+    type:
+      document.getElementById("income-confirm-type")?.value ||
+      form?.elements.type?.value ||
+      incomeTypeForScan(o) ||
+      "salary_wages",
     vendor: entity,
     entity,
     vendorAbn:
@@ -2100,6 +2125,25 @@ function readIncomeScanConfirmPayload() {
     payPeriod: form?.elements.reference?.value || o.payPeriod || "",
     summaryNotes: form?.elements.summaryNotes?.value || o.summaryNotes || "",
   };
+}
+
+function incomeTypeForScan(o) {
+  if (o.suggestedIncomeType && o.suggestedIncomeType !== "salary_wages") return o.suggestedIncomeType;
+  if (o.documentKind === "tax_invoice" || o.documentKind === "invoice") {
+    return document.body.classList.contains("gotax-suite") ? "business_income" : "remittance_owner";
+  }
+  return o.suggestedIncomeType || "";
+}
+
+function selectIncomeType(select, id) {
+  if (!select || !id) return;
+  if (![...select.options].some((opt) => opt.value === id)) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = String(id).replace(/_/g, " ");
+    select.appendChild(opt);
+  }
+  select.value = id;
 }
 
 function renderIncomeTotalConfirm(box) {
@@ -2167,7 +2211,7 @@ function renderIncomeTotalConfirm(box) {
               .map(
                 (t) =>
                   `<option value="${t.id}" ${
-                    (o.suggestedIncomeType || "salary_wages") === t.id ? "selected" : ""
+                    incomeTypeForScan(o) === t.id ? "selected" : ""
                   }>${escapeHtml(t.label)}</option>`
               )
               .join("")}
@@ -2176,6 +2220,9 @@ function renderIncomeTotalConfirm(box) {
         <label>Gross ($)<input type="number" id="income-confirm-gross" step="0.01" min="0" value="${o.grossTotal ?? primary ?? ""}" /></label>
         <label>Taxable ($)<input type="number" id="income-confirm-taxable" step="0.01" min="0" value="${o.taxableIncome ?? o.grossTotal ?? primary ?? ""}" /></label>
         <label>GST ($)<input type="number" id="income-confirm-gst" step="0.01" min="0" value="${o.gstAmount ?? o.gst ?? ""}" /></label>
+        <label>Payment<input type="text" id="income-confirm-pay" value="${escapeHtml(o.paymentMethod || "")}" /></label>
+        <label>Invoice / receipt no.<input type="text" id="income-confirm-receipt" value="${escapeHtml(o.invoiceNumber || o.receiptNumber || "")}" /></label>
+        <label class="checkbox"><input type="checkbox" id="income-confirm-gst-reg" ${o.gstRegistered ? "checked" : ""} /> GST registered</label>
         <label class="scan-confirm-amount-label">Amount / net ($)
           <input type="number" id="income-confirm-amount" step="0.01" min="0" value="${primary || o.netPay || o.grossTotal || ""}" required />
         </label>
@@ -2196,6 +2243,11 @@ function renderIncomeTotalConfirm(box) {
     formDate.value = savedDate;
     if (formDate.dataset) delete formDate.dataset.scanUserEdited;
   }
+  const wantedType = incomeTypeForScan(o);
+  selectIncomeType(document.getElementById("income-confirm-type"), wantedType);
+  selectIncomeType(document.getElementById("income-type"), wantedType);
+  const payerInput = document.querySelector('#income-form [name="payer"]');
+  if (payerInput && entity) payerInput.value = entity;
   const kindSelect = document.getElementById("income-document-kind");
   const confirmKind = document.getElementById("income-confirm-kind");
   if (kindSelect && confirmKind && confirmKind.value) kindSelect.value = confirmKind.value;
@@ -2257,8 +2309,11 @@ async function uploadIncomeFile(file) {
     pickBtn.disabled = true;
     pickBtn.textContent = "Preparing…";
   }
-  box?.classList.add("hidden");
   pendingReceiptConfirm = null;
+  if (box) {
+    box.classList.remove("hidden");
+    box.innerHTML = `<p class="muted">Reading the document…</p>`;
+  }
 
   try {
     const prepared = await prepareImageForUpload(file);
@@ -2279,6 +2334,10 @@ async function uploadIncomeFile(file) {
 
     box.classList.remove("hidden");
     const o = result.ocrResult || {};
+    if (/heic|heif/i.test(file.type) || /\.hei[cf]$/i.test(file.name || "")) {
+      const img = document.querySelector("#income-preview img");
+      if (img && result.receipt && result.receipt.id) img.src = `${API}/receipts/${result.receipt.id}/file`;
+    }
     const totals = result.detectedTotals || getDetectedTotalsClient(o);
 
     pendingReceiptConfirm = {

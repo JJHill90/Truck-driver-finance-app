@@ -102,6 +102,7 @@ const receiptImageServe = require("./lib/receipt-image-serve");
 const { slimOcrResultForList, presentScanConfirmJson } = require("./lib/scan-ocr-present");
 const { lookupAbn, applyAbrToOcr } = require("./lib/abr-lookup");
 const { jpegFromHeic, isHeic, probeHeicConverter } = require("./lib/heic-image");
+const { limitScanBuffer } = require("./lib/receipt-image-prep");
 const { recordScan, scanStats } = require("./lib/scan-telemetry");
 const { warmLocalOcrWorker } = require("./lib/tesseract-cache");
 const {
@@ -4225,7 +4226,7 @@ api.post("/receipts/scan", optionalScanMultipart, async (req, res, next) => {
     if (isHeic(mimeType, filename)) {
       try {
         const raw = imageBase64.includes(",") ? imageBase64.split(",").pop() : imageBase64;
-        const jpeg = await jpegFromHeic(Buffer.from(raw, "base64"));
+        const jpeg = await limitScanBuffer(await jpegFromHeic(Buffer.from(raw, "base64")));
         imageBase64 = `data:image/jpeg;base64,${jpeg.toString("base64")}`;
         mimeType = "image/jpeg";
       } catch (err) {

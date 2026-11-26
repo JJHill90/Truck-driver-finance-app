@@ -16,7 +16,9 @@ delete process.env.ABR_GUID;
 
 const auth = require("./lib/auth");
 const suite = require("./lib/suite");
-const { repairOcrKeywords, cleanPartyName } = require("./lib/ocr-keywords");
+const { repairOcrKeywords, cleanPartyName, isWeakVendor } = require("./lib/ocr-keywords");
+const { categorizeExpense } = require("./lib/product-category-rules");
+const suiteMenus = require("./lib/suite/menus");
 const { buildExpenseSummaryFromText } = require("./lib/local-receipt-ocr");
 const { parseTaxInvoice } = require("./lib/income-invoice");
 
@@ -225,5 +227,65 @@ Total 2420.00`,
     expect(parsed.date).toBe("2026-11-01");
     expect(parsed.suggestedIncomeType).toBe("business_income");
     expect(parsed.gstUnsure).toBe(false);
+  });
+
+  it("reads a misread GST label and prefers total/11 when that amount is also printed", () => {
+    const fuel = buildExpenseSummaryFromText("LAKEVIEW FUEL\n5ST INCLUDED $7.00\nDIESEL 40 L\nTOTAL $77.00");
+    expect(fuel.gstAmount).toBeCloseTo(7, 2);
+    const parts = parseTaxInvoice(
+      `TAX INVOICE
+From: Roadhouse Parts
+ABN 53 004 085 616
+Invoice number: INV-26
+Invoice date: 01/11/2026
+Due date: 15/11/2026
+Bill to: Western Rim
+Brake parts 260.00
+GST 21.00
+GST component 26.00
+Total 286.00`,
+      { product: "haulage" }
+    );
+    expect(parts.gstAmount).toBe(26);
+    expect(parts.vendor || parts.payer).toBeTruthy();
+    expect(parts.suggestedIncomeType).toBe("remittance_owner");
+    expect(parts.vendorAbn).toMatch(/53/);
+    const accountant = parseTaxInvoice(
+      `TAX INVOICE
+Tax Invoice from Harbour Accounting
+ABN: 53 004 085 616
+Invoice number: INV-50
+Invoice date: 01/11/2026
+Due date: 15/11/2026
+Bill to: Alex Driver
+GST 20.00
+Total 550.00
+50.00 GST component`,
+      { product: "suite", entityType: "sole_trader" }
+    );
+    expect(accountant.gstAmount).toBe(50);
+    expect(accountant.suggestedIncomeType).toBe("business_income");
+    expect(accountant.issuer).toMatch(/Harbour Accounting/);
+  });
+
+  it("rejects junk vendors and does not file parts as fuel", () => {
+    expect(isWeakVendor("banana")).toBe(true);
+    expect(isWeakVendor("Indl")).toBe(true);
+    expect(isWeakVendor("Roadhouse Parts")).toBe(false);
+    const summary = buildExpenseSummaryFromText(
+      "Tax Invoice from Roadhouse Parts\nABN 53 004 085 616\nBrake parts\nTOTAL 180.00"
+    );
+    expect(summary.vendor).toMatch(/Roadhouse Parts/);
+    expect(summary.vendorAbn).toMatch(/53/);
+    expect(summary.suggestedCategory).toBe("repairs_maintenance");
+    expect(
+      categorizeExpense({
+        product: "haulage",
+        vendor: "Roadhouse Parts",
+        text: "Brake parts and filters",
+        suggested: "fuel",
+      }).category
+    ).toBe("repairs_maintenance");
+    expect(suiteMenus.listMenuCategories("employee").map((row) => row.id)).toContain("parking_tolls");
   });
 });
